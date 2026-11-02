@@ -63,13 +63,15 @@ export const payBill: Journey = {
             { label: t("Consumer number", "کنزیومر نمبر"), value: "{{bill.reference}}" },
             { label: t("Due date", "آخری تاریخ"), value: "{{ctx.bill.dueDate}}" },
             { label: t("Amount due", "واجب الادا رقم"), value: "PKR {{ctx.bill.amount | money}}" },
+            { label: t("From", "ادائیگی کا ذریعہ"), value: "{{ctx.accounts[bill.fromAccountId].name}} {{ctx.accounts[bill.fromAccountId].maskedNumber}}" },
+            { label: t("Fee", "فیس"), value: "PKR 0" },
           ],
         },
         {
           type: "consent", bind: "bill.consent", termsVersion: "bills-v2", text: t("I confirm I want to pay this bill", "میں اس بل کی ادائیگی کی تصدیق کرتا/کرتی ہوں"),
           validation: { mustBeTrue: true, messages: { mustBeTrue: t("Tick the confirmation first", "پہلے تصدیق کریں") } },
         },
-        { type: "button", label: t("Confirm and send OTP", "تصدیق کریں اور OTP بھیجیں"), variant: "primary", actions: [{ type: "validate" }, { type: "callApi", integration: "otpSend", input: { channel: "sms" }, saveAs: "ctx.otp" }, { type: "navigate", to: "otp" }] },
+        { type: "button", label: t("Confirm and send OTP", "تصدیق کریں اور کوڈ بھیجیں"), variant: "primary", actions: [{ type: "validate" }, { type: "callApi", integration: "otpSend", input: { channel: "sms" }, saveAs: "ctx.otp" }, { type: "navigate", to: "otp" }] },
       ],
     },
     {
@@ -81,7 +83,7 @@ export const payBill: Journey = {
           type: "button", label: t("Pay now", "ابھی ادا کریں"), variant: "primary",
           actions: [
             { type: "validate" },
-            { type: "callApi", integration: "otpVerify", input: { code: "{{otp.code}}" }, onError: { showToast: t("Incorrect code", "غلط کوڈ"), stay: true, lockAfter: 3, lockTo: "failed" } },
+            { type: "callApi", integration: "otpVerify", input: { code: "{{otp.code}}" }, onError: { showToast: t("That code didn't match. Check the SMS and try again.", "یہ کوڈ درست نہیں۔ SMS دیکھ کر دوبارہ درج کریں۔"), stay: true, lockAfter: 3, lockTo: "locked" } },
             { type: "callApi", integration: "billPay", input: { billerId: "{{bill.billerId}}", reference: "{{bill.reference}}", amount: "{{ctx.bill.amount}}", fromAccountId: "{{bill.fromAccountId}}" }, saveAs: "result", onError: { navigate: "failed" } },
             { type: "navigate", to: "success" },
           ],
@@ -91,15 +93,24 @@ export const payBill: Journey = {
     {
       id: "success", title: t("Bill paid", "بل ادا ہو گیا"), kind: "terminal",
       blocks: [
-        { type: "result", tone: "success", title: t("Bill paid", "بل ادا ہو گیا"), text: t("PKR {{ctx.bill.amount | money}} to {{ctx.bill.billerName}}", "PKR {{ctx.bill.amount | money}} بنام {{ctx.bill.billerName}}"), meta: t("Ref {{result.reference}}", "حوالہ {{result.reference}}") },
+        { type: "result", tone: "success", title: t("Bill paid", "بل ادا ہو گیا"), text: t("PKR {{ctx.bill.amount | money}} to {{ctx.bill.billerName}}", "{{ctx.bill.billerName}} کو PKR {{ctx.bill.amount | money}} ادا کر دیے گئے"), meta: t("Ref {{result.reference}}", "حوالہ {{result.reference}}") },
         { type: "button", label: t("Done", "مکمل"), variant: "primary", actions: [{ type: "exit" }] },
+      ],
+    },
+    {
+      id: "locked", title: t("Too many wrong codes", "غلط کوڈ کی حد پوری ہو گئی"), kind: "terminal",
+      blocks: [
+        { type: "result", tone: "error", title: t("Too many wrong codes", "غلط کوڈ کی حد پوری ہو گئی"), text: t("You entered the wrong code 3 times, so we stopped. No money has left your account.", "آپ نے 3 بار غلط کوڈ درج کیا، اس لیے ہم نے روک دیا۔ آپ کے اکاؤنٹ سے کوئی رقم نہیں کٹی۔") },
+        { type: "button", label: t("Start again", "دوبارہ شروع کریں"), variant: "primary", actions: [{ type: "setData", path: "bill.consent", value: false }, { type: "setData", path: "otp.code", value: "" }, { type: "navigate", to: "bill" }] },
+        { type: "button", label: t("Close", "بند کریں"), variant: "ghost", actions: [{ type: "exit" }] },
       ],
     },
     {
       id: "failed", title: t("Payment not completed", "ادائیگی مکمل نہیں ہوئی"), kind: "terminal",
       blocks: [
         { type: "result", tone: "error", title: t("Payment not completed", "ادائیگی مکمل نہیں ہوئی"), text: t("No money has left your account. Try again or contact support.", "آپ کے اکاؤنٹ سے کوئی رقم نہیں کٹی۔ دوبارہ کوشش کریں یا سپورٹ سے رابطہ کریں۔") },
-        { type: "button", label: t("Try again", "دوبارہ کوشش کریں"), variant: "primary", actions: [{ type: "navigate", to: "bill" }] },
+        { type: "button", label: t("Try again", "دوبارہ کوشش کریں"), variant: "primary", actions: [{ type: "setData", path: "bill.consent", value: false }, { type: "setData", path: "otp.code", value: "" }, { type: "navigate", to: "bill" }] },
+        { type: "button", label: t("Close", "بند کریں"), variant: "ghost", actions: [{ type: "exit" }] },
       ],
     },
   ],
