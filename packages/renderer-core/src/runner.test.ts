@@ -104,10 +104,25 @@ describe("Local transfer journey, end to end against the sandbox", () => {
     expect((await bank.call("bank.accounts.list")).acc_current.balance).toBe(92000);
   });
 
+  it("keeps the step progress visible on every step screen", async () => {
+    const { r } = mk();
+    await r.start();
+    expect(r.view().stepCount).toBe(5);
+    expect(r.view().stepIndex).toBe(0);
+    r.set("transfer.fromAccountId", "acc_current"); await press(r, "Continue");
+    expect(r.current).toBe("beneficiary");
+    expect(r.view().stepIndex).toBe(1);
+    expect(r.view().stepCount).toBe(5);
+  });
+
   it("renders in Urdu with RTL", async () => {
     const { r } = mk("ayesha", "ur");
     await r.start();
     expect(r.isRtl).toBe(true);
     expect(r.view().title).toBe("کس اکاؤنٹ سے");
+    expect(r.view().stepLabel).toBe("مرحلہ 1 از 5");
+    expect(r.view().strings.account).toBe("اکاؤنٹ");
+    await press(r, "جاری رکھیں");
+    expect(r.errors["transfer.fromAccountId"]).toBe("ضروری ہے");
   });
 });
