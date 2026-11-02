@@ -1,6 +1,7 @@
 import type { Journey, Screen, Block } from "@finx/journey-schema";
 import { evaluate, getPath, setPath } from "./expr";
 import { interpolate, localize } from "./template";
+import { ui } from "./strings";
 
 export type Adapter = (adapterId: string, input: Record<string, any>) => Promise<any>;
 export type RunnerOptions = { adapter: Adapter; lang?: string };
@@ -15,6 +16,8 @@ export type View = {
   exited: boolean;
   stepIndex: number;
   stepCount: number;
+  stepLabel: string;
+  strings: Record<string, string>;
 };
 
 export class JourneyRunner {
@@ -34,7 +37,7 @@ export class JourneyRunner {
     this.current = journey.entryScreen;
   }
 
-  subscribe(fn: () => void) { this.listeners.add(fn); return () => this.listeners.delete(fn); }
+  subscribe(fn: () => void): () => void { this.listeners.add(fn); return () => { this.listeners.delete(fn); }; }
   private emit() { this.listeners.forEach((l) => l()); }
 
   get screen(): Screen { return this.journey.screens.find((s) => s.id === this.current)!; }
@@ -68,20 +71,20 @@ export class JourneyRunner {
       const def = this.journey.dataModel?.[b.bind];
       const empty = v == null || v === "" || v === false && b.type !== "consent";
       if (b.type === "consent") {
-        if (b.validation?.mustBeTrue && v !== true) this.errors[b.bind] = this.tx(b.validation.messages?.mustBeTrue ?? "Required");
+        if (b.validation?.mustBeTrue && v !== true) this.errors[b.bind] = this.tx(b.validation.messages?.mustBeTrue ?? ui(this.lang, "required"));
         continue;
       }
-      if (def?.required && empty) { this.errors[b.bind] = "Required"; continue; }
+      if (def?.required && empty) { this.errors[b.bind] = ui(this.lang, "required"); continue; }
       if (b.type === "amountInput" && v != null) {
         const n = Number(v);
         const min = b.validation?.min != null ? this.num(b.validation.min) : undefined;
         const max = b.validation?.max != null ? this.num(b.validation.max) : undefined;
-        if (!(n > 0)) this.errors[b.bind] = "Enter an amount";
-        else if (min != null && n < min) this.errors[b.bind] = `Minimum is ${min}`;
-        else if (max != null && n > max) this.errors[b.bind] = this.tx(b.validation.messages?.max ?? `Maximum is ${max}`);
+        if (!(n > 0)) this.errors[b.bind] = ui(this.lang, "enterAmount");
+        else if (min != null && n < min) this.errors[b.bind] = ui(this.lang, "minimum", { n: min });
+        else if (max != null && n > max) this.errors[b.bind] = this.tx(b.validation.messages?.max ?? ui(this.lang, "maximum", { n: max }));
       }
-      if (b.type === "otp" && v != null && String(v).length !== b.length) this.errors[b.bind] = `Enter all ${b.length} digits`;
-      if (def?.pattern && v != null && !new RegExp(def.pattern).test(String(v))) this.errors[b.bind] ??= "Invalid format";
+      if (b.type === "otp" && v != null && String(v).length !== b.length) this.errors[b.bind] = ui(this.lang, "allDigits", { n: b.length });
+      if (def?.pattern && v != null && !new RegExp(def.pattern).test(String(v))) this.errors[b.bind] ??= ui(this.lang, "invalid");
     }
     this.emit();
     return Object.keys(this.errors).length === 0;
@@ -163,7 +166,8 @@ export class JourneyRunner {
   /** A render-ready view model, with all text localized and interpolated and invisible blocks removed. */
   view(): View {
     const s = this.screen;
-    const stepper = s.blocks.find((b) => b.type === "stepper") as any;
+    // the stepper is journey-level: declared once on any screen, shown on every step screen
+    const stepper = this.journey.screens.flatMap((x) => x.blocks).find((b) => b.type === "stepper") as any;
     const steps: string[] = stepper?.steps ?? [];
     const idx = steps.indexOf(s.id);
     const blocks = (s.blocks as any[])
@@ -172,6 +176,8 @@ export class JourneyRunner {
     return {
       screenId: s.id, title: this.tx(s.title), kind: s.kind ?? "screen", blocks, toast: this.toast,
       busy: this.busy, exited: this.exited, stepIndex: idx, stepCount: steps.length,
+      stepLabel: idx >= 0 ? ui(this.lang, "step", { n: idx + 1, total: steps.length }) : "",
+      strings: Object.fromEntries(["account", "payTo", "addBeneficiary", "wait", "back", "close"].map((k) => [k, ui(this.lang, k)])),
     };
   }
 
