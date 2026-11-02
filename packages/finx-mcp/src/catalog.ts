@@ -50,9 +50,9 @@ export const BLOCKS: BlockDoc[] = [
     example: { type: "beneficiaryPicker", bind: "transfer.beneficiaryId", source: "ctx.beneficiaries", allowAddNew: true },
   },
   {
-    type: "amountInput", purpose: "Money amount, stored as a number.", fields: { bind: "data path", currency: "e.g. PKR", label: "Loc", helper: "Loc, may use {{templates}}", validation: "{ min?, max?, messages?: { max?: Loc } }. min and max are a number or an expression string." },
+    type: "amountInput", purpose: "Money amount, stored as a number.", fields: { bind: "data path", currency: "e.g. PKR", label: "Loc", helper: "Loc, may use {{templates}}", validation: "{ min?, max?, messages?: { min?: Loc, max?: Loc } }. min and max are a number or an expression string; messages replace the default error texts." },
     notes: ["If an amount is entered it must be greater than 0. An empty amount is only rejected when dataModel marks the path required: true, so always do that. Use max for balance or limit checks, e.g. \"ctx.accounts[transfer.fromAccountId].balance\"."],
-    example: { type: "amountInput", bind: "topup.amount", currency: "PKR", label: { en: "Amount", ur: "رقم" }, validation: { min: 50, max: 5000, messages: { max: { en: "The most you can top up is PKR 5,000", ur: "زیادہ سے زیادہ ٹاپ اپ PKR 5,000 ہے" } } } },
+    example: { type: "amountInput", bind: "topup.amount", currency: "PKR", label: { en: "Amount", ur: "رقم" }, validation: { min: 50, max: 5000, messages: { min: { en: "The least you can top up is PKR 50", ur: "کم از کم ٹاپ اپ PKR 50 ہے" }, max: { en: "The most you can top up is PKR 5,000", ur: "زیادہ سے زیادہ ٹاپ اپ PKR 5,000 ہے" } } } },
   },
   {
     type: "select", purpose: "Pick one option, shown as chips.", fields: { bind: "data path", label: "Loc", options: "fixed list of strings (the value is the text)", source: "OR a ctx path of an object map whose values have { id, name } (the value is the id)" },

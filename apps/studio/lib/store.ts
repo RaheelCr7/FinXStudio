@@ -137,6 +137,7 @@ export async function createJourney(name: string) {
 
 const STATUSES: RunStatus[] = ["running", "needs_review", "done", "failed"];
 const MAX_STEPS = 100;
+const STATUS_STEP: Record<RunStatus, string> = { running: "Back to running", needs_review: "Ready for your review", done: "Marked done", failed: "Marked failed" };
 export type RunInput = { id?: string; agent?: string; title?: string; brief?: string; status?: string; summary?: string; journeySlug?: string; note?: string };
 
 const text = (v: unknown, name: string, max: number): string | undefined => {
@@ -170,8 +171,10 @@ export async function upsertRun(input: RunInput): Promise<AgentRun> {
   if (brief !== undefined) run.brief = brief;
   if (summary !== undefined) run.summary = summary;
   if (input.journeySlug !== undefined) run.journeySlug = input.journeySlug;
+  const statusChanged = input.status !== undefined && input.status !== run.status;
   if (input.status !== undefined) run.status = input.status as RunStatus;
   if (note) run.steps.push({ at: now, text: note });
+  else if (statusChanged && input.id) run.steps.push({ at: now, text: STATUS_STEP[run.status] });
   if (!input.id && run.steps.length === 0) run.steps.push({ at: now, text: "Started" });
   run.steps = run.steps.slice(-MAX_STEPS);
   run.updatedAt = now;

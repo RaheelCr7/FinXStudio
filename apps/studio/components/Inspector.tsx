@@ -67,6 +67,7 @@ function BlockEditor({ b, journey, onChange }: { b: any; journey: Journey; onCha
         <Field label="Currency"><input className="input" value={b.currency} onChange={(e) => onChange({ currency: e.target.value.toUpperCase().slice(0, 3) })} /></Field>
         <div className="row"><Field label="Min"><input className="input mono" value={b.validation?.min ?? ""} onChange={(e) => onChange({ validation: { ...b.validation, min: num(e.target.value) } })} /></Field>
           <Field label="Max (number or rule)"><input className="input mono" value={b.validation?.max ?? ""} onChange={(e) => onChange({ validation: { ...b.validation, max: num(e.target.value) } })} /></Field></div>
+        <Loc label="Min error message" journey={journey} value={b.validation?.messages?.min ?? ""} onChange={(min) => onChange({ validation: { ...b.validation, messages: { ...(b.validation?.messages ?? {}), min } } })} />
         <Loc label="Max error message" journey={journey} value={b.validation?.messages?.max ?? ""} onChange={(max) => onChange({ validation: { ...b.validation, messages: { ...(b.validation?.messages ?? {}), max } } })} />
         <Loc label="Helper text" journey={journey} value={b.helper ?? ""} onChange={(helper) => onChange({ helper })} /></>) : null}
       {b.type === "select" ? (<><Loc label="Label" journey={journey} value={b.label} onChange={(label) => onChange({ label })} />

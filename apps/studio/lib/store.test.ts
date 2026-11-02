@@ -126,3 +126,14 @@ describe("agent runs", () => {
   });
 
 });
+
+describe("run timeline", () => {
+  it("records a status change as a step when no note is given, and prefers the note when there is one", async () => {
+    const run = await store.upsertRun({ title: "timeline" });
+    await store.upsertRun({ id: run.id, status: "needs_review", summary: "Built it" });
+    await store.upsertRun({ id: run.id, status: "done", note: "Published by hand" });
+    await store.upsertRun({ id: run.id, status: "done" }); // unchanged status adds nothing
+    const r = await store.getRun(run.id);
+    expect(r.steps.map((s) => s.text)).toEqual(["Started", "Ready for your review", "Published by hand"]);
+  });
+});

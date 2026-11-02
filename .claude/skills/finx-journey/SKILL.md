@@ -23,12 +23,12 @@ The tools come from the `finx` MCP server (their full names look like `mcp__finx
    - the happy path to the success screen,
    - a validation failure (an empty or malformed input is blocked and shows the right message),
    - a failure path (for money movement: three wrong OTP codes lock out, and customer `bilal` fails after a correct OTP with no balance change),
-   - the first screens in Urdu (`lang: "ur"`).
+   - the whole happy path again in Urdu (`lang: "ur"`), so every screen's translation and `{{template}}` is exercised, not only the first screens.
 
    Read the frames, not only `ok`: check that each screen says the right thing. Fix, re-save and re-run until clean. Mention any screen left in `unvisited` and why.
 7. **Hand over.** Call `finx_report_run` with status `needs_review` and a short summary: what you built, your assumptions, what the reviewer should check, and what the simulations showed. Then tell the person in a few sentences what the journey does, the screens in order, your assumptions, and the Studio link (`studioUrl`).
 
-Report progress with one short `note` at each milestone, about four calls in total, not one per tool.
+Keep the Agents board useful with `finx_report_run` at these points, each with a one-line `note`: the start, the first saved draft with no lint issues, the simulations passing, and the hand-over (status `needs_review` plus the summary). That is about four calls, not one per tool.
 
 ## Quality bar
 

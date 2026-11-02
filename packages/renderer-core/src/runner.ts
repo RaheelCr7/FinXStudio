@@ -80,7 +80,7 @@ export class JourneyRunner {
         const min = b.validation?.min != null ? this.num(b.validation.min) : undefined;
         const max = b.validation?.max != null ? this.num(b.validation.max) : undefined;
         if (!(n > 0)) this.errors[b.bind] = ui(this.lang, "enterAmount");
-        else if (min != null && n < min) this.errors[b.bind] = ui(this.lang, "minimum", { n: min });
+        else if (min != null && n < min) this.errors[b.bind] = b.validation?.messages?.min ? this.tx(b.validation.messages.min) : ui(this.lang, "minimum", { n: min });
         else if (max != null && n > max) this.errors[b.bind] = this.tx(b.validation.messages?.max ?? ui(this.lang, "maximum", { n: max }));
       }
       if (b.type === "textInput" && v != null && v !== "" && b.pattern && !new RegExp(b.pattern).test(String(v))) this.errors[b.bind] = b.patternMessage ? this.tx(b.patternMessage) : ui(this.lang, "invalid");

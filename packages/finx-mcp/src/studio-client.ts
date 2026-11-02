@@ -35,7 +35,10 @@ export class HttpStudioClient implements StudioClient {
         body: body === undefined ? undefined : JSON.stringify(body),
       });
       const data: any = await res.json().catch(() => ({}));
-      if (!res.ok) throw new StudioError(res.status, data.error ?? `Studio returned HTTP ${res.status}`, data.issues);
+      if (!res.ok) {
+        const hint = res.status === 404 && !data.error ? ` ${method} ${path} does not exist on ${this.baseUrl}. Check that this is FinX Studio, and restart it (cd apps/studio && pnpm dev) so it has the latest code.` : "";
+        throw new StudioError(res.status, data.error ?? `Studio returned HTTP ${res.status}.${hint}`, data.issues);
+      }
       return data as T;
     } catch (e) {
       if (e instanceof StudioError) throw e;

@@ -2,6 +2,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import dynamic from "next/dynamic";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import type { Journey } from "@finx/journey-schema";
 import { lintAll } from "@finx/renderer-core";
 import { addBlock, addScreen, BLOCK_GROUPS, BLOCK_LABELS, KNOWN_ADAPTERS, sameContent, textOf } from "@/lib/edit";
@@ -30,6 +31,7 @@ export function Builder({ initial, aiRun }: { initial: Rec; aiRun?: { id: string
   const [problems, setProblems] = useState(false);
   const [newScreen, setNewScreen] = useState<string | null>(null);
   const [publishing, setPublishing] = useState(false);
+  const router = useRouter();
   const lastSaved = useRef(JSON.stringify(initial.draft));
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -81,6 +83,7 @@ export function Builder({ initial, aiRun }: { initial: Rec; aiRun?: { id: string
     const rec = await (await fetch(`/api/journeys/${journey.slug}?env=draft`)).json();
     setPublished(rec.published); setJourney(rec.draft); lastSaved.current = JSON.stringify(rec.draft);
     setPublishing(false); flash(`Published v${data.version} to UAT. Apps load it the next time the journey opens.`);
+    router.refresh();
   }
 
   const status = !published ? { t: "Draft · never published", c: "chip" } : sameContent(journey, published) ? { t: `Published v${published.version}`, c: "chip pos" } : { t: `Unpublished changes · live is v${published.version}`, c: "chip warn" };

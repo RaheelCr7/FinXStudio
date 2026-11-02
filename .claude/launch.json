@@ -15,7 +15,7 @@
       "runtimeExecutable": "bash",
       "runtimeArgs": [
         "-c",
-        "cd apps/studio && npx next dev --port 3100"
+        "cd apps/studio && npx next dev --port 3100 --hostname 127.0.0.1"
       ],
       "port": 3100
     }
