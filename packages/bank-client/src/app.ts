@@ -153,5 +153,6 @@ export class BankApp {
     this.set({ toast: { text, ok } });
     this.timer = setTimeout(() => { this.timer = null; this.set({ toast: null }); }, this.deps.toastMs ?? 3200);
   }
-  dispose() { if (this.timer) clearTimeout(this.timer); this.listeners.clear(); }
+  /** Stops the pending notice timer. Listeners are left alone: React may unmount and remount an effect without the app going away. */
+  dispose() { if (this.timer) { clearTimeout(this.timer); this.timer = null; } }
 }
