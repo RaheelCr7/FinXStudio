@@ -1,8 +1,8 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { Platform, Pressable, SafeAreaView, ScrollView, StatusBar, Text, View, useColorScheme } from "react-native";
-import { Journey, lintJourney, localTransfer, payBill } from "@finx/journey-schema";
+import { Journey, localTransfer, payBill } from "@finx/journey-schema";
 import { MockBank, personas } from "@finx/mock-bank-api";
-import { localize } from "@finx/renderer-core";
+import { lintAll, localize } from "@finx/renderer-core";
 import { JourneyPlayer, ThemeProvider, useTheme } from "@finx/renderer-native";
 import { formatMoney, radius } from "@finx/ui-kit";
 
@@ -31,7 +31,7 @@ async function loadCatalog(): Promise<{ entries: Entry[]; source: "studio" | "bu
 async function loadJourney(slug: string): Promise<Live | null> {
   try {
     const parsed = Journey.safeParse(await timedFetch(`${STUDIO}/api/journeys/${slug}?env=published`));
-    if (!parsed.success || lintJourney(parsed.data).length) throw new Error("invalid journey");
+    if (!parsed.success || lintAll(parsed.data).length) throw new Error("invalid journey");
     return { journey: parsed.data, source: "studio" };
   } catch {
     const fallback = BUNDLED[slug];

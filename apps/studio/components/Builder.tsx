@@ -2,7 +2,8 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import dynamic from "next/dynamic";
 import Link from "next/link";
-import { lintJourney, type Journey } from "@finx/journey-schema";
+import type { Journey } from "@finx/journey-schema";
+import { lintAll } from "@finx/renderer-core";
 import { addBlock, addScreen, BLOCK_GROUPS, BLOCK_LABELS, KNOWN_ADAPTERS, sameContent, textOf } from "@/lib/edit";
 import { FlowCanvas } from "./FlowCanvas";
 import { Inspector } from "./Inspector";
@@ -30,7 +31,7 @@ export function Builder({ initial }: { initial: Rec }) {
   const lastSaved = useRef(JSON.stringify(initial.draft));
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  const issues = useMemo(() => lintJourney(journey), [journey]);
+  const issues = useMemo(() => lintAll(journey), [journey]);
   const flash = useCallback((m: string) => { setToast(m); setTimeout(() => setToast(""), 3600); }, []);
 
   const commit = useCallback((next: Journey) => {

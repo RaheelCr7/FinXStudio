@@ -57,3 +57,44 @@ describe("Pay a bill fixture", () => {
     expect(lintJourney(j).map((i) => i.code)).toContain("consent_before_submit");
   });
 });
+
+import { validateJourney } from "./index";
+
+describe("validateJourney", () => {
+  it("accepts a valid journey with no warnings", () => {
+    const r = validateJourney(structuredClone(localTransfer));
+    expect(r.ok).toBe(true);
+    if (r.ok) expect(r.warnings).toEqual([]);
+  });
+  it("reports every error with a readable path", () => {
+    const bad = structuredClone(localTransfer) as any;
+    delete bad.screens[0].blocks[1].bind;
+    bad.screens[1].blocks[0].type = "nope";
+    const r = validateJourney(bad);
+    expect(r.ok).toBe(false);
+    if (!r.ok) {
+      expect(r.errors.some((e) => e.startsWith("screens[0].blocks[1].bind"))).toBe(true);
+      expect(r.errors.some((e) => e.startsWith("screens[1].blocks[0].type"))).toBe(true);
+    }
+  });
+  it("warns about misspelled optional fields that would be silently dropped", () => {
+    const j = structuredClone(payBill) as any;
+    j.screens[0].blocks[2].placeholdr = "oops";
+    j.screens[0].blocks[1].labell = "x";
+    const r = validateJourney(j);
+    expect(r.ok).toBe(true);
+    if (r.ok) expect(r.warnings.join(" ")).toContain("screens[0].blocks[2].placeholdr");
+    if (r.ok) expect(r.warnings.join(" ")).toContain("screens[0].blocks[1].labell");
+  });
+});
+
+describe("duplicate ids", () => {
+  it("flags duplicate screen and integration ids", () => {
+    const j = structuredClone(localTransfer);
+    j.screens.push({ ...structuredClone(j.screens[1]!) });
+    j.integrations.push({ ...j.integrations[0]! });
+    const codes = lintJourney(j).map((i) => i.code);
+    expect(codes).toContain("duplicate_screen_id");
+    expect(codes).toContain("duplicate_integration_id");
+  });
+});

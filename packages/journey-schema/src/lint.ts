@@ -26,6 +26,10 @@ const collectNav = (j: Journey, id: string): string[] => {
 export function lintJourney(j: Journey): LintIssue[] {
   const issues: LintIssue[] = [];
   const ids = new Set(j.screens.map((s) => s.id));
+  const dupScreens = j.screens.map((s) => s.id).filter((id, i, all) => all.indexOf(id) !== i);
+  for (const id of new Set(dupScreens)) issues.push({ code: "duplicate_screen_id", message: `Screen id "${id}" is used more than once`, screen: id });
+  const dupInteg = j.integrations.map((i) => i.id).filter((id, i, all) => all.indexOf(id) !== i);
+  for (const id of new Set(dupInteg)) issues.push({ code: "duplicate_integration_id", message: `Integration id "${id}" is declared more than once` });
   if (!ids.has(j.entryScreen)) issues.push({ code: "entry_missing", message: `Entry screen ${j.entryScreen} does not exist` });
 
   // reachability
