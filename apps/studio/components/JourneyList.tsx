@@ -4,6 +4,7 @@ import Link from "next/link";
 import { ArrowUpRight, CircleAlert, Clock, FilePlus2, Globe, Languages, Layers, Search, Smartphone, Sparkles } from "lucide-react";
 import type { Shape } from "@/lib/graph";
 import { NewJourney } from "./NewJourney";
+import { useProjects } from "./Projects";
 
 export type Row = {
   slug: string; name: any; publishedVersion: number | null; draftDiffers: boolean; screens: number; channels: string[];
@@ -65,7 +66,8 @@ function Status({ r }: { r: Row }) {
   return <span className="chip pos dot">Live · v{r.publishedVersion}</span>;
 }
 
-export function JourneyList({ journeys, defaultNew }: { journeys: Row[]; defaultNew: boolean }) {
+export function JourneyList({ journeys, defaultNew, showAll }: { journeys: Row[]; defaultNew: boolean; showAll: boolean }) {
+  const { current, byId } = useProjects();
   const [q, setQ] = useState("");
   const [f, setF] = useState<Filter>("all");
   const counts = useMemo(() => ({
@@ -90,7 +92,7 @@ export function JourneyList({ journeys, defaultNew }: { journeys: Row[]; default
       <div className="page-head">
         <div>
           <h1>Journeys</h1>
-          <p className="sub">{counts.all === 0 ? "Build your first journey, or describe it and let Claude draft it." : `${counts.all} journey${counts.all === 1 ? "" : "s"} · ${counts.live} live${counts.changes ? ` · ${counts.changes} with unpublished changes` : ""}${counts.draft ? ` · ${counts.draft} draft${counts.draft === 1 ? "" : "s"}` : ""}`}</p>
+          <p className="sub">{showAll ? "All projects. " : <>In <b>{current.name}</b>. <Link href="/?scope=all" style={{ color: "var(--accent-text)" }}>Show every project</Link>. </>}{counts.all === 0 ? "Build your first journey, or describe it and let Claude draft it." : `${counts.all} journey${counts.all === 1 ? "" : "s"} · ${counts.live} live${counts.changes ? ` · ${counts.changes} with unpublished changes` : ""}${counts.draft ? ` · ${counts.draft} draft${counts.draft === 1 ? "" : "s"}` : ""}`}</p>
         </div>
         <div className="spacer" />
         <Link href="/agents" className="btn"><Sparkles size={15} aria-hidden /> Create with Claude</Link>
@@ -121,7 +123,7 @@ export function JourneyList({ journeys, defaultNew }: { journeys: Row[]; default
               <div className="thumb"><FlowThumb shape={j.shape} /><span className="open">Open <ArrowUpRight size={14} aria-hidden /></span></div>
               <div className="body">
                 <div className="row"><h3 style={{ flex: 1 }}>{en(j.name)}</h3><Status r={j} /></div>
-                <div className="row" style={{ marginTop: -2 }}><span className="chip accent">{(j.apps.length ? j.apps : ["meezan"]).map((a) => (a === "bankworkx" ? "BankWorkx" : a === "meezan" ? "Meezan Digital" : a)).join(" · ")}</span></div>
+                <div className="row" style={{ marginTop: -2 }}><span className="chip accent">{(j.apps.length ? j.apps : ["meezan"]).map((a) => byId(a)?.name ?? a).join(" · ")}</span></div>
                 {ur(j.name) ? <div className="ur" dir="rtl" lang="ur" style={{ textAlign: "left" }}>{ur(j.name)}</div> : null}
                 <div className="meta">
                   <span title="Screens"><Layers size={14} aria-hidden />{j.screens} screens</span>

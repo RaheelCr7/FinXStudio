@@ -5,8 +5,9 @@ import { localize } from "@finx/renderer-core";
 import { Gradient, Icon, IconTile, JourneyPlayer, Pill, useTheme, type IconName } from "@finx/renderer-native";
 import { formatMoney } from "@finx/ui-kit";
 import { ServerSetting } from "../ServerSetting";
+import { BRAND_INFO } from "../brand";
 import { DEFAULT_STUDIO_URL, SERVER_CHANGE_ALLOWED, loadStudioUrl } from "../studio-config";
-import { bundledEntries, loadCatalog, loadJourney, type Entry, type Live } from "../live";
+import { bundledEntries, loadCatalog, loadJourney, slugIs, type Entry, type Live } from "../live";
 import { Dashboard, type Actions } from "./Dashboard";
 import { Accounts, BudgetDetail, Budgets, Wallet } from "./Tabs";
 import { Card, Sheet, TabBar, tab, type TabId } from "./ui";
@@ -19,7 +20,8 @@ const SLUG_ICON: Record<string, { icon: IconName; text: string }> = {
 };
 
 /** Known actions first, in a sensible order; anything a team adds in Studio follows. */
-const rank = (slug: string) => { const i = Object.keys(SLUG_ICON).indexOf(slug); return i < 0 ? 99 : i; };
+const kindOf = (slug: string) => Object.keys(SLUG_ICON).find((k) => slugIs(slug, k));
+const rank = (slug: string) => { const k = kindOf(slug); return k ? Object.keys(SLUG_ICON).indexOf(k) : 99; };
 
 export function BankWorkxShell() {
   const { c, r } = useTheme();
@@ -48,7 +50,8 @@ export function BankWorkxShell() {
   const money2 = useMemo(() => (n: number) => new Intl.NumberFormat("en-US", { style: "currency", currency: "USD" }).format(n), []);
   const say = (text: string, ok = true) => { setToast({ text, ok }); if (timer.current) clearTimeout(timer.current); timer.current = setTimeout(() => setToast(null), 3200); };
 
-  async function openJourney(slug: string) {
+  async function openJourney(want: string) {
+    const slug = catalog.entries.find((e) => slugIs(e.slug, want))?.slug ?? want;
     setSheet(null); setOpening(slug);
     const l = await loadJourney(studioUrl, slug);
     setOpening(null);
@@ -78,11 +81,11 @@ export function BankWorkxShell() {
         contentContainerStyle={{ padding: 24, paddingTop: 48, maxWidth: 480, width: "100%", alignSelf: "center", gap: 14 }}>
         <View style={{ alignItems: "center", gap: 6 }}>
           <Gradient from={c.heroFrom} to={c.heroTo} radius={22} style={{ width: 72, height: 72, alignItems: "center", justifyContent: "center" }}><Icon name="wallet" size={34} color="#fff" /></Gradient>
-          <Text accessibilityRole="header" style={{ fontSize: 30, fontWeight: "800", color: c.text, marginTop: 10, letterSpacing: -0.6 }}>BankWorkx</Text>
+          <Text accessibilityRole="header" style={{ fontSize: 30, fontWeight: "800", color: c.text, marginTop: 10, letterSpacing: -0.6 }}>{BRAND_INFO.name}</Text>
           <Text style={{ color: c.textMuted }}>Sign in with a sandbox customer</Text>
         </View>
         <View style={{ gap: 10, marginTop: 14 }}>
-          {personasFor("bankworkx").map((p) => {
+          {personasFor(BRAND_INFO.preset).map((p) => {
             const on = p.id === personaId;
             return (
               <Pressable key={p.id} accessibilityRole="radio" accessibilityState={{ selected: on }} onPress={() => setPersonaId(p.id)} style={{ padding: 16, borderRadius: r.lg, backgroundColor: c.surface, borderWidth: 2, borderColor: on ? c.accent : "transparent" }}>
@@ -123,7 +126,7 @@ export function BankWorkxShell() {
       <Sheet visible={sheet === "fab"} onClose={() => setSheet(null)} title="What would you like to do?">
         <View style={{ gap: 10 }}>
           {catalog.entries.length === 0 ? <Text style={{ color: c.textMuted }}>No actions are available right now.</Text> : [...catalog.entries].sort((x, y) => rank(x.slug) - rank(y.slug)).map((e) => {
-            const meta = SLUG_ICON[e.slug] ?? { icon: "plus" as IconName, text: `Version ${e.version}` };
+            const meta = SLUG_ICON[kindOf(e.slug) ?? ""] ?? { icon: "plus" as IconName, text: `Version ${e.version}` };
             return (
               <Card key={e.slug} onPress={() => openJourney(e.slug)} label={localize(e.name, "en", "en")} style={{ flexDirection: "row", alignItems: "center", gap: 14, padding: 14, boxShadow: undefined } as any}>
                 <IconTile icon={meta.icon} color={c.accent} bg={c.accentSoft} size={46} />

@@ -1,3 +1,5 @@
+import brandData from "./brands.json";
+
 /** FinX Design System (FDS) tokens. Single source of truth for Studio and the bank apps. */
 
 export type Theme = {
@@ -110,18 +112,82 @@ const bankworkxDark = {
   chart1: "#7C9BFF", chart2: "#2DC8F0", chart3: "#2ED8AE", chart4: "#F5B25A", chart5: "#A98BFF", chart6: "#FF8CA6",
 };
 
-export type BrandId = "meezan" | "bankworkx";
-export type Brand = { id: BrandId; name: string; light: Theme; dark: Theme; radius: Record<keyof typeof radius, number>; currency: string; locale: string };
-
-/** Everything that makes one bank's app look different. Journeys and the engine never change per brand. */
-export const brands: Record<BrandId, Brand> = {
-  meezan: { id: "meezan", name: "Meezan Digital", light: themes.meezanLight, dark: themes.meezanDark, radius, currency: "PKR", locale: "en-PK" },
-  bankworkx: {
-    id: "bankworkx", name: "BankWorkx",
-    light: { name: "bankworkx-light", colors: bankworkxLight }, dark: { name: "bankworkx-dark", colors: bankworkxDark },
-    radius: { sm: 10, md: 14, lg: 20, xl: 26, pill: 999 }, currency: "USD", locale: "en-US",
-  },
+/** The two looks a bank can start from. A project picks one and then sets its own accent colour. */
+export type Preset = "meezan" | "bankworkx";
+export const PRESETS: Record<Preset, { name: string; description: string }> = {
+  meezan: { name: "Classic", description: "Calm and clean: white cards on a pale canvas, compact corners, a single accent colour." },
+  bankworkx: { name: "Fintech", description: "Lavender canvas, a gradient balance card, rounded cards, charts and a bottom tab bar." },
 };
+
+/** What a bank is, as stored in brands.json (and edited in Studio). Everything else about its look is derived from this. */
+export type BrandDef = {
+  name: string; shortName: string; slug: string; bundleId: string; scheme: string;
+  preset: Preset; accent: string; currency: string; locale: string;
+  /** Folder with the app icons, relative to apps/bank-app. */
+  assets: string; background: string; splashDark: string;
+};
+export type BrandId = string;
+export type Brand = { id: BrandId; name: string; preset: Preset; light: Theme; dark: Theme; radius: Record<keyof typeof radius, number>; currency: string; locale: string };
+
+// ---- colour helpers ---------------------------------------------------------------------------------------------------
+const toRgb = (hex: string): [number, number, number] => { const n = parseInt(hex.slice(1), 16); return [(n >> 16) & 255, (n >> 8) & 255, n & 255]; };
+const toHex = (c: number[]) => "#" + c.map((v) => Math.max(0, Math.min(255, Math.round(v))).toString(16).padStart(2, "0")).join("").toUpperCase();
+/** t = 0 gives a, t = 1 gives b. */
+export const mix = (a: string, b: string, t: number) => { const x = toRgb(a), y = toRgb(b); return toHex(x.map((v, i) => v + (y[i]! - v) * t)); };
+const WHITE = "#FFFFFF", BLACK = "#0B0F19";
+
+/** Moves `fg` toward white or black (whichever helps) until it reads on `bg` at the given ratio. */
+export function ensureContrast(fg: string, bg: string, min = 4.5): string {
+  const toward = contrast(WHITE, bg) > contrast(BLACK, bg) ? WHITE : BLACK;
+  let c = fg;
+  for (let t = 0; t <= 1.0001 && contrast(c, bg) < min; t += 0.04) c = mix(fg, toward, t);
+  return c;
+}
+/** White or near-black text, whichever is more readable on this fill. */
+export const readableOn = (fill: string) => (contrast(WHITE, fill) >= contrast(BLACK, fill) ? WHITE : BLACK);
+
+/** A hex colour like #3155CE, and readable: white text on it and it on white both need to reach 4.5:1. Returns an error message or null. */
+export function accentProblem(hex: string): string | null {
+  if (!/^#[0-9a-fA-F]{6}$/.test(hex)) return "Enter a colour like #3155CE";
+  if (contrast(hex, WHITE) < 4.5) return "This colour is too light: white text on it would be hard to read. Pick a darker one.";
+  return null;
+}
+
+const PRESET_BASE: Record<Preset, { light: Record<string, string>; dark: Record<string, string>; radius: Brand["radius"] }> = {
+  meezan: {
+    light: { ...neutralLight, ...semanticLight, accent: "#0F6E56", accentOn: "#FFFFFF", accentSoft: "#E1F5EE" },
+    dark: { ...neutralDark, ...semanticDark, accent: "#2DBE96", accentOn: "#04130E", accentSoft: "#0E2F27" },
+    radius,
+  },
+  bankworkx: { light: bankworkxLight, dark: bankworkxDark, radius: { sm: 10, md: 14, lg: 20, xl: 26, pill: 999 } },
+};
+const PRESET_ACCENT: Record<Preset, string> = { meezan: "#0F6E56", bankworkx: "#3155CE" };
+
+/** A full light and dark theme for a bank: the preset's palette with the bank's own accent colour applied. */
+export function resolveBrand(id: BrandId, def: BrandDef): Brand {
+  const base = PRESET_BASE[def.preset];
+  const make = (mode: "light" | "dark"): Theme => {
+    const c: Record<string, string> = { ...base[mode] };
+    if (def.accent.toUpperCase() !== PRESET_ACCENT[def.preset]) {
+      const surface = c.surface!;
+      // Dark mode needs a lighter version of the accent so it still reads on dark surfaces.
+      const soft = (a: string) => mix(a, surface, mode === "dark" ? 0.78 : 0.88);
+      let accent = mode === "dark" ? ensureContrast(mix(def.accent, WHITE, 0.35), surface, 4.5) : def.accent;
+      // the accent also has to read on its own soft background, which itself follows the accent, so nudge until both hold
+      for (let i = 0; i < 12 && contrast(accent, soft(accent)) < 4.5; i++) accent = mix(accent, mode === "dark" ? WHITE : BLACK, 0.06);
+      c.accent = accent;
+      c.accentOn = readableOn(accent);
+      c.accentSoft = soft(accent);
+      if (def.preset === "bankworkx") { c.heroFrom = mix(def.accent, WHITE, 0.16); c.heroTo = mix(def.accent, BLACK, 0.42); c.info = accent; c.infoBg = c.accentSoft; c.chart1 = accent; }
+    }
+    return { name: `${id}-${mode}`, colors: c };
+  };
+  return { id, name: def.name, preset: def.preset, light: make("light"), dark: make("dark"), radius: base.radius, currency: def.currency, locale: def.locale };
+}
+
+/** Every bank in brands.json. Journeys and the engine never change per bank; only this does. */
+export const brandDefs = brandData as Record<BrandId, BrandDef>;
+export const brands: Record<BrandId, Brand> = Object.fromEntries(Object.entries(brandDefs).map(([id, def]) => [id, resolveBrand(id, def)]));
 
 /** Every colour a component may use. Brands that do not define an extra one fall back through completeColors. */
 export type ColorKey =

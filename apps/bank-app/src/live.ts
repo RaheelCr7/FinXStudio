@@ -37,3 +37,6 @@ export async function loadJourney(studio: string, slug: string): Promise<Live | 
     return fallback ? { journey: fallback, source: "bundled" } : null;
   }
 }
+
+/** A journey copied into another bank keeps its name with the bank appended (add-money-acme-bank), so match by the original name too. */
+export const slugIs = (slug: string, base: string) => slug === base || slug.startsWith(`${base}-`);
