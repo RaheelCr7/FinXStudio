@@ -1,0 +1,47 @@
+import { describe, expect, it } from "vitest";
+import { existsSync, readFileSync } from "node:fs";
+import { Client, InMemoryTransport } from "@modelcontextprotocol/client";
+import { createFinxServer } from "./index";
+import { FakeStudio } from "./testing/fake-studio";
+
+const read = (rel: string) => readFileSync(new URL(rel, import.meta.url), "utf8");
+const SOURCE = "../skills/finx-journey/SKILL.md";
+const INSTALLED = "../../../.claude/skills/finx-journey/SKILL.md";
+
+describe("the /finx-journey skill", () => {
+  it("has the front matter Claude Code needs", () => {
+    const fm = read(SOURCE).match(/^---\n([\s\S]*?)\n---/)![1]!;
+    expect(fm).toMatch(/^name: finx-journey$/m);
+    expect(fm).toMatch(/^description: .{80,}/m);
+    expect(fm).toMatch(/^argument-hint: /m);
+    // pre-approving tool calls is the person's decision, not the skill's
+    expect(fm).not.toMatch(/allowed-tools/);
+  });
+
+  it("is installed in .claude/skills and identical to the source (run `pnpm --filter @finx/mcp sync-skills`)", () => {
+    expect(existsSync(new URL(INSTALLED, import.meta.url))).toBe(true);
+    expect(read(INSTALLED)).toBe(read(SOURCE));
+  });
+
+  it("takes the brief through $ARGUMENTS exactly once", () => {
+    expect(read(SOURCE).match(/\$ARGUMENTS/g)).toHaveLength(1);
+  });
+
+  it("only mentions tools that the server really provides", async () => {
+    const server = createFinxServer({ studio: new FakeStudio() });
+    const [ct, st] = InMemoryTransport.createLinkedPair();
+    const client = new Client({ name: "t", version: "0" });
+    await Promise.all([server.connect(st), client.connect(ct)]);
+    const real = new Set((await client.listTools()).tools.map((t) => t.name));
+    const mentioned = new Set([...read(SOURCE).matchAll(/`(finx_[a-z_]+)`/g)].map((m) => m[1]!));
+    expect([...mentioned].filter((n) => !real.has(n))).toEqual([]);
+    // and the workflow covers the essentials
+    for (const must of ["finx_get_catalog", "finx_save_draft", "finx_simulate_journey", "finx_report_run", "finx_create_journey"]) expect(mentioned.has(must), must).toBe(true);
+  });
+
+  it("tells the agent never to publish on its own", () => {
+    const body = read(SOURCE);
+    expect(body).toMatch(/Draft only/);
+    expect(body).toMatch(/Publish only if the person explicitly tells you/);
+  });
+});

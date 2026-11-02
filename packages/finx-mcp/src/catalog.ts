@@ -1,0 +1,196 @@
+import { ADAPTER_CATALOG, describePersonas } from "@finx/mock-bank-api";
+
+/**
+ * The reference an AI agent reads before authoring a journey. It documents what the engine really does today,
+ * including the limits. catalog.test.ts checks it against the schema and the lint source so it cannot drift.
+ */
+
+export const SECTIONS = ["all", "overview", "journey", "blocks", "actions", "expressions", "data", "localization", "adapters", "personas", "lint", "patterns"] as const;
+export type Section = (typeof SECTIONS)[number];
+
+export const SKELETON = {
+  id: "jrn_example",
+  slug: "example",
+  name: { en: "Example", ur: "مثال" },
+  version: 0,
+  status: "draft",
+  channels: ["web", "mobile"],
+  locale: { default: "en", supported: ["en", "ur"], rtl: ["ur"] },
+  entryScreen: "welcome",
+  dataModel: {},
+  integrations: [],
+  screens: [
+    { id: "welcome", title: { en: "Example", ur: "مثال" }, blocks: [
+      { type: "text", variant: "title", text: { en: "Example", ur: "مثال" } },
+      { type: "button", label: { en: "Continue", ur: "جاری رکھیں" }, variant: "primary", actions: [{ type: "navigate", to: "done" }] },
+    ] },
+    { id: "done", title: { en: "Done", ur: "مکمل" }, kind: "terminal", blocks: [
+      { type: "result", tone: "success", title: { en: "All done", ur: "سب مکمل" } },
+      { type: "button", label: { en: "Close", ur: "بند کریں" }, variant: "primary", actions: [{ type: "exit" }] },
+    ] },
+  ],
+};
+
+type BlockDoc = { type: string; purpose: string; fields: Record<string, string>; notes?: string[]; example: Record<string, unknown> };
+
+export const BLOCKS: BlockDoc[] = [
+  { type: "text", purpose: "A heading or a paragraph.", fields: { text: "Loc (required)", variant: "title | body | caption (default body)" }, example: { type: "text", variant: "title", text: { en: "Pay a bill", ur: "بل ادا کریں" } } },
+  {
+    type: "stepper", purpose: "Progress bar and \"Step X of N\" for a multi-step journey.", fields: { steps: "screen ids in order" },
+    notes: ["Declare it once, on the first screen. It then shows on every screen listed in steps. It renders nothing itself on other screens.", "Use it when there are 3 or more steps. Do not list branch or terminal screens."],
+    example: { type: "stepper", steps: ["bill", "review", "otp"] },
+  },
+  {
+    type: "accountPicker", purpose: "Choose one of the customer's accounts.", fields: { bind: "data path that receives the account id", source: "a ctx path saved by callApi, normally ctx.accounts", showBalance: "boolean", filter: "optional expression using `account`, e.g. account.canDebit" },
+    notes: ["Needs the accounts integration to be called with saveAs ctx.accounts before the screen is shown (onEnter)."],
+    example: { type: "accountPicker", bind: "bill.fromAccountId", source: "ctx.accounts", showBalance: true },
+  },
+  {
+    type: "beneficiaryPicker", purpose: "Choose a saved payee.", fields: { bind: "data path for the beneficiary id", source: "normally ctx.beneficiaries", allowAddNew: "boolean, shows an \"Add new\" link (not wired to a journey yet)" },
+    example: { type: "beneficiaryPicker", bind: "transfer.beneficiaryId", source: "ctx.beneficiaries", allowAddNew: true },
+  },
+  {
+    type: "amountInput", purpose: "Money amount, stored as a number.", fields: { bind: "data path", currency: "e.g. PKR", label: "Loc", helper: "Loc, may use {{templates}}", validation: "{ min?, max?, messages?: { max?: Loc } }. min and max are a number or an expression string." },
+    notes: ["If an amount is entered it must be greater than 0. An empty amount is only rejected when dataModel marks the path required: true, so always do that. Use max for balance or limit checks, e.g. \"ctx.accounts[transfer.fromAccountId].balance\"."],
+    example: { type: "amountInput", bind: "topup.amount", currency: "PKR", label: { en: "Amount", ur: "رقم" }, validation: { min: 50, max: 5000, messages: { max: { en: "The most you can top up is PKR 5,000", ur: "زیادہ سے زیادہ ٹاپ اپ PKR 5,000 ہے" } } } },
+  },
+  {
+    type: "select", purpose: "Pick one option, shown as chips.", fields: { bind: "data path", label: "Loc", options: "fixed list of strings (the value is the text)", source: "OR a ctx path of an object map whose values have { id, name } (the value is the id)" },
+    notes: ["Use source for data from the bank (billers, carriers). Use options only for short fixed lists."],
+    example: { type: "select", bind: "topup.carrier", label: { en: "Carrier", ur: "کیریئر" }, source: "ctx.carriers" },
+  },
+  {
+    type: "textInput", purpose: "Free text such as a mobile number or reference.", fields: { bind: "data path", label: "Loc", placeholder: "Loc", keyboard: "default | number | phone | email", pattern: "JavaScript regular expression, matched against the whole value. Use ^ and $.", patternMessage: "Loc shown when the value does not match" },
+    notes: ["Mark the field required: true in dataModel, otherwise an empty value is accepted."],
+    example: { type: "textInput", bind: "bill.reference", label: { en: "Consumer number", ur: "کنزیومر نمبر" }, placeholder: { en: "10 to 14 digits", ur: "10 سے 14 ہندسے" }, keyboard: "number", pattern: "^[0-9]{10,14}$", patternMessage: { en: "Enter 10 to 14 digits", ur: "10 سے 14 ہندسے درج کریں" } },
+  },
+  { type: "alert", purpose: "A highlighted message.", fields: { tone: "info | warning | error | success", text: "Loc, may use {{templates}}" }, example: { type: "alert", tone: "warning", text: { en: "PKR {{transfer.amount | money}} is above your remaining daily limit.", ur: "PKR {{transfer.amount | money}} آپ کی بقیہ یومیہ حد سے زیادہ ہے۔" } } },
+  {
+    type: "reviewSummary", purpose: "A read-only list of label and value rows, for the confirmation step.", fields: { rows: "[{ label: Loc, value: Loc }]. Values may use {{templates}}." },
+    example: { type: "reviewSummary", rows: [{ label: { en: "Biller", ur: "بل جاری کرنے والا" }, value: "{{ctx.bill.billerName}}" }, { label: { en: "Amount due", ur: "واجب الادا رقم" }, value: "PKR {{ctx.bill.amount | money}}" }] },
+  },
+  {
+    type: "consent", purpose: "A checkbox the customer must tick before money moves.", fields: { bind: "boolean data path", termsVersion: "e.g. transfers-v3", text: "Loc", validation: "{ mustBeTrue: true, messages: { mustBeTrue: Loc } }" },
+    notes: ["It is only enforced when validation.mustBeTrue is true. Always set it."],
+    example: { type: "consent", bind: "bill.consent", termsVersion: "bills-v2", text: { en: "I confirm I want to pay this bill", ur: "میں اس بل کی ادائیگی کی تصدیق کرتا/کرتی ہوں" }, validation: { mustBeTrue: true, messages: { mustBeTrue: { en: "Tick the confirmation first", ur: "پہلے تصدیق کریں" } } } },
+  },
+  {
+    type: "otp", purpose: "One-time code entry.", fields: { bind: "data path, normally otp.code", length: "4 to 8 digits", hint: "Loc, e.g. \"Enter the code sent to {{ctx.otp.maskedPhone}}\"", maxAttempts: "informational only today", resendAfterSeconds: "informational only today", onResend: "actions, not run by the UI yet" },
+    notes: ["The attempt limit is enforced by the verify call: put lockAfter and lockTo in its onError (see the otp pattern). The integration must be named exactly otpVerify for failures to be counted.", "Mark otp.code required: true in dataModel so an empty code is caught before the call."],
+    example: { type: "otp", bind: "otp.code", length: 6, hint: { en: "Enter the code sent to {{ctx.otp.maskedPhone}}", ur: "{{ctx.otp.maskedPhone}} پر بھیجا گیا کوڈ درج کریں" } },
+  },
+  {
+    type: "result", purpose: "The outcome on a terminal screen.", fields: { tone: "success | error", title: "Loc", text: "Loc", meta: "Loc, e.g. \"Ref {{result.reference}}\"" },
+    notes: ["An error result for a money-moving journey must say that no money has left the account."],
+    example: { type: "result", tone: "success", title: { en: "Bill paid", ur: "بل ادا ہو گیا" }, text: { en: "PKR {{ctx.bill.amount | money}} to {{ctx.bill.billerName}}", ur: "PKR {{ctx.bill.amount | money}} بنام {{ctx.bill.billerName}}" }, meta: { en: "Ref {{result.reference}}", ur: "حوالہ {{result.reference}}" } },
+  },
+  {
+    type: "button", purpose: "Runs a list of actions in order. Buttons are shown at the bottom of the screen, whatever their position in blocks.", fields: { label: "Loc", variant: "primary | secondary | ghost", actions: "Action[] (required)" },
+    notes: ["Put validate first when the screen has inputs. The chain stops at the first failed validate or callApi with an onError that does not navigate."],
+    example: { type: "button", label: { en: "Continue", ur: "جاری رکھیں" }, variant: "primary", actions: [{ type: "validate" }, { type: "navigate", to: "review" }] },
+  },
+];
+
+export const ACTIONS = [
+  { type: "validate", does: "Checks every bound input on the current screen (required, format, amount limits, consent, OTP length). Stops the action chain if anything is invalid and shows the errors.", example: { type: "validate" } },
+  { type: "navigate", does: "Goes to another screen. If the current screen has navigation.rules, the first rule whose `when` is true overrides `to`. toJourney and returnTo are reserved and do nothing yet.", example: { type: "navigate", to: "review" } },
+  { type: "setData", does: "Writes a value to a data path.", example: { type: "setData", path: "bill.reminder", value: true } },
+  {
+    type: "callApi",
+    does: "Calls a declared integration. Top-level input values are used as is, except a value that is exactly one {{expression}}, which is replaced by the evaluated value (keeps numbers as numbers). Nested objects are not evaluated. saveAs stores the result (use ctx.<name> for lists and lookups, any other root such as result for a one-off). onError: showToast (message), navigate (go to a screen), lockAfter + lockTo (go to lockTo after that many failures; only counted for the integration named otpVerify), stay (default when there is no navigate): stay on the screen and stop the chain.",
+    notes: ["Without onError, a failing API call raises an error and the journey cannot recover. Always add onError to every callApi, including those in onEnter."],
+    example: { type: "callApi", integration: "billLookup", input: { billerId: "{{bill.billerId}}", reference: "{{bill.reference}}" }, saveAs: "ctx.bill", onError: { showToast: { en: "We couldn't find that bill.", ur: "یہ بل نہیں ملا۔" }, stay: true } },
+  },
+  { type: "showToast", does: "Shows a short message at the top of the screen.", example: { type: "showToast", text: { en: "Saved", ur: "محفوظ ہو گیا" } } },
+  { type: "share", does: "Reserved for sharing a receipt. Does nothing yet.", example: { type: "share", template: "receipt-transfer" } },
+  { type: "exit", does: "Closes the journey and returns to the app home. Use it on the last button of a terminal screen.", example: { type: "exit" } },
+];
+
+const EXPRESSIONS = {
+  where: "navigation.rules[].when, a block's visibleWhen, amountInput validation min and max, accountPicker filter, and inside {{ }} in any text.",
+  operators: ["+", "-", "*", "/", "%", "==", "!=", "<", ">", "<=", ">=", "&&", "||", "!", "a ? b : c", "parentheses"],
+  literals: ["numbers", "'text' or \"text\"", "true", "false", "null", "Infinity"],
+  functions: ["min(a, b, ...)", "max(a, b, ...)", "abs(x)", "round(x)", "floor(x)", "ceil(x)", "len(x)", "isEmpty(x)"],
+  paths: "Dotted paths such as transfer.amount or ctx.limits.daily, and lookups with brackets such as ctx.accounts[transfer.fromAccountId].balance. A missing value is simply empty, never an error. == is a loose comparison.",
+  templates: "{{ expression }} or {{ expression | formatter }}. Formatters: money (PKR amounts with thousands separators), upper. A missing value renders as empty text. Do not use templates in bind, source, pattern or ids.",
+  notAvailable: ["no assignment", "no ??", "no method calls (only the functions above)", "no string concatenation in rules (use templates in text instead)"],
+  examples: ["transfer.amount > (ctx.limits.daily - ctx.limits.usedToday)", "bill.amount >= 50 && bill.amount <= 5000", "ctx.accounts[topup.fromAccountId].balance", "!isEmpty(bill.reference)"],
+};
+
+const DATA = {
+  dataModel: "A map from dotted path to { type, required?, currency?, pattern? }. type is \"string\", \"money\" or \"boolean\". Declare EVERY path that a block binds to or that a setData writes, and set required: true for every mandatory input (the engine only enforces required fields declared here).",
+  ctx: "ctx.* holds data loaded by callApi (saveAs: \"ctx.accounts\"). It is read-only for blocks. A block's source and every {{ctx.x}} must match a saveAs. Lint checks this.",
+  results: "saveAs with another root, such as saveAs: \"result\", makes {{result.reference}} available afterwards.",
+  lifetime: "All data lives for one run of the journey and is reset when it restarts.",
+  never: ["Do not put secrets, tokens or real customer data in a journey. Journeys are public configuration.", "Do not store card numbers or PINs."],
+};
+
+const LOCALIZATION = {
+  loc: "Every customer-facing string is either a plain string (English only) or an object { en, ur }. Always use { en, ur }. Lint reports translation_gap when an object lacks a language the journey supports.",
+  urdu: ["Use a polite, formal register (آپ).", "Keep PKR, digits and {{templates}} exactly as in English.", "Keep labels short. Do not translate ids, data paths or integration names."],
+  glossary: { Continue: "جاری رکھیں", Confirm: "تصدیق کریں", Done: "مکمل", "Try again": "دوبارہ کوشش کریں", Amount: "رقم", Account: "اکاؤنٹ", "Pay now": "ابھی ادا کریں", Verify: "تصدیق", "Incorrect code": "غلط کوڈ", Required: "ضروری ہے", Review: "جائزہ", Biller: "بل جاری کرنے والا", Fee: "فیس", From: "سے", To: "کو", Mobile: "موبائل", "Mobile number": "موبائل نمبر", Carrier: "کیریئر", Reference: "حوالہ", "Close": "بند کریں", "Back": "واپس", "Transfer sent": "ٹرانسفر بھیج دیا گیا", "No money has left your account": "آپ کے اکاؤنٹ سے کوئی رقم نہیں کٹی" },
+  directions: "Set locale.rtl to [\"ur\"]. Layout mirrors automatically.",
+};
+
+export const LINT_RULES = [
+  { code: "entry_missing", means: "entryScreen is not a screen id.", fix: "Set entryScreen to the first screen's id." },
+  { code: "duplicate_screen_id", means: "Two screens share an id.", fix: "Make ids unique." },
+  { code: "duplicate_integration_id", means: "Two integrations share an id.", fix: "Make ids unique." },
+  { code: "dangling_target", means: "A navigate (or rule, onError, lockTo) points at a screen that does not exist.", fix: "Fix the target id." },
+  { code: "unreachable", means: "No path leads to this screen from the entry screen.", fix: "Add a navigate to it, or delete it." },
+  { code: "unknown_integration", means: "A callApi uses an integration id that integrations[] does not declare.", fix: "Declare it in integrations." },
+  { code: "no_terminal", means: "No screen has kind \"terminal\".", fix: "Add a success screen, and a failed screen for money-moving journeys." },
+  { code: "consent_before_submit", means: "A money-moving journey has no consent block.", fix: "Add a consent block on the review screen." },
+  { code: "otp_before_money", means: "A money-moving journey has no OTP screen, or the money call is not after otpVerify.", fix: "Put otpVerify before the money call in the same button's actions." },
+  { code: "unbound_input", means: "A block binds a path that dataModel does not declare.", fix: "Add the path to dataModel." },
+  { code: "translation_gap", means: "A { en, ur } object is missing a supported language.", fix: "Add the missing translation." },
+  { code: "expression_syntax", means: "A rule or {{template}} is not a valid expression, or uses an unknown function.", fix: "Fix the syntax. See the expressions section." },
+  { code: "unknown_reference", means: "An expression uses a root, or a ctx name, that the journey never defines.", fix: "Use the suggested name, or add the dataModel entry or saveAs." },
+  { code: "unknown_field", means: "An expression uses a path under a known root that dataModel does not declare (usually a typo).", fix: "Use the suggested path." },
+  { code: "unknown_formatter", means: "A {{x | name}} uses a formatter that does not exist.", fix: "Use money or upper." },
+  { code: "unknown_source", means: "A block's source is never saved by a callApi.", fix: "Add saveAs to the callApi, or fix the name." },
+];
+
+const PATTERNS = [
+  "Money movement (transfer, bill, top-up): collect details, then a REVIEW screen with reviewSummary + consent, whose button validates, calls otpSend (saveAs ctx.otp) and navigates to the OTP screen. The OTP screen's button: validate, callApi otpVerify (onError: showToast, stay, lockAfter 3, lockTo failed), callApi the money adapter (saveAs result, onError navigate failed), navigate success. End with terminal screens success and failed.",
+  "Data from the bank: declare the integration, call it in the first screen's onEnter with saveAs ctx.<name> (and an onError), then use accountPicker/beneficiaryPicker/select with source ctx.<name>.",
+  "Look something up before continuing (bill, quote): callApi in the Continue button with saveAs ctx.<name> and onError { showToast, stay: true }, then navigate. Show the result on the next screen with {{ctx.<name>.field}}.",
+  "Branch on a rule: add a screen with kind \"branch\" and a navigation.rules entry on the screen whose single Continue button should divert, e.g. { when: \"topup.amount > ctx.limits.daily - ctx.limits.usedToday\", to: \"limitExceeded\" }. The branch screen needs a button back.",
+  "Validation: set required in dataModel, use pattern/patternMessage on text inputs, min/max on amounts, and validate as the first action of every button that moves forward.",
+  "Failure screens: a terminal screen with an error result and a Try again button that navigates to the start of the journey. For money movement, say that no money has left the account.",
+  "Keep it small: aim for 3 to 6 steps. One idea per screen.",
+];
+
+const OVERVIEW = {
+  what: "A FinX journey is JSON: screens made of blocks, wired together by buttons and rules, calling banking integrations. The same JSON runs on web, Android and iOS. Studio shows the draft you save, and a person publishes it.",
+  workflow: ["finx_get_catalog (this)", "finx_get_example for the closest shipped journey", "finx_create_journey (new) or finx_get_journey (change)", "finx_save_draft or finx_patch_journey, until issues is empty", "finx_simulate_journey: happy path, a validation failure, a failure path, Urdu", "finx_report_run with the summary, then tell the person to review in Studio"],
+  limits: { maxScreens: 30, maxJsonKilobytes: 200, advice: "Typical journeys have 3 to 8 screens." },
+  scope: "Agents only write drafts. Publishing needs the person's explicit instruction.",
+};
+
+export function getCatalog(section: Section = "all") {
+  const all = {
+    overview: OVERVIEW,
+    journey: {
+      shape: SKELETON,
+      fields: {
+        id: "string, e.g. jrn_mobile_top_up", slug: "must equal the slug returned by finx_create_journey", name: "Loc", version: "integer, keep the value you were given (0 for a new journey)", status: "\"draft\" (Studio sets it)",
+        channels: "[\"web\", \"mobile\"]", locale: "{ default: \"en\", supported: [\"en\", \"ur\"], rtl: [\"ur\"] }", entryScreen: "id of the first screen",
+        dataModel: "see the data section", integrations: "[{ id, adapter, mode: \"sandbox\" }] where adapter is from the adapters section",
+        screens: "[{ id, title: Loc, kind?: screen | branch | terminal, onEnter?: Action[], blocks: Block[], navigation?: { rules?: [{ when, to }] } }]",
+      },
+      notes: ["navigation.default is informational today: only button navigate actions and navigation.rules move the customer. Every screen except terminal ones needs a button that navigates.", "navigation.rules apply to every navigate action on that screen, so use them on a screen with one forward button.", "kind: terminal marks the end (success or failed) and hides the back arrow in the app. branch marks an alternate path such as limit exceeded. Both also change how Studio draws them and how lint reasons about the flow.", "Screen ids: lowercase letters, digits and underscores."],
+    },
+    blocks: BLOCKS,
+    actions: ACTIONS,
+    expressions: EXPRESSIONS,
+    data: DATA,
+    localization: LOCALIZATION,
+    adapters: { note: "Declare an integration { id: suggestedId, adapter, mode: \"sandbox\" } for each adapter you use. Only these exist today. If the brief needs something else, say so in the run summary instead of inventing one.", list: ADAPTER_CATALOG },
+    personas: { note: "Use these in finx_simulate_journey. The code 000000 is accepted for every customer; use 999999 as a wrong code.", list: describePersonas() },
+    lint: LINT_RULES,
+    patterns: PATTERNS,
+  };
+  if (section === "all") return all;
+  return { [section]: all[section] };
+}
