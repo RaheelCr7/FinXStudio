@@ -116,6 +116,15 @@ export const ADAPTER_CATALOG: AdapterInfo[] = [
     errors: ["INSTRUMENT_NOT_FOUND", "INVALID_AMOUNT", "ACCOUNT_NOT_FOUND", "INSUFFICIENT_FUNDS"],
   },
   {
+    adapter: "bank.invest.holdings", suggestedId: "holdings", description: "What the customer owns (BankWorkx).",
+    input: {}, returns: "Object map keyed by symbol: { id, symbol, shares, value, name }. Save as ctx.holdings and use it as a select source.",
+  },
+  {
+    adapter: "bank.invest.sell", suggestedId: "sellInvestment", description: "Sells a dollar amount of a holding and pays it into an account (BankWorkx). Selling the whole value sells every share.",
+    input: { symbol: "symbol of a holding", amount: "number, at least 1, at most the holding's value", toAccountId: "account id" }, returns: "{ reference, symbol, name, shares, price, proceeds, newBalance }", moneyMoving: true,
+    errors: ["NOT_HELD", "INVALID_AMOUNT", "ACCOUNT_NOT_FOUND", "INSUFFICIENT_HOLDING"],
+  },
+  {
     adapter: "bank.invest.watch", suggestedId: "watch", description: "Adds a stock or fund to the watchlist, or removes it with on: false (BankWorkx).",
     input: { symbol: "instrument symbol", on: "boolean, default true" }, returns: "{ watching }", errors: ["INSTRUMENT_NOT_FOUND"],
   },

@@ -19,6 +19,7 @@ const SLUG_ICON: Record<string, { icon: IconName; text: string }> = {
   "connect-account": { icon: "bank", text: "Link an account from another bank" },
   "create-budget": { icon: "budgets", text: "Set a monthly spending limit" },
   invest: { icon: "trend", text: "Buy a stock or fund" },
+  "sell-investment": { icon: "down", text: "Sell part or all of a holding" },
 };
 
 /** Known actions first, in a sensible order; anything a team adds in Studio follows. */

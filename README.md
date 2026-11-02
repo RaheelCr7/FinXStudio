@@ -4,11 +4,13 @@ A digital banking platform: ready-made banking journeys, a visual journey builde
 
 Full plan: [docs/PROJECT-PLAN.md](docs/PROJECT-PLAN.md) · Branching: [docs/BRANCHING.md](docs/BRANCHING.md) · Demo: [docs/DEMO.md](docs/DEMO.md) · AI layer: [docs/AI-LAYER.md](docs/AI-LAYER.md)
 
+Studio features: [Projects](docs/PROJECTS.md) · [Catalog](docs/CATALOG.md) · [Rules](docs/RULES.md) · [People and roles](docs/ROLES.md) · [Code tab](docs/CODE.md) · Second bank app: [BankWorkx](docs/BANKWORKX.md) · Devices: [iOS](docs/IOS.md), [Android](docs/ANDROID.md)
+
 ## Repo layout (as it grows)
 ```
-apps/studio       Next.js: builder, catalog, configurator, code/build tabs
+apps/studio       Next.js: journeys and builder, projects, catalog, rules, people and roles, code tab, agents
 apps/bank-app     Expo universal app (iOS, Android, web)
-packages/         journey-schema, renderer-core, renderer-native, mock-bank-api, ui-kit, finx-mcp (AI tools), ...
+packages/         journey-schema, renderer-core, renderer-native, mock-bank-api, ui-kit, codegen, finx-mcp (AI tools)
 docs/             plan, branching, specs
 ```
 

@@ -171,6 +171,7 @@ export function InstrumentDetail({ symbol, a, onBack }: { symbol: string; a: Act
   const watching = fin.invest.watchlist.includes(symbol);
   const held = fin.invest.holdings.find((h) => h.symbol === symbol);
   const canBuy = a.journeys.some((j) => slugIs(j.slug, "invest"));
+  const canSell = !!held && a.journeys.some((j) => slugIs(j.slug, "sell-investment"));
   const data = i.series[range];
   const first = data[0]!.value, move = i.price - first;
   const day = dayChange(i);
@@ -219,11 +220,18 @@ export function InstrumentDetail({ symbol, a, onBack }: { symbol: string; a: Act
       <Text style={{ color: c.textMuted, fontSize: 14, lineHeight: 21 }}>{i.about}</Text>
       <Text style={{ color: c.textFaint, fontSize: 11 }}>Sandbox data about a made-up {i.kind === "fund" ? "fund" : "company"}. Not investment advice.</Text>
 
-      {canBuy ? (
-        <Pressable accessibilityRole="button" accessibilityLabel={`Buy ${i.symbol}`} onPress={() => a.openJourney("invest", { "invest.symbol": i.symbol })} style={({ pressed }) => ({ minHeight: 52, borderRadius: r.lg, backgroundColor: c.accent, alignItems: "center", justifyContent: "center", opacity: pressed ? 0.88 : 1 })}>
-          <Text style={{ color: c.accentOn, fontWeight: "700", fontSize: 16 }}>Buy {i.symbol}</Text>
-        </Pressable>
-      ) : null}
+      <View style={{ flexDirection: "row", gap: 12 }}>
+        {canSell ? (
+          <Pressable accessibilityRole="button" accessibilityLabel={`Sell ${i.symbol}`} onPress={() => a.openJourney("sell-investment", { "sell.symbol": i.symbol })} style={({ pressed }) => ({ flex: 1, minHeight: 52, borderRadius: r.lg, borderWidth: 2, borderColor: c.accent, alignItems: "center", justifyContent: "center", opacity: pressed ? 0.85 : 1 })}>
+            <Text style={{ color: c.accent, fontWeight: "700", fontSize: 16 }}>Sell</Text>
+          </Pressable>
+        ) : null}
+        {canBuy ? (
+          <Pressable accessibilityRole="button" accessibilityLabel={`Buy ${i.symbol}`} onPress={() => a.openJourney("invest", { "invest.symbol": i.symbol })} style={({ pressed }) => ({ flex: 2, minHeight: 52, borderRadius: r.lg, backgroundColor: c.accent, alignItems: "center", justifyContent: "center", opacity: pressed ? 0.88 : 1 })}>
+            <Text style={{ color: c.accentOn, fontWeight: "700", fontSize: 16 }}>Buy {i.symbol}</Text>
+          </Pressable>
+        ) : null}
+      </View>
     </ScrollView>
   );
 }

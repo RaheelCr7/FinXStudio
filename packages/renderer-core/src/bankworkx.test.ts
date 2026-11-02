@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { addCard, addMoney, bankworkxJourneys, connectAccount, createBudget, invest, type Journey } from "@finx/journey-schema";
+import { addCard, addMoney, bankworkxJourneys, connectAccount, createBudget, invest, sellInvestment, type Journey } from "@finx/journey-schema";
 import { MockBank } from "@finx/mock-bank-api";
 import { JourneyRunner } from "./runner";
 import { cardExpiryValid, luhnValid } from "./card";
@@ -188,5 +188,33 @@ describe("Invest", () => {
     expect(r.current).toBe("failed");
     expect(bank.persona.accounts[0]!.balance).toBe(8720.76);
     expect(bank.persona.finance!.invest.holdings.some((h) => h.symbol === "LMRB" && h.shares > 6.5)).toBe(false);
+  });
+});
+
+describe("Sell investment", () => {
+  it("offers only what the customer owns", async () => {
+    const { r } = mk(sellInvestment); await r.start();
+    expect(r.view().blocks.find((b) => b.type === "select")!.items.map((i: any) => i.id)).toEqual(["LMRB", "GLBX", "ORCH", "TBND"]);
+  });
+  it("sells part of a holding and pays the account", async () => {
+    const { r, bank } = mk(sellInvestment); await r.start();
+    r.set("sell.symbol", "LMRB"); r.set("sell.toAccountId", "acc_main"); r.set("sell.amount", 184.2);
+    await press(r, "Continue"); await press(r, "Sell $184.2");
+    expect(r.current).toBe("success");
+    expect(bank.persona.accounts[0]!.balance).toBe(8904.96);
+    expect(bank.persona.finance!.invest.holdings.find((h) => h.symbol === "LMRB")!.shares).toBe(5.5);
+    expect(r.view().blocks.find((b) => b.type === "result")!.text).toBe("You sold 1 of LMRB and $184.20 is in your account.");
+  });
+  it("closes the holding when everything is sold, and refuses more than is owned", async () => {
+    const { r, bank } = mk(sellInvestment); await r.start();
+    r.set("sell.symbol", "TBND"); r.set("sell.toAccountId", "acc_main"); r.set("sell.amount", 600);
+    await press(r, "Continue"); await press(r, "Sell $600");
+    expect(r.current).toBe("failed");
+    expect(bank.persona.accounts[0]!.balance).toBe(8720.76);
+    r.set("sell.amount", 491.5); await press(r, "Try again"); r.set("sell.symbol", "TBND"); r.set("sell.toAccountId", "acc_main"); r.set("sell.amount", 491.5);
+    await press(r, "Continue"); await press(r, "Sell $491.5");
+    expect(r.current).toBe("success");
+    expect(bank.persona.finance!.invest.holdings.some((h) => h.symbol === "TBND")).toBe(false);
+    expect(bank.persona.accounts[0]!.balance).toBe(9212.26);
   });
 });

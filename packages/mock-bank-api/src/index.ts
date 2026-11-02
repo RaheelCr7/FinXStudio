@@ -238,6 +238,34 @@ export class MockBank {
         fin.transactions.unshift({ id: `t_inv${++this.seq}`, title: `Bought ${inst.symbol}`, category: "investing", amount: -amount, daysAgo: 0, time: "Now" });
         return { reference: `INV-20261102-${String(930 + this.seq).padStart(4, "0")}`, symbol: inst.symbol, name: inst.name, shares, price: inst.price, newBalance: from.balance };
       }
+      case "bank.invest.holdings": {
+        const fin = this.p.finance; if (!fin) throw new BankError("NOT_SUPPORTED", "Not available for this customer");
+        return Object.fromEntries(fin.invest.holdings.map((h) => {
+          const i = instrumentOf(h.symbol)!, value = Math.round(h.shares * i.price * 100) / 100;
+          return [h.symbol, { id: h.symbol, symbol: h.symbol, shares: h.shares, value, name: `${i.name} (${h.symbol}) · $${value.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` }];
+        }));
+      }
+      case "bank.invest.sell": {
+        const fin = this.p.finance; if (!fin) throw new BankError("NOT_SUPPORTED", "Not available for this customer");
+        const inst = instrumentOf(String(input.symbol));
+        const held = fin.invest.holdings.find((h) => h.symbol === input.symbol);
+        if (!inst || !held) throw new BankError("NOT_HELD", "Choose something you own to sell");
+        const amount = Number(input.amount);
+        if (!(amount >= 1)) throw new BankError("INVALID_AMOUNT", "Enter an amount of at least $1");
+        const to = this.p.accounts.find((a) => a.id === input.toAccountId);
+        if (!to) throw new BankError("ACCOUNT_NOT_FOUND", "Account not found");
+        const value = held.shares * inst.price;
+        if (amount > value + 0.005) throw new BankError("INSUFFICIENT_HOLDING", `You only hold $${(Math.floor(value * 100) / 100).toFixed(2)} of ${inst.symbol}`);
+        // selling the whole value sells every share, so no rounding crumbs are left behind
+        const all = value - amount < 0.01;
+        const shares = all ? held.shares : Math.round((amount / inst.price) * 10000) / 10000;
+        const proceeds = all ? Math.round(value * 100) / 100 : amount;
+        if (all) fin.invest.holdings = fin.invest.holdings.filter((h) => h.symbol !== inst.symbol);
+        else held.shares = Math.round((held.shares - shares) * 10000) / 10000;
+        to.balance = Math.round((to.balance + proceeds) * 100) / 100;
+        fin.transactions.unshift({ id: `t_sell${++this.seq}`, title: `Sold ${inst.symbol}`, category: "investing", amount: proceeds, daysAgo: 0, time: "Now" });
+        return { reference: `SEL-20261102-${String(930 + this.seq).padStart(4, "0")}`, symbol: inst.symbol, name: inst.name, shares, price: inst.price, proceeds, newBalance: to.balance };
+      }
       case "bank.invest.watch": {
         const fin = this.p.finance; if (!fin) throw new BankError("NOT_SUPPORTED", "Not available for this customer");
         if (!instrumentOf(String(input.symbol))) throw new BankError("INSTRUMENT_NOT_FOUND", "Unknown stock or fund");
