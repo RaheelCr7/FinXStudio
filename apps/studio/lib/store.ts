@@ -194,19 +194,27 @@ export async function createJourney(name: string, appsInput?: unknown) {
  */
 export async function cloneJourney(sourceSlug: string, projectId: string, opts: { publishNow?: boolean } = {}) {
   assertSlug(sourceSlug);
-  const apps = (await cleanApps([projectId]))!;
   const db = await read();
   const src = db.journeys[sourceSlug];
   if (!src) throw new StoreError(404, "Journey not found");
+  return insertCopy(db, src.published ?? src.draft, sourceSlug, projectId, opts.publishNow ? "new project" : undefined);
+}
+
+/** Adds a copy of any journey (a catalog entry, say) to a project, as a journey of its own. */
+export async function addJourneyCopy(template: Journey, projectId: string, opts: { publishNow?: boolean } = {}) {
+  return insertCopy(await read(), template, template.slug, projectId, opts.publishNow ? "catalog" : undefined);
+}
+
+async function insertCopy(db: Db, base: Journey, sourceSlug: string, projectId: string, publishBy?: string) {
+  const apps = (await cleanApps([projectId]))!;
   const slug = `${sourceSlug}-${projectId}`.slice(0, 62).replace(/-+$/, "");
   assertSlug(slug);
   if (db.journeys[slug]) throw new StoreError(409, `A journey called ${slug} already exists`);
-  const base = structuredClone(src.published ?? src.draft);
-  const j: Journey = { ...base, id: `jrn_${slug.replace(/-/g, "_")}`, slug, version: 0, status: "draft", apps };
+  const j: Journey = { ...structuredClone(base), id: `jrn_${slug.replace(/-/g, "_")}`, slug, version: 0, status: "draft", apps };
   const now = new Date().toISOString();
   db.journeys[slug] = { slug, draft: j, history: [], updatedAt: now };
   await write(db);
-  return opts.publishNow ? publish(slug, "new project") : db.journeys[slug]!;
+  return publishBy ? publish(slug, publishBy) : db.journeys[slug]!;
 }
 
 // ---- agent runs -----------------------------------------------------------------------------------------------

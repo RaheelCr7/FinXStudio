@@ -158,7 +158,7 @@ a.card:hover { border-color: var(--border-strong); box-shadow: var(--shadow-md);
 .jcard { padding: 0; overflow: hidden; gap: 0; }
 .jcard .thumb { height: 148px; background-color: var(--surface-2); background-image: radial-gradient(var(--border-strong) 1px, transparent 1px); background-size: 16px 16px; border-bottom: 1px solid var(--border); display: grid; place-items: center; position: relative; }
 .jcard .thumb svg { width: 100%; height: 100%; }
-.jcard .open { position: absolute; right: 12px; bottom: 12px; height: 28px; padding: 0 10px; border-radius: 8px; background: var(--surface); border: 1px solid var(--border-strong); box-shadow: var(--shadow-md); display: inline-flex; align-items: center; gap: 6px; font-size: 12.5px; font-weight: 600; opacity: 0; transform: translateY(4px); transition: opacity .18s, transform .18s var(--ease); }
+.jcard .open { position: absolute; right: 12px; bottom: 12px; height: 28px; padding: 0 10px; border-radius: 8px; background: var(--surface); border: 1px solid var(--border-strong); box-shadow: var(--shadow-md); display: inline-flex; white-space: nowrap; color: var(--text); align-items: center; gap: 6px; font-size: 12.5px; font-weight: 600; opacity: 0; transform: translateY(4px); transition: opacity .18s, transform .18s var(--ease); }
 .jcard:hover .open, .jcard:focus-visible .open { opacity: 1; transform: none; }
 .jcard .body { padding: 14px 16px 15px; display: flex; flex-direction: column; gap: 9px; }
 .jcard .meta { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; color: var(--text-2); font-size: 12.5px; }

@@ -1,6 +1,6 @@
-import { localTransfer, payBill, validateJourney, type Journey } from "@finx/journey-schema";
+import { catalog, catalogEntry, localTransfer, payBill, validateJourney, type Journey } from "@finx/journey-schema";
 import { lintAll } from "@finx/renderer-core";
-import { StudioError, type JourneyRecord, type JourneySummary, type ProjectSummary, type RunInput, type RunRecord, type StudioClient } from "../studio-client";
+import { StudioError, type CatalogSummary, type JourneyRecord, type JourneySummary, type ProjectSummary, type RunInput, type RunRecord, type StudioClient } from "../studio-client";
 import { SKELETON } from "../catalog";
 import { sameContent } from "../advice";
 
@@ -33,6 +33,23 @@ export class FakeStudio implements StudioClient {
     { id: "meezan", name: "Meezan Digital", preset: "meezan", currency: "PKR", bundleId: "pk.meezan.digital", journeys: 1 },
     { id: "bankworkx", name: "BankWorkx", preset: "bankworkx", currency: "USD", bundleId: "com.bankworkx.app", journeys: 0 },
   ];
+  async listCatalog(project = "meezan"): Promise<CatalogSummary[]> {
+    this.calls.push(`catalog ${project}`);
+    return catalog.map((e) => ({
+      id: e.id, name: String(e.journey.name), category: e.category, summary: e.summary, highlights: e.highlights, screens: e.journey.screens.length,
+      languages: e.journey.locale.supported, currencies: [], madeFor: e.madeFor, added: this.records.has(`${e.id}-${project}`) ? `${e.id}-${project}` : null,
+    }));
+  }
+  async addFromCatalog(id: string, project: string) {
+    this.calls.push(`add ${id} to ${project}`);
+    const entry = catalogEntry(id);
+    if (!entry) throw new StudioError(404, `No catalog journey called ${id}`);
+    if (!this.projects.some((p) => p.id === project)) throw new StudioError(404, `No project called ${project}`);
+    const slug = `${id}-${project}`;
+    if (this.records.has(slug)) throw new StudioError(409, `This project already has it: ${slug}`);
+    this.records.set(slug, { slug, draft: { ...structuredClone(entry.journey), slug, id: `jrn_${slug.replace(/-/g, "_")}`, version: 0, status: "draft", apps: [project] }, history: [], updatedAt: new Date().toISOString() });
+    return { slug };
+  }
   async listProjects() { this.calls.push("projects"); return structuredClone(this.projects); }
   async createJourney(name: string, project?: string) {
     this.calls.push(`create ${name}${project ? ` in ${project}` : ""}`);

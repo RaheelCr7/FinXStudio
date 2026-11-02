@@ -30,7 +30,7 @@ function Ago({ iso }: { iso: string }) {
 
 const NODE = { w: 190, h: 64 };
 /** The thumbnail: nodes as rounded boxes joined by curves, coloured like the real canvas. */
-function FlowThumb({ shape }: { shape: Shape }) {
+export function FlowThumb({ shape }: { shape: Shape }) {
   const X = 250, Y = 96;
   const pos = new Map(shape.nodes.map((n) => [n.id, { x: n.x * X, y: n.y * Y, n }]));
   const xs = shape.nodes.map((n) => n.x * X), ys = shape.nodes.map((n) => n.y * Y);
