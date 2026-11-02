@@ -23,9 +23,11 @@ import { spawn, spawnSync } from "node:child_process";
 import { existsSync, mkdirSync, openSync, readdirSync, writeFileSync } from "node:fs";
 import { homedir, platform } from "node:os";
 import { join } from "node:path";
+import { brandConfig } from "./lib/brands.mjs";
 
 const NAME = "FinX_Pixel";
-const PACKAGE = "pk.meezan.digital";
+// Which app to open: FINX_BRAND=bankworkx node scripts/android-emulator.mjs launch (default meezan)
+const PACKAGE = brandConfig(process.env.FINX_BRAND ?? "meezan").bundleId;
 const sdk = [process.env.ANDROID_HOME, process.env.ANDROID_SDK_ROOT, join(homedir(), "Library", "Android", "sdk"), join(homedir(), "Android", "Sdk")].filter(Boolean).find((d) => existsSync(d));
 if (!sdk) die("The Android SDK was not found. Set ANDROID_HOME.");
 const adb = join(sdk, "platform-tools", "adb");
