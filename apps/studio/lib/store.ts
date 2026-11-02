@@ -4,6 +4,7 @@ import { localTransfer, validateJourney, type Journey, type LintIssue } from "@f
 import { lintAll } from "@finx/renderer-core";
 import { sameContent } from "./edit";
 import { shapeOf } from "./graph";
+import { brands } from "@finx/ui-kit";
 
 export type HistoryEntry = { version: number; publishedAt: string; by: string };
 export type JourneyRecord = { slug: string; draft: Journey; published?: Journey; history: HistoryEntry[]; updatedAt: string };
@@ -111,14 +112,27 @@ export async function publish(slug: string, by = "studio") {
   return rec;
 }
 
-export async function createJourney(name: string) {
+/** Keeps only known app ids. No apps means the original Meezan app. */
+export function cleanApps(apps: unknown): string[] | undefined {
+  if (apps == null) return undefined;
+  if (!Array.isArray(apps) || apps.some((a) => typeof a !== "string")) throw new StoreError(400, "apps must be a list of app ids");
+  const bad = apps.filter((a) => !(a in brands));
+  if (bad.length) throw new StoreError(400, `Unknown app ${bad.join(", ")}. Use one of: ${Object.keys(brands).join(", ")}`);
+  return apps.length ? [...new Set(apps as string[])] : undefined;
+}
+
+export async function createJourney(name: string, appsInput?: unknown) {
+  const apps = cleanApps(appsInput);
+  // Meezan journeys start in English and Urdu. Another app's journeys start in English only, so nothing is flagged as untranslated.
+  const english = !!apps && !apps.includes("meezan");
   const slug = name.toLowerCase().trim().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "").slice(0, 60);
   assertSlug(slug || "x");
   const db = await read();
   if (db.journeys[slug]) throw new StoreError(409, "A journey with this name already exists");
   const j: Journey = {
     id: `jrn_${slug.replace(/-/g, "_")}`, slug, name, version: 0, status: "draft", channels: ["web", "mobile"],
-    locale: { default: "en", supported: ["en", "ur"], rtl: ["ur"] }, entryScreen: "welcome", integrations: [],
+    ...(apps ? { apps } : {}),
+    locale: english ? { default: "en", supported: ["en"] } : { default: "en", supported: ["en", "ur"], rtl: ["ur"] }, entryScreen: "welcome", integrations: [],
     screens: [
       { id: "welcome", title: name, blocks: [
         { type: "text", variant: "title", text: name },

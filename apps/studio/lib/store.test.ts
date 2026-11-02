@@ -137,3 +137,19 @@ describe("run timeline", () => {
     expect(r.steps.map((s) => s.text)).toEqual(["Started", "Ready for your review", "Published by hand"]);
   });
 });
+
+describe("journeys for more than one app", () => {
+  it("creates an English-only journey for BankWorkx and lists which app shows it", async () => {
+    const rec = await store.createJourney("Send a gift", ["bankworkx"]);
+    expect(rec.draft.apps).toEqual(["bankworkx"]);
+    expect(rec.draft.locale.supported).toEqual(["en"]);
+    expect((await store.listJourneys()).find((j) => j.slug === "send-a-gift")!.apps).toEqual(["bankworkx"]);
+    expect((await store.publish("send-a-gift")).published!.apps).toEqual(["bankworkx"]);
+  });
+  it("keeps the original Meezan defaults when no app is given, and rejects an unknown app", async () => {
+    const rec = await store.createJourney("Plain journey");
+    expect(rec.draft.apps).toBeUndefined();
+    expect(rec.draft.locale.supported).toEqual(["en", "ur"]);
+    await expect(store.createJourney("Odd one", ["nobank"])).rejects.toMatchObject({ status: 400 });
+  });
+});

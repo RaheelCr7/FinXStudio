@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation";
 import { Check, ChevronRight, CircleCheck, Eye, EyeOff, Layers, LoaderCircle, Plus, Redo2, Rocket, Settings2, Sparkles, TriangleAlert, Undo2, X } from "lucide-react";
 import type { Journey } from "@finx/journey-schema";
 import { lintAll } from "@finx/renderer-core";
+import { brands } from "@finx/ui-kit";
 import { addBlock, addScreen, BLOCK_GROUPS, BLOCK_LABELS, KNOWN_ADAPTERS, sameContent, textOf } from "@/lib/edit";
 import { BLOCK_ICONS } from "@/lib/blocks-ui";
 import { FlowCanvas } from "./FlowCanvas";
@@ -208,6 +209,22 @@ export function Builder({ initial, aiRun }: { initial: Rec; aiRun?: { id: string
               <div className="label-section" style={{ marginTop: 0 }}>Journey</div>
               <Loc label="Name" journey={journey} value={journey.name} onChange={(name) => commit({ ...journey, name })} />
               <div className="faint" style={{ marginTop: 8 }}>/{journey.slug} · {journey.locale.supported.join(", ")}</div>
+
+              <div className="label-section">Shown in</div>
+              {Object.values(brands).map((br) => {
+                const current = journey.apps?.length ? journey.apps : ["meezan"];
+                const on = current.includes(br.id);
+                return (
+                  <label key={br.id} className="row" style={{ gap: 8, padding: "4px 0", fontSize: 13.5 }}>
+                    <input type="checkbox" checked={on} onChange={(e) => {
+                      const next = e.target.checked ? [...current, br.id] : current.filter((x) => x !== br.id);
+                      if (next.length === 0) { flash("A journey must be shown in at least one app", false); return; }
+                      commit({ ...journey, apps: next });
+                    }} />{br.name}
+                  </label>
+                );
+              })}
+              <div className="faint">An app only shows the journeys that list it. A journey with none listed belongs to Meezan Digital.</div>
 
               <div className="label-section">Integrations</div>
               {journey.integrations.length === 0 ? <div className="faint" style={{ marginBottom: 8 }}>No integrations yet. Add one to let buttons call the bank.</div> : null}
