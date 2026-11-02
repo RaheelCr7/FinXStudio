@@ -6,17 +6,24 @@ import { sameContent } from "./edit";
 
 export type HistoryEntry = { version: number; publishedAt: string; by: string };
 export type JourneyRecord = { slug: string; draft: Journey; published?: Journey; history: HistoryEntry[]; updatedAt: string };
-type Db = { journeys: Record<string, JourneyRecord> };
+export type RunStatus = "running" | "needs_review" | "done" | "failed";
+export type RunStep = { at: string; text: string };
+/** One piece of work an AI agent (a Claude Code skill) did, reported back through the FinX MCP server. */
+export type AgentRun = { id: string; agent: string; title: string; brief?: string; status: RunStatus; summary?: string; journeySlug?: string; steps: RunStep[]; startedAt: string; updatedAt: string };
+type Db = { journeys: Record<string, JourneyRecord>; runs?: Record<string, AgentRun> };
 
 const file = () => path.join(process.env.FINX_DATA_DIR ?? path.join(process.cwd(), ".data"), "journeys.json");
 const SLUG = /^[a-z0-9][a-z0-9-]{0,62}$/;
 
 async function read(): Promise<Db> {
   try {
-    return JSON.parse(await fs.readFile(file(), "utf8")) as Db;
+    const db = JSON.parse(await fs.readFile(file(), "utf8")) as Db;
+    db.runs ??= {};
+    return db;
   } catch {
     const now = new Date().toISOString();
     const db: Db = {
+      runs: {},
       journeys: {
         [localTransfer.slug]: {
           slug: localTransfer.slug,
@@ -88,6 +95,14 @@ export async function publish(slug: string, by = "studio") {
   rec.draft = structuredClone(rec.published);
   rec.history.push({ version, publishedAt: new Date().toISOString(), by });
   rec.updatedAt = new Date().toISOString();
+  // a human publishing the reviewed draft completes the agent run that produced it
+  for (const run of Object.values(db.runs ?? {})) {
+    if (run.journeySlug === slug && run.status === "needs_review") {
+      run.status = "done";
+      run.steps.push({ at: rec.updatedAt, text: `Published v${version} to UAT by ${by}` });
+      run.updatedAt = rec.updatedAt;
+    }
+  }
   await write(db);
   return rec;
 }
@@ -116,4 +131,70 @@ export async function createJourney(name: string) {
   db.journeys[slug] = { slug, draft: j, history: [], updatedAt: now };
   await write(db);
   return db.journeys[slug]!;
+}
+
+// ---- agent runs -----------------------------------------------------------------------------------------------
+
+const STATUSES: RunStatus[] = ["running", "needs_review", "done", "failed"];
+const MAX_STEPS = 100;
+export type RunInput = { id?: string; agent?: string; title?: string; brief?: string; status?: string; summary?: string; journeySlug?: string; note?: string };
+
+const text = (v: unknown, name: string, max: number): string | undefined => {
+  if (v == null) return undefined;
+  if (typeof v !== "string") throw new StoreError(400, `${name} must be text`);
+  if (v.length > max) throw new StoreError(400, `${name} is too long (max ${max} characters)`);
+  return v;
+};
+
+/** Create a run (no id) or update one (with id). Notes become timeline steps. */
+export async function upsertRun(input: RunInput): Promise<AgentRun> {
+  const title = text(input.title, "title", 120), brief = text(input.brief, "brief", 2000), summary = text(input.summary, "summary", 4000), note = text(input.note, "note", 500);
+  const agent = text(input.agent, "agent", 24);
+  if (agent !== undefined && !/^[a-z][a-z-]{1,23}$/.test(agent)) throw new StoreError(400, "agent must be lowercase letters, e.g. journey");
+  if (input.status !== undefined && !STATUSES.includes(input.status as RunStatus)) throw new StoreError(400, `status must be one of ${STATUSES.join(", ")}`);
+  if (input.journeySlug !== undefined) assertSlug(input.journeySlug);
+  const db = await read();
+  db.runs ??= {};
+  const now = new Date().toISOString();
+  let run: AgentRun;
+  if (input.id) {
+    const existing = db.runs[input.id];
+    if (!existing) throw new StoreError(404, "Run not found");
+    run = existing;
+  } else {
+    if (!title) throw new StoreError(400, "title is required to start a run");
+    run = { id: `run_${crypto.randomUUID().slice(0, 8)}`, agent: agent ?? "journey", title, status: "running", steps: [], startedAt: now, updatedAt: now };
+    db.runs[run.id] = run;
+  }
+  if (title && input.id) run.title = title;
+  if (brief !== undefined) run.brief = brief;
+  if (summary !== undefined) run.summary = summary;
+  if (input.journeySlug !== undefined) run.journeySlug = input.journeySlug;
+  if (input.status !== undefined) run.status = input.status as RunStatus;
+  if (note) run.steps.push({ at: now, text: note });
+  if (!input.id && run.steps.length === 0) run.steps.push({ at: now, text: "Started" });
+  run.steps = run.steps.slice(-MAX_STEPS);
+  run.updatedAt = now;
+  await write(db);
+  return run;
+}
+
+export async function listRuns(): Promise<AgentRun[]> {
+  const db = await read();
+  // newest update first; runs touched in the same millisecond keep reverse insertion order
+  return Object.values(db.runs ?? {})
+    .map((run, i) => ({ run, i }))
+    .sort((a, b) => b.run.updatedAt.localeCompare(a.run.updatedAt) || b.i - a.i)
+    .map((x) => x.run)
+    .slice(0, 100);
+}
+
+export async function getRun(id: string): Promise<AgentRun> {
+  const run = (await read()).runs?.[id];
+  if (!run) throw new StoreError(404, "Run not found");
+  return run;
+}
+
+export async function latestRunForJourney(slug: string): Promise<AgentRun | undefined> {
+  return (await listRuns()).find((r) => r.journeySlug === slug && r.agent === "journey");
 }
