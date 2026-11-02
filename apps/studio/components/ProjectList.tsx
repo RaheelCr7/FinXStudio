@@ -28,7 +28,7 @@ function CopyLine({ label, cmd }: { label: string; cmd: string }) {
   );
 }
 
-export function ProjectList({ projects, starters, defaultNew }: { projects: ProjectRow[]; starters: Starter[]; defaultNew: boolean }) {
+export function ProjectList({ projects, starters, defaultNew, initialAccent }: { projects: ProjectRow[]; starters: Starter[]; defaultNew: boolean; initialAccent?: string }) {
   const router = useRouter();
   const { current, setCurrent } = useProjects();
   const { can } = useWho();
@@ -73,7 +73,7 @@ export function ProjectList({ projects, starters, defaultNew }: { projects: Proj
         ))}
       </div>
 
-      {wizard ? <NewProjectWizard starters={starters} onClose={() => { setWizard(false); if (defaultNew) router.replace("/projects"); }} /> : null}
+      {wizard ? <NewProjectWizard starters={starters} initialAccent={initialAccent} onClose={() => { setWizard(false); if (defaultNew) router.replace("/projects"); }} /> : null}
     </div>
   );
 }

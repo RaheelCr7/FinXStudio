@@ -77,6 +77,23 @@ export async function createProject(input: NewProject): Promise<Created> {
   return { project: toProject(id, def), iconsMade: icons.ok, iconWarning: icons.warning };
 }
 
+/** Changes a project's brand colour, for example to one taken from a design. The app icons are remade from it. */
+export async function updateProjectAccent(id: string, accentInput: unknown): Promise<Created & { previous: string }> {
+  const all = await read();
+  const def = all[id];
+  if (!def) throw new StoreError(404, `No project called ${id}`);
+  const accent = String(accentInput ?? "").toUpperCase();
+  const bad = accentProblem(accent);
+  if (bad) throw new StoreError(400, bad);
+  const updated: BrandDef = { ...def, accent };
+  const file = brandsFile();
+  const tmp = `${file}.${process.pid}.tmp`;
+  await fs.writeFile(tmp, JSON.stringify({ ...all, [id]: updated }, null, 2) + "\n");
+  await fs.rename(tmp, file);
+  const icons = makeIcons(id, accent);
+  return { project: toProject(id, updated), iconsMade: icons.ok, iconWarning: icons.warning, previous: def.accent };
+}
+
 /** The app icons come from the accent colour. If Python or Pillow is missing, the build script makes them later. */
 function makeIcons(id: string, accent: string): { ok: boolean; warning?: string } {
   if (process.env.FINX_SKIP_ICONS === "1") return { ok: false, warning: "Icons are made the first time the app is built." };

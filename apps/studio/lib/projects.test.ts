@@ -69,4 +69,13 @@ describe("projects", () => {
     await expect(store.cloneJourney("fund-transfer-local", "acme-bank")).rejects.toMatchObject({ status: 409 });
     await expect(store.cloneJourney("fund-transfer-local", "nobody")).rejects.toMatchObject({ status: 400 });
   });
+
+  it("changes a project's colour in the file, remembers the old one, and refuses a pale colour", async () => {
+    const out = await projects.updateProjectAccent("bankworkx", "#7c3aed");
+    expect(out).toMatchObject({ previous: "#3155CE", project: { accent: "#7C3AED" } });
+    expect(JSON.parse(readFileSync(file, "utf8")).bankworkx.accent).toBe("#7C3AED");
+    expect((await projects.getProject("bankworkx"))!.brand.light.colors.accent).toBe("#7C3AED");
+    await expect(projects.updateProjectAccent("bankworkx", "#FFEE99")).rejects.toMatchObject({ status: 400 });
+    await expect(projects.updateProjectAccent("nobank", "#7C3AED")).rejects.toMatchObject({ status: 404 });
+  });
 });

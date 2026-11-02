@@ -86,7 +86,7 @@ export async function requireCan(req: Request, action: Action): Promise<Person> 
   const who = await actorOf(req);
   if (!can(who.role, action)) {
     const need = action === "publish" ? "a Reviewer or Admin" : action === "edit" ? "a Designer, Developer or Admin" : action === "agents" ? "a Developer or Admin" : action === "projects" ? "a Designer or Admin" : "an Admin";
-    const verb: Record<Action, string> = { edit: "edit journeys", publish: "publish", projects: "create projects", agents: "update agent runs", people: "manage people" };
+    const verb: Record<Action, string> = { edit: "edit journeys", publish: "publish", projects: "create or restyle projects", agents: "update agent runs", people: "manage people" };
     throw new StoreError(403, `${who.name} is a ${ROLE_INFO[who.role].label} and cannot ${verb[action]}. Ask ${need}.`);
   }
   return who;
