@@ -1,0 +1,30 @@
+{
+  "name": "@finx/studio",
+  "version": "0.0.1",
+  "private": true,
+  "scripts": {
+    "dev": "next dev --port 3100",
+    "build": "next build",
+    "typecheck": "tsc -p . --noEmit",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@finx/journey-schema": "workspace:*",
+    "@finx/mock-bank-api": "workspace:*",
+    "@finx/renderer-core": "workspace:*",
+    "@finx/renderer-native": "workspace:*",
+    "@finx/ui-kit": "workspace:*",
+    "@xyflow/react": "12.12.1",
+    "next": "16.4.4",
+    "react": "19.3.0",
+    "react-dom": "19.3.0",
+    "react-native": "0.88.1",
+    "react-native-web": "^0.21.4"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.0",
+    "@types/react": "~19.3.0",
+    "@types/react-dom": "~19.3.0",
+    "vitest": "2.1.8"
+  }
+}
