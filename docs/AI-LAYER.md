@@ -1,12 +1,15 @@
-# AI layer: Claude Code, the FinX MCP server and the journey skill
+# AI layer: Claude Code, the FinX MCP server and the FinX skills
 
-FinX Studio has no AI backend and needs no Anthropic API key. AI runs in **your Claude Code session, on your own Claude subscription**. FinX gives Claude Code three things:
+FinX Studio has no AI backend and needs no Anthropic API key. AI runs in **your Claude Code session, on your own Claude subscription**. FinX gives Claude Code these things:
 
 | Piece | Where | What it does |
 |---|---|---|
 | FinX MCP server | `packages/finx-mcp` | Tools to read, create, change, lint, test and report on journeys in Studio |
 | `/finx-journey` skill | `.claude/skills/finx-journey` | The workflow: brief in, reviewed and tested draft out |
+| `/finx-review` skill | `.claude/skills/finx-review` | Reviews a journey (money safety, clarity, accessibility, security, translations, sandbox runs) and reports findings. Read only |
+| `/finx-code` skill | `.claude/skills/finx-code` | Changes this repository's code on a feature branch with tests, docs and a pull request |
 | Agents board | Studio, `/agents` | Shows each AI run, its progress and result, and links to the draft for review |
+| Ask Claude | Studio, in the Builder | Writes the exact Claude Code command for this journey (change it or review it); the Agents page does the same for any task |
 
 ## Quick start
 
@@ -23,7 +26,14 @@ Open this folder in Claude Code. The first time, approve the project's `finx` MC
 
 Watch it at `http://localhost:3100/agents`. When the run is *Needs your review*, open the draft in the builder, check it, and press **Publish to UAT**. Publishing from Studio completes the run.
 
-You can also start from Studio: the Agents page turns your brief into the exact `claude` command to run.
+You can also start from Studio: the Agents page and the Builder's **Ask Claude** button turn your request into the exact `claude` command to run, for a journey change, a review, or a code change. Studio never calls an AI service itself.
+
+```
+/finx-review pay-a-bill focus on the failure screens
+/finx-code Add a block that shows a download button
+```
+
+A review run appears on the Agents board as *Review agent*, done, with the report as its summary. A code run ends as a pull request. Design colours do not need Claude: see [DESIGN.md](DESIGN.md).
 
 ## The tools
 
