@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useReducer, useRef } from "react";
-import { Pressable, ScrollView, Text, View } from "react-native";
+import { BackHandler, Platform, Pressable, ScrollView, Text, View } from "react-native";
 import type { Journey } from "@finx/journey-schema";
 import { JourneyRunner, type Adapter } from "@finx/renderer-core";
 import { radius } from "@finx/ui-kit";
@@ -16,6 +16,17 @@ export function JourneyPlayer({ journey, adapter, lang, onExit, onClose }: Journ
   useEffect(() => runner.subscribe(force), [runner]);
   useEffect(() => { runner.start(); }, [runner]);
   useEffect(() => { if (lang) runner.setLang(lang); }, [lang, runner]);
+
+  // Android's back button steps back through the journey, and closes it from the first or a final screen.
+  // (Only on Android: react-native-web's BackHandler logs an error when used.)
+  useEffect(() => {
+    if (Platform.OS !== "android") return;
+    const sub = BackHandler.addEventListener("hardwareBackPress", () => {
+      if (runner.screen.kind !== "terminal" && runner.history.length > 0) runner.back(); else onClose?.();
+      return true;
+    });
+    return () => sub.remove();
+  }, [runner, onClose]);
 
   const v = runner.view();
   useEffect(() => { if (v.exited) onExit?.(); }, [v.exited]);

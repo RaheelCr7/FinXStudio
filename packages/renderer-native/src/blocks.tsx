@@ -212,10 +212,13 @@ export function TextBlock({ b }: P) {
 export function Button({ b, press, busy, strings }: P) {
   const { c } = useTheme();
   const primary = (b.variant ?? "primary") === "primary";
+  const label = busy ? strings.wait : b.label;
+  // An explicit label keeps screen readers announcing the button's name. Without one, React Native on Android
+  // leaves the description "busy" behind after the button has been busy once.
   return (
-    <Pressable accessibilityRole="button" accessibilityState={{ busy, disabled: busy }} onPress={() => press(b.actions)}
+    <Pressable accessibilityRole="button" accessibilityLabel={label} accessibilityState={{ busy, disabled: busy }} onPress={() => press(b.actions)}
       style={({ pressed }) => ({ height: 54, borderRadius: radius.lg, alignItems: "center", justifyContent: "center", backgroundColor: primary ? c.accent : "transparent", borderWidth: primary ? 0 : 1, borderColor: c.borderStrong, opacity: busy ? 0.6 : pressed ? 0.88 : 1, transform: [{ scale: pressed ? 0.985 : 1 }] })}>
-      <Text style={{ color: primary ? c.accentOn : c.text, fontSize: 16, fontWeight: "600" }}>{busy ? strings.wait : b.label}</Text>
+      <Text style={{ color: primary ? c.accentOn : c.text, fontSize: 16, fontWeight: "600" }}>{label}</Text>
     </Pressable>
   );
 }

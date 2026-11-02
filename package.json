@@ -4,7 +4,8 @@
   "packageManager": "pnpm@9.15.0",
   "scripts": {
     "test": "pnpm -r --if-present test",
-    "typecheck": "pnpm -r --if-present typecheck"
+    "typecheck": "pnpm -r --if-present typecheck",
+    "android:apk": "pnpm --filter @finx/bank-app build:android"
   },
   "devDependencies": {
     "typescript": "5.6.3",
