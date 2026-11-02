@@ -1,11 +1,29 @@
-import React, { useMemo, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import { Platform, Pressable, SafeAreaView, ScrollView, StatusBar, Text, View, useColorScheme } from "react-native";
-import { localTransfer } from "@finx/journey-schema";
+import { Journey, lintJourney, localTransfer } from "@finx/journey-schema";
 import { MockBank, personas } from "@finx/mock-bank-api";
 import { JourneyPlayer, ThemeProvider, useTheme } from "@finx/renderer-native";
 import { formatMoney, radius } from "@finx/ui-kit";
 
 type Screen = { name: "login" } | { name: "home" } | { name: "journey" };
+type Live = { journey: Journey; source: "studio" | "bundled" };
+
+// Over-the-air journeys: the app asks Studio for the published version each time, and never trusts it blindly.
+const STUDIO = process.env.EXPO_PUBLIC_STUDIO_URL ?? (Platform.OS === "android" ? "http://10.0.2.2:3100" : "http://localhost:3100");
+async function loadJourney(slug: string): Promise<Live> {
+  try {
+    const ctl = new AbortController();
+    const t = setTimeout(() => ctl.abort(), 2500);
+    const res = await fetch(`${STUDIO}/api/journeys/${slug}?env=published`, { signal: ctl.signal });
+    clearTimeout(t);
+    if (!res.ok) throw new Error(String(res.status));
+    const parsed = Journey.safeParse(await res.json());
+    if (!parsed.success || lintJourney(parsed.data).length) throw new Error("invalid journey");
+    return { journey: parsed.data, source: "studio" };
+  } catch {
+    return { journey: localTransfer, source: "bundled" };
+  }
+}
 const tab = { fontVariant: ["tabular-nums" as const] };
 
 function Shell() {
@@ -14,6 +32,8 @@ function Shell() {
   const [personaId, setPersonaId] = useState("ayesha");
   const [lang, setLang] = useState("en");
   const [tick, setTick] = useState(0);
+  const [live, setLive] = useState<Live>({ journey: localTransfer, source: "bundled" });
+  useEffect(() => { if (screen.name === "home") loadJourney("fund-transfer-local").then(setLive); }, [screen.name, tick]);
   const bank = useMemo(() => new MockBank(personaId), [personaId, screen.name === "login"]);
   const adapter = useMemo(() => (id: string, input: Record<string, any>) => bank.call(id, input), [bank]);
   const rtl = lang === "ur";
@@ -56,7 +76,7 @@ function Shell() {
 
   if (screen.name === "journey") {
     return (
-      <JourneyPlayer journey={localTransfer} adapter={adapter} lang={lang}
+      <JourneyPlayer journey={live.journey} adapter={adapter} lang={lang}
         onClose={() => { setTick(tick + 1); setScreen({ name: "home" }); }} onExit={() => { setTick(tick + 1); setScreen({ name: "home" }); }} />
     );
   }
@@ -97,7 +117,12 @@ function Shell() {
             </Pressable>
           ))}
         </View>
-        <Text style={{ color: c.textFaint, fontSize: 12 }}>Transfer runs the “Send to beneficiary” journey (v{localTransfer.version}) from the journey engine. Bills, Top-up and Scan arrive with their journeys.</Text>
+        <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
+          <View style={{ paddingHorizontal: 10, height: 24, borderRadius: radius.pill, justifyContent: "center", backgroundColor: live.source === "studio" ? c.positiveBg : c.warningBg }}>
+            <Text style={{ fontSize: 12, fontWeight: "600", color: live.source === "studio" ? c.positive : c.warning }}>{live.source === "studio" ? `Live from Studio · v${live.journey.version}` : `Offline copy · v${live.journey.version}`}</Text>
+          </View>
+        </View>
+        <Text style={{ color: c.textFaint, fontSize: 12 }}>Transfer runs the “Send to beneficiary” journey published from FinX Studio. Bills, Top-up and Scan arrive with their journeys.</Text>
       </ScrollView>
     </View>
   );
