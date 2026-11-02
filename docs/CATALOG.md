@@ -20,6 +20,7 @@ The catalog is a library of ready-made journeys. A project (bank app) adds one t
 | Add card | Cards | BankWorkx |
 | Create budget | Budgeting | BankWorkx |
 | Invest | Investing | BankWorkx |
+| Sell investment | Investing | BankWorkx |
 
 The catalog holds each journey exactly as shipped (`packages/journey-schema/src/catalog.ts`). Editing a journey in Studio never changes the catalog, and adding a journey twice is refused.
 

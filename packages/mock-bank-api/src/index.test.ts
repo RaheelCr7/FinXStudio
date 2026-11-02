@@ -143,5 +143,17 @@ describe("sandbox investing", () => {
     await b.call("bank.invest.watch", { symbol: "APXC", on: false });
     expect(b.persona.finance!.invest.watchlist).toEqual(["SMTH", "GRNF", "HBRE"]);
   });
+  it("sells part or all of a holding and refuses what is not owned or too much", async () => {
+    const b = new MockBank("alex");
+    expect(Object.keys(await b.call("bank.invest.holdings", {}))).toEqual(["LMRB", "GLBX", "ORCH", "TBND"]);
+    const part = await b.call("bank.invest.sell", { symbol: "GLBX", amount: 421.8, toAccountId: "acc_main" });
+    expect(part).toMatchObject({ shares: 10, proceeds: 421.8, newBalance: 9142.56 });
+    expect(b.persona.finance!.invest.holdings.find((h) => h.symbol === "GLBX")!.shares).toBe(30);
+    await expect(b.call("bank.invest.sell", { symbol: "APXC", amount: 10, toAccountId: "acc_main" })).rejects.toMatchObject({ code: "NOT_HELD" });
+    await expect(b.call("bank.invest.sell", { symbol: "GLBX", amount: 99999, toAccountId: "acc_main" })).rejects.toMatchObject({ code: "INSUFFICIENT_HOLDING" });
+    await expect(b.call("bank.invest.sell", { symbol: "GLBX", amount: 0, toAccountId: "acc_main" })).rejects.toMatchObject({ code: "INVALID_AMOUNT" });
+    const all = await b.call("bank.invest.sell", { symbol: "GLBX", amount: 30 * 42.18, toAccountId: "acc_main" });
+    expect(all.shares).toBe(30);
+    expect(b.persona.finance!.invest.holdings.some((h) => h.symbol === "GLBX")).toBe(false);
+  });
 });
-

@@ -1,7 +1,7 @@
 import type { Journey } from "./schema";
 import { localTransfer } from "./fixtures/local-transfer";
 import { payBill } from "./fixtures/pay-bill";
-import { addMoney, addCard, connectAccount, createBudget, invest } from "./fixtures/bankworkx";
+import { addMoney, addCard, connectAccount, createBudget, invest, sellInvestment } from "./fixtures/bankworkx";
 
 /**
  * The journey catalog: ready-made journeys a project can add to its own app.
@@ -58,6 +58,11 @@ export const catalog: CatalogEntry[] = [
     id: invest.slug, category: "Investing", madeFor: "bankworkx", journey: invest,
     summary: "Buy a stock or fund with a dollar amount, even part of a share, with a review step before the order.",
     highlights: ["Instrument picker", "Quick amount chips", "Risk notice", "Failure path with no money moved"],
+  },
+  {
+    id: sellInvestment.slug, category: "Investing", madeFor: "bankworkx", journey: sellInvestment,
+    summary: "Sell part or all of a holding and have the money paid into an account.",
+    highlights: ["Holding picker", "Amount capped by what you own", "Failure path with nothing sold"],
   },
 ];
 
