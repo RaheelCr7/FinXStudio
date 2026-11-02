@@ -1,5 +1,5 @@
 import type { ConfigContext, ExpoConfig } from "expo/config";
-import brands from "./brands.json";
+import brands from "../../packages/ui-kit/src/brands.json";
 
 /**
  * The environment-dependent parts of the app configuration. app.json holds the static parts.

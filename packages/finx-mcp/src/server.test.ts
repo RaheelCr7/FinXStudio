@@ -18,7 +18,7 @@ async function connect(studio: FakeStudio, readOnly = false) {
   return { client, call, studio };
 }
 
-const TOOLS = ["finx_get_catalog", "finx_get_example", "finx_list_journeys", "finx_get_journey", "finx_create_journey", "finx_save_draft", "finx_patch_journey", "finx_lint_journey", "finx_simulate_journey", "finx_publish_journey", "finx_report_run"];
+const TOOLS = ["finx_get_catalog", "finx_get_example", "finx_list_journeys", "finx_list_projects", "finx_get_journey", "finx_create_journey", "finx_save_draft", "finx_patch_journey", "finx_lint_journey", "finx_simulate_journey", "finx_publish_journey", "finx_report_run"];
 
 describe("FinX MCP server", () => {
   let studio: FakeStudio;
@@ -57,6 +57,16 @@ describe("FinX MCP server", () => {
     expect(got.json).toMatchObject({ publishedVersion: 5, draftDiffersFromPublished: false, issues: [] });
     expect(got.json.studioUrl).toBe("http://studio.test/journeys/fund-transfer-local");
     expect((await call("finx_get_journey", { slug: "missing" })).isError).toBe(true);
+  });
+
+  it("lists the projects, and creates a journey inside one so only that bank's app shows it", async () => {
+    const { call } = await connect(studio);
+    const projects = await call("finx_list_projects");
+    expect(projects.json.projects.map((p: any) => p.id)).toEqual(["meezan", "bankworkx"]);
+    const created = await call("finx_create_journey", { name: "Send a gift", project: "bankworkx" });
+    expect(created.json.journey.apps).toEqual(["bankworkx"]);
+    expect((await call("finx_create_journey", { name: "Other gift", project: "nobody" })).isError).toBe(true);
+    expect((await call("finx_create_journey", { name: "Plain journey" })).json.journey.apps).toBeUndefined();
   });
 
   it("creates, saves, simulates and hands over a whole journey the way the skill does", async () => {

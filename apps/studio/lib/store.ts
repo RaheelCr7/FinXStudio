@@ -4,7 +4,7 @@ import { localTransfer, validateJourney, type Journey, type LintIssue } from "@f
 import { lintAll } from "@finx/renderer-core";
 import { sameContent } from "./edit";
 import { shapeOf } from "./graph";
-import { brands } from "@finx/ui-kit";
+import { appIds } from "./brand-ids";
 
 export type HistoryEntry = { version: number; publishedAt: string; by: string };
 export type JourneyRecord = { slug: string; draft: Journey; published?: Journey; history: HistoryEntry[]; updatedAt: string };
@@ -113,16 +113,17 @@ export async function publish(slug: string, by = "studio") {
 }
 
 /** Keeps only known app ids. No apps means the original Meezan app. */
-export function cleanApps(apps: unknown): string[] | undefined {
+export async function cleanApps(apps: unknown): Promise<string[] | undefined> {
   if (apps == null) return undefined;
   if (!Array.isArray(apps) || apps.some((a) => typeof a !== "string")) throw new StoreError(400, "apps must be a list of app ids");
-  const bad = apps.filter((a) => !(a in brands));
-  if (bad.length) throw new StoreError(400, `Unknown app ${bad.join(", ")}. Use one of: ${Object.keys(brands).join(", ")}`);
+  const known = await appIds();
+  const bad = apps.filter((a) => !known.includes(a));
+  if (bad.length) throw new StoreError(400, `Unknown app ${bad.join(", ")}. Use one of: ${known.join(", ")}`);
   return apps.length ? [...new Set(apps as string[])] : undefined;
 }
 
 export async function createJourney(name: string, appsInput?: unknown) {
-  const apps = cleanApps(appsInput);
+  const apps = await cleanApps(appsInput);
   // Meezan journeys start in English and Urdu. Another app's journeys start in English only, so nothing is flagged as untranslated.
   const english = !!apps && !apps.includes("meezan");
   const slug = name.toLowerCase().trim().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "").slice(0, 60);
@@ -149,6 +150,27 @@ export async function createJourney(name: string, appsInput?: unknown) {
   db.journeys[slug] = { slug, draft: j, history: [], updatedAt: now };
   await write(db);
   return db.journeys[slug]!;
+}
+
+/**
+ * Copies a journey into another project (a bank app), as a new journey of its own, so a new bank can start from working journeys.
+ * The copy gets a slug of its own, belongs only to that project, and can be published straight away.
+ */
+export async function cloneJourney(sourceSlug: string, projectId: string, opts: { publishNow?: boolean } = {}) {
+  assertSlug(sourceSlug);
+  const apps = (await cleanApps([projectId]))!;
+  const db = await read();
+  const src = db.journeys[sourceSlug];
+  if (!src) throw new StoreError(404, "Journey not found");
+  const slug = `${sourceSlug}-${projectId}`.slice(0, 62).replace(/-+$/, "");
+  assertSlug(slug);
+  if (db.journeys[slug]) throw new StoreError(409, `A journey called ${slug} already exists`);
+  const base = structuredClone(src.published ?? src.draft);
+  const j: Journey = { ...base, id: `jrn_${slug.replace(/-/g, "_")}`, slug, version: 0, status: "draft", apps };
+  const now = new Date().toISOString();
+  db.journeys[slug] = { slug, draft: j, history: [], updatedAt: now };
+  await write(db);
+  return opts.publishNow ? publish(slug, "new project") : db.journeys[slug]!;
 }
 
 // ---- agent runs -----------------------------------------------------------------------------------------------

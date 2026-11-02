@@ -16,7 +16,7 @@ import { homedir, platform } from "node:os";
 import { delimiter, dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { artifactName, formatDuration, hintFor, isDebugSigner, parseBadging, parseSigner, readyDevices } from "./lib/android-build.mjs";
-import { brandConfig, brandIds } from "./lib/brands.mjs";
+import { brandConfig, brandIds, ensureBrandAssets } from "./lib/brands.mjs";
 
 const APP = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const DIST = join(APP, "dist");
@@ -56,6 +56,7 @@ for (let i = 0; i < args.length; i++) {
 }
 if (!brandIds.includes(opt.brand)) fail(`--brand must be one of: ${brandIds.join(", ")}`);
 const brand = brandConfig(opt.brand);
+try { if (ensureBrandAssets(brand).made) console.log(`Made the app icons for ${brand.name}.`); } catch (e) { fail(e.message); }
 if (!["uat", "production"].includes(opt.env)) fail("--env must be uat or production");
 if (!/^[1-9][0-9]*$/.test(opt.versionCode)) fail("--version-code must be a whole number of 1 or more");
 if (opt.studioUrl && !/^https?:\/\/[^\s/]+/.test(opt.studioUrl)) fail("--studio-url must look like http://192.168.1.20:3100");

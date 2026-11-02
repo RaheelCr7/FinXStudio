@@ -8,7 +8,7 @@ import { JourneyPlayer, ThemeProvider, useTheme } from "@finx/renderer-native";
 import { formatMoney } from "@finx/ui-kit";
 import { ServerSetting } from "./src/ServerSetting";
 import { DEFAULT_STUDIO_URL, SERVER_CHANGE_ALLOWED, loadStudioUrl } from "./src/studio-config";
-import { BRAND } from "./src/brand";
+import { BRAND, BRAND_INFO } from "./src/brand";
 import { bundledEntries, loadCatalog, loadJourney, type Entry, type Live } from "./src/live";
 import { BankWorkxShell } from "./src/bankworkx/Shell";
 
@@ -55,12 +55,14 @@ function MeezanShell() {
       <ScrollView ref={loginScroller} keyboardShouldPersistTaps="handled" onContentSizeChange={followEditor} onLayout={followEditor}
         contentContainerStyle={{ padding: 24, paddingTop: 56, maxWidth: 480, width: "100%", alignSelf: "center" }}>
         <View style={{ alignItems: "center" }}>
-          <Image accessibilityIgnoresInvertColors source={require("./assets/icon.png")} style={{ width: 72, height: 72, borderRadius: 20 }} />
-          <Text accessibilityRole="header" style={{ fontSize: 28, fontWeight: "600", color: c.text, marginTop: 14, letterSpacing: -0.4 }}>Meezan Digital</Text>
+          {BRAND === "meezan"
+            ? <Image accessibilityIgnoresInvertColors source={require("./assets/icon.png")} style={{ width: 72, height: 72, borderRadius: 20 }} />
+            : <View style={{ width: 72, height: 72, borderRadius: 20, backgroundColor: c.accent, alignItems: "center", justifyContent: "center" }}><Text style={{ color: c.accentOn, fontSize: 32, fontWeight: "800" }}>{BRAND_INFO.name.slice(0, 1)}</Text></View>}
+          <Text accessibilityRole="header" style={{ fontSize: 28, fontWeight: "600", color: c.text, marginTop: 14, letterSpacing: -0.4 }}>{BRAND_INFO.name}</Text>
           <Text style={{ color: c.textMuted, marginTop: 6 }}>Sign in with a sandbox customer</Text>
         </View>
         <View style={{ marginTop: 32, gap: 10 }}>
-          {personasFor("meezan").map((p) => {
+          {personasFor(BRAND_INFO.preset).map((p) => {
             const on = p.id === personaId;
             return (
               <Pressable key={p.id} accessibilityRole="radio" accessibilityState={{ selected: on }} onPress={() => setPersonaId(p.id)}
@@ -165,7 +167,7 @@ function Root({ mode }: { mode: "light" | "dark" }) {
       <StatusBar style={mode === "dark" ? "light" : "dark"} />
       {/* Drawing edge to edge, Android no longer shrinks the window for the keyboard, so lift the content here. */}
       <KeyboardAvoidingView style={{ flex: 1 }} behavior="padding">
-        {BRAND === "bankworkx" ? <BankWorkxShell /> : <MeezanShell />}
+        {BRAND_INFO.preset === "bankworkx" ? <BankWorkxShell /> : <MeezanShell />}
       </KeyboardAvoidingView>
     </View>
   );

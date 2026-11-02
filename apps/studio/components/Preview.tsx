@@ -3,7 +3,8 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { Moon, RotateCcw, Sun } from "lucide-react";
 import type { Journey } from "@finx/journey-schema";
 import { MockBank, personasFor } from "@finx/mock-bank-api";
-import type { BrandId } from "@finx/ui-kit";
+import { brands, type Brand } from "@finx/ui-kit";
+import { useProjects } from "./Projects";
 import { JourneyPlayer, ThemeProvider } from "@finx/renderer-native";
 
 function useDebounced<T>(value: T, ms: number) {
@@ -15,9 +16,10 @@ function useDebounced<T>(value: T, ms: number) {
 const PHONE = { w: 340, h: 690 };
 
 export function Preview({ journey }: { journey: Journey }) {
-  // A journey tagged for BankWorkx previews with that bank's look and customers; everything else is Meezan
-  const brand: BrandId = journey.apps?.includes("bankworkx") ? "bankworkx" : "meezan";
-  const people = personasFor(brand);
+  // A journey previews with the look and sandbox customers of the project (bank app) it belongs to; none listed means Meezan
+  const { byId } = useProjects();
+  const brand: Brand = byId(journey.apps?.[0] ?? "meezan")?.brand ?? brands.meezan!;
+  const people = personasFor(brand.preset);
   const [persona, setPersona] = useState(people[0]!.id);
   const [lang, setLang] = useState("en");
   const [dark, setDark] = useState(false);

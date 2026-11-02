@@ -8,13 +8,16 @@ export type JourneySummary = { slug: string; name: unknown; publishedVersion: nu
 export type JourneyRecord = { slug: string; draft: Journey; published?: Journey; history: { version: number; publishedAt: string; by: string }[]; updatedAt: string };
 export type RunInput = { id?: string; agent?: string; title?: string; brief?: string; status?: string; summary?: string; journeySlug?: string; note?: string };
 export type RunRecord = { id: string; status: string; title: string };
+/** A bank app in Studio. Journeys belong to one or more of these. */
+export type ProjectSummary = { id: string; name: string; preset: string; currency: string; bundleId: string; journeys: number };
 
 /** Everything the tools need from FinX Studio. The HTTP client implements it; tests use an in-memory one. */
 export interface StudioClient {
   readonly baseUrl: string;
   listJourneys(): Promise<JourneySummary[]>;
   getRecord(slug: string): Promise<JourneyRecord>;
-  createJourney(name: string): Promise<JourneyRecord>;
+  listProjects(): Promise<ProjectSummary[]>;
+  createJourney(name: string, project?: string): Promise<JourneyRecord>;
   saveDraft(slug: string, journey: Journey): Promise<void>;
   publish(slug: string): Promise<{ version: number }>;
   reportRun(input: RunInput): Promise<RunRecord>;
@@ -50,7 +53,8 @@ export class HttpStudioClient implements StudioClient {
 
   listJourneys() { return this.request<JourneySummary[]>("GET", "/api/journeys"); }
   getRecord(slug: string) { return this.request<JourneyRecord & { issues: LintIssue[] }>("GET", `/api/journeys/${encodeURIComponent(slug)}?env=draft`); }
-  createJourney(name: string) { return this.request<JourneyRecord>("POST", "/api/journeys", { name }); }
+  async listProjects() { return (await this.request<{ projects: ProjectSummary[] }>("GET", "/api/projects")).projects.map(({ id, name, preset, currency, bundleId, journeys }) => ({ id, name, preset, currency, bundleId, journeys })); }
+  createJourney(name: string, project?: string) { return this.request<JourneyRecord>("POST", "/api/journeys", { name, ...(project ? { apps: [project] } : {}) }); }
   async saveDraft(slug: string, journey: Journey) { await this.request("PUT", `/api/journeys/${encodeURIComponent(slug)}`, journey); }
   publish(slug: string) { return this.request<{ version: number }>("POST", `/api/journeys/${encodeURIComponent(slug)}/publish`); }
   reportRun(input: RunInput) { return this.request<RunRecord>("POST", "/api/runs", input); }

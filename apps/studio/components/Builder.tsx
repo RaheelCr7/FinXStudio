@@ -6,7 +6,7 @@ import { useRouter } from "next/navigation";
 import { Check, ChevronRight, CircleCheck, Eye, EyeOff, Layers, LoaderCircle, Plus, Redo2, Rocket, Settings2, Sparkles, TriangleAlert, Undo2, X } from "lucide-react";
 import type { Journey } from "@finx/journey-schema";
 import { lintAll } from "@finx/renderer-core";
-import { brands } from "@finx/ui-kit";
+import { appsOfJourney, useProjects } from "./Projects";
 import { addBlock, addScreen, BLOCK_GROUPS, BLOCK_LABELS, KNOWN_ADAPTERS, sameContent, textOf } from "@/lib/edit";
 import { BLOCK_ICONS } from "@/lib/blocks-ui";
 import { FlowCanvas } from "./FlowCanvas";
@@ -48,6 +48,7 @@ export function Builder({ initial, aiRun }: { initial: Rec; aiRun?: { id: string
   const [publishing, setPublishing] = useState(false);
   const wide = useMedia("(min-width: 1600px)");
   const router = useRouter();
+  const { projects } = useProjects();
   const lastSaved = useRef(JSON.stringify(initial.draft));
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const problemsRef = useRef<HTMLDivElement>(null);
@@ -211,8 +212,8 @@ export function Builder({ initial, aiRun }: { initial: Rec; aiRun?: { id: string
               <div className="faint" style={{ marginTop: 8 }}>/{journey.slug} · {journey.locale.supported.join(", ")}</div>
 
               <div className="label-section">Shown in</div>
-              {Object.values(brands).map((br) => {
-                const current = journey.apps?.length ? journey.apps : ["meezan"];
+              {projects.map((br) => {
+                const current = appsOfJourney(journey);
                 const on = current.includes(br.id);
                 return (
                   <label key={br.id} className="row" style={{ gap: 8, padding: "4px 0", fontSize: 13.5 }}>
@@ -224,7 +225,7 @@ export function Builder({ initial, aiRun }: { initial: Rec; aiRun?: { id: string
                   </label>
                 );
               })}
-              <div className="faint">An app only shows the journeys that list it. A journey with none listed belongs to Meezan Digital.</div>
+              <div className="faint">A project\'s app only shows the journeys that list it. A journey with none listed belongs to Meezan Digital.</div>
 
               <div className="label-section">Integrations</div>
               {journey.integrations.length === 0 ? <div className="faint" style={{ marginBottom: 8 }}>No integrations yet. Add one to let buttons call the bank.</div> : null}

@@ -21,6 +21,6 @@ describe("brands", () => {
     expect(() => brandConfig("nope")).toThrow(/meezan, bankworkx/);
   });
   it("uses the brand accent colour for the app's accent", () => {
-    for (const id of brandIds) expect(brands[id as keyof typeof brands].light.colors.accent!.toLowerCase()).toBe(brandConfig(id).accent.toLowerCase());
+    for (const id of brandIds) expect(brands[id]!.light.colors.accent!.toLowerCase()).toBe(brandConfig(id).accent.toLowerCase());
   });
 });

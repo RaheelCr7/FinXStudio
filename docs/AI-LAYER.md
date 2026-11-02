@@ -32,7 +32,8 @@ You can also start from Studio: the Agents page turns your brief into the exact 
 | `finx_get_catalog` | no | The authoring reference: blocks, actions, expressions, data, Urdu rules, integrations, personas, lint rules, patterns |
 | `finx_get_example` | no | A shipped, lint-clean journey to copy structure from |
 | `finx_list_journeys`, `finx_get_journey` | no | Read what is in Studio, with lint issues |
-| `finx_create_journey` | draft only | New draft with a valid skeleton |
+| `finx_list_projects` | read only | The bank apps (projects) in Studio, to choose which one a journey is for |
+| `finx_create_journey` | draft only | New draft with a valid skeleton, in a project when one is named |
 | `finx_save_draft` | draft only | Validates (every schema error with its path), saves, returns lint issues, advice and misspelled-field warnings |
 | `finx_patch_journey` | draft only | Small edits with JSON Patch, all or nothing |
 | `finx_lint_journey` | no | Checks a journey without saving |

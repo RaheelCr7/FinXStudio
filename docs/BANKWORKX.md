@@ -75,12 +75,7 @@ Charts, the gradient card, the donut, icons and pills are shared widgets in `pac
 
 ## How a bank is defined
 
-- `apps/bank-app/brands.json`: name, id, URL scheme, icon folder and colours for each bank.
-- `packages/ui-kit/src/tokens.ts`: the colours and corner radii (`brands`). BankWorkx uses larger radii and a different palette; dark mode is included.
-- `packages/mock-bank-api`: the sandbox customers, tagged with their bank.
-- Build with `--brand <id>`. Icons come from `pnpm brand-assets` (`python3 scripts/generate-brand-assets.py --accent "#3155CE" --detail "#0BB5E3" --out assets/bankworkx`).
-
-To add a third bank: add it to `brands.json` and `tokens.ts`, generate its icons, and give it sandbox customers.
+A bank is a **project**: see [PROJECTS.md](PROJECTS.md). In short, `packages/ui-kit/src/brands.json` holds each bank's name, ids, look ("preset"), accent colour and currency; the design system turns that into a full light and dark theme, and Studio can add new ones. The sandbox customers are in `packages/mock-bank-api`, tagged by look. Build with `--brand <id>`. Icons come from `scripts/generate-brand-assets.py` (the build makes them if missing).
 
 ## Not built yet
 

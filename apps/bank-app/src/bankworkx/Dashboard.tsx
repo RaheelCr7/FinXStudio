@@ -2,7 +2,7 @@ import React, { useMemo, useState } from "react";
 import { Pressable, ScrollView, Text, View } from "react-native";
 import { Donut, Gradient, Icon, IconTile, LineChart, Pill, ProgressBar, Segmented, useTheme } from "@finx/renderer-native";
 import type { MockBank } from "@finx/mock-bank-api";
-import type { Entry } from "../live";
+import { slugIs, type Entry } from "../live";
 import { Card, SectionTitle, TxnRow, inDays, lift, tab, type TabId } from "./ui";
 
 export type Actions = {
@@ -95,7 +95,7 @@ export function Dashboard({ a }: { a: Actions }) {
             {txns.length === 0 ? <Text style={{ color: c.textMuted, padding: 14 }}>No transactions yet.</Text> : txns.map((t) => <TxnRow key={t.id} t={t} money={a.money} open={open === t.id} onPress={() => setOpen(open === t.id ? null : t.id)} />)}
           </Card>
 
-          <SectionTitle title="Monthly Budgets" action={fin.budgets.length ? "Manage" : "Create"} onAction={() => (fin.budgets.length ? a.go("budgets") : a.journeys.some((j) => j.slug === "create-budget") && a.openJourney("create-budget"))} />
+          <SectionTitle title="Monthly Budgets" action={fin.budgets.length ? "Manage" : "Create"} onAction={() => (fin.budgets.length ? a.go("budgets") : a.journeys.some((j) => slugIs(j.slug, "create-budget")) && a.openJourney("create-budget"))} />
           {fin.budgets.length === 0 ? <Card style={{ padding: 16 }}><Text style={{ color: c.textMuted }}>No budgets yet. Create one to track your spending by category.</Text></Card> : null}
           <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 12, paddingTop: 4, paddingBottom: 24, paddingEnd: 20 }} style={{ marginBottom: -16 }}>
             {fin.budgets.map((b) => {
@@ -167,7 +167,7 @@ function GetStarted({ a, first }: { a: Actions; first: string }) {
         <Text style={{ color: "rgba(255,255,255,.85)", fontSize: 14, lineHeight: 20 }}>Connect an account and your balance, spending and budgets appear here.</Text>
       </Gradient>
       {steps.map((s) => {
-        const available = a.journeys.some((j) => j.slug === s.slug);
+        const available = a.journeys.some((j) => slugIs(j.slug, s.slug));
         return (
           <Card key={s.slug} onPress={available ? () => a.openJourney(s.slug) : undefined} label={s.title} style={{ flexDirection: "row", alignItems: "center", gap: 14, opacity: available ? 1 : 0.5 }}>
             <IconTile icon={s.icon} color={c.accent} bg={c.accentSoft} size={48} />

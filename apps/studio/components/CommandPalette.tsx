@@ -8,7 +8,7 @@ type Ctx = { open: boolean; setOpen: (v: boolean) => void; register: (owner: str
 const C = createContext<Ctx | null>(null);
 
 /** The order groups appear in. Anything not listed comes after, in the order it was registered. */
-const GROUP_ORDER = ["This journey", "Screens", "Journeys", "Go to", "General", "Add to this screen"];
+const GROUP_ORDER = ["This journey", "Screens", "Journeys", "Projects", "Go to", "General", "Add to this screen"];
 
 export function CommandsProvider({ children, base }: { children: React.ReactNode; base: Command[] }) {
   const [open, setOpen] = useState(false);

@@ -2,8 +2,10 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import { FilePlus2, Monitor, Moon, PanelLeftClose, PanelLeftOpen, Search, Sparkles, Sun, Workflow } from "lucide-react";
+import { FilePlus2, FolderKanban, Monitor, Moon, PanelLeftClose, PanelLeftOpen, Search, Sparkles, Sun, Workflow } from "lucide-react";
 import { CommandsProvider, useCommandPalette, type Command } from "./CommandPalette";
+import { ProjectSwitcher } from "./ProjectSwitcher";
+import { useProjects } from "./Projects";
 
 type Theme = "system" | "light" | "dark";
 type Side = "open" | "rail";
@@ -15,6 +17,7 @@ const store = {
 export function Shell({ children }: { children: React.ReactNode }) {
   const path = usePathname();
   const router = useRouter();
+  const { projects, current, setCurrent } = useProjects();
   const inBuilder = path.startsWith("/journeys/");
   const [theme, setTheme] = useState<Theme>("system");
   const [side, setSide] = useState<Side | null>(null);
@@ -34,28 +37,28 @@ export function Shell({ children }: { children: React.ReactNode }) {
 
   const base: Command[] = useMemo(() => [
     { id: "go:journeys", title: "Journeys", group: "Go to", icon: Workflow, hint: "All journeys", run: () => router.push("/") },
+    { id: "go:projects", title: "Projects", group: "Go to", icon: FolderKanban, hint: "Bank apps", run: () => router.push("/projects") },
+    { id: "new:project", title: "New project", group: "General", icon: FilePlus2, keywords: "create bank app add", run: () => router.push("/projects?new=1") },
+    ...projects.filter((p) => p.id !== current.id).map((p) => ({ id: `sw:${p.id}`, title: `Switch to ${p.name}`, group: "Projects", icon: FolderKanban, hint: p.bundleId, keywords: "project bank app", run: () => setCurrent(p.id) })),
     { id: "go:agents", title: "Agents", group: "Go to", icon: Sparkles, hint: "AI work", run: () => router.push("/agents") },
     { id: "new", title: "New journey", group: "General", icon: FilePlus2, keywords: "create add", run: () => { if (path === "/") window.dispatchEvent(new Event("finx:new-journey")); else router.push("/?new=1"); } },
     { id: "theme:light", title: "Light theme", group: "General", icon: Sun, keywords: "appearance", run: () => applyTheme("light") },
     { id: "theme:dark", title: "Dark theme", group: "General", icon: Moon, keywords: "appearance", run: () => applyTheme("dark") },
     { id: "theme:system", title: "Match system theme", group: "General", icon: Monitor, keywords: "appearance auto", run: () => applyTheme("system") },
     { id: "side", title: rail ? "Expand sidebar" : "Collapse sidebar", group: "General", icon: rail ? PanelLeftOpen : PanelLeftClose, run: toggleSide },
-  ], [router, path, applyTheme, rail, toggleSide]);
+  ], [router, path, applyTheme, rail, toggleSide, projects, current.id, setCurrent]);
 
   return (
     <CommandsProvider base={base}>
       <div className={`app ${rail ? "rail" : ""}`}>
         <aside className="sidebar" aria-label="Main">
           <Link href="/" className="brand" aria-label="FinX Studio home"><span className="mark">F</span><span className="lbl">FinX Studio</span></Link>
-          <div className="workspace" title="Meezan Digital · UAT environment">
-            <span className="av">M</span>
-            <span className="t"><b>Meezan Digital</b><span>Sandbox bank</span></span>
-            <span className="env-pill">UAT</span>
-          </div>
+          <ProjectSwitcher />
           <SearchButton mac={mac} />
           <nav className="nav" aria-label="Sections">
             <div className="nav-label">Build</div>
             <Link href="/" className={path === "/" || inBuilder ? "on" : ""} aria-current={path === "/" || inBuilder ? "page" : undefined} title="Journeys"><Workflow size={18} aria-hidden /><span className="lbl">Journeys</span></Link>
+            <Link href="/projects" className={path.startsWith("/projects") ? "on" : ""} aria-current={path.startsWith("/projects") ? "page" : undefined} title="Projects"><FolderKanban size={18} aria-hidden /><span className="lbl">Projects</span></Link>
             <Link href="/agents" className={path.startsWith("/agents") ? "on" : ""} aria-current={path.startsWith("/agents") ? "page" : undefined} title="Agents"><Sparkles size={18} aria-hidden /><span className="lbl">Agents</span></Link>
           </nav>
           <div className="side-foot">

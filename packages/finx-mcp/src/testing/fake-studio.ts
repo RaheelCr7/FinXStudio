@@ -1,6 +1,6 @@
 import { localTransfer, payBill, validateJourney, type Journey } from "@finx/journey-schema";
 import { lintAll } from "@finx/renderer-core";
-import { StudioError, type JourneyRecord, type JourneySummary, type RunInput, type RunRecord, type StudioClient } from "../studio-client";
+import { StudioError, type JourneyRecord, type JourneySummary, type ProjectSummary, type RunInput, type RunRecord, type StudioClient } from "../studio-client";
 import { SKELETON } from "../catalog";
 import { sameContent } from "../advice";
 
@@ -29,11 +29,17 @@ export class FakeStudio implements StudioClient {
     if (!r) throw new StudioError(404, "Journey not found");
     return structuredClone(r);
   }
-  async createJourney(name: string) {
-    this.calls.push(`create ${name}`);
+  projects: ProjectSummary[] = [
+    { id: "meezan", name: "Meezan Digital", preset: "meezan", currency: "PKR", bundleId: "pk.meezan.digital", journeys: 1 },
+    { id: "bankworkx", name: "BankWorkx", preset: "bankworkx", currency: "USD", bundleId: "com.bankworkx.app", journeys: 0 },
+  ];
+  async listProjects() { this.calls.push("projects"); return structuredClone(this.projects); }
+  async createJourney(name: string, project?: string) {
+    this.calls.push(`create ${name}${project ? ` in ${project}` : ""}`);
+    if (project && !this.projects.some((p) => p.id === project)) throw new StudioError(400, `Unknown app ${project}`);
     const slug = name.toLowerCase().trim().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "");
     if (this.records.has(slug)) throw new StudioError(409, "A journey with this name already exists");
-    const draft = { ...structuredClone(SKELETON), id: `jrn_${slug.replace(/-/g, "_")}`, slug, name } as unknown as Journey;
+    const draft = { ...structuredClone(SKELETON), id: `jrn_${slug.replace(/-/g, "_")}`, slug, name, ...(project ? { apps: [project] } : {}) } as unknown as Journey;
     const rec: JourneyRecord = { slug, draft, history: [], updatedAt: new Date().toISOString() };
     this.records.set(slug, rec);
     return structuredClone(rec);

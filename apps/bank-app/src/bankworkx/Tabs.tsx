@@ -3,6 +3,7 @@ import { Pressable, ScrollView, Text, TextInput, View } from "react-native";
 import { CardVisual, Icon, IconTile, Pill, ProgressBar, useTheme } from "@finx/renderer-native";
 import type { Budget, Txn } from "@finx/mock-bank-api";
 import type { Actions } from "./Dashboard";
+import { slugIs } from "../live";
 import { Card, SectionTitle, TxnRow, dayLabel, tab } from "./ui";
 
 const Title = ({ text, onAdd, label }: { text: string; onAdd?: () => void; label?: string }) => {
@@ -14,7 +15,7 @@ const Title = ({ text, onAdd, label }: { text: string; onAdd?: () => void; label
     </View>
   );
 };
-const has = (a: Actions, slug: string) => a.journeys.some((j) => j.slug === slug);
+const has = (a: Actions, slug: string) => a.journeys.some((j) => slugIs(j.slug, slug));
 
 // ---------- Accounts ------------------------------------------------------------------------------------------------------
 export function Accounts({ a }: { a: Actions }) {

@@ -16,7 +16,7 @@ import { closeSync, createWriteStream, existsSync, mkdirSync, openSync, readFile
 import { platform } from "node:os";
 import { delimiter, dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
-import { brandConfig, brandIds } from "./lib/brands.mjs";
+import { brandConfig, brandIds, ensureBrandAssets } from "./lib/brands.mjs";
 import { formatDuration } from "./lib/common.mjs";
 import { atsSummary, findPod, iosArtifactName, iosHintFor, isHermesBytecode, pickSimulator, plistProblems, simulatorDevices } from "./lib/ios-build.mjs";
 
@@ -60,6 +60,7 @@ for (let i = 0; i < args.length; i++) {
 }
 if (!brandIds.includes(opt.brand)) fail(`--brand must be one of: ${brandIds.join(", ")}`);
 const brand = brandConfig(opt.brand);
+try { if (ensureBrandAssets(brand).made) console.log(`Made the app icons for ${brand.name}.`); } catch (e) { fail(e.message); }
 if (!["uat", "production"].includes(opt.env)) fail("--env must be uat or production");
 if (!/^[1-9][0-9]*$/.test(opt.buildNumber)) fail("--build-number must be a whole number of 1 or more");
 if (opt.studioUrl && !/^https?:\/\/[^\s/]+/.test(opt.studioUrl)) fail("--studio-url must look like http://192.168.1.20:3100");

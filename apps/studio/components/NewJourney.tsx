@@ -3,15 +3,17 @@ import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { Plus, Sparkles } from "lucide-react";
-import { brands } from "@finx/ui-kit";
+import { useProjects } from "./Projects";
 
 export function NewJourney({ defaultOpen = false }: { defaultOpen?: boolean }) {
   const router = useRouter();
+  const { projects, current } = useProjects();
   const [open, setOpen] = useState(defaultOpen);
   const [name, setName] = useState("");
   const [err, setErr] = useState("");
   const [busy, setBusy] = useState(false);
-  const [app, setApp] = useState<string>("meezan");
+  const [chosen, setChosen] = useState<string | null>(null);
+  const app = chosen ?? current.id; // starts as the project you are working in
   const input = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
@@ -43,9 +45,9 @@ export function NewJourney({ defaultOpen = false }: { defaultOpen?: boolean }) {
             <label className="field">Journey name
               <input ref={input} className="input" style={{ height: 40 }} placeholder="e.g. Pay a bill" value={name} onChange={(e) => { setName(e.target.value); setErr(""); }} />
             </label>
-            <label className="field" style={{ marginTop: 12 }}>Shown in which app?
-              <select className="select" style={{ height: 40 }} value={app} onChange={(e) => setApp(e.target.value)}>
-                {Object.values(brands).map((b) => <option key={b.id} value={b.id}>{b.name}</option>)}
+            <label className="field" style={{ marginTop: 12 }}>Which project is it for?
+              <select className="select" style={{ height: 40 }} value={app} onChange={(e) => setChosen(e.target.value)}>
+                {projects.map((b) => <option key={b.id} value={b.id}>{b.name}</option>)}
               </select>
             </label>
             {err ? <div role="alert" style={{ color: "var(--negative)", fontSize: 13, marginTop: 8 }}>{err}</div> : null}
