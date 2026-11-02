@@ -21,17 +21,17 @@ describe("simulate", () => {
     expect(r.bank.balances.acc_current).toBe(184250 - 7789);
     expect(r.bank.limitUsedToday).toBe(7789);
     expect(r.visited).toEqual(["bill", "review", "otp", "success"]);
-    expect(r.unvisited).toEqual(["failed"]);
+    expect(r.unvisited).toEqual(["locked", "failed"]);
     expect(r.frames[0]!.did).toBe("start");
     expect(r.frames[0]!.blocks.join(" ")).toContain("select[bill.billerId]= options: K-Electric, LESCO, SSGC, PTCL");
   });
 
-  it("shows the lock-out path: three wrong OTPs end on the failed screen with money untouched", async () => {
+  it("shows the lock-out path: three wrong OTPs end on the locked screen with money untouched", async () => {
     const steps: Step[] = [
       { set: { "bill.billerId": "ptcl", "bill.fromAccountId": "acc_current", "bill.reference": "9999999999", "bill.consent": true } },
       { press: "Find my bill" }, { press: "Confirm and send OTP" },
-      { set: { "otp.code": "000001" } }, { press: "Pay now" }, { expectToast: "Incorrect code" }, { expectScreen: "otp" },
-      { press: "Pay now" }, { press: "Pay now" }, { expectScreen: "failed" },
+      { set: { "otp.code": "000001" } }, { press: "Pay now" }, { expectToast: "That code didn't match. Check the SMS and try again." }, { expectScreen: "otp" },
+      { press: "Pay now" }, { press: "Pay now" }, { expectScreen: "locked" },
     ];
     const r = await simulate({ journey: payBill, persona: "ayesha", lang: "en", steps });
     expect(r.failures).toEqual([]);
