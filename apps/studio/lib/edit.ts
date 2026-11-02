@@ -2,11 +2,11 @@ import type { Block, Journey, Screen } from "@finx/journey-schema";
 
 export const BLOCK_LABELS: Record<string, string> = {
   text: "Text", alert: "Alert", button: "Button", result: "Result", reviewSummary: "Review summary", consent: "Consent",
-  otp: "OTP", amountInput: "Amount", select: "Select", accountPicker: "Account picker", beneficiaryPicker: "Beneficiary picker",
+  otp: "OTP", amountInput: "Amount", select: "Select", textInput: "Text input", accountPicker: "Account picker", beneficiaryPicker: "Beneficiary picker",
 };
 export const BLOCK_GROUPS: Array<{ name: string; types: string[] }> = [
   { name: "Content", types: ["text", "alert", "result"] },
-  { name: "Inputs", types: ["amountInput", "select", "consent"] },
+  { name: "Inputs", types: ["textInput", "amountInput", "select", "consent"] },
   { name: "Banking", types: ["accountPicker", "beneficiaryPicker", "reviewSummary"] },
   { name: "Verification", types: ["otp"] },
   { name: "Actions", types: ["button"] },
@@ -19,6 +19,7 @@ export function newBlock(type: string, j: Journey): Block {
     case "result": return { type: "result", tone: "success", title: "Done" };
     case "amountInput": return { type: "amountInput", bind: "amount", currency: "PKR", label: "Amount", validation: { min: 1 } };
     case "select": return { type: "select", bind: "choice", label: "Choose one", options: ["Option 1", "Option 2"] };
+    case "textInput": return { type: "textInput", bind: "reference", label: "Reference number", placeholder: "Enter a value", keyboard: "default" };
     case "consent": return { type: "consent", bind: "consent", termsVersion: "v1", text: "I agree to the terms", validation: { mustBeTrue: true } };
     case "accountPicker": return { type: "accountPicker", bind: "accountId", source: "ctx.accounts", showBalance: true };
     case "beneficiaryPicker": return { type: "beneficiaryPicker", bind: "beneficiaryId", source: "ctx.beneficiaries", allowAddNew: true };
@@ -135,7 +136,7 @@ export function blockSummary(b: any): string {
     case "text": case "alert": return textOf(b.text);
     case "button": return textOf(b.label);
     case "result": return textOf(b.title);
-    case "amountInput": case "select": return `${textOf(b.label)} → ${b.bind}`;
+    case "amountInput": case "select": case "textInput": return `${textOf(b.label)} → ${b.bind}`;
     case "consent": return textOf(b.text);
     case "otp": return `${b.length} digits → ${b.bind}`;
     case "accountPicker": case "beneficiaryPicker": return b.bind;

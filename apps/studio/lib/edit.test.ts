@@ -73,3 +73,12 @@ describe("editing", () => {
     expect(setLoc({ en: "Hello", ur: "ہیلو" }, "ur", "", ["en", "ur"])).toEqual({ en: "Hello" });
   });
 });
+
+describe("new blocks", () => {
+  it("adds a text input and registers its binding so lint stays clean", () => {
+    const { journey } = addBlock(blank(), "a", "textInput");
+    expect(journey.screens[0]!.blocks.map((b) => b.type)).toEqual(["text", "textInput", "button"]);
+    expect(journey.dataModel?.reference).toBeDefined();
+    expect(lintJourney(journey)).toEqual([]);
+  });
+});
