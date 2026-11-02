@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { Journey, lintJourney, localTransfer } from "./index";
+import { Journey, lintJourney, localTransfer, payBill } from "./index";
 
 describe("journey schema", () => {
   it("accepts the Local transfer fixture", () => {
@@ -43,5 +43,17 @@ describe("lint", () => {
     const j = structuredClone(localTransfer);
     (j.screens[1] as any).blocks[1].actions[1].to = "nowhere";
     expect(lintJourney(j).map((i) => i.code)).toContain("dangling_target");
+  });
+});
+
+describe("Pay a bill fixture", () => {
+  it("is valid and passes lint", () => {
+    expect(() => Journey.parse(payBill)).not.toThrow();
+    expect(lintJourney(payBill)).toEqual([]);
+  });
+  it("lint requires consent and OTP for a bill payment", () => {
+    const j = structuredClone(payBill);
+    j.screens.find((s) => s.id === "review")!.blocks = j.screens.find((s) => s.id === "review")!.blocks.filter((b) => b.type !== "consent");
+    expect(lintJourney(j).map((i) => i.code)).toContain("consent_before_submit");
   });
 });

@@ -83,6 +83,7 @@ export class JourneyRunner {
         else if (min != null && n < min) this.errors[b.bind] = ui(this.lang, "minimum", { n: min });
         else if (max != null && n > max) this.errors[b.bind] = this.tx(b.validation.messages?.max ?? ui(this.lang, "maximum", { n: max }));
       }
+      if (b.type === "textInput" && v != null && v !== "" && b.pattern && !new RegExp(b.pattern).test(String(v))) this.errors[b.bind] = b.patternMessage ? this.tx(b.patternMessage) : ui(this.lang, "invalid");
       if (b.type === "otp" && v != null && String(v).length !== b.length) this.errors[b.bind] = ui(this.lang, "allDigits", { n: b.length });
       if (def?.pattern && v != null && !new RegExp(def.pattern).test(String(v))) this.errors[b.bind] ??= ui(this.lang, "invalid");
     }
@@ -183,10 +184,11 @@ export class JourneyRunner {
 
   private viewBlock(b: any): Record<string, any> {
     const out: Record<string, any> = { ...b };
-    for (const k of ["label", "text", "title", "hint", "helper", "meta"]) if (k in b) out[k] = this.tx(b[k]);
+    for (const k of ["label", "text", "title", "hint", "helper", "meta", "placeholder"]) if (k in b) out[k] = this.tx(b[k]);
     if (b.bind) { out.value = this.get(b.bind); out.error = this.errors[b.bind]; }
     if (b.type === "reviewSummary") out.rows = b.rows.map((r: any) => ({ label: this.tx(r.label), value: this.tx(r.value) }));
     if (b.type === "accountPicker") out.items = Object.values(this.get(b.source) ?? {}).filter((a: any) => !b.filter || evaluate(b.filter, { account: a }));
+    if (b.type === "select") out.items = b.source ? Object.values(this.get(b.source) ?? {}).map((x: any) => ({ id: x.id, name: x.name })) : (b.options ?? []).map((o: string) => ({ id: o, name: o }));
     if (b.type === "beneficiaryPicker") out.items = Object.values(this.get(b.source) ?? {});
     if (b.type === "button") out.label = this.tx(b.label);
     return out;

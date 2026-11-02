@@ -12,6 +12,11 @@ export type Persona = {
 };
 
 const day = 24 * 3600 * 1000;
+export const BILLERS = [
+  { id: "k_electric", name: "K-Electric", category: "Electricity" }, { id: "lesco", name: "LESCO", category: "Electricity" },
+  { id: "ssgc", name: "SSGC", category: "Gas" }, { id: "ptcl", name: "PTCL", category: "Internet" },
+];
+export const CARRIERS = [{ id: "jazz", name: "Jazz" }, { id: "zong", name: "Zong" }, { id: "telenor", name: "Telenor" }, { id: "ufone", name: "Ufone" }];
 
 export const personas: Record<string, Persona> = {
   ayesha: {
@@ -88,6 +93,35 @@ export class MockBank {
         this.seq += 1;
         return { reference: `TRX-20261102-${String(930 + this.seq).padStart(4, "0")}`, newBalance: from.balance };
       }
+      case "bank.billers.list":
+        return Object.fromEntries(BILLERS.map((b) => [b.id, b]));
+      case "bank.bills.lookup": {
+        const biller = BILLERS.find((b) => b.id === input.billerId);
+        const ref = String(input.reference ?? "").replace(/\s/g, "");
+        if (!biller) throw new BankError("BILLER_NOT_FOUND", "Unknown biller");
+        if (!/^[0-9]{10,14}$/.test(ref)) throw new BankError("BILL_NOT_FOUND", "No bill found for this reference");
+        const amount = 1000 + (parseInt(ref.slice(-4), 10) % 9000);
+        return { billerName: biller.name, reference: ref, payerName: this.p.name.split(" (")[0], amount, dueDate: "2026-11-12" };
+      }
+      case "bank.bills.pay":
+      case "bank.topup.create": {
+        const isBill = adapter === "bank.bills.pay";
+        if (!this.otpVerified) throw new BankError("OTP_REQUIRED", "OTP not verified");
+        if (this.p.behaviour.transferFails) throw new BankError("CORE_UNAVAILABLE", "Core banking unavailable");
+        const amount = Number(input.amount);
+        if (!isBill && !(amount >= 50 && amount <= 5000)) throw new BankError("INVALID_AMOUNT", "Top-up must be between 50 and 5,000");
+        const from = this.p.accounts.find((a) => a.id === input.fromAccountId);
+        if (!from) throw new BankError("ACCOUNT_NOT_FOUND", "Account not found");
+        if (amount > from.balance) throw new BankError("INSUFFICIENT_FUNDS", "Insufficient funds");
+        if (this.p.limits.usedToday + amount > this.p.limits.daily) throw new BankError("LIMIT_EXCEEDED", "Daily limit exceeded");
+        from.balance -= amount;
+        this.p.limits.usedToday += amount;
+        this.otpVerified = false;
+        this.seq += 1;
+        return { reference: `${isBill ? "BILL" : "TOP"}-20261102-${String(930 + this.seq).padStart(4, "0")}`, newBalance: from.balance };
+      }
+      case "bank.carriers.list":
+        return Object.fromEntries(CARRIERS.map((c) => [c.id, c]));
       default:
         throw new BankError("UNKNOWN_ADAPTER", `No sandbox handler for ${adapter}`);
     }
