@@ -4,6 +4,7 @@
   "main": "index.ts",
   "dependencies": {
     "@expo/metro-runtime": "~58.0.16",
+    "@finx/bank-client": "workspace:*",
     "@finx/journey-schema": "workspace:*",
     "@finx/mock-bank-api": "workspace:*",
     "@finx/renderer-core": "workspace:*",

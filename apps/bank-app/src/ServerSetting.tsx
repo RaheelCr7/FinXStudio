@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from "react";
 import { Platform, Pressable, Text, TextInput, View } from "react-native";
 import { useTheme } from "@finx/renderer-native";
-import { checkStudio, normalizeStudioUrl } from "./studio-url";
+import { checkStudio, normalizeStudioUrl } from "@finx/bank-client";
 import { DEFAULT_STUDIO_URL, resetStudioUrl, saveStudioUrl } from "./studio-config";
 
 type Status = { kind: "idle" } | { kind: "checking" } | { kind: "ok" | "error"; text: string };

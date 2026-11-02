@@ -20,6 +20,9 @@ importers:
       '@expo/metro-runtime':
         specifier: ~58.0.16
         version: 58.0.16(@expo/log-box@58.0.14)(expo@58.0.22)(react-dom@19.3.0(react@19.3.0))(react-native@0.88.1(@babel/core@7.29.7)(@types/react@19.3.0)(react@19.3.0))(react@19.3.0)
+      '@finx/bank-client':
+        specifier: workspace:*
+        version: link:../../packages/bank-client
       '@finx/journey-schema':
         specifier: workspace:*
         version: link:../../packages/journey-schema
@@ -133,6 +136,28 @@ importers:
       '@types/react-dom':
         specifier: ~19.3.0
         version: 19.3.0(@types/react@19.3.0)
+      vitest:
+        specifier: 2.1.8
+        version: 2.1.8(@types/node@22.20.5)(lightningcss@1.33.0)(terser@5.51.2)
+
+  packages/bank-client:
+    dependencies:
+      '@finx/journey-schema':
+        specifier: workspace:*
+        version: link:../journey-schema
+      '@finx/mock-bank-api':
+        specifier: workspace:*
+        version: link:../mock-bank-api
+      '@finx/renderer-core':
+        specifier: workspace:*
+        version: link:../renderer-core
+      '@finx/ui-kit':
+        specifier: workspace:*
+        version: link:../ui-kit
+    devDependencies:
+      '@types/node':
+        specifier: ^22.10.0
+        version: 22.20.5
       vitest:
         specifier: 2.1.8
         version: 2.1.8(@types/node@22.20.5)(lightningcss@1.33.0)(terser@5.51.2)
