@@ -23,7 +23,7 @@ Without Studio the app falls back to the journeys bundled inside it, so the demo
 
 ## Checked on
 
-The web build, and the iOS Simulator (iPhone 17 Pro, iOS 26.5): sign-in, dashboard with the chart, the action sheet, a full *Add money* journey with a balance update, and dark mode. All four journeys ran on iOS (typed card number, hidden password, switches, tiles). The first BankWorkx iOS build took 1 min 27 s and rebuilds about 50 s. On an Android 14 emulator the app starts in under half a second and the dashboard renders fully (the 21.8 MB APK is `bankworkx-0.1.0-1-uat-arm64.apk`); the journeys were not re-run there. A real iPhone has not been tried. To open BankWorkx on the emulator: `FINX_BRAND=bankworkx node apps/bank-app/scripts/android-emulator.mjs launch`.
+The web build, and the iOS Simulator (iPhone 17 Pro, iOS 26.5): sign-in, dashboard with the chart, the action sheet, a full *Add money* journey with a balance update, and dark mode. All four journeys ran on iOS (typed card number, hidden password, switches, tiles). The first BankWorkx iOS build took 1 min 27 s and rebuilds about 50 s. On an Android 14 emulator the app starts in under half a second and the dashboard renders fully (the 21.8 MB APK is `bankworkx-0.1.0-1-uat-arm64.apk`); on 2 November 2026 the Invest screens also ran there: the portfolio, a stock page, the watchlist star, and a *Sell investment* sale ($50 of a holding, with the position updating). The other journeys were not re-run on Android. A real iPhone has not been tried. To open BankWorkx on the emulator: `FINX_BRAND=bankworkx node apps/bank-app/scripts/android-emulator.mjs launch`.
 
 ## Sandbox customers
 
