@@ -3,7 +3,7 @@ import { StoreError } from "./store";
 import { originAllowed } from "./origin";
 
 function corsHeaders(req?: Request): Record<string, string> {
-  const h: Record<string, string> = { Vary: "Origin", "Access-Control-Allow-Methods": "GET,PUT,POST,OPTIONS", "Access-Control-Allow-Headers": "Content-Type" };
+  const h: Record<string, string> = { Vary: "Origin", "Access-Control-Allow-Methods": "GET,PUT,POST,PATCH,DELETE,OPTIONS", "Access-Control-Allow-Headers": "Content-Type" };
   const origin = req?.headers.get("origin");
   if (origin && originAllowed(origin)) h["Access-Control-Allow-Origin"] = origin;
   return h;
