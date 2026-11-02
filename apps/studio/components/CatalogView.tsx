@@ -8,6 +8,7 @@ import type { Journey } from "@finx/journey-schema";
 import type { Shape } from "@/lib/graph";
 import { FlowThumb } from "./JourneyList";
 import { useProjects } from "./Projects";
+import { useWho } from "./Who";
 
 const Preview = dynamic(() => import("./Preview").then((m) => m.Preview), { ssr: false, loading: () => <div className="faint">Loading preview…</div> });
 
@@ -19,6 +20,7 @@ export type Entry = {
 export function CatalogView({ entries, categories }: { entries: Entry[]; categories: string[] }) {
   const router = useRouter();
   const { current, byId } = useProjects();
+  const { can } = useWho();
   const [q, setQ] = useState("");
   const [cat, setCat] = useState("all");
   const [live, setLive] = useState(false);
@@ -91,7 +93,7 @@ export function CatalogView({ entries, categories }: { entries: Entry[]; categor
                     <div className="spacer" />
                     <button className="btn sm" onClick={() => setTrying(e)}><Play size={13} aria-hidden /> Try</button>
                     {e.added ? <Link href={`/journeys/${e.added}`} className="btn sm"><Check size={14} aria-hidden /> In project · Open</Link>
-                      : <button className="btn sm primary" disabled={busy === e.id} onClick={() => add(e)}><Plus size={14} aria-hidden /> {busy === e.id ? "Adding…" : "Add to project"}</button>}
+                      : <button className="btn sm primary" disabled={busy === e.id || !can("edit") || (live && !can("publish"))} title={!can("edit") ? "Your role cannot add journeys" : live && !can("publish") ? "Your role cannot publish: untick Make live" : undefined} onClick={() => add(e)}><Plus size={14} aria-hidden /> {busy === e.id ? "Adding…" : "Add to project"}</button>}
                   </div>
                 </div>
               </div>

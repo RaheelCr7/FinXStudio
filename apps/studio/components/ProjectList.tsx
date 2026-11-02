@@ -5,6 +5,7 @@ import { ArrowUpRight, Check, Copy, Plus, Smartphone, Terminal } from "lucide-re
 import { PRESETS } from "@finx/ui-kit";
 import { Avatar } from "./ProjectSwitcher";
 import { useProjects, type ProjectInfo } from "./Projects";
+import { useWho } from "./Who";
 import { NewProjectWizard, type Starter } from "./NewProjectWizard";
 
 export type ProjectRow = ProjectInfo & { journeys: number; live: number };
@@ -30,6 +31,7 @@ function CopyLine({ label, cmd }: { label: string; cmd: string }) {
 export function ProjectList({ projects, starters, defaultNew }: { projects: ProjectRow[]; starters: Starter[]; defaultNew: boolean }) {
   const router = useRouter();
   const { current, setCurrent } = useProjects();
+  const { can } = useWho();
   const [wizard, setWizard] = useState(defaultNew);
   const [showBuild, setShowBuild] = useState<string | null>(null);
   return (
@@ -40,7 +42,7 @@ export function ProjectList({ projects, starters, defaultNew }: { projects: Proj
           <p className="sub">Each project is one bank app: its own name, look, journeys and customers, built from the same platform.</p>
         </div>
         <div className="spacer" />
-        <button className="btn primary" onClick={() => setWizard(true)}><Plus size={16} aria-hidden /> New project</button>
+        <button className="btn primary" onClick={() => setWizard(true)} disabled={!can("projects")} title={can("projects") ? undefined : "Your role cannot create projects"}><Plus size={16} aria-hidden /> New project</button>
       </div>
 
       <div className="grid">

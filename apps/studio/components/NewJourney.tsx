@@ -4,10 +4,12 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { Plus, Sparkles } from "lucide-react";
 import { useProjects } from "./Projects";
+import { useWho } from "./Who";
 
 export function NewJourney({ defaultOpen = false }: { defaultOpen?: boolean }) {
   const router = useRouter();
   const { projects, current } = useProjects();
+  const { can } = useWho();
   const [open, setOpen] = useState(defaultOpen);
   const [name, setName] = useState("");
   const [err, setErr] = useState("");
@@ -36,7 +38,7 @@ export function NewJourney({ defaultOpen = false }: { defaultOpen?: boolean }) {
 
   return (
     <>
-      <button className="btn primary" onClick={() => setOpen(true)}><Plus size={16} aria-hidden /> New journey</button>
+      <button className="btn primary" onClick={() => setOpen(true)} disabled={!can("edit")} title={can("edit") ? undefined : "Your role cannot create journeys"}><Plus size={16} aria-hidden /> New journey</button>
       {open ? (
         <div className="scrim" onMouseDown={(e) => { if (e.target === e.currentTarget) close(); }} onKeyDown={(e) => { if (e.key === "Escape") close(); }}>
           <form className="modal" onSubmit={create} aria-label="Create journey" role="dialog">

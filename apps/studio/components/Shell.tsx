@@ -2,9 +2,10 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import { FilePlus2, FolderKanban, LibraryBig, Monitor, Moon, PanelLeftClose, PanelLeftOpen, Search, Sparkles, Sun, Workflow } from "lucide-react";
+import { FilePlus2, FolderKanban, LibraryBig, Users, Monitor, Moon, PanelLeftClose, PanelLeftOpen, Search, Sparkles, Sun, Workflow } from "lucide-react";
 import { CommandsProvider, useCommandPalette, type Command } from "./CommandPalette";
 import { ProjectSwitcher } from "./ProjectSwitcher";
+import { UserSwitcher } from "./UserSwitcher";
 import { useProjects } from "./Projects";
 
 type Theme = "system" | "light" | "dark";
@@ -41,6 +42,7 @@ export function Shell({ children }: { children: React.ReactNode }) {
     { id: "new:project", title: "New project", group: "General", icon: FilePlus2, keywords: "create bank app add", run: () => router.push("/projects?new=1") },
     ...projects.filter((p) => p.id !== current.id).map((p) => ({ id: `sw:${p.id}`, title: `Switch to ${p.name}`, group: "Projects", icon: FolderKanban, hint: p.bundleId, keywords: "project bank app", run: () => setCurrent(p.id) })),
     { id: "go:catalog", title: "Catalog", group: "Go to", icon: LibraryBig, hint: "Ready-made journeys", keywords: "templates library add", run: () => router.push("/catalog") },
+    { id: "go:people", title: "People and roles", group: "Go to", icon: Users, hint: "Who can edit and publish", keywords: "users permissions team", run: () => router.push("/people") },
     { id: "go:agents", title: "Agents", group: "Go to", icon: Sparkles, hint: "AI work", run: () => router.push("/agents") },
     { id: "new", title: "New journey", group: "General", icon: FilePlus2, keywords: "create add", run: () => { if (path === "/") window.dispatchEvent(new Event("finx:new-journey")); else router.push("/?new=1"); } },
     { id: "theme:light", title: "Light theme", group: "General", icon: Sun, keywords: "appearance", run: () => applyTheme("light") },
@@ -61,9 +63,11 @@ export function Shell({ children }: { children: React.ReactNode }) {
             <Link href="/" className={path === "/" || inBuilder ? "on" : ""} aria-current={path === "/" || inBuilder ? "page" : undefined} title="Journeys"><Workflow size={18} aria-hidden /><span className="lbl">Journeys</span></Link>
             <Link href="/catalog" className={path.startsWith("/catalog") ? "on" : ""} aria-current={path.startsWith("/catalog") ? "page" : undefined} title="Catalog"><LibraryBig size={18} aria-hidden /><span className="lbl">Catalog</span></Link>
             <Link href="/projects" className={path.startsWith("/projects") ? "on" : ""} aria-current={path.startsWith("/projects") ? "page" : undefined} title="Projects"><FolderKanban size={18} aria-hidden /><span className="lbl">Projects</span></Link>
+            <Link href="/people" className={path.startsWith("/people") ? "on" : ""} aria-current={path.startsWith("/people") ? "page" : undefined} title="People"><Users size={18} aria-hidden /><span className="lbl">People</span></Link>
             <Link href="/agents" className={path.startsWith("/agents") ? "on" : ""} aria-current={path.startsWith("/agents") ? "page" : undefined} title="Agents"><Sparkles size={18} aria-hidden /><span className="lbl">Agents</span></Link>
           </nav>
           <div className="side-foot">
+            <UserSwitcher />
             <div className="theme-switch" role="group" aria-label="Theme">
               <button aria-pressed={theme === "light"} onClick={() => applyTheme("light")} aria-label="Light theme" title="Light"><Sun size={15} /></button>
               <button aria-pressed={theme === "system"} onClick={() => applyTheme("system")} aria-label="Match system theme" title="System"><Monitor size={15} /></button>
