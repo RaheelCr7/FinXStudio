@@ -14,26 +14,26 @@ type P = BlockProps;
 function RadioGroup({ legend, name, error, children, className }: { legend: string; name: string; error?: string; children: React.ReactNode; className?: string }) {
   const ids = useFieldIds();
   return (
-    <fieldset className={`fx-field ${className ?? ""}`} aria-describedby={describedBy(ids, !!error)} aria-invalid={error ? true : undefined} data-name={name}>
+    <fieldset className={`fx-field ${className ?? ""}`} aria-describedby={describedBy(ids, !!error)} data-name={name}>
       <legend className="fx-label">{legend}</legend>
       {children}
       <FieldError id={ids.error} text={error} />
     </fieldset>
   );
 }
-function Radio({ name, checked, onChange, label, children, className }: { name: string; checked: boolean; onChange: () => void; label: string; children: React.ReactNode; className: string }) {
+function Radio({ name, checked, onChange, label, children, className, invalid }: { name: string; checked: boolean; onChange: () => void; label: string; children: React.ReactNode; className: string; invalid?: boolean }) {
   return (
     <label className={`${className} ${checked ? "is-on" : ""}`}>
-      <input className="fx-radio-input" type="radio" name={name} checked={checked} onChange={onChange} aria-label={label} />
+      <input className="fx-radio-input" type="radio" name={name} checked={checked} onChange={onChange} aria-label={label} aria-invalid={invalid ? true : undefined} />
       {children}
     </label>
   );
 }
 const Avatar = ({ text, round }: { text: string; round?: boolean }) => <span className={`fx-avatar ${round ? "is-round" : ""}`} aria-hidden>{text}</span>;
-const PickerRows = ({ rows, name, onPick }: { rows: PickerRow[]; name: string; onPick: (id: string) => void }) => (
+const PickerRows = ({ rows, name, onPick, invalid }: { rows: PickerRow[]; name: string; onPick: (id: string) => void; invalid?: boolean }) => (
   <>
     {rows.map((r) => (
-      <Radio key={r.id} name={name} checked={r.selected} onChange={() => onPick(r.id)} label={r.label} className="fx-row">
+      <Radio key={r.id} name={name} checked={r.selected} onChange={() => onPick(r.id)} label={r.label} className="fx-row" invalid={invalid}>
         <Avatar text={r.avatar} round={r.round} />
         <span className="fx-row-text"><span className="fx-row-title">{r.title}</span>{r.sub ? <span className="fx-row-sub">{r.sub}</span> : null}</span>
       </Radio>
@@ -44,7 +44,7 @@ const PickerRows = ({ rows, name, onPick }: { rows: PickerRow[]; name: string; o
 export function AccountPicker({ b, set, strings }: P) {
   return (
     <RadioGroup legend={strings.account!} name={b.bind} error={b.error}>
-      <PickerRows rows={accountRows(b as any)} name={b.bind} onPick={(id) => set(b.bind, id)} />
+      <PickerRows rows={accountRows(b as any)} name={b.bind} onPick={(id) => set(b.bind, id)} invalid={!!b.error} />
     </RadioGroup>
   );
 }
@@ -52,13 +52,13 @@ export function AccountPicker({ b, set, strings }: P) {
 export function BeneficiaryPicker({ b, set, strings }: P) {
   return (
     <RadioGroup legend={strings.payTo!} name={b.bind} error={b.error}>
-      <PickerRows rows={beneficiaryRows(b as any)} name={b.bind} onPick={(id) => set(b.bind, id)} />
+      <PickerRows rows={beneficiaryRows(b as any)} name={b.bind} onPick={(id) => set(b.bind, id)} invalid={!!b.error} />
       {b.allowAddNew ? <p className="fx-link-text">{strings.addBeneficiary}</p> : null}
     </RadioGroup>
   );
 }
 
-export function AmountInput({ b, set }: P) {
+export function AmountInput({ b, set, lang }: P) {
   const ids = useFieldIds();
   const chips = quickAmounts(b as any);
   return (
@@ -72,7 +72,7 @@ export function AmountInput({ b, set }: P) {
       </div>
       {b.helper ? <p id={ids.help} className="fx-help">{b.helper}</p> : null}
       {chips.length ? (
-        <div className="fx-chips" role="radiogroup" aria-label={b.label}>
+        <div className="fx-chips" role="radiogroup" aria-label={ui(lang, "quickAmounts")}>
           {chips.map((q) => (
             <button key={q.value} type="button" role="radio" aria-checked={q.selected} aria-label={q.aria} className={`fx-chip ${q.selected ? "is-on" : ""}`} onClick={() => set(b.bind, q.value)}>{q.label}</button>
           ))}
@@ -88,7 +88,7 @@ export function SelectChips({ b, set }: P) {
   return (
     <RadioGroup legend={b.label} name={b.bind} error={b.error} className={tiles ? "fx-tiles" : "fx-chips"}>
       {choices.map((o) => (
-        <Radio key={o.id} name={b.bind} checked={o.selected} onChange={() => set(b.bind, o.id)} label={o.name} className={tiles ? "fx-tile" : "fx-chip"}>
+        <Radio key={o.id} name={b.bind} checked={o.selected} onChange={() => set(b.bind, o.id)} label={o.name} className={tiles ? "fx-tile" : "fx-chip"} invalid={!!b.error}>
           {tiles ? (
             <>
               {o.icon ? <IconTile icon={o.icon} size={40} tone={o.selected ? "accent2" : "accent"} /> : <span className="fx-letter" style={o.color ? { background: o.color } : undefined} aria-hidden>{o.letter}</span>}

@@ -6,7 +6,7 @@ const STRINGS: Record<string, Record<string, string>> = {
     wait: "Please wait…", back: "Back", close: "Close",
     cardNumber: "Enter a valid card number", cardExpiry: "Enter a valid expiry date (MM/YY)", cardCvv: "Enter the 3 or 4 digit code", cardHolder: "Enter the name on the card",
     cardNumberLabel: "Card number", cardHolderLabel: "Name on card", cardHolderPlaceholder: "As shown on the card", cardExpiryLabel: "Expiry", cardCvvLabel: "Security code",
-    show: "Show", hide: "Hide", otpLabel: "One-time code, {n} digits",
+    show: "Show", hide: "Hide", otpLabel: "One-time code, {n} digits", quickAmounts: "Quick amounts",
   },
   ur: {
     step: "مرحلہ {n} از {total}", required: "ضروری ہے", enterAmount: "رقم درج کریں", minimum: "کم از کم {n} ہے", maximum: "زیادہ سے زیادہ {n} ہے",
@@ -14,7 +14,7 @@ const STRINGS: Record<string, Record<string, string>> = {
     wait: "براہ کرم انتظار کریں…", back: "واپس", close: "بند کریں",
     cardNumber: "درست کارڈ نمبر درج کریں", cardExpiry: "درست میعاد (MM/YY) درج کریں", cardCvv: "3 یا 4 ہندسوں کا کوڈ درج کریں", cardHolder: "کارڈ پر درج نام لکھیں",
     cardNumberLabel: "کارڈ نمبر", cardHolderLabel: "کارڈ پر نام", cardHolderPlaceholder: "جیسا کارڈ پر درج ہے", cardExpiryLabel: "میعاد", cardCvvLabel: "سیکیورٹی کوڈ",
-    show: "دکھائیں", hide: "چھپائیں", otpLabel: "ایک بار استعمال ہونے والا کوڈ، {n} ہندسے",
+    show: "دکھائیں", hide: "چھپائیں", otpLabel: "ایک بار استعمال ہونے والا کوڈ، {n} ہندسے", quickAmounts: "فوری رقم",
   },
 };
 
