@@ -4,3 +4,12 @@ dist
 .next
 *.log
 .DS_Store
+*.tsbuildinfo
+
+# Signing keys and store credentials: never commit them
+*.jks
+*.keystore
+*.p8
+*.p12
+*.key
+*.mobileprovision

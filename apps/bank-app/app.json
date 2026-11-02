@@ -1,0 +1,40 @@
+{
+  "expo": {
+    "name": "Meezan Digital",
+    "slug": "meezan-digital",
+    "version": "0.1.0",
+    "orientation": "portrait",
+    "icon": "./assets/icon.png",
+    "userInterfaceStyle": "automatic",
+    "ios": {
+      "supportsTablet": false,
+      "bundleIdentifier": "pk.meezan.digital"
+    },
+    "android": {
+      "adaptiveIcon": {
+        "backgroundColor": "#0F6E56",
+        "foregroundImage": "./assets/android-icon-foreground.png",
+        "backgroundImage": "./assets/android-icon-background.png",
+        "monochromeImage": "./assets/android-icon-monochrome.png"
+      },
+      "predictiveBackGestureEnabled": false,
+      "package": "pk.meezan.digital",
+      "allowBackup": false,
+      "blockedPermissions": [
+        "android.permission.SYSTEM_ALERT_WINDOW",
+        "android.permission.READ_EXTERNAL_STORAGE",
+        "android.permission.WRITE_EXTERNAL_STORAGE"
+      ]
+    },
+    "web": {
+      "favicon": "./assets/favicon.png",
+      "bundler": "metro",
+      "output": "single",
+      "name": "Meezan Digital",
+      "shortName": "Meezan",
+      "themeColor": "#0F6E56",
+      "backgroundColor": "#F6F7F9"
+    },
+    "scheme": "finx"
+  }
+}
