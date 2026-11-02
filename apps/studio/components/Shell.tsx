@@ -1,0 +1,85 @@
+"use client";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import Link from "next/link";
+import { usePathname, useRouter } from "next/navigation";
+import { FilePlus2, Monitor, Moon, PanelLeftClose, PanelLeftOpen, Search, Sparkles, Sun, Workflow } from "lucide-react";
+import { CommandsProvider, useCommandPalette, type Command } from "./CommandPalette";
+
+type Theme = "system" | "light" | "dark";
+type Side = "open" | "rail";
+const store = {
+  get: (k: string) => { try { return localStorage.getItem(k); } catch { return null; } },
+  set: (k: string, v: string) => { try { localStorage.setItem(k, v); } catch { /* private window: the choice just won't persist */ } },
+};
+
+export function Shell({ children }: { children: React.ReactNode }) {
+  const path = usePathname();
+  const router = useRouter();
+  const inBuilder = path.startsWith("/journeys/");
+  const [theme, setTheme] = useState<Theme>("system");
+  const [side, setSide] = useState<Side | null>(null);
+  const [mac, setMac] = useState(false); // decided after mount so server and browser markup match
+
+  useEffect(() => {
+    setMac(/Mac|iPhone|iPad/.test(navigator.platform));
+    const t = store.get("finx.theme"); if (t === "light" || t === "dark") setTheme(t);
+    const s = store.get("finx.sidebar"); if (s === "open" || s === "rail") setSide(s);
+  }, []);
+  const applyTheme = useCallback((t: Theme) => {
+    setTheme(t); store.set("finx.theme", t);
+    if (t === "system") delete document.documentElement.dataset.theme; else document.documentElement.dataset.theme = t;
+  }, []);
+  const rail = (side ?? (inBuilder ? "rail" : "open")) === "rail";
+  const toggleSide = useCallback(() => { const n: Side = rail ? "open" : "rail"; setSide(n); store.set("finx.sidebar", n); }, [rail]);
+
+  const base: Command[] = useMemo(() => [
+    { id: "go:journeys", title: "Journeys", group: "Go to", icon: Workflow, hint: "All journeys", run: () => router.push("/") },
+    { id: "go:agents", title: "Agents", group: "Go to", icon: Sparkles, hint: "AI work", run: () => router.push("/agents") },
+    { id: "new", title: "New journey", group: "General", icon: FilePlus2, keywords: "create add", run: () => { if (path === "/") window.dispatchEvent(new Event("finx:new-journey")); else router.push("/?new=1"); } },
+    { id: "theme:light", title: "Light theme", group: "General", icon: Sun, keywords: "appearance", run: () => applyTheme("light") },
+    { id: "theme:dark", title: "Dark theme", group: "General", icon: Moon, keywords: "appearance", run: () => applyTheme("dark") },
+    { id: "theme:system", title: "Match system theme", group: "General", icon: Monitor, keywords: "appearance auto", run: () => applyTheme("system") },
+    { id: "side", title: rail ? "Expand sidebar" : "Collapse sidebar", group: "General", icon: rail ? PanelLeftOpen : PanelLeftClose, run: toggleSide },
+  ], [router, path, applyTheme, rail, toggleSide]);
+
+  return (
+    <CommandsProvider base={base}>
+      <div className={`app ${rail ? "rail" : ""}`}>
+        <aside className="sidebar" aria-label="Main">
+          <Link href="/" className="brand" aria-label="FinX Studio home"><span className="mark">F</span><span className="lbl">FinX Studio</span></Link>
+          <div className="workspace" title="Meezan Digital · UAT environment">
+            <span className="av">M</span>
+            <span className="t"><b>Meezan Digital</b><span>Sandbox bank</span></span>
+            <span className="env-pill">UAT</span>
+          </div>
+          <SearchButton mac={mac} />
+          <nav className="nav" aria-label="Sections">
+            <div className="nav-label">Build</div>
+            <Link href="/" className={path === "/" || inBuilder ? "on" : ""} aria-current={path === "/" || inBuilder ? "page" : undefined} title="Journeys"><Workflow size={18} aria-hidden /><span className="lbl">Journeys</span></Link>
+            <Link href="/agents" className={path.startsWith("/agents") ? "on" : ""} aria-current={path.startsWith("/agents") ? "page" : undefined} title="Agents"><Sparkles size={18} aria-hidden /><span className="lbl">Agents</span></Link>
+          </nav>
+          <div className="side-foot">
+            <div className="theme-switch" role="group" aria-label="Theme">
+              <button aria-pressed={theme === "light"} onClick={() => applyTheme("light")} aria-label="Light theme" title="Light"><Sun size={15} /></button>
+              <button aria-pressed={theme === "system"} onClick={() => applyTheme("system")} aria-label="Match system theme" title="System"><Monitor size={15} /></button>
+              <button aria-pressed={theme === "dark"} onClick={() => applyTheme("dark")} aria-label="Dark theme" title="Dark"><Moon size={15} /></button>
+            </div>
+            <button className="collapse-btn" onClick={toggleSide} aria-label={rail ? "Expand sidebar" : "Collapse sidebar"} title={rail ? "Expand sidebar" : "Collapse sidebar"}>
+              {rail ? <PanelLeftOpen size={18} /> : <PanelLeftClose size={18} />}<span className="lbl">Collapse</span>
+            </button>
+          </div>
+        </aside>
+        <main className={`main ${inBuilder ? "fill" : ""}`}>{children}</main>
+      </div>
+    </CommandsProvider>
+  );
+}
+
+function SearchButton({ mac }: { mac: boolean }) {
+  const { setOpen } = useCommandPalette();
+  return (
+    <button className="search-btn" onClick={() => setOpen(true)} aria-label="Search and commands" title="Search (⌘K)">
+      <Search size={16} aria-hidden /><span className="lbl">Search…</span><kbd>{mac ? "⌘K" : "Ctrl K"}</kbd>
+    </button>
+  );
+}

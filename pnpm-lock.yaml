@@ -90,9 +90,15 @@ importers:
       '@finx/ui-kit':
         specifier: workspace:*
         version: link:../../packages/ui-kit
+      '@fontsource-variable/inter':
+        specifier: 5.3.0
+        version: 5.3.0
       '@xyflow/react':
         specifier: 12.12.1
         version: 12.12.1(@types/react-dom@19.3.0(@types/react@19.3.0))(@types/react@19.3.0)(react-dom@19.3.0(react@19.3.0))(react@19.3.0)
+      lucide-react:
+        specifier: 1.66.0
+        version: 1.66.0(@types/react@19.3.0)(react@19.3.0)
       next:
         specifier: 16.4.4
         version: 16.4.4(@babel/core@7.29.7)(@types/node@22.20.5)(babel-plugin-react-compiler@1.0.0)(react-dom@19.3.0(react@19.3.0))(react@19.3.0)
@@ -1045,6 +1051,9 @@ packages:
   '@expo/xcpretty@4.4.7':
     resolution: {integrity: sha512-EbxYllZ7/ozONVZd425cm4XnolfW+AmSFT5aP7Jdno6oc3WrYQcHz2CO20z/2rwWwYgztmV2PXvYH+BQ8YFjqg==}
     hasBin: true
+
+  '@fontsource-variable/inter@5.3.0':
+    resolution: {integrity: sha512-OupL48va4JNofb97w6NYeF9S7W/kHNKM0Er8Dem5nqi4jeOLrVJDoE8tZEpnMJmtkvNbB1EIPPwHcdkF6b1oUA==}
 
   '@img/colour@1.1.0':
     resolution: {integrity: sha512-Td76q7j57o/tLVdgS746cYARfSyxk8iEfRxewL9h4OMzYhbW4TAcppl0mT4eyqXddh6L/jwoM75mo7ixa/pCeQ==}
@@ -2505,6 +2514,15 @@ packages:
 
   lru-cache@5.1.1:
     resolution: {integrity: sha512-KpNARQA3Iwv+jTA0utUVVbrh+Jlrr1Fv0e56GGzAFOXN7dk/FviaDW8LHmK52DlcH4WP2n6gI8vN1aesBFgo9w==}
+
+  lucide-react@1.66.0:
+    resolution: {integrity: sha512-8zjbi/Us+ETXqfBwmXF/FHrWGIqOdE6zT1yUdRJLQVoptomSkB0zdFWVIM667t9K8djWDaXdkBkqi2qVTuDNiw==}
+    peerDependencies:
+      '@types/react': '*'
+      react: ^16.5.1 || ^17.0.0 || ^18.0.0 || ^19.0.0
+    peerDependenciesMeta:
+      '@types/react':
+        optional: true
 
   magic-string@0.30.21:
     resolution: {integrity: sha512-vd2F4YUyEXKGcLHoq+TEyCjxueSeHnFxyyjNp80yg0XV4vUhnDer/lvvlqM/arB5bXQN5K2/3oinyCRyx8T2CQ==}
@@ -4439,6 +4457,8 @@ snapshots:
       chalk: 4.1.2
       js-yaml: 4.3.2
 
+  '@fontsource-variable/inter@5.3.0': {}
+
   '@img/colour@1.1.0':
     optional: true
 
@@ -4890,6 +4910,14 @@ snapshots:
       '@vitest/utils': 2.1.8
       chai: 5.3.3
       tinyrainbow: 1.2.0
+
+  '@vitest/mocker@2.1.8(vite@5.4.21(@types/node@22.20.5)(lightningcss@1.33.0)(terser@5.51.2))':
+    dependencies:
+      '@vitest/spy': 2.1.8
+      estree-walker: 3.0.3
+      magic-string: 0.30.21
+    optionalDependencies:
+      vite: 5.4.21(@types/node@22.20.5)(lightningcss@1.33.0)(terser@5.51.2)
 
   '@vitest/mocker@2.1.8(vite@5.4.21(@types/node@26.6.6)(lightningcss@1.33.0)(terser@5.51.2))':
     dependencies:
@@ -5824,6 +5852,12 @@ snapshots:
   lru-cache@5.1.1:
     dependencies:
       yallist: 3.1.1
+
+  lucide-react@1.66.0(@types/react@19.3.0)(react@19.3.0):
+    dependencies:
+      react: 19.3.0
+    optionalDependencies:
+      '@types/react': 19.3.0
 
   magic-string@0.30.21:
     dependencies:
@@ -6875,7 +6909,7 @@ snapshots:
   vitest@2.1.8(@types/node@22.20.5)(lightningcss@1.33.0)(terser@5.51.2):
     dependencies:
       '@vitest/expect': 2.1.8
-      '@vitest/mocker': 2.1.8(vite@5.4.21(@types/node@26.6.6)(lightningcss@1.33.0)(terser@5.51.2))
+      '@vitest/mocker': 2.1.8(vite@5.4.21(@types/node@22.20.5)(lightningcss@1.33.0)(terser@5.51.2))
       '@vitest/pretty-format': 2.1.9
       '@vitest/runner': 2.1.8
       '@vitest/snapshot': 2.1.8

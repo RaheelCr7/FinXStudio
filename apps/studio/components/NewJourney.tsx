@@ -1,13 +1,23 @@
 "use client";
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
+import { Plus, Sparkles } from "lucide-react";
 
-export function NewJourney() {
+export function NewJourney({ defaultOpen = false }: { defaultOpen?: boolean }) {
   const router = useRouter();
-  const [open, setOpen] = useState(false);
+  const [open, setOpen] = useState(defaultOpen);
   const [name, setName] = useState("");
   const [err, setErr] = useState("");
   const [busy, setBusy] = useState(false);
+  const input = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    const h = () => setOpen(true);
+    window.addEventListener("finx:new-journey", h); return () => window.removeEventListener("finx:new-journey", h);
+  }, []);
+  useEffect(() => { if (open) input.current?.focus(); }, [open]);
+  const close = () => { setOpen(false); setErr(""); setName(""); if (defaultOpen) router.replace("/"); };
 
   async function create(e: React.FormEvent) {
     e.preventDefault();
@@ -20,16 +30,27 @@ export function NewJourney() {
     router.push(`/journeys/${data.slug}`);
   }
 
-  if (!open) return <button className="btn primary" onClick={() => setOpen(true)}>+ New journey</button>;
   return (
-    <form onSubmit={create} className="row" aria-label="Create journey">
-      <label className="field" style={{ width: 260 }}>
-        <span style={{ position: "absolute", left: -9999 }}>Journey name</span>
-        <input className="input" autoFocus placeholder="e.g. Pay a bill" value={name} onChange={(e) => { setName(e.target.value); setErr(""); }} />
-      </label>
-      <button className="btn primary" disabled={busy}>{busy ? "Creating…" : "Create"}</button>
-      <button type="button" className="btn" onClick={() => { setOpen(false); setErr(""); }}>Cancel</button>
-      {err ? <span role="alert" style={{ color: "var(--negative)", fontSize: 13 }}>{err}</span> : null}
-    </form>
+    <>
+      <button className="btn primary" onClick={() => setOpen(true)}><Plus size={16} aria-hidden /> New journey</button>
+      {open ? (
+        <div className="scrim" onMouseDown={(e) => { if (e.target === e.currentTarget) close(); }} onKeyDown={(e) => { if (e.key === "Escape") close(); }}>
+          <form className="modal" onSubmit={create} aria-label="Create journey" role="dialog">
+            <h2>New journey</h2>
+            <p className="muted" style={{ margin: "0 0 16px" }}>Give it a name. You can change everything later.</p>
+            <label className="field">Journey name
+              <input ref={input} className="input" style={{ height: 40 }} placeholder="e.g. Pay a bill" value={name} onChange={(e) => { setName(e.target.value); setErr(""); }} />
+            </label>
+            {err ? <div role="alert" style={{ color: "var(--negative)", fontSize: 13, marginTop: 8 }}>{err}</div> : null}
+            <div className="row" style={{ marginTop: 18 }}>
+              <Link href="/agents" className="btn ghost" onClick={() => setOpen(false)}><Sparkles size={15} aria-hidden /> Let Claude draft it</Link>
+              <div className="spacer" />
+              <button type="button" className="btn" onClick={close}>Cancel</button>
+              <button className="btn primary" disabled={busy}>{busy ? "Creating…" : "Create journey"}</button>
+            </div>
+          </form>
+        </div>
+      ) : null}
+    </>
   );
 }

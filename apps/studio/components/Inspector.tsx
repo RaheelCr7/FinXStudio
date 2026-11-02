@@ -1,9 +1,17 @@
 "use client";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { ArrowDown, ArrowUp, Boxes, ChevronRight, Flag, GitBranch, Play, Plus, Route, Search, Smartphone, Trash2, TriangleAlert, X, type LucideIcon } from "lucide-react";
 import type { Journey, LintIssue } from "@finx/journey-schema";
-import { BLOCK_LABELS, blockSummary, deleteScreen, moveBlock, removeBlock, textOf, updateScreen } from "@/lib/edit";
+import { BLOCK_GROUPS, BLOCK_LABELS, blockSummary, deleteScreen, moveBlock, removeBlock, textOf, updateScreen } from "@/lib/edit";
+import { BLOCK_HELP, BLOCK_ICONS } from "@/lib/blocks-ui";
 import { BindField, Field, Loc, ScreenSelect } from "./fields";
 
-type Props = { journey: Journey; screenId: string; blockIndex: number | null; issues: LintIssue[]; onChange: (j: Journey) => void; onSelectBlock: (i: number | null) => void; onSelectScreen: (id: string) => void };
+type Props = {
+  journey: Journey; screenId: string; blockIndex: number | null; issues: LintIssue[]; onChange: (j: Journey) => void;
+  onSelectBlock: (i: number | null) => void; onSelectScreen: (id: string) => void; onAddBlock: (type: string) => void;
+  /** Inside a tabbed dock that already provides the panel, so no panel of its own. */
+  bare?: boolean;
+};
 
 const ACTION_TYPES = ["validate", "navigate", "callApi", "showToast", "exit"] as const;
 
@@ -19,9 +27,9 @@ function ActionsEditor({ actions, journey, onChange }: { actions: any[]; journey
               const t = e.target.value;
               onChange(actions.map((x, k) => k !== i ? x : t === "navigate" ? { type: t, to: journey.screens[0]?.id } : t === "callApi" ? { type: t, integration: journey.integrations[0]?.id ?? "" } : t === "showToast" ? { type: t, text: "Message" } : { type: t }));
             }}>{ACTION_TYPES.map((t) => <option key={t} value={t}>{t}</option>)}</select>
-            <button className="btn sm icon" disabled={i === 0} onClick={() => swap(i, -1)} aria-label="Move action up">↑</button>
-            <button className="btn sm icon" disabled={i === actions.length - 1} onClick={() => swap(i, 1)} aria-label="Move action down">↓</button>
-            <button className="btn sm icon danger" onClick={() => onChange(actions.filter((_, k) => k !== i))} aria-label="Remove action">✕</button>
+            <button className="btn sm icon" disabled={i === 0} onClick={() => swap(i, -1)} aria-label="Move action up"><ArrowUp size={14} /></button>
+            <button className="btn sm icon" disabled={i === actions.length - 1} onClick={() => swap(i, 1)} aria-label="Move action down"><ArrowDown size={14} /></button>
+            <button className="btn sm icon danger" onClick={() => onChange(actions.filter((_, k) => k !== i))} aria-label="Remove action"><X size={14} /></button>
           </div>
           {a.type === "navigate" ? <ScreenSelect journey={journey} label="Go to" value={a.to} onChange={(to) => set(i, { to })} /> : null}
           {a.type === "callApi" ? (
@@ -102,54 +110,131 @@ function BlockEditor({ b, journey, onChange }: { b: any; journey: Journey; onCha
   );
 }
 
-export function Inspector({ journey, screenId, blockIndex, issues, onChange, onSelectBlock, onSelectScreen }: Props) {
+function Acc({ title, icon: Icon, count, defaultOpen, children }: { title: string; icon: LucideIcon; count?: number; defaultOpen?: boolean; children: React.ReactNode }) {
+  const [open, setOpen] = useState(!!defaultOpen);
+  return (
+    <div className="acc">
+      <button aria-expanded={open} onClick={() => setOpen(!open)}><Icon size={15} aria-hidden style={{ color: "var(--text-3)" }} />{title}{count != null ? <span className="chip">{count}</span> : null}<ChevronRight size={15} className="chev" aria-hidden /></button>
+      {open ? <div className="acc-body">{children}</div> : null}
+    </div>
+  );
+}
+
+/** Searchable list of block types, opened from the "Add block" button. */
+function BlockPicker({ onPick, onClose }: { onPick: (type: string) => void; onClose: () => void }) {
+  const [q, setQ] = useState("");
+  const [i, setI] = useState(0);
+  const ref = useRef<HTMLDivElement>(null);
+  const flat = useMemo(() => {
+    const words = q.toLowerCase().split(/\s+/).filter(Boolean);
+    return BLOCK_GROUPS.flatMap((g) => g.types.map((t) => ({ t, g: g.name }))).filter(({ t, g }) => { const hay = `${BLOCK_LABELS[t]} ${BLOCK_HELP[t]} ${g}`.toLowerCase(); return words.every((w) => hay.includes(w)); });
+  }, [q]);
+  useEffect(() => { setI(0); }, [q]);
+  useEffect(() => {
+    const h = (e: MouseEvent) => { if (ref.current && !ref.current.contains(e.target as Node)) onClose(); };
+    document.addEventListener("mousedown", h); return () => document.removeEventListener("mousedown", h);
+  }, [onClose]);
+  const key = (e: React.KeyboardEvent) => {
+    if (e.key === "Escape") { e.preventDefault(); onClose(); }
+    else if (e.key === "ArrowDown") { e.preventDefault(); setI((x) => Math.min(flat.length - 1, x + 1)); }
+    else if (e.key === "ArrowUp") { e.preventDefault(); setI((x) => Math.max(0, x - 1)); }
+    else if (e.key === "Enter") { e.preventDefault(); const p = flat[i]; if (p) { onPick(p.t); onClose(); } }
+  };
+  let last = "";
+  return (
+    <div className="picker" ref={ref} onKeyDown={key} role="dialog" aria-label="Add a block">
+      <div className="q"><Search size={15} aria-hidden /><input autoFocus placeholder="Search blocks…" value={q} onChange={(e) => setQ(e.target.value)} aria-label="Search blocks" /></div>
+      <div className="list" role="listbox">
+        {flat.length === 0 ? <div className="faint" style={{ padding: 16, textAlign: "center" }}>No block matches “{q}”.</div> : flat.map(({ t, g }, n) => {
+          const Icon = BLOCK_ICONS[t]; const head = g !== last ? <div className="g">{g}</div> : null; last = g;
+          return (
+            <div key={t}>{head}
+              <button className="it" role="option" aria-selected={n === i} onMouseMove={() => setI(n)} onClick={() => { onPick(t); onClose(); }}>
+                <span className="bi">{Icon ? <Icon size={16} aria-hidden /> : null}</span>
+                <span><b style={{ fontWeight: 600, fontSize: 13.5 }}>{BLOCK_LABELS[t]}</b><small>{BLOCK_HELP[t]}</small></span>
+              </button>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+export function Inspector({ journey, screenId, blockIndex, issues, onChange, onSelectBlock, onSelectScreen, onAddBlock, bare }: Props) {
+  const [picker, setPicker] = useState(false);
   const screen = journey.screens.find((s) => s.id === screenId);
-  if (!screen) return <div className="pane right muted">Select a screen on the canvas.</div>;
+  const wrap = (children: React.ReactNode) => (bare ? <div style={{ flex: 1, minHeight: 0, overflowY: "auto" }}>{children}</div> : <div className="pane right">{children}</div>);
+  if (!screen) return wrap(<div className="pad muted">Select a screen on the canvas.</div>);
   const mine = issues.filter((i) => i.screen === screenId);
   const edit = (fn: (s: any) => void) => onChange(updateScreen(journey, screenId, fn));
-  const block: any = blockIndex != null ? screen.blocks[blockIndex] : null;
+  const kind = screen.kind ?? "screen";
+  const isStart = journey.entryScreen === screen.id;
+  const KindIcon = isStart ? Play : kind === "branch" ? GitBranch : kind === "terminal" ? Flag : Smartphone;
 
-  return (
-    <div className="pane right">
-      <div className="row"><div style={{ fontWeight: 600, fontSize: 15 }}>{textOf(screen.title)}</div><div className="spacer" /><span className="chip">{screen.id}</span></div>
-      {mine.map((i, k) => <div key={k} className="issue" role="status">⚠ {i.message}</div>)}
-
-      <div className="label-section">Screen</div>
-      <div className="stack">
-        <Loc label="Title" journey={journey} value={screen.title} onChange={(title) => edit((s) => { s.title = title; })} />
-        <Field label="Type"><select className="select" value={screen.kind ?? "screen"} onChange={(e) => edit((s) => { s.kind = e.target.value === "screen" ? undefined : e.target.value; })}>
-          <option value="screen">Screen</option><option value="branch">Branch (alternate path)</option><option value="terminal">End screen</option></select></Field>
-        {journey.entryScreen !== screen.id ? <button className="btn sm" onClick={() => onChange({ ...journey, entryScreen: screen.id })}>Make this the start screen</button> : <span className="faint">This is the start screen</span>}
-      </div>
-
-      <div className="label-section">Blocks</div>
-      {screen.blocks.map((b: any, i) => (
-        <div key={i} className={`block-row ${blockIndex === i ? "on" : ""}`} onClick={() => onSelectBlock(blockIndex === i ? null : i)} role="button" tabIndex={0} onKeyDown={(e) => { if (e.key === "Enter") onSelectBlock(i); }}>
-          <span className="t">{BLOCK_LABELS[b.type] ?? b.type}</span><span className="s">{blockSummary(b)}</span>
-          <button className="btn sm icon" disabled={i === 0} onClick={(e) => { e.stopPropagation(); onChange(moveBlock(journey, screenId, i, -1)); onSelectBlock(i - 1); }} aria-label="Move block up">↑</button>
-          <button className="btn sm icon" disabled={i === screen.blocks.length - 1} onClick={(e) => { e.stopPropagation(); onChange(moveBlock(journey, screenId, i, 1)); onSelectBlock(i + 1); }} aria-label="Move block down">↓</button>
-          <button className="btn sm icon danger" onClick={(e) => { e.stopPropagation(); onChange(removeBlock(journey, screenId, i)); onSelectBlock(null); }} aria-label="Delete block">✕</button>
+  return wrap(
+    <>
+      <div style={{ padding: "16px 14px 14px", display: "flex", gap: 12, alignItems: "center" }}>
+        <span className="bi" style={{ width: 38, height: 38, borderRadius: 11, background: kind === "branch" ? "var(--warning-bg)" : kind === "terminal" ? "var(--positive-bg)" : "var(--accent-soft)", color: kind === "branch" ? "var(--warning)" : kind === "terminal" ? "var(--positive)" : "var(--accent-text)", display: "grid", placeItems: "center", flex: "none" }}><KindIcon size={18} aria-hidden /></span>
+        <div style={{ minWidth: 0, flex: 1 }}>
+          <div style={{ fontWeight: 650, fontSize: 16, letterSpacing: "-0.012em", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{textOf(screen.title)}</div>
+          <div className="faint">{isStart ? "Start screen · " : ""}{kind === "terminal" ? "End screen" : kind === "branch" ? "Branch" : "Screen"} · {screen.id}</div>
         </div>
-      ))}
-      {screen.blocks.length === 0 ? <div className="faint">No blocks yet. Add one from the palette on the left.</div> : null}
-
-      {block ? (<><div className="label-section">{BLOCK_LABELS[block.type] ?? block.type} properties</div>
-        <BlockEditor b={block} journey={journey} onChange={(patch) => edit((s) => { s.blocks[blockIndex!] = { ...s.blocks[blockIndex!], ...patch }; })} /></>) : null}
-
-      <div className="label-section">Next screen rules</div>
-      <div className="faint" style={{ marginBottom: 8 }}>The first matching rule wins when a button navigates; otherwise the button's own target is used.</div>
-      <div className="stack" style={{ gap: 8 }}>
-        {(screen.navigation?.rules ?? []).map((r, i) => (
-          <div key={i} className="card" style={{ padding: 10, gap: 8, borderRadius: 10 }}>
-            <Field label="When"><input className="input mono" value={r.when} onChange={(e) => edit((s) => { s.navigation.rules[i].when = e.target.value; })} placeholder="amount > limit" /></Field>
-            <ScreenSelect journey={journey} label="Go to" value={r.to} onChange={(to) => edit((s) => { s.navigation.rules[i].to = to; })} />
-            <button className="btn sm danger" onClick={() => edit((s) => { s.navigation.rules.splice(i, 1); })}>Remove rule</button>
-          </div>))}
-        <button className="btn sm" onClick={() => edit((s) => { s.navigation ??= {}; s.navigation.rules ??= []; s.navigation.rules.push({ when: "true", to: journey.screens.find((x) => x.id !== s.id)?.id ?? s.id }); })}>+ Add rule</button>
       </div>
+      {mine.length ? <div style={{ padding: "0 14px 8px" }}>{mine.map((i, k) => <div key={k} className="issue" role="status"><TriangleAlert size={14} aria-hidden />{i.message}</div>)}</div> : null}
 
-      <div className="label-section">Danger zone</div>
-      <button className="btn sm danger" onClick={() => { const out = deleteScreen(journey, screenId); if (out) { onChange(out); onSelectScreen(out.entryScreen); onSelectBlock(null); } }}>Delete screen</button>
-    </div>
+      <Acc title="Screen" icon={Smartphone} defaultOpen={false}>
+        <div className="stack">
+          <Loc label="Title" journey={journey} value={screen.title} onChange={(title) => edit((s) => { s.title = title; })} />
+          <Field label="Type"><select className="select" value={kind} onChange={(e) => edit((s) => { s.kind = e.target.value === "screen" ? undefined : e.target.value; })}>
+            <option value="screen">Screen</option><option value="branch">Branch (alternate path)</option><option value="terminal">End screen</option></select></Field>
+          {!isStart ? <button className="btn sm" onClick={() => onChange({ ...journey, entryScreen: screen.id })}><Play size={13} aria-hidden />Make this the start screen</button> : <span className="faint">This is the start screen</span>}
+        </div>
+      </Acc>
+
+      <Acc title="Blocks" icon={Boxes} count={screen.blocks.length} defaultOpen>
+        <div style={{ position: "relative" }}>
+          {screen.blocks.map((b: any, i) => {
+            const Icon = BLOCK_ICONS[b.type]; const on = blockIndex === i;
+            return (
+              <div key={i}>
+                <div className={`block-row ${on ? "on" : ""}`} onClick={() => onSelectBlock(on ? null : i)} role="button" tabIndex={0} aria-expanded={on} onKeyDown={(e) => { if (e.key === "Enter") onSelectBlock(on ? null : i); }}
+                  style={on ? { marginBottom: 0, borderBottomLeftRadius: 0, borderBottomRightRadius: 0 } : undefined}>
+                  <span className="bi">{Icon ? <Icon size={16} aria-hidden /> : null}</span>
+                  <span className="bt"><span className="t">{BLOCK_LABELS[b.type] ?? b.type}</span><span className="s">{blockSummary(b) || " "}</span></span>
+                  <span className="acts">
+                    <button className="btn sm ghost icon" disabled={i === 0} onClick={(e) => { e.stopPropagation(); onChange(moveBlock(journey, screenId, i, -1)); onSelectBlock(i - 1); }} aria-label="Move block up"><ArrowUp size={14} /></button>
+                    <button className="btn sm ghost icon" disabled={i === screen.blocks.length - 1} onClick={(e) => { e.stopPropagation(); onChange(moveBlock(journey, screenId, i, 1)); onSelectBlock(i + 1); }} aria-label="Move block down"><ArrowDown size={14} /></button>
+                    <button className="btn sm ghost icon danger" onClick={(e) => { e.stopPropagation(); onChange(removeBlock(journey, screenId, i)); onSelectBlock(null); }} aria-label="Delete block"><Trash2 size={14} /></button>
+                  </span>
+                </div>
+                {on ? <div className="block-edit"><BlockEditor b={b} journey={journey} onChange={(patch) => edit((s) => { s.blocks[blockIndex!] = { ...s.blocks[blockIndex!], ...patch }; })} /></div> : null}
+              </div>
+            );
+          })}
+          {screen.blocks.length === 0 ? <div className="faint" style={{ margin: "2px 0 10px" }}>No blocks yet. Add the first one to build this screen.</div> : null}
+          <button className="btn" style={{ width: "100%" }} onClick={() => setPicker(!picker)} aria-expanded={picker}><Plus size={15} aria-hidden />Add block</button>
+          {picker ? <BlockPicker onPick={onAddBlock} onClose={() => setPicker(false)} /> : null}
+        </div>
+      </Acc>
+
+      <Acc title="Next screen rules" icon={Route} count={screen.navigation?.rules?.length ?? 0}>
+        <div className="faint" style={{ marginBottom: 8 }}>The first matching rule wins when a button navigates; otherwise the button's own target is used.</div>
+        <div className="stack" style={{ gap: 8 }}>
+          {(screen.navigation?.rules ?? []).map((r, i) => (
+            <div key={i} className="card" style={{ padding: 10, gap: 8, borderRadius: 10, boxShadow: "none" }}>
+              <Field label="When"><input className="input mono" value={r.when} onChange={(e) => edit((s) => { s.navigation.rules[i].when = e.target.value; })} placeholder="amount > limit" /></Field>
+              <ScreenSelect journey={journey} label="Go to" value={r.to} onChange={(to) => edit((s) => { s.navigation.rules[i].to = to; })} />
+              <button className="btn sm danger" onClick={() => edit((s) => { s.navigation.rules.splice(i, 1); })}><Trash2 size={13} aria-hidden />Remove rule</button>
+            </div>))}
+          <button className="btn sm" onClick={() => edit((s) => { s.navigation ??= {}; s.navigation.rules ??= []; s.navigation.rules.push({ when: "true", to: journey.screens.find((x) => x.id !== s.id)?.id ?? s.id }); })}><Plus size={13} aria-hidden />Add rule</button>
+        </div>
+      </Acc>
+
+      <Acc title="Danger zone" icon={Trash2}>
+        <button className="btn sm danger" onClick={() => { const out = deleteScreen(journey, screenId); if (out) { onChange(out); onSelectScreen(out.entryScreen); onSelectBlock(null); } }}><Trash2 size={13} aria-hidden />Delete this screen</button>
+      </Acc>
+      <div style={{ height: 24 }} />
+    </>
   );
 }

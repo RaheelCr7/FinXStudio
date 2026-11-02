@@ -2,7 +2,7 @@ import type { Block, Journey, Screen } from "@finx/journey-schema";
 
 export const BLOCK_LABELS: Record<string, string> = {
   text: "Text", alert: "Alert", button: "Button", result: "Result", reviewSummary: "Review summary", consent: "Consent",
-  otp: "OTP", amountInput: "Amount", select: "Select", textInput: "Text input", accountPicker: "Account picker", beneficiaryPicker: "Beneficiary picker",
+  otp: "OTP", stepper: "Progress steps", amountInput: "Amount", select: "Select", textInput: "Text input", accountPicker: "Account picker", beneficiaryPicker: "Beneficiary picker",
 };
 export const BLOCK_GROUPS: Array<{ name: string; types: string[] }> = [
   { name: "Content", types: ["text", "alert", "result"] },
