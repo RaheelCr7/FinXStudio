@@ -94,17 +94,32 @@ export function SelectChips({ b, set }: P) {
   return (
     <View>
       <Label>{b.label}</Label>
-      <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8 }}>
-        {b.options.map((o: string) => {
-          const on = b.value === o;
+      <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8 }} accessibilityRole="radiogroup">
+        {b.items.map((o: { id: string; name: string }) => {
+          const on = b.value === o.id;
           return (
-            <Pressable key={o} accessibilityRole="radio" accessibilityState={{ selected: on }} onPress={() => set(b.bind, o)}
-              style={{ paddingHorizontal: 14, height: 40, borderRadius: radius.pill, justifyContent: "center", borderWidth: 1, borderColor: on ? c.accent : c.border, backgroundColor: on ? c.accentSoft : c.surface }}>
-              <Text style={{ color: on ? c.accent : c.text, fontWeight: "500", fontSize: 14 }}>{o}</Text>
+            <Pressable key={o.id} accessibilityRole="radio" accessibilityState={{ selected: on }} onPress={() => set(b.bind, o.id)}
+              style={{ paddingHorizontal: 14, height: 40, borderRadius: radius.pill, justifyContent: "center", borderWidth: on ? 2 : 1, borderColor: on ? c.accent : c.border, backgroundColor: on ? c.accentSoft : c.surface }}>
+              <Text style={{ color: on ? c.accent : c.text, fontWeight: "500", fontSize: 14 }}>{o.name}</Text>
             </Pressable>
           );
         })}
       </View>
+      <ErrorText e={b.error} />
+    </View>
+  );
+}
+
+export function TextField({ b, set }: P) {
+  const { c } = useTheme();
+  const [focus, setFocus] = React.useState(false);
+  const kb = b.keyboard === "number" ? "number-pad" : b.keyboard === "phone" ? "phone-pad" : b.keyboard === "email" ? "email-address" : "default";
+  return (
+    <View>
+      <Label>{b.label}</Label>
+      <TextInput accessibilityLabel={b.label} value={String(b.value ?? "")} placeholder={b.placeholder} placeholderTextColor={c.textFaint} keyboardType={kb}
+        onFocus={() => setFocus(true)} onBlur={() => setFocus(false)} onChangeText={(t) => set(b.bind, t)}
+        style={[{ height: 52, borderRadius: radius.md, borderWidth: focus || b.error ? 2 : 1, borderColor: b.error ? c.negative : focus ? c.accent : c.borderStrong, backgroundColor: c.surface, paddingHorizontal: 14, fontSize: 16, color: c.text }, tab, Platform.OS === "web" ? ({ outlineStyle: "none" } as any) : null]} />
       <ErrorText e={b.error} />
     </View>
   );
@@ -209,7 +224,7 @@ const s = StyleSheet.create({
   row: { flexDirection: "row", alignItems: "center", padding: 14, borderRadius: radius.lg, marginBottom: 10 },
 });
 export const registry: Record<string, (p: P) => React.ReactElement | null> = {
-  accountPicker: AccountPicker, beneficiaryPicker: BeneficiaryPicker, amountInput: AmountInput, select: SelectChips,
+  accountPicker: AccountPicker, beneficiaryPicker: BeneficiaryPicker, amountInput: AmountInput, select: SelectChips, textInput: TextField,
   alert: Alert, reviewSummary: ReviewSummary, consent: Consent, otp: Otp, result: Result, text: TextBlock, button: Button, stepper: () => null,
 };
 export { space };

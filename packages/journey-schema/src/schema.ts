@@ -42,7 +42,11 @@ export const Block = z.discriminatedUnion("type", [
     helper: LocalizedText.optional(),
     validation: z.object({ min: z.union([z.number(), z.string()]).optional(), max: z.union([z.number(), z.string()]).optional(), messages: z.record(z.string(), LocalizedText).optional() }).optional(),
   }),
-  z.object({ ...base, type: z.literal("select"), bind: z.string(), label: LocalizedText, options: z.array(z.string()) }),
+  z.object({ ...base, type: z.literal("select"), bind: z.string(), label: LocalizedText, options: z.array(z.string()).optional(), source: z.string().optional() }),
+  z.object({
+    ...base, type: z.literal("textInput"), bind: z.string(), label: LocalizedText, placeholder: LocalizedText.optional(),
+    keyboard: z.enum(["default", "number", "phone", "email"]).optional(), pattern: z.string().optional(), patternMessage: LocalizedText.optional(),
+  }),
   z.object({ ...base, type: z.literal("alert"), tone: z.enum(["info", "warning", "error", "success"]), text: LocalizedText }),
   z.object({ ...base, type: z.literal("reviewSummary"), rows: z.array(z.object({ label: LocalizedText, value: LocalizedText })) }),
   z.object({

@@ -1,29 +1,44 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { Platform, Pressable, SafeAreaView, ScrollView, StatusBar, Text, View, useColorScheme } from "react-native";
-import { Journey, lintJourney, localTransfer } from "@finx/journey-schema";
+import { Journey, lintJourney, localTransfer, payBill } from "@finx/journey-schema";
 import { MockBank, personas } from "@finx/mock-bank-api";
+import { localize } from "@finx/renderer-core";
 import { JourneyPlayer, ThemeProvider, useTheme } from "@finx/renderer-native";
 import { formatMoney, radius } from "@finx/ui-kit";
 
 type Screen = { name: "login" } | { name: "home" } | { name: "journey" };
 type Live = { journey: Journey; source: "studio" | "bundled" };
 
-// Over-the-air journeys: the app asks Studio for the published version each time, and never trusts it blindly.
+// Over-the-air journeys: the app asks Studio what is published, and never trusts a journey blindly.
 const STUDIO = process.env.EXPO_PUBLIC_STUDIO_URL ?? (Platform.OS === "android" ? "http://10.0.2.2:3100" : "http://localhost:3100");
-async function loadJourney(slug: string): Promise<Live> {
+const BUNDLED: Record<string, Journey> = { [localTransfer.slug]: localTransfer, [payBill.slug]: payBill };
+type Entry = { slug: string; name: any; version: number };
+const bundledEntries = (): Entry[] => Object.values(BUNDLED).map((j) => ({ slug: j.slug, name: j.name, version: j.version }));
+
+async function timedFetch(url: string) {
+  const ctl = new AbortController();
+  const t = setTimeout(() => ctl.abort(), 2500);
+  try { const res = await fetch(url, { signal: ctl.signal }); if (!res.ok) throw new Error(String(res.status)); return await res.json(); }
+  finally { clearTimeout(t); }
+}
+async function loadCatalog(): Promise<{ entries: Entry[]; source: "studio" | "bundled" }> {
   try {
-    const ctl = new AbortController();
-    const t = setTimeout(() => ctl.abort(), 2500);
-    const res = await fetch(`${STUDIO}/api/journeys/${slug}?env=published`, { signal: ctl.signal });
-    clearTimeout(t);
-    if (!res.ok) throw new Error(String(res.status));
-    const parsed = Journey.safeParse(await res.json());
+    const list = await timedFetch(`${STUDIO}/api/journeys`);
+    const entries = (list as any[]).filter((j) => j.publishedVersion != null).map((j) => ({ slug: j.slug, name: j.name, version: j.publishedVersion }));
+    return { entries, source: "studio" };
+  } catch { return { entries: bundledEntries(), source: "bundled" }; }
+}
+async function loadJourney(slug: string): Promise<Live | null> {
+  try {
+    const parsed = Journey.safeParse(await timedFetch(`${STUDIO}/api/journeys/${slug}?env=published`));
     if (!parsed.success || lintJourney(parsed.data).length) throw new Error("invalid journey");
     return { journey: parsed.data, source: "studio" };
   } catch {
-    return { journey: localTransfer, source: "bundled" };
+    const fallback = BUNDLED[slug];
+    return fallback ? { journey: fallback, source: "bundled" } : null;
   }
 }
+
 const tab = { fontVariant: ["tabular-nums" as const] };
 
 function Shell() {
@@ -32,8 +47,16 @@ function Shell() {
   const [personaId, setPersonaId] = useState("ayesha");
   const [lang, setLang] = useState("en");
   const [tick, setTick] = useState(0);
-  const [live, setLive] = useState<Live>({ journey: localTransfer, source: "bundled" });
-  useEffect(() => { if (screen.name === "home") loadJourney("fund-transfer-local").then(setLive); }, [screen.name, tick]);
+  const [catalog, setCatalog] = useState<{ entries: Entry[]; source: "studio" | "bundled" }>({ entries: bundledEntries(), source: "bundled" });
+  const [active, setActive] = useState<Live | null>(null);
+  const [opening, setOpening] = useState<string | null>(null);
+  useEffect(() => { if (screen.name === "home") loadCatalog().then(setCatalog); }, [screen.name, tick]);
+  async function open(slug: string) {
+    setOpening(slug);
+    const l = await loadJourney(slug);
+    setOpening(null);
+    if (l) { setActive(l); setScreen({ name: "journey" }); }
+  }
   const bank = useMemo(() => new MockBank(personaId), [personaId, screen.name === "login"]);
   const adapter = useMemo(() => (id: string, input: Record<string, any>) => bank.call(id, input), [bank]);
   const rtl = lang === "ur";
@@ -74,9 +97,9 @@ function Shell() {
     );
   }
 
-  if (screen.name === "journey") {
+  if (screen.name === "journey" && active) {
     return (
-      <JourneyPlayer journey={live.journey} adapter={adapter} lang={lang}
+      <JourneyPlayer journey={active.journey} adapter={adapter} lang={lang}
         onClose={() => { setTick(tick + 1); setScreen({ name: "home" }); }} onExit={() => { setTick(tick + 1); setScreen({ name: "home" }); }} />
     );
   }
@@ -108,21 +131,29 @@ function Shell() {
           </View>
         )}
 
-        <View style={{ flexDirection: "row", justifyContent: "space-between" }}>
-          {[{ k: "transfer", en: "Transfer", ur: "ٹرانسفر", go: true }, { k: "bills", en: "Bills", ur: "بلز" }, { k: "topup", en: "Top-up", ur: "ٹاپ اپ" }, { k: "scan", en: "Scan", ur: "اسکین" }].map((a) => (
-            <Pressable key={a.k} accessibilityRole="button" accessibilityLabel={a.en} disabled={!a.go || accounts.length === 0} onPress={() => setScreen({ name: "journey" })}
-              style={({ pressed }) => ({ alignItems: "center", gap: 8, opacity: !a.go || accounts.length === 0 ? 0.45 : pressed ? 0.8 : 1, width: 76 })}>
-              <View style={{ width: 56, height: 56, borderRadius: 18, backgroundColor: c.accentSoft, alignItems: "center", justifyContent: "center" }}><Text style={{ color: c.accent, fontWeight: "700", fontSize: 16 }}>{a.en.slice(0, 1)}</Text></View>
-              <Text style={{ color: c.textMuted, fontSize: 12, fontWeight: "500" }}>{rtl ? a.ur : a.en}</Text>
-            </Pressable>
-          ))}
+        <Text accessibilityRole="header" style={{ color: c.text, fontSize: 16, fontWeight: "600" }}>{rtl ? "سروسز" : "Services"}</Text>
+        <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 12 }}>
+          {catalog.entries.map((e) => {
+            const name = localize(e.name, lang, "en");
+            const busy = opening === e.slug;
+            return (
+              <Pressable key={e.slug} accessibilityRole="button" accessibilityLabel={name} disabled={accounts.length === 0 || busy} onPress={() => open(e.slug)}
+                style={({ pressed }) => ({ width: "47.5%", padding: 14, borderRadius: radius.lg, backgroundColor: c.surface, borderWidth: 1, borderColor: c.border, opacity: accounts.length === 0 ? 0.45 : pressed ? 0.85 : 1, gap: 10 })}>
+                <View style={{ width: 44, height: 44, borderRadius: 14, backgroundColor: c.accentSoft, alignItems: "center", justifyContent: "center" }}>
+                  <Text style={{ color: c.accent, fontWeight: "700", fontSize: 16 }}>{name.slice(0, 1)}</Text>
+                </View>
+                <Text style={{ color: c.text, fontWeight: "600", fontSize: 15 }}>{busy ? "…" : name}</Text>
+                <Text style={{ color: c.textFaint, fontSize: 12 }}>v{e.version}</Text>
+              </Pressable>
+            );
+          })}
         </View>
         <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
-          <View style={{ paddingHorizontal: 10, height: 24, borderRadius: radius.pill, justifyContent: "center", backgroundColor: live.source === "studio" ? c.positiveBg : c.warningBg }}>
-            <Text style={{ fontSize: 12, fontWeight: "600", color: live.source === "studio" ? c.positive : c.warning }}>{live.source === "studio" ? `Live from Studio · v${live.journey.version}` : `Offline copy · v${live.journey.version}`}</Text>
+          <View style={{ paddingHorizontal: 10, height: 24, borderRadius: radius.pill, justifyContent: "center", backgroundColor: catalog.source === "studio" ? c.positiveBg : c.warningBg }}>
+            <Text style={{ fontSize: 12, fontWeight: "600", color: catalog.source === "studio" ? c.positive : c.warning }}>{catalog.source === "studio" ? `Live from Studio · ${catalog.entries.length} journeys` : "Offline copies"}</Text>
           </View>
         </View>
-        <Text style={{ color: c.textFaint, fontSize: 12 }}>Transfer runs the “Send to beneficiary” journey published from FinX Studio. Bills, Top-up and Scan arrive with their journeys.</Text>
+        <Text style={{ color: c.textFaint, fontSize: 12 }}>Services come from the journeys published in FinX Studio. Publish a new journey there and it appears here.</Text>
       </ScrollView>
     </View>
   );

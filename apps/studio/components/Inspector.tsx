@@ -71,7 +71,14 @@ function BlockEditor({ b, journey, onChange }: { b: any; journey: Journey; onCha
         <Loc label="Helper text" journey={journey} value={b.helper ?? ""} onChange={(helper) => onChange({ helper })} /></>) : null}
       {b.type === "select" ? (<><Loc label="Label" journey={journey} value={b.label} onChange={(label) => onChange({ label })} />
         <BindField journey={journey} value={b.bind} onChange={(bind) => onChange({ bind })} />
-        <Field label="Options (one per line)"><textarea className="textarea" value={b.options.join("\n")} onChange={(e) => onChange({ options: e.target.value.split("\n").map((x) => x.trim()).filter(Boolean) })} /></Field></>) : null}
+        <Field label="Data source (optional)" hint="e.g. ctx.billers. Leave empty to use the fixed options below."><input className="input mono" value={b.source ?? ""} onChange={(e) => onChange({ source: e.target.value || undefined })} /></Field>
+        {!b.source ? <Field label="Options (one per line)"><textarea className="textarea" value={(b.options ?? []).join("\n")} onChange={(e) => onChange({ options: e.target.value.split("\n").map((x) => x.trim()).filter(Boolean) })} /></Field> : null}</>) : null}
+      {b.type === "textInput" ? (<><Loc label="Label" journey={journey} value={b.label} onChange={(label) => onChange({ label })} />
+        <Loc label="Placeholder" journey={journey} value={b.placeholder ?? ""} onChange={(placeholder) => onChange({ placeholder })} />
+        <BindField journey={journey} value={b.bind} onChange={(bind) => onChange({ bind })} />
+        <Field label="Keyboard"><select className="select" value={b.keyboard ?? "default"} onChange={(e) => onChange({ keyboard: e.target.value })}>{["default", "number", "phone", "email"].map((k) => <option key={k}>{k}</option>)}</select></Field>
+        <Field label="Format (regular expression)" hint="e.g. ^[0-9]{10,14}$"><input className="input mono" value={b.pattern ?? ""} onChange={(e) => onChange({ pattern: e.target.value || undefined })} /></Field>
+        {b.pattern ? <Loc label="Message when format is wrong" journey={journey} value={b.patternMessage ?? ""} onChange={(patternMessage) => onChange({ patternMessage })} /> : null}</>) : null}
       {b.type === "consent" ? (<><Loc label="Text" journey={journey} value={b.text} onChange={(text) => onChange({ text })} />
         <BindField journey={journey} value={b.bind} onChange={(bind) => onChange({ bind })} />
         <Field label="Terms version"><input className="input" value={b.termsVersion} onChange={(e) => onChange({ termsVersion: e.target.value })} /></Field>
