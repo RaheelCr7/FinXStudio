@@ -77,3 +77,15 @@ describe("one-time code", () => {
     expect([otpLabel("en", 6), otpLabel("ur", 6)]).toEqual(["One-time code, 6 digits", "ایک بار استعمال ہونے والا کوڈ، 6 ہندسے"]);
   });
 });
+
+import { caretAfterFormat } from "./index";
+describe("caret after formatting", () => {
+  it("keeps the caret after the same digit", () => {
+    expect(caretAfterFormat("42424", 5, "4242 4")).toBe(6);        // typing at the end: after the new digit, past the added space
+    expect(caretAfterFormat("42x424", 3, "4242 4")).toBe(2);       // a stray letter is dropped: caret stays after the second digit
+    expect(caretAfterFormat("4242 9 4242", 6, "4242 9424 2")).toBe(6); // inserting in the middle
+    expect(caretAfterFormat("12/", 3, "12")).toBe(2);
+    expect(caretAfterFormat("abc", 2, "")).toBe(0);
+    expect(caretAfterFormat("12", 99, "12")).toBe(2);
+  });
+});

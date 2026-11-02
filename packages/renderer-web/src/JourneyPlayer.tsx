@@ -1,0 +1,82 @@
+"use client";
+import { useEffect, useMemo, useReducer, useRef } from "react";
+import type { Journey } from "@finx/journey-schema";
+import { JourneyController, ui, type Adapter, type BlockType } from "@finx/renderer-core";
+import { Button, registry } from "./blocks/blocks";
+
+export type JourneyPlayerProps = {
+  journey: Journey;
+  adapter: Adapter;
+  lang?: string;
+  /** Answers to fill in when the journey opens, by data path. */
+  initial?: Record<string, any>;
+  /** The close button, and back from the first screen. */
+  onClose?: () => void;
+  /** The journey asked to exit (its last screen's button). */
+  onExit?: () => void;
+};
+
+/**
+ * Plays a journey on the web. The engine and every decision about the screen live in @finx/renderer-core (JourneyController);
+ * this draws it with real form elements: labels, error messages that are announced, a step list, Enter to continue,
+ * and focus that moves to the screen title (or the first mistake) so keyboard and screen-reader users are never left behind.
+ */
+export function JourneyPlayer({ journey, adapter, lang, initial, onClose, onExit }: JourneyPlayerProps) {
+  const controller = useMemo(() => new JourneyController(journey, { adapter, lang, initial }), [journey, adapter]);
+  const [, force] = useReducer((x: number) => x + 1, 0);
+  useEffect(() => controller.subscribe(force), [controller]);
+  useEffect(() => { void controller.start(); }, [controller]);
+  useEffect(() => { if (lang) controller.setLang(lang); }, [lang, controller]);
+
+  const layout = controller.layout();
+  const { view: v, body, buttons } = layout;
+  useEffect(() => { if (v.exited) onExit?.(); }, [v.exited]);
+
+  const title = useRef<HTMLHeadingElement>(null);
+  const bodyRef = useRef<HTMLDivElement>(null);
+  // a new screen: move focus to its title, so a screen reader reads where it landed
+  useEffect(() => { title.current?.focus({ preventScroll: false }); window.scrollTo?.({ top: 0 }); }, [v.screenId]);
+  // a failed check: move focus to the first field with a mistake
+  const errorKey = body.map((b) => b.error ?? Object.values(b.errors ?? {}).filter(Boolean).join(",")).join("|").replace(/\|/g, "");
+  useEffect(() => { if (errorKey) bodyRef.current?.querySelector<HTMLElement>('[aria-invalid="true"]')?.focus(); }, [errorKey]);
+
+  const primary = buttons.find((b) => (b.variant ?? "primary") === "primary");
+  const common = { busy: v.busy, lang: layout.lang, strings: v.strings };
+  const back = ui(layout.lang, "back"), close = ui(layout.lang, "close");
+
+  return (
+    <div className="fx-player" dir={layout.rtl ? "rtl" : "ltr"} lang={layout.lang}>
+      <header className="fx-player-head">
+        <div className="fx-player-bar">
+          {layout.canGoBack ? <button type="button" className="fx-icon-btn" aria-label={back} onClick={() => controller.stepBack()}><span aria-hidden className="fx-flip">‹</span></button> : null}
+          <div className="fx-player-title">
+            <h1 ref={title} tabIndex={-1}>{v.title}</h1>
+            {layout.steps ? <p className="fx-player-step">{layout.steps.label}</p> : null}
+          </div>
+          <button type="button" className="fx-icon-btn" aria-label={close} onClick={onClose}><span aria-hidden>✕</span></button>
+        </div>
+        {layout.steps ? (
+          <ol className="fx-steps" aria-label={layout.steps.label}>
+            {layout.steps.done.map((done, i) => <li key={i} className={done ? "is-done" : ""} aria-current={i === v.stepIndex ? "step" : undefined} />)}
+          </ol>
+        ) : null}
+      </header>
+
+      {/* announced when the screen changes, without moving the visible layout */}
+      <p className="fx-sr" role="status" aria-live="polite">{v.title}{layout.steps ? `. ${layout.steps.label}` : ""}</p>
+      {v.toast ? <div className="fx-toast-error" role="alert">{v.toast}</div> : null}
+
+      <form className="fx-player-form" noValidate onSubmit={(e) => { e.preventDefault(); if (primary && !v.busy) void controller.press(primary.actions); }}>
+        <div className="fx-player-body" ref={bodyRef}>
+          {body.map((b, i) => {
+            const C = registry[b.type as BlockType];
+            return C ? <div key={`${v.screenId}-${i}`} className="fx-block"><C b={b} set={(p, val) => controller.set(p, val)} press={(a) => controller.press(a)} {...common} /></div> : null;
+          })}
+        </div>
+        <footer className="fx-player-foot">
+          {buttons.map((b, i) => <Button key={`${v.screenId}-b${i}`} b={b} set={() => {}} press={(a) => controller.press(a)} {...common} submit={b === primary} />)}
+        </footer>
+      </form>
+    </div>
+  );
+}
