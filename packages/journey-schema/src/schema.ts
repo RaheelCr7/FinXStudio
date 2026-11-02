@@ -1,0 +1,87 @@
+import { z } from "zod";
+
+export const LocalizedText = z.union([
+  z.string(),
+  z.record(z.string(), z.string()),
+]);
+export type LocalizedText = z.infer<typeof LocalizedText>;
+
+export const Action: z.ZodType<any> = z.lazy(() =>
+  z.discriminatedUnion("type", [
+    z.object({ type: z.literal("validate") }),
+    z.object({ type: z.literal("navigate"), to: z.string().optional(), toJourney: z.string().optional(), returnTo: z.string().optional() }),
+    z.object({ type: z.literal("setData"), path: z.string(), value: z.any() }),
+    z.object({
+      type: z.literal("callApi"),
+      integration: z.string(),
+      input: z.record(z.string(), z.any()).optional(),
+      saveAs: z.string().optional(),
+      onError: z.object({
+        navigate: z.string().optional(),
+        showToast: LocalizedText.optional(),
+        stay: z.boolean().optional(),
+        lockAfter: z.number().optional(),
+        lockTo: z.string().optional(),
+      }).optional(),
+    }),
+    z.object({ type: z.literal("showToast"), text: LocalizedText }),
+    z.object({ type: z.literal("share"), template: z.string() }),
+    z.object({ type: z.literal("exit") }),
+  ]),
+);
+
+const base = { id: z.string().optional(), visibleWhen: z.string().optional() };
+
+export const Block = z.discriminatedUnion("type", [
+  z.object({ ...base, type: z.literal("text"), text: LocalizedText, variant: z.enum(["title", "body", "caption"]).optional() }),
+  z.object({ ...base, type: z.literal("stepper"), steps: z.array(z.string()) }),
+  z.object({ ...base, type: z.literal("accountPicker"), bind: z.string(), source: z.string(), showBalance: z.boolean().optional(), filter: z.string().optional() }),
+  z.object({ ...base, type: z.literal("beneficiaryPicker"), bind: z.string(), source: z.string(), allowAddNew: z.boolean().optional(), addNewJourney: z.string().optional() }),
+  z.object({
+    ...base, type: z.literal("amountInput"), bind: z.string(), currency: z.string(), label: LocalizedText.optional(),
+    helper: LocalizedText.optional(),
+    validation: z.object({ min: z.union([z.number(), z.string()]).optional(), max: z.union([z.number(), z.string()]).optional(), messages: z.record(z.string(), LocalizedText).optional() }).optional(),
+  }),
+  z.object({ ...base, type: z.literal("select"), bind: z.string(), label: LocalizedText, options: z.array(z.string()) }),
+  z.object({ ...base, type: z.literal("alert"), tone: z.enum(["info", "warning", "error", "success"]), text: LocalizedText }),
+  z.object({ ...base, type: z.literal("reviewSummary"), rows: z.array(z.object({ label: LocalizedText, value: LocalizedText })) }),
+  z.object({
+    ...base, type: z.literal("consent"), bind: z.string(), termsVersion: z.string(), text: LocalizedText,
+    validation: z.object({ mustBeTrue: z.boolean().optional(), messages: z.record(z.string(), LocalizedText).optional() }).optional(),
+  }),
+  z.object({
+    ...base, type: z.literal("otp"), bind: z.string(), length: z.number().int().min(4).max(8), maxAttempts: z.number().int().optional(),
+    resendAfterSeconds: z.number().int().optional(), hint: LocalizedText.optional(), onResend: z.array(Action).optional(),
+  }),
+  z.object({ ...base, type: z.literal("result"), tone: z.enum(["success", "error"]), title: LocalizedText, text: LocalizedText.optional(), meta: LocalizedText.optional() }),
+  z.object({ ...base, type: z.literal("button"), label: LocalizedText, variant: z.enum(["primary", "secondary", "ghost"]).optional(), actions: z.array(Action) }),
+]);
+export type Block = z.infer<typeof Block>;
+
+export const Screen = z.object({
+  id: z.string(),
+  title: LocalizedText,
+  kind: z.enum(["screen", "branch", "terminal"]).optional(),
+  onEnter: z.array(Action).optional(),
+  blocks: z.array(Block),
+  navigation: z.object({
+    rules: z.array(z.object({ when: z.string(), to: z.string() })).optional(),
+    default: z.string().optional(),
+  }).optional(),
+});
+export type Screen = z.infer<typeof Screen>;
+
+export const Journey = z.object({
+  id: z.string(),
+  slug: z.string(),
+  name: LocalizedText,
+  version: z.number().int(),
+  status: z.enum(["draft", "in_review", "published", "archived"]),
+  channels: z.array(z.enum(["web", "mobile"])),
+  locale: z.object({ default: z.string(), supported: z.array(z.string()), rtl: z.array(z.string()).optional() }),
+  entryScreen: z.string(),
+  dataModel: z.record(z.string(), z.object({ type: z.string(), required: z.boolean().optional(), currency: z.string().optional(), pattern: z.string().optional() })).optional(),
+  integrations: z.array(z.object({ id: z.string(), adapter: z.string(), mode: z.enum(["sandbox", "live"]) })),
+  screens: z.array(Screen).min(1),
+});
+export type Journey = z.infer<typeof Journey>;
