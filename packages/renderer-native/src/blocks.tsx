@@ -1,37 +1,37 @@
 import React from "react";
 import { Pressable, Text, TextInput, View, StyleSheet, Platform } from "react-native";
-import { radius, space, formatMoney } from "@finx/ui-kit";
+import { space, formatMoney } from "@finx/ui-kit";
 import { useTheme } from "./theme";
 
 type P = { b: Record<string, any>; set: (path: string, v: any) => void; press: (actions: any[]) => void; busy: boolean; lang: string; strings: Record<string, string> };
 const tab = { fontVariant: ["tabular-nums" as const] };
 
 export const Label = ({ children }: { children: React.ReactNode }) => {
-  const { c } = useTheme();
+  const { c, r: radius } = useTheme();
   return <Text style={{ fontSize: 13, fontWeight: "500", color: c.textMuted, marginBottom: 8 }}>{children}</Text>;
 };
 const ErrorText = ({ e }: { e?: string }) => {
-  const { c } = useTheme();
+  const { c, r: radius } = useTheme();
   return e ? <Text accessibilityRole="alert" style={{ color: c.negative, fontSize: 13, marginTop: 6 }}>{e}</Text> : null;
 };
 
 export function Row({ children, selected, onPress, label }: { children: React.ReactNode; selected: boolean; onPress: () => void; label: string }) {
-  const { c } = useTheme();
+  const { c, r: radius } = useTheme();
   return (
     <Pressable accessibilityRole="radio" accessibilityState={{ selected }} accessibilityLabel={label} onPress={onPress}
-      style={({ pressed }) => [s.row, { backgroundColor: c.surface, borderColor: selected ? c.accent : c.border, borderWidth: selected ? 2 : 1, opacity: pressed ? 0.85 : 1 }]}>
+      style={({ pressed }) => [s.row, { borderRadius: radius.lg, backgroundColor: c.surface, borderColor: selected ? c.accent : c.border, borderWidth: selected ? 2 : 1, opacity: pressed ? 0.85 : 1 }]}>
       {children}
     </Pressable>
   );
 }
 const Avatar = ({ text, round }: { text: string; round?: boolean }) => {
-  const { c } = useTheme();
+  const { c, r: radius } = useTheme();
   return <View style={{ width: 40, height: 40, borderRadius: round ? 20 : radius.md, backgroundColor: c.accentSoft, alignItems: "center", justifyContent: "center", marginEnd: 12 }}><Text style={{ color: c.accent, fontWeight: "600", fontSize: 13 }}>{text}</Text></View>;
 };
 const initials = (n: string) => n.split(" ").map((x) => x[0]).slice(0, 2).join("").toUpperCase();
 
 export function AccountPicker({ b, set, strings }: P) {
-  const { c } = useTheme();
+  const { c, r: radius } = useTheme();
   return (
     <View accessibilityRole="radiogroup">
       <Label>{strings.account}</Label>
@@ -50,7 +50,7 @@ export function AccountPicker({ b, set, strings }: P) {
 }
 
 export function BeneficiaryPicker({ b, set, strings }: P) {
-  const { c } = useTheme();
+  const { c, r: radius } = useTheme();
   return (
     <View accessibilityRole="radiogroup">
       <Label>{strings.payTo}</Label>
@@ -70,7 +70,7 @@ export function BeneficiaryPicker({ b, set, strings }: P) {
 }
 
 export function AmountInput({ b, set }: P) {
-  const { c } = useTheme();
+  const { c, r: radius } = useTheme();
   const [focus, setFocus] = React.useState(false);
   const text = b.value ? Number(b.value).toLocaleString("en-US") : "";
   return (
@@ -90,7 +90,7 @@ export function AmountInput({ b, set }: P) {
 }
 
 export function SelectChips({ b, set }: P) {
-  const { c } = useTheme();
+  const { c, r: radius } = useTheme();
   return (
     <View>
       <Label>{b.label}</Label>
@@ -111,7 +111,7 @@ export function SelectChips({ b, set }: P) {
 }
 
 export function TextField({ b, set }: P) {
-  const { c } = useTheme();
+  const { c, r: radius } = useTheme();
   const [focus, setFocus] = React.useState(false);
   const kb = b.keyboard === "number" ? "number-pad" : b.keyboard === "phone" ? "phone-pad" : b.keyboard === "email" ? "email-address" : "default";
   return (
@@ -126,13 +126,13 @@ export function TextField({ b, set }: P) {
 }
 
 export function Alert({ b }: P) {
-  const { c } = useTheme();
+  const { c, r: radius } = useTheme();
   const tone = { warning: [c.warningBg, c.warning], error: [c.negativeBg, c.negative], success: [c.positiveBg, c.positive], info: [c.infoBg, c.info] }[b.tone as string] ?? [c.infoBg, c.info];
   return <View accessibilityRole="alert" style={{ backgroundColor: tone[0], padding: 14, borderRadius: radius.md }}><Text style={{ color: tone[1], fontSize: 14, lineHeight: 20 }}>{b.text}</Text></View>;
 }
 
 export function ReviewSummary({ b }: P) {
-  const { c } = useTheme();
+  const { c, r: radius } = useTheme();
   return (
     <View style={{ borderWidth: 1, borderColor: c.border, backgroundColor: c.surface, borderRadius: radius.lg, paddingHorizontal: 16 }}>
       {b.rows.map((r: any, i: number) => (
@@ -146,7 +146,7 @@ export function ReviewSummary({ b }: P) {
 }
 
 export function Consent({ b, set }: P) {
-  const { c } = useTheme();
+  const { c, r: radius } = useTheme();
   const on = b.value === true;
   return (
     <View>
@@ -162,7 +162,7 @@ export function Consent({ b, set }: P) {
 }
 
 export function Otp({ b, set }: P) {
-  const { c } = useTheme();
+  const { c, r: radius } = useTheme();
   const ref = React.useRef<React.ComponentRef<typeof TextInput>>(null);
   const v = String(b.value ?? "");
   return (
@@ -189,7 +189,7 @@ export function Otp({ b, set }: P) {
 }
 
 export function Result({ b }: P) {
-  const { c } = useTheme();
+  const { c, r: radius } = useTheme();
   const ok = b.tone === "success";
   return (
     <View style={{ alignItems: "center", paddingTop: 32 }}>
@@ -204,13 +204,13 @@ export function Result({ b }: P) {
 }
 
 export function TextBlock({ b }: P) {
-  const { c } = useTheme();
+  const { c, r: radius } = useTheme();
   const big = b.variant === "title";
   return <Text style={{ color: big ? c.text : c.textMuted, fontSize: big ? 24 : 15, fontWeight: big ? "600" : "400", lineHeight: big ? 30 : 22 }}>{b.text}</Text>;
 }
 
 export function Button({ b, press, busy, strings }: P) {
-  const { c } = useTheme();
+  const { c, r: radius } = useTheme();
   const primary = (b.variant ?? "primary") === "primary";
   const label = busy ? strings.wait : b.label;
   // An explicit label keeps screen readers announcing the button's name. Without one, React Native on Android
@@ -224,7 +224,7 @@ export function Button({ b, press, busy, strings }: P) {
 }
 
 const s = StyleSheet.create({
-  row: { flexDirection: "row", alignItems: "center", padding: 14, borderRadius: radius.lg, marginBottom: 10 },
+  row: { flexDirection: "row", alignItems: "center", padding: 14, marginBottom: 10 },
 });
 export const registry: Record<string, (p: P) => React.ReactElement | null> = {
   accountPicker: AccountPicker, beneficiaryPicker: BeneficiaryPicker, amountInput: AmountInput, select: SelectChips, textInput: TextField,

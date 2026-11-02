@@ -2,14 +2,13 @@ import React, { useEffect, useMemo, useReducer, useRef } from "react";
 import { BackHandler, Platform, Pressable, ScrollView, Text, View } from "react-native";
 import type { Journey } from "@finx/journey-schema";
 import { JourneyRunner, type Adapter } from "@finx/renderer-core";
-import { radius } from "@finx/ui-kit";
 import { registry } from "./blocks";
 import { useTheme } from "./theme";
 
 export type JourneyPlayerProps = { journey: Journey; adapter: Adapter; lang?: string; onExit?: () => void; onClose?: () => void };
 
 export function JourneyPlayer({ journey, adapter, lang, onExit, onClose }: JourneyPlayerProps) {
-  const { c, fontFamily } = useTheme();
+  const { c, r: radius, fontFamily } = useTheme();
   const runner = useMemo(() => new JourneyRunner(journey, { adapter, lang }), [journey, adapter]);
   const [, force] = useReducer((x: number) => x + 1, 0);
   const scroller = useRef<React.ComponentRef<typeof ScrollView>>(null);

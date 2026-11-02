@@ -1,7 +1,6 @@
 import React, { useEffect, useState } from "react";
 import { Platform, Pressable, Text, TextInput, View } from "react-native";
 import { useTheme } from "@finx/renderer-native";
-import { radius } from "@finx/ui-kit";
 import { checkStudio, normalizeStudioUrl } from "./studio-url";
 import { DEFAULT_STUDIO_URL, resetStudioUrl, saveStudioUrl } from "./studio-config";
 
@@ -9,7 +8,7 @@ type Status = { kind: "idle" } | { kind: "checking" } | { kind: "ok" | "error"; 
 
 /** Shows which Studio the app talks to, and lets a tester point it at another one. Preview builds only. */
 export function ServerSetting({ url, onChange, onEditingChange }: { url: string; onChange: (url: string) => void; onEditingChange?: (editing: boolean) => void }) {
-  const { c } = useTheme();
+  const { c, r: radius } = useTheme();
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState(url);
   const [status, setStatus] = useState<Status>({ kind: "idle" });

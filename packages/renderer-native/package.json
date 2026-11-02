@@ -4,11 +4,17 @@
   "private": true,
   "type": "module",
   "main": "src/index.ts",
-  "scripts": { "typecheck": "tsc -p ." },
+  "scripts": {
+    "typecheck": "tsc -p ."
+  },
   "dependencies": {
     "@finx/journey-schema": "workspace:*",
     "@finx/renderer-core": "workspace:*",
-    "@finx/ui-kit": "workspace:*"
+    "@finx/ui-kit": "workspace:*",
+    "react-native-svg": "15.16.0"
   },
-  "peerDependencies": { "react": "*", "react-native": "*" }
+  "peerDependencies": {
+    "react": "*",
+    "react-native": "*"
+  }
 }

@@ -82,6 +82,8 @@ export const Journey = z.object({
   version: z.number().int(),
   status: z.enum(["draft", "in_review", "published", "archived"]),
   channels: z.array(z.enum(["web", "mobile"])),
+  /** Which bank apps show this journey (for example ["bankworkx"]). Empty or missing means every app. */
+  apps: z.array(z.string()).optional(),
   locale: z.object({ default: z.string(), supported: z.array(z.string()), rtl: z.array(z.string()).optional() }),
   entryScreen: z.string(),
   dataModel: z.record(z.string(), z.object({ type: z.string(), required: z.boolean().optional(), currency: z.string().optional(), pattern: z.string().optional() })).optional(),

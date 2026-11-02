@@ -2,7 +2,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Moon, RotateCcw, Sun } from "lucide-react";
 import type { Journey } from "@finx/journey-schema";
-import { MockBank, personas } from "@finx/mock-bank-api";
+import { MockBank, personasFor } from "@finx/mock-bank-api";
 import { JourneyPlayer, ThemeProvider } from "@finx/renderer-native";
 
 function useDebounced<T>(value: T, ms: number) {
@@ -40,7 +40,7 @@ export function Preview({ journey }: { journey: Journey }) {
     <>
       <div className="row wrap" style={{ width: "100%", maxWidth: 360, gap: 6, justifyContent: "center" }}>
         <select className="select" style={{ flex: 1, minWidth: 140, height: 30, fontSize: 13 }} value={persona} onChange={(e) => { setPersona(e.target.value); restart(); }} aria-label="Sandbox customer">
-          {Object.values(personas).map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
+          {personasFor("meezan").map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
         </select>
         <div className="row" style={{ gap: 4 }}>
           {supported.length > 1 ? <button className="btn sm" onClick={() => setLang(lang === "en" ? supported.find((l) => l !== "en") ?? "en" : "en")} aria-label="Switch preview language">{lang === "en" ? "اردو" : "English"}</button> : null}

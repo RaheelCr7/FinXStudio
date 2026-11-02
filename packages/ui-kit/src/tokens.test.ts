@@ -1,8 +1,9 @@
 import { describe, it, expect } from "vitest";
-import { themes, contrast, toCssVars, formatMoney } from "./index";
+import { themes, brands, contrast, toCssVars, formatMoney } from "./index";
 
 describe("FDS tokens", () => {
-  for (const [name, t] of Object.entries(themes)) {
+  const all = [...Object.entries(themes), ...Object.values(brands).flatMap((b) => [[`${b.id}-light`, b.light], [`${b.id}-dark`, b.dark]] as const)];
+  for (const [name, t] of all) {
     it(`${name}: body text and muted text meet WCAG AA on surface and bg`, () => {
       expect(contrast(t.colors.text!, t.colors.surface!)).toBeGreaterThanOrEqual(4.5);
       expect(contrast(t.colors.text!, t.colors.bg!)).toBeGreaterThanOrEqual(4.5);
