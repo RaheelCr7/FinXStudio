@@ -31,7 +31,7 @@ export function Accounts() {
     <div className="wb-page" key={s.tick}>
       <PageTitle title="Connected Accounts" addHref={hasAction(s.catalog.entries, "connect-account") ? `/${project.id}/j/connect-account` : undefined} addLabel="Connect an account" />
       {items.length === 0 ? <Empty icon="bank" title="No accounts yet" text="Connect a bank to see its balance and activity here." /> : (
-        <ul className="wb-acct-row" role="radiogroup" aria-label="Accounts">
+        <div role="radiogroup" aria-label="Accounts"><ul className="wb-acct-row">
           {items.map((x) => (
             <li key={x.id}>
               <label className={`wb-acct ${current === x.id ? "is-on" : ""}`}>
@@ -40,7 +40,7 @@ export function Accounts() {
               </label>
             </li>
           ))}
-        </ul>
+        </ul></div>
       )}
       <section className="wb-panel" aria-labelledby="acc-tx">
         <h2 id="acc-tx">Transactions</h2>
@@ -127,7 +127,7 @@ export function Wallet() {
         <Link className="wb-panel wb-empty" href={`/${project.id}/j/add-card`} prefetch={false}><IconTile icon="card" size={52} /><b>Add your first card</b><p className="wb-muted">Save a card to add money in seconds.</p></Link>
       ) : (
         <>
-          <ul className="wb-cardrow" role="radiogroup" aria-label="Your cards">
+          <div role="radiogroup" aria-label="Your cards"><ul className="wb-cardrow">
             {cards.map((k, i) => (
               <li key={k.id}>
                 <label className={`wb-cardpick ${i === sel ? "is-on" : ""}`}>
@@ -136,7 +136,7 @@ export function Wallet() {
                 </label>
               </li>
             ))}
-          </ul>
+          </ul></div>
           {card ? <section className="wb-panel"><div className="wb-between"><h2>{card.nickname}</h2>{card.isDefault ? <Pill tone="positive">Default</Pill> : null}</div><p className="wb-muted">{networkName(card)} ending {card.last4} · expires {card.expiry}</p></section> : null}
         </>
       )}

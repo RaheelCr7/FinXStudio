@@ -3,10 +3,8 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { useState } from "react";
 import { personaSummary } from "@finx/bank-client";
 import { formatMoney } from "@finx/ui-kit";
+import { safeNext } from "@/lib/safe-next";
 import { useApp, useAppState } from "./AppProvider";
-
-/** Only addresses inside this bank are followed after signing in. */
-export const safeNext = (next: string | null, project: string, fallback: string) => (next && next.startsWith(`/${project}/`) && !next.startsWith("//") && !next.includes("\\") ? next : fallback);
 
 export function Login() {
   const { app, project } = useApp();

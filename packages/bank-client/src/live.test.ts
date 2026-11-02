@@ -40,5 +40,6 @@ describe("journeys over the air", () => {
     expect(resolveBrandId("bankworkx")).toBe("bankworkx");
     expect(resolveBrandId("unknown")).toBe("meezan");
     expect(resolveBrandId(undefined)).toBe("meezan");
+    for (const odd of ["constructor", "__proto__", "toString", "hasOwnProperty"]) expect(resolveBrandId(odd), odd).toBe("meezan");
   });
 });

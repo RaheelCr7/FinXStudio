@@ -17,9 +17,12 @@ Read `README.md` and the doc that covers the area: `docs/BRANCHING.md` (how bran
 ```
 apps/studio       Next.js: Studio (pages in app/, components/, lib/ with tests next to them)
 apps/bank-app     Expo app for web, Android and iOS; src/bankworkx for the BankWorkx shell
+apps/bank-web     Next.js web banking app (real web layouts); components/bankworkx for BankWorkx
 packages/journey-schema   schema, lint, shipped journeys (fixtures), the catalog
 packages/renderer-core    engine: expressions, runner, templates, lint of expressions
-packages/renderer-native  blocks and widgets drawn for React Native and web
+packages/renderer-native  blocks and widgets drawn for React Native (and the phone-style web build)
+packages/renderer-web     the same blocks and widgets as real DOM elements for the Next.js app
+packages/bank-client      shared app logic: app store, Studio loading, view-models (no react-native, no DOM)
 packages/mock-bank-api    the sandbox bank: customers, adapters and their catalog
 packages/ui-kit           design tokens, brands.json (the banks), theme maths
 packages/codegen          the generated source of a project
@@ -30,7 +33,8 @@ Where things go, by kind of change:
 - **A new block**: schema (`journey-schema/src/schema.ts`), the renderer (`renderer-native/src/blocks.tsx`), lint if it has rules, the AI catalog (`finx-mcp/src/catalog.ts`, which a test checks against the schema), Studio's block list (`apps/studio/lib/blocks-ui.ts`) and Inspector fields.
 - **A new sandbox adapter**: `mock-bank-api/src/index.ts` (behaviour) and `catalog.ts` (the description the AI reads), with tests in `index.test.ts`.
 - **A new shipped journey**: a fixture in `journey-schema/src/fixtures/`, an entry in `journey-schema/src/catalog.ts`.
-- **An app screen**: `apps/bank-app/src/`. Check it on web, and on a device when it is native-only behaviour.
+- **A new block** also needs the same block in `renderer-web/src/blocks/blocks.tsx`: both registries are typed against the schema. Put logic in `renderer-core/src/blocks/`, not in either renderer.
+- **An app screen**: put what it shows in `bank-client` view-models (with tests) and draw it in `apps/bank-app/src/` and `apps/bank-web/components/`. Check it on web, and on a device when it is native-only behaviour.
 
 ## How to work
 

@@ -49,6 +49,7 @@ export function Dashboard() {
   return (
     <div className="wb-dash" key={s.tick}>
       <h1 className="wb-sr">Dashboard</h1>
+      <div className="wb-col">
       <section className="wb-hero" aria-label="Balance">
         <p>Total balance</p>
         <p className="wb-hero-amount">{usd(total)}</p>
@@ -72,6 +73,9 @@ export function Dashboard() {
         {txns.length === 0 ? <p className="wb-muted">No transactions yet.</p> : <ul className="wb-txn-list">{txns.map((t) => <TxnRow key={t.id} t={t} money={usd} open={open === t.id} onToggle={() => setOpen(open === t.id ? null : t.id)} />)}</ul>}
       </section>
 
+      </div>
+
+      <div className="wb-col">
       <section className="wb-panel wb-bud" aria-labelledby="bud-title">
         <div className="wb-section-title"><h2 id="bud-title">Monthly Budgets</h2>{fin.budgets.length ? <Link href={`/${project.id}/budgets`}>Manage</Link> : hasAction(s.catalog.entries, "create-budget") ? <Link href={`/${project.id}/j/create-budget`} prefetch={false}>Create</Link> : null}</div>
         {fin.budgets.length === 0 ? <p className="wb-muted">No budgets yet. Create one to track your spending by category.</p> : (
@@ -129,6 +133,7 @@ export function Dashboard() {
           {inv.holdings.length ? <Pill tone={invT.gain >= 0 ? "positive" : "negative"}>{pctText(invT.gainPct)}</Pill> : <Icon name="chevronRight" size={20} />}
         </Link>
       </section>
+      </div>
     </div>
   );
 }
