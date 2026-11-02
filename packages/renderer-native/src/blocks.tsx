@@ -161,7 +161,7 @@ export function TextField({ b, set }: P) {
     <View>
       <Label>{b.label}</Label>
       <View>
-        <TextInput accessibilityLabel={b.label} value={String(b.value ?? "")} placeholder={b.placeholder} placeholderTextColor={c.textFaint} keyboardType={kb} secureTextEntry={!!b.secure && !shown}
+        <TextInput accessibilityLabel={b.label} value={String(b.value ?? "")} placeholder={b.placeholder} placeholderTextColor={c.textFaint} keyboardType={kb} secureTextEntry={!!b.secure && !shown} textContentType={b.secure ? "none" : undefined} autoComplete={b.secure ? "off" : undefined} importantForAutofill={b.secure ? "no" : undefined}
           autoCapitalize="none" autoCorrect={false} onFocus={() => setFocus(true)} onBlur={() => setFocus(false)} onChangeText={(t) => set(b.bind, t)}
           style={[{ height: 52, borderRadius: radius.md, borderWidth: focus || b.error ? 2 : 1, borderColor: b.error ? c.negative : focus ? c.accent : c.borderStrong, backgroundColor: c.surface, paddingStart: 14, paddingEnd: b.secure ? 64 : 14, fontSize: 16, color: c.text }, tab, Platform.OS === "web" ? ({ outlineStyle: "none" } as any) : null]} />
         {b.secure ? <Pressable accessibilityRole="button" accessibilityLabel={shown ? "Hide" : "Show"} onPress={() => setShown(!shown)} hitSlop={8} style={{ position: "absolute", end: 14, top: 0, bottom: 0, justifyContent: "center" }}><Text style={{ color: c.accent, fontWeight: "700", fontSize: 13 }}>{shown ? "Hide" : "Show"}</Text></Pressable> : null}
