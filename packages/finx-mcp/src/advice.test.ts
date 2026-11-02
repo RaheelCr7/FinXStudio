@@ -15,7 +15,7 @@ describe("advice for authors", () => {
     const advice = adviceFor(j).join("\n");
     expect(advice).toContain('callApi "accounts" has no onError');
     const noFail = structuredClone(payBill);
-    noFail.screens.find((s) => s.id === "failed")!.blocks = noFail.screens.find((s) => s.id === "failed")!.blocks.filter((b) => b.type !== "result");
+    for (const id of ["failed", "locked"]) noFail.screens.find((s) => s.id === id)!.blocks = noFail.screens.find((s) => s.id === id)!.blocks.filter((b) => b.type !== "result");
     expect(adviceFor(noFail).join("\n")).toContain("should end in a failed screen");
   });
 
