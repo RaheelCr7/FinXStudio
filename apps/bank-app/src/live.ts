@@ -1,4 +1,4 @@
-import { Journey, localTransfer, payBill } from "@finx/journey-schema";
+import { Journey, bankworkxJourneys, localTransfer, payBill } from "@finx/journey-schema";
 import { lintAll } from "@finx/renderer-core";
 import { BRAND } from "./brand";
 
@@ -6,8 +6,9 @@ export type Live = { journey: Journey; source: "studio" | "bundled" };
 export type Entry = { slug: string; name: any; version: number };
 
 /** Over-the-air journeys: the app asks Studio what is published, and never trusts a journey blindly. */
-const ALL_BUNDLED: Journey[] = [localTransfer, payBill];
-const forThisApp = (j: { apps?: string[] }) => !j.apps || j.apps.length === 0 || j.apps.includes(BRAND);
+const ALL_BUNDLED: Journey[] = [localTransfer, payBill, ...bankworkxJourneys];
+/** A journey with no apps listed belongs to the original Meezan app; anything else lists the apps that show it. */
+const forThisApp = (j: { apps?: string[] }) => (j.apps?.length ? j.apps : ["meezan"]).includes(BRAND);
 const BUNDLED: Record<string, Journey> = Object.fromEntries(ALL_BUNDLED.filter(forThisApp).map((j) => [j.slug, j]));
 export const bundledEntries = (): Entry[] => Object.values(BUNDLED).map((j) => ({ slug: j.slug, name: j.name, version: j.version }));
 

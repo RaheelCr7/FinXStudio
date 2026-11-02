@@ -1,11 +1,18 @@
-/** Create (if needed), save and publish a journey fixture through the Studio API. Usage: tsx scripts/seed-journey.ts <fixture-name> */
-import { payBill } from "@finx/journey-schema";
+/**
+ * Create (if needed), save and publish journey fixtures through the Studio API.
+ * Usage: tsx scripts/seed-journey.ts <fixture-name | all>   (all = the BankWorkx journeys)
+ */
+import { addCard, addMoney, connectAccount, createBudget, payBill, type Journey } from "@finx/journey-schema";
 
-const FIXTURES = { "pay-a-bill": payBill } as const;
+const FIXTURES: Record<string, Journey> = {
+  "pay-a-bill": payBill, "add-money": addMoney, "add-card": addCard, "connect-account": connectAccount, "create-budget": createBudget,
+};
 const BASE = process.env.STUDIO_URL ?? "http://localhost:3100";
-const name = process.argv[2] as keyof typeof FIXTURES;
-const journey = FIXTURES[name];
-if (!journey) { console.error(`Unknown fixture. Choose one of: ${Object.keys(FIXTURES).join(", ")}`); process.exit(1); }
+const arg = process.argv[2] ?? "";
+// "all" means the BankWorkx set. Existing journeys such as pay-a-bill are only re-seeded when named, because seeding overwrites their draft.
+const BANKWORKX = ["add-money", "add-card", "connect-account", "create-budget"];
+const names = arg === "all" ? BANKWORKX : [arg];
+if (names.some((n) => !FIXTURES[n])) { console.error(`Unknown fixture. Choose one of: all, ${Object.keys(FIXTURES).join(", ")}`); process.exit(1); }
 
 async function call(method: string, path: string, body?: unknown) {
   const res = await fetch(`${BASE}${path}`, { method, headers: { "Content-Type": "application/json" }, body: body ? JSON.stringify(body) : undefined });
@@ -13,13 +20,13 @@ async function call(method: string, path: string, body?: unknown) {
   return { status: res.status, data };
 }
 
-async function main() {
-  const created = await call("POST", "/api/journeys", { name: "Pay a bill" });
-  if (![201, 409].includes(created.status)) { console.error("create failed", created); process.exit(1); }
+async function seed(journey: Journey) {
+  const display = typeof journey.name === "string" ? journey.name : journey.name.en ?? journey.slug;
+  const created = await call("POST", "/api/journeys", { name: display });
+  if (![201, 409].includes(created.status)) { console.error(`${journey.slug}: create failed`, created); process.exit(1); }
   const saved = await call("PUT", `/api/journeys/${journey.slug}`, { ...journey, version: 0, status: "draft" });
-  if (saved.status !== 200) { console.error("save failed", saved); process.exit(1); }
-  console.log("saved draft; lint issues:", saved.data.issues?.length ?? 0);
+  if (saved.status !== 200) { console.error(`${journey.slug}: save failed`, saved); process.exit(1); }
   const pub = await call("POST", `/api/journeys/${journey.slug}/publish`);
-  console.log(pub.status === 200 ? `published v${pub.data.version}` : `publish failed: ${JSON.stringify(pub.data)}`);
+  console.log(`${journey.slug}: lint issues ${saved.data.issues?.length ?? 0}; ${pub.status === 200 ? `published v${pub.data.version}` : `publish failed: ${JSON.stringify(pub.data)}`}`);
 }
-main().catch((e) => { console.error(e); process.exit(1); });
+(async () => { for (const n of names) await seed(FIXTURES[n]!); })().catch((e) => { console.error(e); process.exit(1); });

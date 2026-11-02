@@ -2,9 +2,14 @@ import React from "react";
 import { Pressable, Text, TextInput, View, StyleSheet, Platform } from "react-native";
 import { space, formatMoney } from "@finx/ui-kit";
 import { useTheme } from "./theme";
+import { CardVisual, Icon, IconTile } from "./widgets";
 
 type P = { b: Record<string, any>; set: (path: string, v: any) => void; press: (actions: any[]) => void; busy: boolean; lang: string; strings: Record<string, string> };
 const tab = { fontVariant: ["tabular-nums" as const] };
+/** "$" for USD, "PKR" for PKR: the short form people expect in front of an amount. */
+const symbolOf = (currency: string) => {
+  try { return new Intl.NumberFormat("en-US", { style: "currency", currency, currencyDisplay: "narrowSymbol" }).formatToParts(0).find((p) => p.type === "currency")?.value ?? currency; } catch { return currency; }
+};
 
 export const Label = ({ children }: { children: React.ReactNode }) => {
   const { c, r: radius } = useTheme();
@@ -77,13 +82,26 @@ export function AmountInput({ b, set }: P) {
     <View>
       <Label>{b.label}</Label>
       <View style={{ flexDirection: "row", alignItems: "baseline", borderBottomWidth: 2, borderBottomColor: b.error ? c.negative : focus ? c.accent : c.borderStrong, paddingBottom: 8 }}>
-        <Text style={{ fontSize: 20, fontWeight: "500", color: c.textMuted, marginEnd: 8 }}>{b.currency}</Text>
+        <Text style={{ fontSize: 20, fontWeight: "500", color: c.textMuted, marginEnd: 8 }}>{symbolOf(b.currency)}</Text>
         <TextInput accessibilityLabel={b.label} value={text} placeholder="0" placeholderTextColor={c.textFaint} keyboardType="number-pad"
           onFocus={() => setFocus(true)} onBlur={() => setFocus(false)}
           onChangeText={(t) => { const n = parseInt(t.replace(/[^0-9]/g, ""), 10); set(b.bind, isNaN(n) ? undefined : n); }}
           style={[{ flex: 1, fontSize: 40, fontWeight: "600", color: c.text, padding: 0 }, tab, Platform.OS === "web" ? ({ outlineStyle: "none" } as any) : null]} />
       </View>
       {b.helper ? <Text style={[{ color: c.textMuted, fontSize: 13, marginTop: 8 }, tab]}>{b.helper}</Text> : null}
+      {b.quickAmounts?.length ? (
+        <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8, marginTop: 14 }} accessibilityRole="radiogroup">
+          {b.quickAmounts.map((q: number) => {
+            const on = Number(b.value) === q;
+            return (
+              <Pressable key={q} accessibilityRole="radio" accessibilityState={{ selected: on }} accessibilityLabel={`${symbolOf(b.currency)}${q}`} onPress={() => set(b.bind, q)}
+                style={({ pressed }) => ({ minWidth: 64, minHeight: 40, paddingHorizontal: 16, borderRadius: radius.md, alignItems: "center", justifyContent: "center", backgroundColor: on ? c.accent2 : c.surface, borderWidth: 1, borderColor: on ? c.accent2 : c.border, opacity: pressed ? 0.85 : 1 })}>
+                <Text style={[{ color: on ? "#fff" : c.text, fontWeight: "700", fontSize: 15 }, tab]}>{symbolOf(b.currency)}{q.toLocaleString("en-US")}</Text>
+              </Pressable>
+            );
+          })}
+        </View>
+      ) : null}
       <ErrorText e={b.error} />
     </View>
   );
@@ -91,6 +109,29 @@ export function AmountInput({ b, set }: P) {
 
 export function SelectChips({ b, set }: P) {
   const { c, r: radius } = useTheme();
+  if (b.variant === "tiles") {
+    return (
+      <View>
+        <Label>{b.label}</Label>
+        <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 12 }} accessibilityRole="radiogroup">
+          {b.items.map((o: { id: string; name: string; color?: string; icon?: string; sub?: string }) => {
+            const on = b.value === o.id;
+            const tint = o.color ?? c.accent;
+            return (
+              <Pressable key={o.id} accessibilityRole="radio" accessibilityState={{ selected: on }} accessibilityLabel={o.name} onPress={() => set(b.bind, o.id)}
+                style={({ pressed }) => ({ width: "47%", flexGrow: 1, padding: 14, borderRadius: radius.lg, gap: 10, backgroundColor: c.surface, borderWidth: 2, borderColor: on ? c.accent2 : c.border, opacity: pressed ? 0.88 : 1 })}>
+                {o.icon ? <IconTile icon={o.icon} color={on ? c.accent2 : c.accent} bg={on ? c.accent2Soft : c.accentSoft} size={40} />
+                  : <View style={{ width: 40, height: 40, borderRadius: 13, backgroundColor: tint, alignItems: "center", justifyContent: "center" }}><Text style={{ color: "#fff", fontWeight: "800", fontSize: 16 }}>{o.name.slice(0, 1)}</Text></View>}
+                <View><Text style={{ color: c.text, fontWeight: "700", fontSize: 15 }}>{o.name}</Text>{o.sub ? <Text style={{ color: c.textMuted, fontSize: 12, marginTop: 2 }}>{o.sub}</Text> : null}</View>
+                {on ? <View style={{ position: "absolute", top: 10, right: 10, width: 22, height: 22, borderRadius: 11, backgroundColor: c.accent2, alignItems: "center", justifyContent: "center" }}><Icon name="check" size={13} color="#fff" stroke={3} /></View> : null}
+              </Pressable>
+            );
+          })}
+        </View>
+        <ErrorText e={b.error} />
+      </View>
+    );
+  }
   return (
     <View>
       <Label>{b.label}</Label>
@@ -113,14 +154,68 @@ export function SelectChips({ b, set }: P) {
 export function TextField({ b, set }: P) {
   const { c, r: radius } = useTheme();
   const [focus, setFocus] = React.useState(false);
+  const [shown, setShown] = React.useState(false);
   const kb = b.keyboard === "number" ? "number-pad" : b.keyboard === "phone" ? "phone-pad" : b.keyboard === "email" ? "email-address" : "default";
   return (
     <View>
       <Label>{b.label}</Label>
-      <TextInput accessibilityLabel={b.label} value={String(b.value ?? "")} placeholder={b.placeholder} placeholderTextColor={c.textFaint} keyboardType={kb}
-        onFocus={() => setFocus(true)} onBlur={() => setFocus(false)} onChangeText={(t) => set(b.bind, t)}
-        style={[{ height: 52, borderRadius: radius.md, borderWidth: focus || b.error ? 2 : 1, borderColor: b.error ? c.negative : focus ? c.accent : c.borderStrong, backgroundColor: c.surface, paddingHorizontal: 14, fontSize: 16, color: c.text }, tab, Platform.OS === "web" ? ({ outlineStyle: "none" } as any) : null]} />
+      <View>
+        <TextInput accessibilityLabel={b.label} value={String(b.value ?? "")} placeholder={b.placeholder} placeholderTextColor={c.textFaint} keyboardType={kb} secureTextEntry={!!b.secure && !shown}
+          autoCapitalize="none" autoCorrect={false} onFocus={() => setFocus(true)} onBlur={() => setFocus(false)} onChangeText={(t) => set(b.bind, t)}
+          style={[{ height: 52, borderRadius: radius.md, borderWidth: focus || b.error ? 2 : 1, borderColor: b.error ? c.negative : focus ? c.accent : c.borderStrong, backgroundColor: c.surface, paddingStart: 14, paddingEnd: b.secure ? 64 : 14, fontSize: 16, color: c.text }, tab, Platform.OS === "web" ? ({ outlineStyle: "none" } as any) : null]} />
+        {b.secure ? <Pressable accessibilityRole="button" accessibilityLabel={shown ? "Hide" : "Show"} onPress={() => setShown(!shown)} hitSlop={8} style={{ position: "absolute", end: 14, top: 0, bottom: 0, justifyContent: "center" }}><Text style={{ color: c.accent, fontWeight: "700", fontSize: 13 }}>{shown ? "Hide" : "Show"}</Text></Pressable> : null}
+      </View>
       <ErrorText e={b.error} />
+    </View>
+  );
+}
+
+export function Toggle({ b, set }: P) {
+  const { c } = useTheme();
+  const on = b.value === true;
+  return (
+    <Pressable accessibilityRole="switch" accessibilityState={{ checked: on }} accessibilityLabel={b.label} onPress={() => set(b.bind, !on)} style={{ flexDirection: "row", alignItems: "center", gap: 14 }}>
+      <View style={{ flex: 1 }}>
+        <Text style={{ color: c.text, fontSize: 15, fontWeight: "600" }}>{b.label}</Text>
+        {b.helper ? <Text style={{ color: c.textMuted, fontSize: 13, marginTop: 2 }}>{b.helper}</Text> : null}
+      </View>
+      <View style={{ width: 50, height: 30, borderRadius: 15, padding: 3, backgroundColor: on ? c.accent2 : c.borderStrong, alignItems: on ? "flex-end" : "flex-start", justifyContent: "center" }}>
+        <View style={{ width: 24, height: 24, borderRadius: 12, backgroundColor: "#fff" }} />
+      </View>
+    </Pressable>
+  );
+}
+
+const groupCard = (digits: string) => (digits.match(/.{1,4}/g) ?? []).join(" ");
+const expiryText = (raw: string) => { const d = raw.replace(/\D/g, "").slice(0, 4); return d.length > 2 ? `${d.slice(0, 2)}/${d.slice(2)}` : d; };
+
+export function CardForm({ b, set }: P) {
+  const { c, r: radius } = useTheme();
+  const v = (b.value ?? {}) as Record<string, string>;
+  const [focus, setFocus] = React.useState<string | null>(null);
+  const field = (key: "number" | "holder" | "expiry" | "cvv", label: string, o: { placeholder: string; keyboard?: "number-pad" | "default"; format?: (t: string) => string; clean?: (t: string) => string; max?: number; secure?: boolean; caps?: boolean }) => {
+    const err = b.errors?.[key];
+    const raw = String(v[key] ?? "");
+    return (
+      <View style={{ flex: 1 }} key={key}>
+        <Label>{label}</Label>
+        <TextInput accessibilityLabel={label} value={o.format ? o.format(raw) : raw} placeholder={o.placeholder} placeholderTextColor={c.textFaint} keyboardType={o.keyboard ?? "default"} maxLength={o.max}
+          secureTextEntry={o.secure} autoCapitalize={o.caps ? "characters" : "none"} autoCorrect={false} onFocus={() => setFocus(key)} onBlur={() => setFocus(null)}
+          onChangeText={(t) => set(`${b.bind}.${key}`, o.clean ? o.clean(t) : t)}
+          style={[{ height: 52, borderRadius: radius.md, borderWidth: focus === key || err ? 2 : 1, borderColor: err ? c.negative : focus === key ? c.accent : c.borderStrong, backgroundColor: c.surface, paddingHorizontal: 14, fontSize: 16, color: c.text }, tab, Platform.OS === "web" ? ({ outlineStyle: "none" } as any) : null]} />
+        <ErrorText e={err} />
+      </View>
+    );
+  };
+  return (
+    <View style={{ gap: 16 }}>
+      <CardVisual number={String(v.number ?? "")} holder={String(v.holder ?? "").toUpperCase()} expiry={String(v.expiry ?? "")} network={String(v.number ?? "").startsWith("4") ? "visa" : "mastercard"} />
+      {field("number", "Card number", { placeholder: "1234 5678 9012 3456", keyboard: "number-pad", format: groupCard, clean: (t) => t.replace(/\D/g, "").slice(0, 19), max: 23 })}
+      {field("holder", "Name on card", { placeholder: "As shown on the card", caps: true })}
+      <View style={{ flexDirection: "row", gap: 12 }}>
+        {field("expiry", "Expiry", { placeholder: "MM/YY", keyboard: "number-pad", format: expiryText, clean: (t) => expiryText(t), max: 5 })}
+        {field("cvv", "Security code", { placeholder: "123", keyboard: "number-pad", clean: (t) => t.replace(/\D/g, "").slice(0, 4), max: 4, secure: true })}
+      </View>
     </View>
   );
 }
@@ -228,6 +323,6 @@ const s = StyleSheet.create({
 });
 export const registry: Record<string, (p: P) => React.ReactElement | null> = {
   accountPicker: AccountPicker, beneficiaryPicker: BeneficiaryPicker, amountInput: AmountInput, select: SelectChips, textInput: TextField,
-  alert: Alert, reviewSummary: ReviewSummary, consent: Consent, otp: Otp, result: Result, text: TextBlock, button: Button, stepper: () => null,
+  alert: Alert, toggle: Toggle, cardForm: CardForm, reviewSummary: ReviewSummary, consent: Consent, otp: Otp, result: Result, text: TextBlock, button: Button, stepper: () => null,
 };
 export { space };

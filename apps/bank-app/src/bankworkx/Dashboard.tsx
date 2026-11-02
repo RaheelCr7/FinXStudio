@@ -22,11 +22,13 @@ export function Dashboard({ a }: { a: Actions }) {
   const [filter, setFilter] = useState<Filter>("all");
   const [open, setOpen] = useState<string | null>(null);
   const [seg, setSeg] = useState<number | null>(null);
-  const total = accounts.reduce((s, x) => s + x.balance, 0);
+  const total = accounts.reduce((s, x) => s + x.balance, 0) + fin.linked.reduce((s, x) => s + (x.kind === "Credit" ? 0 : x.balance), 0);
+  const connected = accounts.length + fin.linked.length > 0;
+  const series = fin.ranges[range];
   const first = a.bank.persona.name.split(" ")[0] ?? "";
   const initials = a.bank.persona.name.split(" ").map((x) => x[0]).slice(0, 2).join("");
   const txns = useMemo(() => fin.transactions.filter((t) => filter === "all" || (filter === "income" ? t.amount > 0 : t.amount < 0)).slice(0, 4), [fin.transactions, filter]);
-  const spendTotal = fin.spendingByCategory.reduce((s, x) => s + x.value, 0);
+  const spendTotal = fin.spendingByCategory.reduce((s, x) => s + x.value, 0) || 1;
   const colors = [c.chart1, c.chart2, c.chart3, c.chart4, c.chart5, c.chart6];
   const segments = fin.spendingByCategory.map((s, i) => ({ ...s, color: colors[i % colors.length]! }));
   const pickedSeg = seg != null ? segments[seg] : null;
@@ -46,7 +48,7 @@ export function Dashboard({ a }: { a: Actions }) {
         <Pressable accessibilityRole="button" accessibilityLabel="Menu" onPress={a.menu} hitSlop={8}><Icon name="menu" size={24} color={c.text} /></Pressable>
       </View>
 
-      {accounts.length === 0 ? (
+      {!connected ? (
         <GetStarted a={a} first={first} />
       ) : (
         <>
@@ -56,7 +58,9 @@ export function Dashboard({ a }: { a: Actions }) {
               <Text accessibilityRole="header" numberOfLines={1} adjustsFontSizeToFit style={[{ color: "#fff", fontSize: 36, fontWeight: "800", letterSpacing: -0.8, marginTop: 2, marginBottom: 12 }, tab]}>{a.money(total)}</Text>
               <Segmented dark value={range} onChange={setRange} options={(["1W", "1M", "3M", "1Y"] as Range[]).map((x) => ({ id: x, label: x }))} />
               <View style={{ marginTop: 10 }}>
-                <LineChart key={range} data={fin.ranges[range]} color="#FFFFFF" height={120} format={(p) => a.money(p.value)} />
+                {series.length > 1
+                  ? <LineChart key={range} data={series} color="#FFFFFF" height={120} format={(p) => a.money(p.value)} />
+                  : <View style={{ height: 120, justifyContent: "center" }}><Text style={{ color: "rgba(255,255,255,.85)", fontSize: 14, lineHeight: 20 }}>Your balance history will appear here as you use your accounts.</Text></View>}
               </View>
             </Gradient>
             <View style={{ marginTop: -36, marginHorizontal: 14 }}>
@@ -91,7 +95,8 @@ export function Dashboard({ a }: { a: Actions }) {
             {txns.length === 0 ? <Text style={{ color: c.textMuted, padding: 14 }}>No transactions yet.</Text> : txns.map((t) => <TxnRow key={t.id} t={t} money={a.money} open={open === t.id} onPress={() => setOpen(open === t.id ? null : t.id)} />)}
           </Card>
 
-          <SectionTitle title="Monthly Budgets" action="Manage" onAction={() => a.go("budgets")} />
+          <SectionTitle title="Monthly Budgets" action={fin.budgets.length ? "Manage" : "Create"} onAction={() => (fin.budgets.length ? a.go("budgets") : a.journeys.some((j) => j.slug === "create-budget") && a.openJourney("create-budget"))} />
+          {fin.budgets.length === 0 ? <Card style={{ padding: 16 }}><Text style={{ color: c.textMuted }}>No budgets yet. Create one to track your spending by category.</Text></Card> : null}
           <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 12, paddingTop: 4, paddingBottom: 24, paddingEnd: 20 }} style={{ marginBottom: -16 }}>
             {fin.budgets.map((b) => {
               const pct = b.limit ? b.spent / b.limit : 0;
@@ -114,8 +119,8 @@ export function Dashboard({ a }: { a: Actions }) {
             })}
           </ScrollView>
 
-          <SectionTitle title="Your Account Spendings" />
-          <Card style={{ gap: 14 }}>
+          {segments.length > 0 ? <SectionTitle title="Your Account Spendings" /> : null}
+          {segments.length > 0 ? <Card style={{ gap: 14 }}>
             <Donut segments={segments} selected={seg} onSelect={setSeg} centerTop={pickedSeg ? a.money(pickedSeg.value) : compact(spendTotal)} centerSub={pickedSeg ? `${Math.round((pickedSeg.value / spendTotal) * 100)}% · ${pickedSeg.label}` : "Spent this month"} />
             <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8, justifyContent: "center" }}>
               {segments.map((s, i) => (
@@ -126,9 +131,9 @@ export function Dashboard({ a }: { a: Actions }) {
                 </Pressable>
               ))}
             </View>
-          </Card>
+          </Card> : null}
 
-          <SectionTitle title="Monthly Subscriptions" />
+          {fin.subscriptions.length > 0 ? <SectionTitle title="Monthly Subscriptions" /> : null}
           <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 12, paddingTop: 4, paddingBottom: 24, paddingEnd: 20 }} style={{ marginBottom: -16 }}>
             {fin.subscriptions.map((s) => (
               <Card key={s.id} style={{ width: 170, gap: 8 }}>

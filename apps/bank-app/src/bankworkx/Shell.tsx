@@ -18,6 +18,9 @@ const SLUG_ICON: Record<string, { icon: IconName; text: string }> = {
   "create-budget": { icon: "budgets", text: "Set a monthly spending limit" },
 };
 
+/** Known actions first, in a sensible order; anything a team adds in Studio follows. */
+const rank = (slug: string) => { const i = Object.keys(SLUG_ICON).indexOf(slug); return i < 0 ? 99 : i; };
+
 export function BankWorkxShell() {
   const { c, r } = useTheme();
   const [screen, setScreen] = useState<"login" | "app" | "journey">("login");
@@ -119,7 +122,7 @@ export function BankWorkxShell() {
 
       <Sheet visible={sheet === "fab"} onClose={() => setSheet(null)} title="What would you like to do?">
         <View style={{ gap: 10 }}>
-          {catalog.entries.length === 0 ? <Text style={{ color: c.textMuted }}>No actions are available right now.</Text> : catalog.entries.map((e) => {
+          {catalog.entries.length === 0 ? <Text style={{ color: c.textMuted }}>No actions are available right now.</Text> : [...catalog.entries].sort((x, y) => rank(x.slug) - rank(y.slug)).map((e) => {
             const meta = SLUG_ICON[e.slug] ?? { icon: "plus" as IconName, text: `Version ${e.version}` };
             return (
               <Card key={e.slug} onPress={() => openJourney(e.slug)} label={localize(e.name, "en", "en")} style={{ flexDirection: "row", alignItems: "center", gap: 14, padding: 14, boxShadow: undefined } as any}>
