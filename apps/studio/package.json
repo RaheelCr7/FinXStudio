@@ -10,6 +10,7 @@
     "dev:lan": "next dev --port 3100 --hostname 0.0.0.0"
   },
   "dependencies": {
+    "@finx/codegen": "workspace:*",
     "@finx/journey-schema": "workspace:*",
     "@finx/mock-bank-api": "workspace:*",
     "@finx/renderer-core": "workspace:*",
