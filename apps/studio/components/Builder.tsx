@@ -12,6 +12,7 @@ import { BLOCK_ICONS } from "@/lib/blocks-ui";
 import { FlowCanvas } from "./FlowCanvas";
 import { Inspector } from "./Inspector";
 import { Loc } from "./fields";
+import { VersionHistory } from "./VersionHistory";
 import { useCommands, type Command } from "./CommandPalette";
 
 const Preview = dynamic(() => import("./Preview").then((m) => m.Preview), { ssr: false, loading: () => <div className="faint">Loading preview…</div> });
@@ -225,7 +226,7 @@ export function Builder({ initial, aiRun }: { initial: Rec; aiRun?: { id: string
                   </label>
                 );
               })}
-              <div className="faint">A project\'s app only shows the journeys that list it. A journey with none listed belongs to Meezan Digital.</div>
+              <div className="faint">A project's app only shows the journeys that list it. A journey with none listed belongs to Meezan Digital.</div>
 
               <div className="label-section">Integrations</div>
               {journey.integrations.length === 0 ? <div className="faint" style={{ marginBottom: 8 }}>No integrations yet. Add one to let buttons call the bank.</div> : null}
@@ -240,7 +241,7 @@ export function Builder({ initial, aiRun }: { initial: Rec; aiRun?: { id: string
                 {KNOWN_ADAPTERS.filter((a) => !journey.integrations.some((i) => i.id === a.id)).map((a) => <option key={a.id} value={a.adapter}>{a.adapter.replace("bank.", "")}</option>)}
               </select>
 
-              {initial.history.length ? <><div className="label-section">Publish history</div>{[...initial.history].reverse().slice(0, 6).map((h) => <div key={h.version} className="row" style={{ padding: "4px 0", fontSize: 12.5 }}><span className="chip pos">v{h.version}</span><span className="muted">{h.publishedAt.slice(0, 10)}</span><span className="faint">{h.by}</span></div>)}</> : null}
+              <VersionHistory slug={journey.slug} liveVersion={published?.version} />
             </div>
           )}
         </aside>

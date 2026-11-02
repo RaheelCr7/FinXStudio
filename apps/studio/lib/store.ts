@@ -4,10 +4,13 @@ import { localTransfer, validateJourney, type Journey, type LintIssue } from "@f
 import { lintAll } from "@finx/renderer-core";
 import { sameContent } from "./edit";
 import { shapeOf } from "./graph";
+import { describeChanges } from "./diff";
 import { appIds } from "./brand-ids";
 
 export type HistoryEntry = { version: number; publishedAt: string; by: string };
-export type JourneyRecord = { slug: string; draft: Journey; published?: Journey; history: HistoryEntry[]; updatedAt: string };
+/** Published copies kept for rolling back. Older versions than this are dropped. */
+export const KEEP_VERSIONS = 20;
+export type JourneyRecord = { slug: string; draft: Journey; published?: Journey; history: HistoryEntry[]; updatedAt: string; /** the published journey as it was at each version number */ versions?: Record<string, Journey> };
 export type RunStatus = "running" | "needs_review" | "done" | "failed";
 export type RunStep = { at: string; text: string };
 /** One piece of work an AI agent (a Claude Code skill) did, reported back through the FinX MCP server. */
@@ -96,9 +99,13 @@ export async function publish(slug: string, by = "studio") {
   const issues = lintAll(rec.draft);
   if (issues.length) throw new StoreError(422, `Cannot publish: ${issues.length} lint issue(s)`, issues);
   const version = (rec.published?.version ?? 0) + 1;
+  // the version being replaced may predate version copies: keep it now so it can still be restored
+  if (rec.published && !rec.versions?.[String(rec.published.version)]) rec.versions = { ...(rec.versions ?? {}), [String(rec.published.version)]: structuredClone(rec.published) };
   rec.published = { ...structuredClone(rec.draft), version, status: "published" };
   rec.draft = structuredClone(rec.published);
   rec.history.push({ version, publishedAt: new Date().toISOString(), by });
+  rec.versions = { ...(rec.versions ?? {}), [String(version)]: structuredClone(rec.published) };
+  for (const old of Object.keys(rec.versions).map(Number).sort((x, y) => y - x).slice(KEEP_VERSIONS)) delete rec.versions[String(old)];
   rec.updatedAt = new Date().toISOString();
   // a human publishing the reviewed draft completes the agent run that produced it
   for (const run of Object.values(db.runs ?? {})) {
@@ -120,6 +127,35 @@ export async function cleanApps(apps: unknown): Promise<string[] | undefined> {
   const bad = apps.filter((a) => !known.includes(a));
   if (bad.length) throw new StoreError(400, `Unknown app ${bad.join(", ")}. Use one of: ${known.join(", ")}`);
   return apps.length ? [...new Set(apps as string[])] : undefined;
+}
+
+/** The published journey as it was at a version: kept copy, or the live one when that is the version asked for. */
+function snapshotOf(rec: JourneyRecord, version: number): Journey | undefined {
+  return rec.versions?.[String(version)] ?? (rec.published?.version === version ? rec.published : undefined);
+}
+
+/** Every publish of a journey, newest first, with what differs from the current draft and whether it can be restored. */
+export async function listVersions(slug: string) {
+  const rec = await getRecord(slug);
+  return [...rec.history].reverse().map((h) => {
+    const snap = snapshotOf(rec, h.version);
+    return { ...h, restorable: !!snap, live: rec.published?.version === h.version, changes: snap ? describeChanges(snap, rec.draft) : [] };
+  });
+}
+
+/** Puts an earlier published version back as the draft. Nothing changes for customers until a person publishes it again. */
+export async function restoreVersion(slug: string, version: number) {
+  assertSlug(slug);
+  const db = await read();
+  const rec = db.journeys[slug];
+  if (!rec) throw new StoreError(404, "Journey not found");
+  if (!Number.isInteger(version)) throw new StoreError(400, "version must be a whole number");
+  const snap = snapshotOf(rec, version);
+  if (!snap) throw new StoreError(409, `There is no saved copy of v${version}. Copies are kept for the last ${KEEP_VERSIONS} publishes.`);
+  rec.draft = { ...structuredClone(snap), status: "draft" };
+  rec.updatedAt = new Date().toISOString();
+  await write(db);
+  return rec;
 }
 
 export async function createJourney(name: string, appsInput?: unknown) {
