@@ -114,6 +114,8 @@ Two real headless Claude Code runs (`claude -p "/finx-journey …"`, Claude Sonn
 
 A person then reviewed the draft in Studio and published it. Publishing completed the run on the Agents board, the journey appeared in the app's Services, and it ran there: warning screen, review, consent, OTP, "Recharge complete". The CLI reported notional costs of about $0.39 and $0.29 per run; on a subscription these count against usage limits, not an invoice.
 
+A third headless run checked `/finx-review pay-a-bill focus on the failure screens and Urdu` (read-only tools only). It reported "ready with notes" with twelve findings, among them a real bug (after three wrong codes, *Try again* returns with consent and the wrong code still filled in) and Urdu wording problems, and it ran five simulations, including the Urdu happy path and the core-failure customer. It changed nothing and marked its run done on the Agents board.
+
 What the runs found, and what changed because of it:
 
 - The agent wrote a custom *minimum amount* message that the engine ignored. The engine now honors it, and the catalog documents it.
