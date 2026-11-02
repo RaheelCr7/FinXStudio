@@ -73,8 +73,8 @@ function Shell() {
 
   const LangToggle = (
     <Pressable accessibilityRole="button" accessibilityLabel="Switch language" onPress={() => setLang(lang === "en" ? "ur" : "en")}
-      style={{ paddingHorizontal: 12, height: 32, borderRadius: radius.pill, borderWidth: 1, borderColor: c.border, backgroundColor: c.surface, justifyContent: "center" }}>
-      <Text style={{ color: c.text, fontSize: 13, fontWeight: "600" }}>{lang === "en" ? "اردو" : "English"}</Text>
+      style={{ paddingHorizontal: 12, paddingVertical: 6, minHeight: 32, borderRadius: radius.pill, borderWidth: 1, borderColor: c.border, backgroundColor: c.surface, justifyContent: "center" }}>
+      <Text style={{ color: c.text, fontSize: 13, lineHeight: 20, fontWeight: "600" }}>{lang === "en" ? "اردو" : "English"}</Text>
     </Pressable>
   );
 
@@ -99,7 +99,7 @@ function Shell() {
             );
           })}
         </View>
-        <Pressable accessibilityRole="button" onPress={() => setScreen({ name: "home" })} style={({ pressed }) => ({ marginTop: 24, height: 54, borderRadius: radius.lg, backgroundColor: c.accent, alignItems: "center", justifyContent: "center", opacity: pressed ? 0.88 : 1 })}>
+        <Pressable accessibilityRole="button" onPress={() => setScreen({ name: "home" })} style={({ pressed }) => ({ marginTop: 24, minHeight: 54, paddingVertical: 8, borderRadius: radius.lg, backgroundColor: c.accent, alignItems: "center", justifyContent: "center", opacity: pressed ? 0.88 : 1 })}>
           <Text style={{ color: c.accentOn, fontWeight: "600", fontSize: 16 }}>Log in</Text>
         </Pressable>
         <View style={{ alignItems: "center", marginTop: 20 }}>{LangToggle}</View>
@@ -120,13 +120,13 @@ function Shell() {
   return (
     <View style={{ flex: 1, direction: rtl ? "rtl" : "ltr" } as any}>
       <ScrollView contentContainerStyle={{ padding: 20, paddingTop: 24, gap: 18, maxWidth: 560, width: "100%", alignSelf: "center" }}>
-        <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center" }}>
-          <View>
+        <View style={{ flexDirection: "row", flexWrap: "wrap", justifyContent: "space-between", alignItems: "center", gap: 10 }}>
+          <View style={{ flexShrink: 1 }}>
             <Text style={{ color: c.textMuted, fontSize: 13 }}>{rtl ? "خوش آمدید" : "Good morning"}</Text>
             <Text style={{ color: c.text, fontSize: 20, fontWeight: "600" }}>{bank.persona.name.split(" (")[0]}</Text>
           </View>
-          <View style={{ flexDirection: "row", gap: 8 }}>{LangToggle}
-            <Pressable accessibilityRole="button" onPress={() => setScreen({ name: "login" })} style={{ paddingHorizontal: 12, height: 32, borderRadius: radius.pill, borderWidth: 1, borderColor: c.border, backgroundColor: c.surface, justifyContent: "center" }}><Text style={{ color: c.text, fontSize: 13, fontWeight: "600" }}>Log out</Text></Pressable>
+          <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>{LangToggle}
+            <Pressable accessibilityRole="button" onPress={() => setScreen({ name: "login" })} style={{ paddingHorizontal: 12, paddingVertical: 6, minHeight: 32, borderRadius: radius.pill, borderWidth: 1, borderColor: c.border, backgroundColor: c.surface, justifyContent: "center" }}><Text style={{ color: c.text, fontSize: 13, fontWeight: "600" }}>Log out</Text></Pressable>
           </View>
         </View>
 
@@ -138,7 +138,7 @@ function Shell() {
         ) : (
           <View style={{ padding: 20, borderRadius: radius.xl, backgroundColor: c.accent }}>
             <Text style={{ color: c.accentOn, opacity: 0.85, fontSize: 13 }}>{accounts[0]!.name} {accounts[0]!.maskedNumber}</Text>
-            <Text key={tick} style={[{ color: c.accentOn, fontSize: 32, fontWeight: "600", marginTop: 6, letterSpacing: -0.6 }, tab]}>{formatMoney(accounts[0]!.balance, accounts[0]!.currency)}</Text>
+            <Text key={tick} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.5} style={[{ color: c.accentOn, fontSize: 32, fontWeight: "600", marginTop: 6, letterSpacing: -0.6 }, tab]}>{formatMoney(accounts[0]!.balance, accounts[0]!.currency)}</Text>
             <Text style={{ color: c.accentOn, opacity: 0.85, fontSize: 13, marginTop: 10 }}>Daily limit used {formatMoney(bank.persona.limits.usedToday)} of {formatMoney(bank.persona.limits.daily)}</Text>
           </View>
         )}

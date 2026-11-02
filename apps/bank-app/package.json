@@ -27,11 +27,12 @@
   "scripts": {
     "start": "expo start",
     "android": "expo run:android",
-    "ios": "expo run:ios",
+    "ios": "expo run:ios --no-install",
     "web": "expo start --web",
     "typecheck": "tsc -p .",
     "test": "vitest run",
     "build:android": "node scripts/build-android.mjs",
+    "build:ios": "node scripts/build-ios.mjs",
     "brand-assets": "python3 scripts/generate-brand-assets.py"
   },
   "private": true

@@ -43,7 +43,7 @@ export function ServerSetting({ url, onChange, onEditingChange }: { url: string;
         </View>
         {!editing ? (
           <Pressable accessibilityRole="button" accessibilityLabel="Change Studio server" onPress={() => { setDraft(url); setStatus({ kind: "idle" }); setEditing(true); }}
-            style={{ paddingHorizontal: 12, height: 34, borderRadius: radius.pill, borderWidth: 1, borderColor: c.borderStrong, justifyContent: "center" }}>
+            style={{ paddingHorizontal: 12, minHeight: 34, paddingVertical: 6, borderRadius: radius.pill, borderWidth: 1, borderColor: c.borderStrong, justifyContent: "center" }}>
             <Text style={{ color: c.text, fontSize: 13, fontWeight: "600" }}>Change</Text>
           </Pressable>
         ) : null}
@@ -56,13 +56,13 @@ export function ServerSetting({ url, onChange, onEditingChange }: { url: string;
             style={[{ height: 46, borderRadius: radius.md, borderWidth: 1, borderColor: c.borderStrong, backgroundColor: c.bg, paddingHorizontal: 12, fontSize: 15, color: c.text, fontFamily: mono }, Platform.OS === "web" ? ({ outlineStyle: "none" } as any) : null]} />
           <View style={{ flexDirection: "row", gap: 8, flexWrap: "wrap" }}>
             <Pressable accessibilityRole="button" onPress={testAndSave} disabled={status.kind === "checking"}
-              style={{ paddingHorizontal: 14, height: 40, borderRadius: radius.md, backgroundColor: c.accent, justifyContent: "center", opacity: status.kind === "checking" ? 0.6 : 1 }}>
+              style={{ paddingHorizontal: 14, minHeight: 40, paddingVertical: 6, borderRadius: radius.md, backgroundColor: c.accent, justifyContent: "center", opacity: status.kind === "checking" ? 0.6 : 1 }}>
               <Text style={{ color: c.accentOn, fontWeight: "600", fontSize: 14 }}>{status.kind === "checking" ? "Checking…" : "Test and save"}</Text>
             </Pressable>
-            <Pressable accessibilityRole="button" onPress={useDefault} style={{ paddingHorizontal: 14, height: 40, borderRadius: radius.md, borderWidth: 1, borderColor: c.borderStrong, justifyContent: "center" }}>
+            <Pressable accessibilityRole="button" onPress={useDefault} style={{ paddingHorizontal: 14, minHeight: 40, paddingVertical: 6, borderRadius: radius.md, borderWidth: 1, borderColor: c.borderStrong, justifyContent: "center" }}>
               <Text style={{ color: c.text, fontWeight: "600", fontSize: 14 }}>Use default</Text>
             </Pressable>
-            <Pressable accessibilityRole="button" onPress={() => { setEditing(false); setStatus({ kind: "idle" }); }} style={{ paddingHorizontal: 10, height: 40, justifyContent: "center" }}>
+            <Pressable accessibilityRole="button" onPress={() => { setEditing(false); setStatus({ kind: "idle" }); }} style={{ paddingHorizontal: 10, minHeight: 40, paddingVertical: 6, justifyContent: "center" }}>
               <Text style={{ color: c.textMuted, fontWeight: "600", fontSize: 14 }}>Cancel</Text>
             </Pressable>
           </View>

@@ -54,6 +54,7 @@ for (let i = 0; i < args.length; i++) {
 if (!["uat", "production"].includes(opt.env)) fail("--env must be uat or production");
 if (!/^[1-9][0-9]*$/.test(opt.versionCode)) fail("--version-code must be a whole number of 1 or more");
 if (opt.studioUrl && !/^https?:\/\/[^\s/]+/.test(opt.studioUrl)) fail("--studio-url must look like http://192.168.1.20:3100");
+if (opt.env === "production" && !opt.studioUrl?.startsWith("https://")) fail("A production build cannot change its server, so give it the real one: --studio-url https://...");
 
 function fail(message) { console.error(`\nerror: ${message}`); process.exit(1); }
 const step = (n, text) => console.log(`\n[${n}/6] ${text}`);
@@ -118,6 +119,7 @@ const childEnv = {
   FINX_ANDROID_VERSION_CODE: opt.versionCode,
   ...(opt.studioUrl ? { EXPO_PUBLIC_STUDIO_URL: opt.studioUrl.replace(/\/+$/, "") } : {}),
 };
+if (!opt.studioUrl) delete childEnv.EXPO_PUBLIC_STUDIO_URL; // only --studio-url may bake in an address
 
 mkdirSync(DIST, { recursive: true });
 const logPath = join(DIST, "build-android.log");
