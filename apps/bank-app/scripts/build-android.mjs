@@ -16,6 +16,7 @@ import { homedir, platform } from "node:os";
 import { delimiter, dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { artifactName, formatDuration, hintFor, isDebugSigner, parseBadging, parseSigner, readyDevices } from "./lib/android-build.mjs";
+import { brandConfig, brandIds } from "./lib/brands.mjs";
 
 const APP = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const DIST = join(APP, "dist");
@@ -23,6 +24,7 @@ const ANDROID = join(APP, "android");
 
 const HELP = `Usage: build-android.mjs [options]
 
+  --brand meezan|bankworkx  Which bank this build is (name, ids, icons, look). Default meezan. See brands.json.
   --env uat|production    uat (default) allows changing the server inside the app and plain http.
                           production never does. A store build also needs your own signing key (docs/ANDROID.md).
   --studio-url <url>      Studio address baked into the app as its default, e.g. http://192.168.1.20:3100
@@ -37,11 +39,12 @@ const HELP = `Usage: build-android.mjs [options]
 
 // ---------- arguments ----------------------------------------------------------------------------------------------
 const args = process.argv.slice(2);
-const opt = { env: "uat", studioUrl: undefined, abis: "arm64-v8a", versionCode: "1", aab: false, clean: false, install: false };
+const opt = { brand: "meezan", env: "uat", studioUrl: undefined, abis: "arm64-v8a", versionCode: "1", aab: false, clean: false, install: false };
 for (let i = 0; i < args.length; i++) {
   const a = args[i];
   const next = () => { const v = args[++i]; if (v === undefined) fail(`${a} needs a value`); return v; };
   if (a === "-h" || a === "--help") { console.log(HELP); process.exit(0); }
+  else if (a === "--brand") opt.brand = next();
   else if (a === "--env") opt.env = next();
   else if (a === "--studio-url") opt.studioUrl = next();
   else if (a === "--abis") opt.abis = next();
@@ -51,6 +54,8 @@ for (let i = 0; i < args.length; i++) {
   else if (a === "--install") opt.install = true;
   else fail(`Unknown option ${a}\n\n${HELP}`);
 }
+if (!brandIds.includes(opt.brand)) fail(`--brand must be one of: ${brandIds.join(", ")}`);
+const brand = brandConfig(opt.brand);
 if (!["uat", "production"].includes(opt.env)) fail("--env must be uat or production");
 if (!/^[1-9][0-9]*$/.test(opt.versionCode)) fail("--version-code must be a whole number of 1 or more");
 if (opt.studioUrl && !/^https?:\/\/[^\s/]+/.test(opt.studioUrl)) fail("--studio-url must look like http://192.168.1.20:3100");
@@ -112,6 +117,8 @@ const childEnv = {
   CI: "1",
   EXPO_NO_TELEMETRY: "1",
   NODE_ENV: "production",
+  FINX_BRAND: opt.brand,
+  EXPO_PUBLIC_FINX_BRAND: opt.brand,
   FINX_ENV: opt.env,
   EXPO_PUBLIC_FINX_ENV: opt.env,
   FINX_ANDROID_CLEARTEXT: opt.env === "production" ? "0" : "1",
@@ -157,7 +164,7 @@ step(4, "Collecting the APK");
 const built = join(ANDROID, "app", "build", "outputs", "apk", "release", "app-release.apk");
 if (!existsSync(built)) fail(`The build finished but ${built} does not exist.`);
 const appJson = JSON.parse(readFileSync(join(APP, "app.json"), "utf8")).expo;
-const base = artifactName({ slug: appJson.slug, version: appJson.version, versionCode: opt.versionCode, env: opt.env, abis: opt.abis });
+const base = artifactName({ slug: brand.slug, version: appJson.version, versionCode: opt.versionCode, env: opt.env, abis: opt.abis });
 const apk = join(DIST, `${base}.apk`);
 copyFileSync(built, apk);
 if (opt.aab) {
@@ -181,7 +188,7 @@ if (newest) {
     console.log(`  signature verified (${signer.dn || "unknown signer"})`);
   }
 }
-if (info.package && info.package !== appJson.android.package) fail(`The APK has package ${info.package}, expected ${appJson.android.package}.`);
+if (info.package && info.package !== brand.bundleId) fail(`The APK has package ${info.package}, expected ${brand.bundleId}.`);
 if (info.versionCode && info.versionCode !== opt.versionCode) fail(`The APK has versionCode ${info.versionCode}, expected ${opt.versionCode}.`);
 const sha = createHash("sha256").update(readFileSync(apk)).digest("hex");
 const mb = (statSync(apk).size / 1024 / 1024).toFixed(1);

@@ -6,10 +6,11 @@ import { CardVisual, Icon, IconTile } from "./widgets";
 
 type P = { b: Record<string, any>; set: (path: string, v: any) => void; press: (actions: any[]) => void; busy: boolean; lang: string; strings: Record<string, string> };
 const tab = { fontVariant: ["tabular-nums" as const] };
-/** "$" for USD, "PKR" for PKR: the short form people expect in front of an amount. */
-const symbolOf = (currency: string) => {
-  try { return new Intl.NumberFormat("en-US", { style: "currency", currency, currencyDisplay: "narrowSymbol" }).formatToParts(0).find((p) => p.type === "currency")?.value ?? currency; } catch { return currency; }
-};
+/** "$" for USD, "PKR" for PKR: the short form people expect in front of an amount. A table, because the phone's Intl does not always know symbols. */
+const SYMBOLS: Record<string, string> = { USD: "$", EUR: "€", GBP: "£", INR: "₹", AED: "AED", PKR: "PKR" };
+const symbolOf = (currency: string) => SYMBOLS[currency] ?? currency;
+/** Symbols that are a single character sit tight against the number ($50); codes get a space (PKR 50). */
+const prefixOf = (currency: string) => { const s = symbolOf(currency); return s.length > 1 ? `${s} ` : s; };
 
 export const Label = ({ children }: { children: React.ReactNode }) => {
   const { c, r: radius } = useTheme();
@@ -94,9 +95,9 @@ export function AmountInput({ b, set }: P) {
           {b.quickAmounts.map((q: number) => {
             const on = Number(b.value) === q;
             return (
-              <Pressable key={q} accessibilityRole="radio" accessibilityState={{ selected: on }} accessibilityLabel={`${symbolOf(b.currency)}${q}`} onPress={() => set(b.bind, q)}
+              <Pressable key={q} accessibilityRole="radio" accessibilityState={{ selected: on }} accessibilityLabel={`${prefixOf(b.currency)}${q}`} onPress={() => set(b.bind, q)}
                 style={({ pressed }) => ({ minWidth: 64, minHeight: 40, paddingHorizontal: 16, borderRadius: radius.md, alignItems: "center", justifyContent: "center", backgroundColor: on ? c.accent2 : c.surface, borderWidth: 1, borderColor: on ? c.accent2 : c.border, opacity: pressed ? 0.85 : 1 })}>
-                <Text style={[{ color: on ? "#fff" : c.text, fontWeight: "700", fontSize: 15 }, tab]}>{symbolOf(b.currency)}{q.toLocaleString("en-US")}</Text>
+                <Text style={[{ color: on ? "#fff" : c.text, fontWeight: "700", fontSize: 15 }, tab]}>{prefixOf(b.currency)}{q.toLocaleString("en-US")}</Text>
               </Pressable>
             );
           })}

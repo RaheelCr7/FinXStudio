@@ -50,17 +50,17 @@ export const BLOCKS: BlockDoc[] = [
     example: { type: "beneficiaryPicker", bind: "transfer.beneficiaryId", source: "ctx.beneficiaries", allowAddNew: true },
   },
   {
-    type: "amountInput", purpose: "Money amount, stored as a number.", fields: { bind: "data path", currency: "e.g. PKR", label: "Loc", helper: "Loc, may use {{templates}}", validation: "{ min?, max?, messages?: { min?: Loc, max?: Loc } }. min and max are a number or an expression string; messages replace the default error texts." },
+    type: "amountInput", purpose: "Money amount, stored as a number.", fields: { bind: "data path", currency: "e.g. PKR", label: "Loc", helper: "Loc, may use {{templates}}", quickAmounts: "optional list of numbers shown as one-tap chips, e.g. [50, 100, 150, 200]", validation: "{ min?, max?, messages?: { min?: Loc, max?: Loc } }. min and max are a number or an expression string; messages replace the default error texts." },
     notes: ["If an amount is entered it must be greater than 0. An empty amount is only rejected when dataModel marks the path required: true, so always do that. Use max for balance or limit checks, e.g. \"ctx.accounts[transfer.fromAccountId].balance\"."],
     example: { type: "amountInput", bind: "topup.amount", currency: "PKR", label: { en: "Amount", ur: "رقم" }, validation: { min: 50, max: 5000, messages: { min: { en: "The least you can top up is PKR 50", ur: "کم از کم ٹاپ اپ PKR 50 ہے" }, max: { en: "The most you can top up is PKR 5,000", ur: "زیادہ سے زیادہ ٹاپ اپ PKR 5,000 ہے" } } } },
   },
   {
-    type: "select", purpose: "Pick one option, shown as chips.", fields: { bind: "data path", label: "Loc", options: "fixed list of strings (the value is the text)", source: "OR a ctx path of an object map whose values have { id, name } (the value is the id)" },
-    notes: ["Use source for data from the bank (billers, carriers). Use options only for short fixed lists."],
+    type: "select", purpose: "Pick one option, shown as chips.", fields: { bind: "data path", label: "Loc", options: "fixed list of strings (the value is the text)", choices: "OR a fixed list of { id, label: Loc, icon?, text?: Loc } for tiles with an icon and a line of help. Icons: bank, card, food, bag, trend, shield, wallet, repeat, dollar, home, briefcase", source: "OR a ctx path of an object map whose values have { id, name, color?, sub? } (the value is the id)", variant: "chips (default) or tiles (larger cards, good for banks or account types)" },
+    notes: ["Use source for data from the bank (billers, carriers). Use options only for short fixed lists. Use variant tiles with choices for a short list of big options."],
     example: { type: "select", bind: "topup.carrier", label: { en: "Carrier", ur: "کیریئر" }, source: "ctx.carriers" },
   },
   {
-    type: "textInput", purpose: "Free text such as a mobile number or reference.", fields: { bind: "data path", label: "Loc", placeholder: "Loc", keyboard: "default | number | phone | email", pattern: "JavaScript regular expression, matched against the whole value. Use ^ and $.", patternMessage: "Loc shown when the value does not match" },
+    type: "textInput", purpose: "Free text such as a mobile number or reference.", fields: { bind: "data path", label: "Loc", placeholder: "Loc", keyboard: "default | number | phone | email", secure: "true hides what is typed, with a Show button (passwords)", pattern: "JavaScript regular expression, matched against the whole value. Use ^ and $.", patternMessage: "Loc shown when the value does not match" },
     notes: ["Mark the field required: true in dataModel, otherwise an empty value is accepted."],
     example: { type: "textInput", bind: "bill.reference", label: { en: "Consumer number", ur: "کنزیومر نمبر" }, placeholder: { en: "10 to 14 digits", ur: "10 سے 14 ہندسے" }, keyboard: "number", pattern: "^[0-9]{10,14}$", patternMessage: { en: "Enter 10 to 14 digits", ur: "10 سے 14 ہندسے درج کریں" } },
   },
@@ -73,6 +73,16 @@ export const BLOCKS: BlockDoc[] = [
     type: "consent", purpose: "A checkbox the customer must tick before money moves.", fields: { bind: "boolean data path", termsVersion: "e.g. transfers-v3", text: "Loc", validation: "{ mustBeTrue: true, messages: { mustBeTrue: Loc } }" },
     notes: ["It is only enforced when validation.mustBeTrue is true. Always set it."],
     example: { type: "consent", bind: "bill.consent", termsVersion: "bills-v2", text: { en: "I confirm I want to pay this bill", ur: "میں اس بل کی ادائیگی کی تصدیق کرتا/کرتی ہوں" }, validation: { mustBeTrue: true, messages: { mustBeTrue: { en: "Tick the confirmation first", ur: "پہلے تصدیق کریں" } } } },
+  },
+  {
+    type: "toggle", purpose: "An on/off switch for a yes-or-no choice that is not a legal confirmation.", fields: { bind: "boolean data path", label: "Loc", helper: "Loc" },
+    notes: ["Use consent, not toggle, for anything the customer must agree to. A toggle is never required."],
+    example: { type: "toggle", bind: "budget.alert", label: { en: "Alert me at 80%" }, helper: { en: "We will tell you when you are close to the limit" } },
+  },
+  {
+    type: "cardForm", purpose: "Card number, name, expiry and security code with a live card picture. Checks each field.", fields: { bind: "an object path; the form saves number, holder, expiry and cvv under it" },
+    notes: ["Declare the bind and each of bind.number, bind.holder, bind.expiry and bind.cvv in dataModel. The button's validate action checks the number (Luhn), name, expiry (MM/YY, not past) and code, and shows one error per field. Send the values to bank.cards.add."],
+    example: { type: "cardForm", bind: "card" },
   },
   {
     type: "otp", purpose: "One-time code entry.", fields: { bind: "data path, normally otp.code", length: "4 to 8 digits", hint: "Loc, e.g. \"Enter the code sent to {{ctx.otp.maskedPhone}}\"", maxAttempts: "informational only today", resendAfterSeconds: "informational only today", onResend: "actions, not run by the UI yet" },

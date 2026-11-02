@@ -31,18 +31,22 @@ export function SectionTitle({ title, action, onAction }: { title: string; actio
   );
 }
 
-/** Icon and tint for a spending category. */
+/** Icon and tint for a spending category. The tile background is the icon colour at low strength, so it suits light and dark. */
 export function categoryStyle(c: Colors, cat: Category): { icon: IconName; fg: string; bg: string } {
-  switch (cat) {
-    case "income": return { icon: "briefcase", fg: c.accent, bg: c.accentSoft };
-    case "shopping": return { icon: "bag", fg: "#E8872B", bg: "#FFF1E1" };
-    case "food": case "coffee": return { icon: "food", fg: c.chart5, bg: "#EFE9FF" };
-    case "rent": return { icon: "home", fg: c.chart2, bg: c.accent2Soft };
-    case "groceries": return { icon: "bag", fg: c.chart3, bg: c.positiveBg };
-    case "health": return { icon: "shield", fg: c.chart6, bg: "#FFE8EE" };
-    case "vehicle": case "transport": return { icon: "trend", fg: c.chart1, bg: c.accentSoft };
-    case "entertainment": return { icon: "repeat", fg: c.chart6, bg: "#FFE8EE" };
-  }
+  const pick = (): { icon: IconName; fg: string } => {
+    switch (cat) {
+      case "income": return { icon: "briefcase", fg: c.accent };
+      case "shopping": return { icon: "bag", fg: "#E8872B" };
+      case "food": case "coffee": return { icon: "food", fg: c.chart5 };
+      case "rent": return { icon: "home", fg: c.chart2 };
+      case "groceries": return { icon: "bag", fg: c.chart3 };
+      case "health": return { icon: "shield", fg: c.chart6 };
+      case "vehicle": case "transport": return { icon: "trend", fg: c.chart1 };
+      case "entertainment": return { icon: "repeat", fg: c.chart6 };
+    }
+  };
+  const { icon, fg } = pick();
+  return { icon, fg, bg: `${fg}26` };
 }
 
 export function dayLabel(daysAgo: number): string {

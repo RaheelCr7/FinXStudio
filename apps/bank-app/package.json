@@ -34,7 +34,8 @@
     "test": "vitest run",
     "build:android": "node scripts/build-android.mjs",
     "build:ios": "node scripts/build-ios.mjs",
-    "brand-assets": "python3 scripts/generate-brand-assets.py"
+    "brand-assets": "python3 scripts/generate-brand-assets.py",
+    "web:bankworkx": "EXPO_PUBLIC_FINX_BRAND=bankworkx expo start --web"
   },
   "private": true
 }

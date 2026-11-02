@@ -6,7 +6,8 @@
     "test": "pnpm -r --if-present test",
     "typecheck": "pnpm -r --if-present typecheck",
     "android:apk": "pnpm --filter @finx/bank-app build:android",
-    "ios:sim": "pnpm --filter @finx/bank-app build:ios"
+    "ios:sim": "pnpm --filter @finx/bank-app build:ios",
+    "bankworkx:web": "pnpm --filter @finx/bank-app web:bankworkx"
   },
   "devDependencies": {
     "typescript": "5.6.3",

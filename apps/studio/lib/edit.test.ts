@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { Journey, lintJourney, localTransfer } from "@finx/journey-schema";
-import { addBlock, addScreen, deleteScreen, moveBlock, removeBlock, setLoc } from "./edit";
+import { addBlock, addScreen, deleteScreen, moveBlock, newBlock, removeBlock, setLoc } from "./edit";
 import { buildEdges, layout } from "./graph";
 
 const fresh = () => structuredClone(localTransfer);
@@ -80,5 +80,21 @@ describe("new blocks", () => {
     expect(journey.screens[0]!.blocks.map((b) => b.type)).toEqual(["text", "textInput", "button"]);
     expect(journey.dataModel?.reference).toBeDefined();
     expect(lintJourney(journey)).toEqual([]);
+  });
+});
+
+describe("BankWorkx blocks in the Builder", () => {
+  const j = (apps?: string[]) => ({ ...structuredClone(localTransfer), apps, dataModel: {} }) as any;
+  it("adds a card form with its four fields declared in the data model, so lint stays clean", () => {
+    const out = addBlock(j(["bankworkx"]), "amount", "cardForm").journey;
+    expect(Object.keys(out.dataModel ?? {})).toEqual(expect.arrayContaining(["card", "card.number", "card.holder", "card.expiry", "card.cvv"]));
+  });
+  it("adds a switch that is a plain yes/no, never required", () => {
+    const out = addBlock(j(), "amount", "toggle").journey;
+    expect(out.dataModel!.option).toEqual({ type: "boolean" });
+  });
+  it("starts money fields in the journey's own currency", () => {
+    expect((newBlock("amountInput", j(["bankworkx"])) as any).currency).toBe("USD");
+    expect((newBlock("amountInput", j()) as any).currency).toBe("PKR");
   });
 });

@@ -54,12 +54,16 @@ export function Icon({ name, size = 22, color, stroke = 2 }: { name: IconName; s
 // ---------- gradient surface --------------------------------------------------------------------------------------------
 export function Gradient({ from, to, radius = 0, style, children }: { from: string; to: string; radius?: number; style?: ViewStyle; children?: React.ReactNode }) {
   const id = gid(useId());
+  // Explicit pixel sizes: on iOS an SVG sized "100%" inside an absolutely positioned layer did not follow its parent.
+  const [box, setBox] = useState({ w: 0, h: 0 });
   return (
-    <View style={[{ overflow: "hidden", borderRadius: radius }, style]}>
-      <Svg style={StyleSheet.absoluteFill} width="100%" height="100%" preserveAspectRatio="none" pointerEvents="none">
-        <Defs><LinearGradient id={id} x1="0" y1="0" x2="1" y2="1"><Stop offset="0" stopColor={from} /><Stop offset="1" stopColor={to} /></LinearGradient></Defs>
-        <Rect width="100%" height="100%" fill={`url(#${id})`} />
-      </Svg>
+    <View style={[{ overflow: "hidden", borderRadius: radius }, style]} onLayout={(e: LayoutChangeEvent) => { const { width, height } = e.nativeEvent.layout; setBox((b) => (b.w === width && b.h === height ? b : { w: width, h: height })); }}>
+      {box.w > 0 ? (
+        <Svg style={StyleSheet.absoluteFill} width={box.w} height={box.h} pointerEvents="none">
+          <Defs><LinearGradient id={id} x1="0" y1="0" x2="1" y2="1"><Stop offset="0" stopColor={from} /><Stop offset="1" stopColor={to} /></LinearGradient></Defs>
+          <Rect x={0} y={0} width={box.w} height={box.h} fill={`url(#${id})`} />
+        </Svg>
+      ) : null}
       {children}
     </View>
   );
@@ -217,11 +221,13 @@ export function CardVisual({ number, holder, expiry, network = "mastercard", bal
   return (
     <Gradient from={c.heroFrom} to={c.heroTo} radius={22} style={{ padding: 20, minHeight: 170, justifyContent: "space-between" }}>
       <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center" }}>
-        <View style={{ flexDirection: "row" }}>
-          <View style={{ width: 28, height: 28, borderRadius: 14, backgroundColor: "#EB001B" }} />
-          <View style={{ width: 28, height: 28, borderRadius: 14, backgroundColor: "#F79E1B", marginStart: -11, opacity: 0.92 }} />
-        </View>
-        <Text style={{ color: "rgba(255,255,255,.9)", fontSize: 13, fontWeight: "700", textTransform: "capitalize" }}>{label ?? network}</Text>
+        {network === "visa"
+          ? <Text style={{ color: "#fff", fontSize: 22, fontWeight: "900", fontStyle: "italic", letterSpacing: 1 }}>VISA</Text>
+          : <View style={{ flexDirection: "row" }}>
+              <View style={{ width: 28, height: 28, borderRadius: 14, backgroundColor: "#EB001B" }} />
+              <View style={{ width: 28, height: 28, borderRadius: 14, backgroundColor: "#F79E1B", marginStart: -11, opacity: 0.92 }} />
+            </View>}
+        <Text style={{ color: "rgba(255,255,255,.9)", fontSize: 13, fontWeight: "700", textTransform: "capitalize" }}>{network === "visa" ? "Credit" : "Mastercard"}</Text>
       </View>
       {balance ? <View><Text style={{ color: "rgba(255,255,255,.75)", fontSize: 11 }}>Balance</Text><Text style={[{ color: "#fff", fontSize: 24, fontWeight: "700" }, tab]}>{balance}</Text></View> : null}
       <View>

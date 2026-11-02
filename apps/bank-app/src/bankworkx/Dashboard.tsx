@@ -75,7 +75,7 @@ export function Dashboard({ a }: { a: Actions }) {
                       style={{ flex: 1, padding: 8, borderRadius: r.md, backgroundColor: on ? c.surfaceMuted : "transparent", borderWidth: 1, borderColor: on ? c.borderStrong : "transparent" }}>
                       <Text style={{ color: c.textMuted, fontSize: 11 }}>{s.label}</Text>
                       <View style={{ flexDirection: "row", alignItems: "center", gap: 3, marginTop: 2 }}>
-                        <Text style={[{ color: s.color, fontSize: 14, fontWeight: "800" }, tab]}>{s.sign}{a.money2(s.value)}</Text><Icon name={s.icon} size={13} color={s.color} />
+                        <Text numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.7} style={[{ color: s.color, fontSize: 14, fontWeight: "800", flexShrink: 1 }, tab]}>{`${s.sign}${a.money2(s.value)}`}</Text><Icon name={s.icon} size={13} color={s.color} />
                       </View>
                     </Pressable>
                   );
@@ -83,7 +83,7 @@ export function Dashboard({ a }: { a: Actions }) {
                 <View style={{ flex: 1, padding: 8 }}>
                   <Text style={{ color: c.textMuted, fontSize: 11 }}>Savings</Text>
                   <View style={{ flexDirection: "row", alignItems: "center", gap: 3, marginTop: 2 }}>
-                    <Text style={[{ color: c.accent, fontSize: 14, fontWeight: "800" }, tab]}>{a.money2(fin.savings)}</Text><Icon name="trend" size={13} color={c.accent} />
+                    <Text numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.7} style={[{ color: c.accent, fontSize: 14, fontWeight: "800", flexShrink: 1 }, tab]}>{a.money2(fin.savings)}</Text><Icon name="trend" size={13} color={c.accent} />
                   </View>
                 </View>
               </Card>

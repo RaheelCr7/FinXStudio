@@ -1,0 +1,10 @@
+{
+  "meezan": {
+    "name": "Meezan Digital", "slug": "meezan-digital", "bundleId": "pk.meezan.digital", "scheme": "finx",
+    "assets": "./assets", "accent": "#0F6E56", "background": "#F6F7F9", "splashDark": "#0A0D12", "shortName": "Meezan"
+  },
+  "bankworkx": {
+    "name": "BankWorkx", "slug": "bankworkx", "bundleId": "com.bankworkx.app", "scheme": "bankworkx",
+    "assets": "./assets/bankworkx", "accent": "#3155CE", "background": "#F6F4FC", "splashDark": "#0D1022", "shortName": "BankWorkx"
+  }
+}
