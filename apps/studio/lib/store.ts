@@ -3,6 +3,7 @@ import path from "node:path";
 import { localTransfer, validateJourney, type Journey, type LintIssue } from "@finx/journey-schema";
 import { lintAll } from "@finx/renderer-core";
 import { sameContent } from "./edit";
+import { shapeOf } from "./graph";
 
 export type HistoryEntry = { version: number; publishedAt: string; by: string };
 export type JourneyRecord = { slug: string; draft: Journey; published?: Journey; history: HistoryEntry[]; updatedAt: string };
@@ -59,6 +60,8 @@ export async function listJourneys() {
     channels: r.draft.channels,
     updatedAt: r.updatedAt,
     issues: lintAll(r.draft).length,
+    languages: r.draft.locale.supported,
+    shape: shapeOf(r.draft),
   })).sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
 }
 

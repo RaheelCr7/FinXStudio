@@ -56,3 +56,15 @@ export function layout(j: Journey, gapX = 250, gapY = 132): Record<string, { x: 
   }
   return pos;
 }
+
+export type Shape = { nodes: { id: string; x: number; y: number; kind: string; entry: boolean }[]; edges: { from: string; to: string; kind: FlowEdge["kind"] }[] };
+
+/** A small left-to-right sketch of a journey's flow, for thumbnails on the journeys list. */
+export function shapeOf(j: Journey): Shape {
+  const pos = layout(j, 1, 1);
+  const ids = new Set(j.screens.map((s) => s.id));
+  return {
+    nodes: j.screens.map((s) => ({ id: s.id, x: pos[s.id]!.y, y: pos[s.id]!.x, kind: s.kind ?? "screen", entry: s.id === j.entryScreen })),
+    edges: buildEdges(j).filter((e) => ids.has(e.from) && ids.has(e.to)).map((e) => ({ from: e.from, to: e.to, kind: e.kind })),
+  };
+}
