@@ -1,6 +1,6 @@
 import { Platform } from "react-native";
 import AsyncStorage from "@react-native-async-storage/async-storage";
-import { normalizeStudioUrl } from "./studio-url";
+import { normalizeStudioUrl } from "@finx/bank-client";
 
 const KEY = "finx.studioUrl";
 

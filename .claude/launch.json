@@ -18,6 +18,15 @@
         "cd apps/studio && npx next dev --port 3100 --hostname 127.0.0.1"
       ],
       "port": 3100
+    },
+    {
+      "name": "bank-web",
+      "runtimeExecutable": "bash",
+      "runtimeArgs": [
+        "-c",
+        "cd apps/bank-web && npx next dev --port 3200 --hostname 127.0.0.1"
+      ],
+      "port": 3200
     }
   ]
 }

@@ -1,7 +1,8 @@
 import React, { useMemo, useState } from "react";
 import { Pressable, ScrollView, Text, TextInput, View } from "react-native";
 import { CardVisual, Icon, IconTile, Pill, ProgressBar, useTheme } from "@finx/renderer-native";
-import type { Budget, Txn } from "@finx/mock-bank-api";
+import type { Budget } from "@finx/mock-bank-api";
+import { accountItems, budgetDetail, budgetIcon, budgetProgress, cardPictureNumber, filterTransactions, groupByDay, networkName } from "@finx/bank-client";
 import type { Actions } from "./Dashboard";
 import { slugIs } from "../live";
 import { Card, SectionTitle, TxnRow, dayLabel, tab } from "./ui";
@@ -21,15 +22,12 @@ const has = (a: Actions, slug: string) => a.journeys.some((j) => slugIs(j.slug, 
 export function Accounts({ a }: { a: Actions }) {
   const { c, r } = useTheme();
   const fin = a.bank.persona.finance!;
-  const items = [
-    ...a.bank.persona.accounts.map((x) => ({ id: x.id, name: x.name, bank: "BankWorkx", mask: x.maskedNumber, balance: x.balance })),
-    ...fin.linked.map((l) => ({ id: l.id, name: l.kind, bank: l.bank, mask: l.maskedNumber, balance: l.balance })),
-  ];
+  const items = accountItems(a.bank.persona, fin);
   const [sel, setSel] = useState<string | null>(null);
   const [q, setQ] = useState("");
   const [kind, setKind] = useState<"all" | "in" | "out">("all");
-  const list = useMemo(() => fin.transactions.filter((t) => (kind === "all" || (kind === "in" ? t.amount > 0 : t.amount < 0)) && t.title.toLowerCase().includes(q.trim().toLowerCase())), [fin.transactions, q, kind]);
-  const groups = useMemo(() => { const m = new Map<number, Txn[]>(); for (const t of list) m.set(t.daysAgo, [...(m.get(t.daysAgo) ?? []), t]); return [...m.entries()].sort((x, y) => x[0] - y[0]); }, [list]);
+  const list = useMemo(() => filterTransactions(fin.transactions, q, kind), [fin.transactions, q, kind]);
+  const groups = useMemo(() => groupByDay(list), [list]);
   return (
     <ScrollView contentContainerStyle={{ padding: 20, paddingBottom: 120, gap: 16 }} keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>
       <Title text="Connected Accounts" onAdd={has(a, "connect-account") ? () => a.openJourney("connect-account") : undefined} label="Connect an account" />
@@ -85,12 +83,12 @@ export function Budgets({ a }: { a: Actions }) {
       {budgets.length === 0 ? (
         <Card style={{ alignItems: "center", gap: 8, padding: 24 }}><IconTile icon="budgets" color={c.accent} bg={c.accentSoft} size={52} /><Text style={{ color: c.text, fontWeight: "700", fontSize: 16 }}>No budgets yet</Text><Text style={{ color: c.textMuted, textAlign: "center" }}>Set a monthly limit for a category and track it here.</Text></Card>
       ) : budgets.map((b) => {
-        const pct = b.limit ? b.spent / b.limit : 0;
-        const col = pct < 0.6 ? c.chart3 : pct < 0.9 ? c.chart4 : c.negative;
+        const { pct, tone } = budgetProgress(b);
+        const col = tone === "ok" ? c.chart3 : tone === "warn" ? c.chart4 : c.negative;
         return (
           <Card key={b.id} onPress={() => a.openBudget(b.id)} label={`${b.name} budget`} style={{ gap: 10 }}>
             <View style={{ flexDirection: "row", alignItems: "center", gap: 12 }}>
-              <IconTile icon={b.name.startsWith("Food") ? "food" : b.name.startsWith("Shop") ? "bag" : "repeat"} color={col} bg={c.surfaceMuted} />
+              <IconTile icon={budgetIcon(b.name)} color={col} bg={c.surfaceMuted} />
               <View style={{ flex: 1 }}><Text style={{ color: c.text, fontWeight: "700", fontSize: 16 }}>{b.name}</Text><Text style={[{ color: c.textFaint, fontSize: 12 }, tab]}>{a.money(b.limit)}/month</Text></View>
               <Icon name="chevronRight" size={18} color={c.textFaint} />
             </View>
@@ -108,10 +106,8 @@ export function Budgets({ a }: { a: Actions }) {
 export function BudgetDetail({ b, a, onBack }: { b: Budget; a: Actions; onBack: () => void }) {
   const { c, r } = useTheme();
   const [day, setDay] = useState(0);
-  const left = Math.max(0, b.limit - b.spent), pct = b.limit ? b.spent / b.limit : 0;
-  const daysLeft = 28;
-  const col = pct < 0.6 ? c.chart3 : pct < 0.9 ? c.chart4 : c.negative;
-  const related = a.bank.persona.finance!.transactions.filter((t) => (b.category === "food" ? t.category === "food" || t.category === "coffee" : t.category === b.category));
+  const { left, pct, tone, daysLeft, perDay, transactions: shown } = budgetDetail(b, a.bank.persona.finance!.transactions, day === 0 ? "week" : "month");
+  const col = tone === "ok" ? c.chart3 : tone === "warn" ? c.chart4 : c.negative;
   return (
     <View style={{ flex: 1, backgroundColor: c.ink }}>
       <ScrollView contentContainerStyle={{ padding: 20, paddingBottom: 60, gap: 18 }}>
@@ -135,13 +131,13 @@ export function BudgetDetail({ b, a, onBack }: { b: Budget; a: Actions; onBack: 
           <Text style={{ color: c.inkMuted, fontSize: 12, textAlign: "center" }}>{Math.round(pct * 100)}% used · {daysLeft} days left</Text>
         </View>
         <View style={{ padding: 14, borderRadius: r.lg, backgroundColor: "rgba(255,255,255,.07)" }}>
-          <Text style={{ color: c.inkText, fontSize: 14, lineHeight: 20 }}>You can spend <Text style={[{ color: col, fontWeight: "800" }, tab]}>{a.money(Math.floor(left / daysLeft))}</Text> each day for the rest of the period.</Text>
+          <Text style={{ color: c.inkText, fontSize: 14, lineHeight: 20 }}>You can spend <Text style={[{ color: col, fontWeight: "800" }, tab]}>{a.money(perDay)}</Text> each day for the rest of the period.</Text>
         </View>
         <Text style={{ color: c.inkText, fontSize: 17, fontWeight: "700" }}>Transactions</Text>
         <View style={{ flexDirection: "row", gap: 8 }}>
           {["This week", "This month"].map((l, i) => <Pressable key={l} accessibilityRole="button" accessibilityState={{ selected: day === i }} onPress={() => setDay(i)} style={{ paddingHorizontal: 14, minHeight: 32, borderRadius: 999, justifyContent: "center", backgroundColor: day === i ? c.accent2 : "rgba(255,255,255,.1)" }}><Text style={{ color: "#fff", fontWeight: "700", fontSize: 13 }}>{l}</Text></Pressable>)}
         </View>
-        {related.filter((t) => day === 1 || t.daysAgo <= 7).length === 0 ? <Text style={{ color: c.inkMuted }}>Nothing spent here yet.</Text> : related.filter((t) => day === 1 || t.daysAgo <= 7).map((t) => (
+        {shown.length === 0 ? <Text style={{ color: c.inkMuted }}>Nothing spent here yet.</Text> : shown.map((t) => (
           <View key={t.id} style={{ flexDirection: "row", justifyContent: "space-between", paddingVertical: 8, borderTopWidth: 1, borderTopColor: "rgba(255,255,255,.08)" }}>
             <View><Text style={{ color: c.inkText, fontWeight: "600" }}>{t.title}</Text><Text style={{ color: c.inkMuted, fontSize: 12 }}>{dayLabel(t.daysAgo)}</Text></View>
             <Text style={[{ color: c.negative, fontWeight: "700" }, tab]}>-{a.money(Math.abs(t.amount))}</Text>
@@ -174,14 +170,14 @@ export function Wallet({ a }: { a: Actions }) {
             onMomentumScrollEnd={(e) => setSel(Math.round(e.nativeEvent.contentOffset.x / 316))}>
             {cards.map((k, i) => (
               <Pressable key={k.id} accessibilityRole="button" accessibilityLabel={`${k.nickname} card ending ${k.last4}`} accessibilityState={{ selected: i === sel }} onPress={() => setSel(i)} style={{ width: 300, opacity: i === sel ? 1 : 0.7 }}>
-                <CardVisual number={`${k.network === "visa" ? "4000" : "5200"}00000000${k.last4}`} holder={k.holder.toUpperCase()} expiry={k.expiry} network={k.network} label={k.network} />
+                <CardVisual number={cardPictureNumber(k)} holder={k.holder.toUpperCase()} expiry={k.expiry} network={k.network} label={k.network} />
               </Pressable>
             ))}
           </ScrollView>
           {card ? (
             <Card style={{ gap: 10 }}>
               <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}><Text style={{ color: c.text, fontWeight: "700", fontSize: 17, flex: 1 }}>{card.nickname}</Text>{card.isDefault ? <Pill text="Default" tone="positive" /> : null}</View>
-              <Text style={{ color: c.textMuted }}>{card.network === "visa" ? "Visa" : "Mastercard"} ending {card.last4} · expires {card.expiry}</Text>
+              <Text style={{ color: c.textMuted }}>{networkName(card)} ending {card.last4} · expires {card.expiry}</Text>
             </Card>
           ) : null}
         </>

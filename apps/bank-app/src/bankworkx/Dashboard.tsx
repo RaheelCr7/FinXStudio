@@ -4,7 +4,8 @@ import { Donut, Gradient, Icon, IconTile, LineChart, Pill, ProgressBar, Segmente
 import type { MockBank } from "@finx/mock-bank-api";
 import { slugIs, type Entry } from "../live";
 import { portfolioTotals } from "@finx/mock-bank-api";
-import { Card, SectionTitle, TxnRow, inDays, lift, tab, type TabId } from "./ui";
+import { budgetIcon, budgetProgress, compactMoney, displayName, firstName, hasAccounts, initials as initialsOf, inDays, recentTransactions, spendingSegments, totalBalance, transactionsTitle } from "@finx/bank-client";
+import { Card, SectionTitle, TxnRow, lift, tab, type TabId } from "./ui";
 
 export type Actions = {
   bank: MockBank; money: (n: number) => string; money2: (n: number) => string; go: (t: TabId) => void; openJourney: (slug: string, initial?: Record<string, any>) => void;
@@ -12,8 +13,6 @@ export type Actions = {
 };
 type Range = "1W" | "1M" | "3M" | "1Y";
 type Filter = "all" | "income" | "expense";
-
-const compact = (n: number) => (n >= 1000 ? `$${(n / 1000).toFixed(1).replace(/\.0$/, "")}K` : `$${Math.round(n)}`);
 
 export function Dashboard({ a }: { a: Actions }) {
   const { c, r, mode } = useTheme();
@@ -23,15 +22,15 @@ export function Dashboard({ a }: { a: Actions }) {
   const [filter, setFilter] = useState<Filter>("all");
   const [open, setOpen] = useState<string | null>(null);
   const [seg, setSeg] = useState<number | null>(null);
-  const total = accounts.reduce((s, x) => s + x.balance, 0) + fin.linked.reduce((s, x) => s + (x.kind === "Credit" ? 0 : x.balance), 0);
-  const connected = accounts.length + fin.linked.length > 0;
+  const total = totalBalance(a.bank.persona, fin);
+  const connected = hasAccounts(a.bank.persona, fin);
   const series = fin.ranges[range];
-  const first = a.bank.persona.name.split(" ")[0] ?? "";
-  const initials = a.bank.persona.name.split(" ").map((x) => x[0]).slice(0, 2).join("");
-  const txns = useMemo(() => fin.transactions.filter((t) => filter === "all" || (filter === "income" ? t.amount > 0 : t.amount < 0)).slice(0, 4), [fin.transactions, filter]);
-  const spendTotal = fin.spendingByCategory.reduce((s, x) => s + x.value, 0) || 1;
+  const first = firstName(a.bank.persona);
+  const initials = initialsOf(a.bank.persona);
+  const txns = useMemo(() => recentTransactions(fin.transactions, filter), [fin.transactions, filter]);
+  const { total: spendTotal, segments: ring } = spendingSegments(fin);
   const colors = [c.chart1, c.chart2, c.chart3, c.chart4, c.chart5, c.chart6];
-  const segments = fin.spendingByCategory.map((s, i) => ({ ...s, color: colors[i % colors.length]! }));
+  const segments = ring.map((s, i) => ({ label: s.label, value: s.value, color: colors[i % colors.length]! }));
   const pickedSeg = seg != null ? segments[seg] : null;
 
   return (
@@ -40,7 +39,7 @@ export function Dashboard({ a }: { a: Actions }) {
         <View style={{ width: 44, height: 44, borderRadius: 22, backgroundColor: c.accent, alignItems: "center", justifyContent: "center" }}><Text style={{ color: c.accentOn, fontWeight: "700" }}>{initials}</Text></View>
         <View style={{ flex: 1 }}>
           <Text style={{ color: c.textFaint, fontSize: 12 }}>Welcome back,</Text>
-          <Text style={{ color: c.text, fontSize: 17, fontWeight: "700" }}>{a.bank.persona.name.split(" (")[0]}</Text>
+          <Text style={{ color: c.text, fontSize: 17, fontWeight: "700" }}>{displayName(a.bank.persona)}</Text>
         </View>
         <Pressable accessibilityRole="button" accessibilityLabel="Notifications" onPress={a.notifications} hitSlop={8}>
           <Icon name="bell" size={24} color={c.text} />
@@ -91,7 +90,7 @@ export function Dashboard({ a }: { a: Actions }) {
             </View>
           </View>
 
-          <SectionTitle title={filter === "all" ? "Transactions" : filter === "income" ? "Money in" : "Money out"} action="See all" onAction={() => a.go("accounts")} />
+          <SectionTitle title={transactionsTitle(filter)} action="See all" onAction={() => a.go("accounts")} />
           <Card style={{ paddingVertical: 6 }}>
             {txns.length === 0 ? <Text style={{ color: c.textMuted, padding: 14 }}>No transactions yet.</Text> : txns.map((t) => <TxnRow key={t.id} t={t} money={a.money} open={open === t.id} onPress={() => setOpen(open === t.id ? null : t.id)} />)}
           </Card>
@@ -100,12 +99,12 @@ export function Dashboard({ a }: { a: Actions }) {
           {fin.budgets.length === 0 ? <Card style={{ padding: 16 }}><Text style={{ color: c.textMuted }}>No budgets yet. Create one to track your spending by category.</Text></Card> : null}
           <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 12, paddingTop: 4, paddingBottom: 24, paddingEnd: 20 }} style={{ marginBottom: -16 }}>
             {fin.budgets.map((b) => {
-              const pct = b.limit ? b.spent / b.limit : 0;
-              const col = pct < 0.6 ? c.chart3 : pct < 0.9 ? c.chart4 : c.negative;
+              const { pct, tone, message } = budgetProgress(b);
+              const col = tone === "ok" ? c.chart3 : tone === "warn" ? c.chart4 : c.negative;
               return (
                 <Card key={b.id} onPress={() => a.openBudget(b.id)} label={`${b.name} budget, ${Math.round(pct * 100)} percent used`} style={{ width: 250, gap: 10 }}>
                   <View style={{ flexDirection: "row", alignItems: "center", gap: 10 }}>
-                    <IconTile icon={b.name.startsWith("Food") ? "food" : b.name.startsWith("Shop") ? "bag" : "repeat"} color={col} bg={c.surfaceMuted} size={38} />
+                    <IconTile icon={budgetIcon(b.name)} color={col} bg={c.surfaceMuted} size={38} />
                     <View style={{ flex: 1 }}><Text style={{ color: c.text, fontWeight: "700", fontSize: 15 }}>{b.name}</Text><Text style={[{ color: c.textFaint, fontSize: 12 }, tab]}>{a.money(b.limit)}/month</Text></View>
                     <Icon name="chevronRight" size={18} color={c.textFaint} />
                   </View>
@@ -114,7 +113,7 @@ export function Dashboard({ a }: { a: Actions }) {
                     <Text style={[{ color: c.textMuted, fontSize: 12 }, tab]}>{a.money(b.spent)} of {a.money(b.limit)}</Text>
                     <View style={{ paddingHorizontal: 9, paddingVertical: 2, borderRadius: 999, backgroundColor: col }}><Text style={[{ color: "#fff", fontSize: 11, fontWeight: "800" }, tab]}>{Math.round(pct * 100)}%</Text></View>
                   </View>
-                  <Text style={{ color: c.textMuted, fontSize: 12 }}>{pct < 0.6 ? "Good job! Your spending is on track." : pct < 0.9 ? "Careful, you have used most of this budget." : "Almost at your limit this month."}</Text>
+                  <Text style={{ color: c.textMuted, fontSize: 12 }}>{message}</Text>
                 </Card>
               );
             })}
@@ -122,7 +121,7 @@ export function Dashboard({ a }: { a: Actions }) {
 
           {segments.length > 0 ? <SectionTitle title="Your Account Spendings" /> : null}
           {segments.length > 0 ? <Card style={{ gap: 14 }}>
-            <Donut segments={segments} selected={seg} onSelect={setSeg} centerTop={pickedSeg ? a.money(pickedSeg.value) : compact(spendTotal)} centerSub={pickedSeg ? `${Math.round((pickedSeg.value / spendTotal) * 100)}% · ${pickedSeg.label}` : "Spent this month"} />
+            <Donut segments={segments} selected={seg} onSelect={setSeg} centerTop={pickedSeg ? a.money(pickedSeg.value) : compactMoney(spendTotal)} centerSub={pickedSeg ? `${Math.round((pickedSeg.value / spendTotal) * 100)}% · ${pickedSeg.label}` : "Spent this month"} />
             <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8, justifyContent: "center" }}>
               {segments.map((s, i) => (
                 <Pressable key={s.label} accessibilityRole="button" accessibilityLabel={`${s.label} ${a.money(s.value)}`} accessibilityState={{ selected: seg === i }} onPress={() => setSeg(seg === i ? null : i)}

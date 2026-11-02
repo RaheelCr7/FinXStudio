@@ -1,41 +1,32 @@
-import React, { useEffect, useMemo, useRef, useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import { Image, KeyboardAvoidingView, Pressable, ScrollView, Text, View, useColorScheme } from "react-native";
 import { StatusBar } from "expo-status-bar";
 import { SafeAreaProvider, useSafeAreaInsets } from "react-native-safe-area-context";
-import { MockBank, personasFor } from "@finx/mock-bank-api";
+import { BankApp } from "@finx/bank-client";
 import { localize } from "@finx/renderer-core";
 import { JourneyPlayer, ThemeProvider, useTheme } from "@finx/renderer-native";
 import { formatMoney } from "@finx/ui-kit";
 import { ServerSetting } from "./src/ServerSetting";
 import { DEFAULT_STUDIO_URL, SERVER_CHANGE_ALLOWED, loadStudioUrl } from "./src/studio-config";
 import { BRAND, BRAND_INFO } from "./src/brand";
-import { bundledEntries, loadCatalog, loadJourney, type Entry, type Live } from "./src/live";
+import { live } from "./src/live";
+import { useBankApp } from "./src/useBankApp";
 import { BankWorkxShell } from "./src/bankworkx/Shell";
-
-type Screen = { name: "login" } | { name: "home" } | { name: "journey" };
 
 const tab = { fontVariant: ["tabular-nums" as const] };
 
 function MeezanShell() {
-  const { c, r: radius, mode } = useTheme();
-  const [screen, setScreen] = useState<Screen>({ name: "login" });
-  const [personaId, setPersonaId] = useState("ayesha");
-  const [lang, setLang] = useState("en");
-  const [tick, setTick] = useState(0);
-  const [catalog, setCatalog] = useState<{ entries: Entry[]; source: "studio" | "bundled" }>({ entries: bundledEntries(), source: "bundled" });
-  const [active, setActive] = useState<Live | null>(null);
-  const [opening, setOpening] = useState<string | null>(null);
-  const [studioUrl, setStudioUrl] = useState(DEFAULT_STUDIO_URL);
-  useEffect(() => { loadStudioUrl().then(setStudioUrl); }, []);
-  useEffect(() => { if (screen.name === "home") loadCatalog(studioUrl).then(setCatalog); }, [screen.name, tick, studioUrl]);
-  async function open(slug: string) {
-    setOpening(slug);
-    const l = await loadJourney(studioUrl, slug);
-    setOpening(null);
-    if (l) { setActive(l); setScreen({ name: "journey" }); }
-  }
-  const bank = useMemo(() => new MockBank(personaId), [personaId, screen.name === "login"]);
-  const adapter = useMemo(() => (id: string, input: Record<string, any>) => bank.call(id, input), [bank]);
+  const { c, r: radius } = useTheme();
+  // Who is signed in, the Studio catalog, the journey in progress and the language live in @finx/bank-client, shared with the web app.
+  const [app] = useState(() => new BankApp({ preset: BRAND_INFO.preset, live, studioUrl: DEFAULT_STUDIO_URL }));
+  const s = useBankApp(app);
+  const { screen, personaId, lang, tick, catalog, active } = s;
+  useEffect(() => { loadStudioUrl().then((u) => app.setStudioUrl(u)); return () => app.dispose(); }, [app]);
+  const bank = app.bank;
+  const adapter = app.adapter;
+  const studioUrl = s.studioUrl;
+  const opening = s.opening;
+  const open = (slug: string) => app.openJourney(slug);
   const rtl = lang === "ur";
 
   // The Studio server editor sits at the bottom of the sign-in screen. While it is open, keep it in view as the keyboard appears.
@@ -44,13 +35,13 @@ function MeezanShell() {
   const followEditor = () => { if (editingServer) loginScroller.current?.scrollToEnd({ animated: true }); };
 
   const LangToggle = (
-    <Pressable accessibilityRole="button" accessibilityLabel="Switch language" onPress={() => setLang(lang === "en" ? "ur" : "en")}
+    <Pressable accessibilityRole="button" accessibilityLabel="Switch language" onPress={() => app.toggleLang()}
       style={{ paddingHorizontal: 12, paddingVertical: 6, minHeight: 32, borderRadius: radius.pill, borderWidth: 1, borderColor: c.border, backgroundColor: c.surface, justifyContent: "center" }}>
       <Text style={{ color: c.text, fontSize: 13, lineHeight: 20, fontWeight: "600" }}>{lang === "en" ? "اردو" : "English"}</Text>
     </Pressable>
   );
 
-  if (screen.name === "login") {
+  if (screen === "login") {
     return (
       <ScrollView ref={loginScroller} keyboardShouldPersistTaps="handled" onContentSizeChange={followEditor} onLayout={followEditor}
         contentContainerStyle={{ padding: 24, paddingTop: 56, maxWidth: 480, width: "100%", alignSelf: "center" }}>
@@ -62,10 +53,10 @@ function MeezanShell() {
           <Text style={{ color: c.textMuted, marginTop: 6 }}>Sign in with a sandbox customer</Text>
         </View>
         <View style={{ marginTop: 32, gap: 10 }}>
-          {personasFor(BRAND_INFO.preset).map((p) => {
+          {app.personas().map((p) => {
             const on = p.id === personaId;
             return (
-              <Pressable key={p.id} accessibilityRole="radio" accessibilityState={{ selected: on }} onPress={() => setPersonaId(p.id)}
+              <Pressable key={p.id} accessibilityRole="radio" accessibilityState={{ selected: on }} onPress={() => app.selectPersona(p.id)}
                 style={{ padding: 16, borderRadius: radius.lg, backgroundColor: c.surface, borderWidth: on ? 2 : 1, borderColor: on ? c.accent : c.border }}>
                 <Text style={{ color: c.text, fontWeight: "600", fontSize: 16 }}>{p.name}</Text>
                 <Text style={{ color: c.textMuted, fontSize: 13, marginTop: 4 }}>{p.accounts.length ? `${p.accounts.length} account(s) · daily limit ${formatMoney(p.limits.daily)}` : "No accounts (KYC rejected)"}</Text>
@@ -73,20 +64,20 @@ function MeezanShell() {
             );
           })}
         </View>
-        <Pressable accessibilityRole="button" onPress={() => setScreen({ name: "home" })} style={({ pressed }) => ({ marginTop: 24, minHeight: 54, paddingVertical: 8, borderRadius: radius.lg, backgroundColor: c.accent, alignItems: "center", justifyContent: "center", opacity: pressed ? 0.88 : 1 })}>
+        <Pressable accessibilityRole="button" onPress={() => app.login()} style={({ pressed }) => ({ marginTop: 24, minHeight: 54, paddingVertical: 8, borderRadius: radius.lg, backgroundColor: c.accent, alignItems: "center", justifyContent: "center", opacity: pressed ? 0.88 : 1 })}>
           <Text style={{ color: c.accentOn, fontWeight: "600", fontSize: 16 }}>Log in</Text>
         </Pressable>
         <View style={{ alignItems: "center", marginTop: 20 }}>{LangToggle}</View>
-        {SERVER_CHANGE_ALLOWED ? <ServerSetting url={studioUrl} onChange={setStudioUrl} onEditingChange={setEditingServer} /> : null}
+        {SERVER_CHANGE_ALLOWED ? <ServerSetting url={studioUrl} onChange={(u) => app.setStudioUrl(u)} onEditingChange={setEditingServer} /> : null}
         <Text style={{ textAlign: "center", color: c.textFaint, fontSize: 12, marginTop: 24 }}>Sandbox build · no real money moves</Text>
       </ScrollView>
     );
   }
 
-  if (screen.name === "journey" && active) {
+  if (screen === "journey" && active) {
     return (
       <JourneyPlayer journey={active.journey} adapter={adapter} lang={lang}
-        onClose={() => { setTick(tick + 1); setScreen({ name: "home" }); }} onExit={() => { setTick(tick + 1); setScreen({ name: "home" }); }} />
+        onClose={() => app.closeJourney()} onExit={() => app.closeJourney()} />
     );
   }
 
@@ -100,7 +91,7 @@ function MeezanShell() {
             <Text style={{ color: c.text, fontSize: 20, fontWeight: "600" }}>{bank.persona.name.split(" (")[0]}</Text>
           </View>
           <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>{LangToggle}
-            <Pressable accessibilityRole="button" onPress={() => setScreen({ name: "login" })} style={{ paddingHorizontal: 12, paddingVertical: 6, minHeight: 32, borderRadius: radius.pill, borderWidth: 1, borderColor: c.border, backgroundColor: c.surface, justifyContent: "center" }}><Text style={{ color: c.text, fontSize: 13, fontWeight: "600" }}>Log out</Text></Pressable>
+            <Pressable accessibilityRole="button" onPress={() => app.logout()} style={{ paddingHorizontal: 12, paddingVertical: 6, minHeight: 32, borderRadius: radius.pill, borderWidth: 1, borderColor: c.border, backgroundColor: c.surface, justifyContent: "center" }}><Text style={{ color: c.text, fontSize: 13, fontWeight: "600" }}>Log out</Text></Pressable>
           </View>
         </View>
 
