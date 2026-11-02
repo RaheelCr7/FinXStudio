@@ -153,3 +153,38 @@ describe("journeys for more than one app", () => {
     await expect(store.createJourney("Odd one", ["nobank"])).rejects.toMatchObject({ status: 400 });
   });
 });
+
+describe("version history", () => {
+  it("keeps each published copy, lists them newest first, and restores one as the draft without touching what is live", async () => {
+    const slug = "fund-transfer-local";
+    const v5 = (await store.getRecord(slug)).published!;
+    const draft = structuredClone(v5);
+    (draft.screens[0] as any).title = { en: "Choose account", ur: "اکاؤنٹ منتخب کریں" };
+    await store.saveDraft(slug, draft);
+    await store.publish(slug); // v6
+
+    const list = await store.listVersions(slug);
+    expect(list.map((v) => [v.version, v.live, v.restorable])).toEqual([[6, true, true], [5, false, true]]);
+    expect(list[0]!.changes).toEqual([]); // the newest equals the draft
+    expect(list[1]!.changes[0]).toMatch(/title|blocks|Choose account/); // v5 differs from the current draft
+
+    const rec = await store.restoreVersion(slug, 5);
+    expect((rec.draft.screens[0] as any).title).toEqual((v5.screens[0] as any).title);
+    expect(rec.draft.status).toBe("draft");
+    expect((await store.getRecord(slug)).published!.version).toBe(6); // still live
+    expect((await store.listJourneys()).find((j) => j.slug === slug)!.draftDiffers).toBe(true);
+  });
+  it("refuses a version it has no copy of", async () => {
+    await expect(store.restoreVersion("fund-transfer-local", 3)).rejects.toMatchObject({ status: 409 });
+    await expect(store.restoreVersion("nope-journey", 1)).rejects.toMatchObject({ status: 404 });
+  });
+  it("keeps only the most recent copies", async () => {
+    const slug = "fund-transfer-local";
+    for (let i = 0; i < store.KEEP_VERSIONS + 2; i++) await store.publish(slug);
+    const rec = await store.getRecord(slug);
+    expect(Object.keys(rec.versions!)).toHaveLength(store.KEEP_VERSIONS);
+    const list = await store.listVersions(slug);
+    expect(list.filter((v) => v.restorable)).toHaveLength(store.KEEP_VERSIONS);
+    expect(list.length).toBeGreaterThan(store.KEEP_VERSIONS); // older publishes stay in the list, but cannot be restored
+  });
+});
