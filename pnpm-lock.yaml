@@ -219,6 +219,9 @@ importers:
       '@finx/journey-schema':
         specifier: workspace:*
         version: link:../journey-schema
+      '@finx/ui-kit':
+        specifier: workspace:*
+        version: link:../ui-kit
     devDependencies:
       '@finx/mock-bank-api':
         specifier: workspace:*

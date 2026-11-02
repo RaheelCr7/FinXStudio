@@ -1,6 +1,7 @@
 import React, { useId, useMemo, useState } from "react";
 import { GestureResponderEvent, LayoutChangeEvent, Pressable, StyleSheet, Text, View, type ViewStyle } from "react-native";
 import Svg, { Circle, Defs, G, Line, LinearGradient, Path, Rect, Stop } from "react-native-svg";
+import { cardPictureDigits } from "@finx/renderer-core";
 import { ICON_SHAPES, donutArcs, donutHit, lineGeometry, nearestIndex, type ChartPoint, type DonutSegment, type IconKey } from "@finx/ui-kit";
 import { useTheme } from "./theme";
 
@@ -164,8 +165,7 @@ export function Donut({ segments, size = 168, thickness = 20, centerTop, centerS
 // ---------- card visual ---------------------------------------------------------------------------------------------------
 export function CardVisual({ number, holder, expiry, network = "mastercard", balance, label }: { number: string; holder: string; expiry: string; network?: string; balance?: string; label?: string }) {
   const { c } = useTheme();
-  const digits = number.replace(/\D/g, "");
-  const grouped = (digits.padEnd(16, "•").match(/.{1,4}/g) ?? []).join("  ");
+  const grouped = cardPictureDigits(number);
   return (
     <Gradient from={c.heroFrom} to={c.heroTo} radius={22} style={{ padding: 20, minHeight: 170, justifyContent: "space-between" }}>
       <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center" }}>
