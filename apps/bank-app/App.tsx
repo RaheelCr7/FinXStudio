@@ -1,16 +1,19 @@
-import React, { useEffect, useMemo, useState } from "react";
-import { Platform, Pressable, SafeAreaView, ScrollView, StatusBar, Text, View, useColorScheme } from "react-native";
+import React, { useEffect, useMemo, useRef, useState } from "react";
+import { Image, KeyboardAvoidingView, Pressable, ScrollView, Text, View, useColorScheme } from "react-native";
+import { StatusBar } from "expo-status-bar";
+import { SafeAreaProvider, useSafeAreaInsets } from "react-native-safe-area-context";
 import { Journey, localTransfer, payBill } from "@finx/journey-schema";
 import { MockBank, personas } from "@finx/mock-bank-api";
 import { lintAll, localize } from "@finx/renderer-core";
 import { JourneyPlayer, ThemeProvider, useTheme } from "@finx/renderer-native";
 import { formatMoney, radius } from "@finx/ui-kit";
+import { ServerSetting } from "./src/ServerSetting";
+import { DEFAULT_STUDIO_URL, SERVER_CHANGE_ALLOWED, loadStudioUrl } from "./src/studio-config";
 
 type Screen = { name: "login" } | { name: "home" } | { name: "journey" };
 type Live = { journey: Journey; source: "studio" | "bundled" };
 
 // Over-the-air journeys: the app asks Studio what is published, and never trusts a journey blindly.
-const STUDIO = process.env.EXPO_PUBLIC_STUDIO_URL ?? (Platform.OS === "android" ? "http://10.0.2.2:3100" : "http://localhost:3100");
 const BUNDLED: Record<string, Journey> = { [localTransfer.slug]: localTransfer, [payBill.slug]: payBill };
 type Entry = { slug: string; name: any; version: number };
 const bundledEntries = (): Entry[] => Object.values(BUNDLED).map((j) => ({ slug: j.slug, name: j.name, version: j.version }));
@@ -21,16 +24,16 @@ async function timedFetch(url: string) {
   try { const res = await fetch(url, { signal: ctl.signal }); if (!res.ok) throw new Error(String(res.status)); return await res.json(); }
   finally { clearTimeout(t); }
 }
-async function loadCatalog(): Promise<{ entries: Entry[]; source: "studio" | "bundled" }> {
+async function loadCatalog(studio: string): Promise<{ entries: Entry[]; source: "studio" | "bundled" }> {
   try {
-    const list = await timedFetch(`${STUDIO}/api/journeys`);
+    const list = await timedFetch(`${studio}/api/journeys`);
     const entries = (list as any[]).filter((j) => j.publishedVersion != null).map((j) => ({ slug: j.slug, name: j.name, version: j.publishedVersion }));
     return { entries, source: "studio" };
   } catch { return { entries: bundledEntries(), source: "bundled" }; }
 }
-async function loadJourney(slug: string): Promise<Live | null> {
+async function loadJourney(studio: string, slug: string): Promise<Live | null> {
   try {
-    const parsed = Journey.safeParse(await timedFetch(`${STUDIO}/api/journeys/${slug}?env=published`));
+    const parsed = Journey.safeParse(await timedFetch(`${studio}/api/journeys/${slug}?env=published`));
     if (!parsed.success || lintAll(parsed.data).length) throw new Error("invalid journey");
     return { journey: parsed.data, source: "studio" };
   } catch {
@@ -50,16 +53,23 @@ function Shell() {
   const [catalog, setCatalog] = useState<{ entries: Entry[]; source: "studio" | "bundled" }>({ entries: bundledEntries(), source: "bundled" });
   const [active, setActive] = useState<Live | null>(null);
   const [opening, setOpening] = useState<string | null>(null);
-  useEffect(() => { if (screen.name === "home") loadCatalog().then(setCatalog); }, [screen.name, tick]);
+  const [studioUrl, setStudioUrl] = useState(DEFAULT_STUDIO_URL);
+  useEffect(() => { loadStudioUrl().then(setStudioUrl); }, []);
+  useEffect(() => { if (screen.name === "home") loadCatalog(studioUrl).then(setCatalog); }, [screen.name, tick, studioUrl]);
   async function open(slug: string) {
     setOpening(slug);
-    const l = await loadJourney(slug);
+    const l = await loadJourney(studioUrl, slug);
     setOpening(null);
     if (l) { setActive(l); setScreen({ name: "journey" }); }
   }
   const bank = useMemo(() => new MockBank(personaId), [personaId, screen.name === "login"]);
   const adapter = useMemo(() => (id: string, input: Record<string, any>) => bank.call(id, input), [bank]);
   const rtl = lang === "ur";
+
+  // The Studio server editor sits at the bottom of the sign-in screen. While it is open, keep it in view as the keyboard appears.
+  const loginScroller = useRef<React.ComponentRef<typeof ScrollView>>(null);
+  const [editingServer, setEditingServer] = useState(false);
+  const followEditor = () => { if (editingServer) loginScroller.current?.scrollToEnd({ animated: true }); };
 
   const LangToggle = (
     <Pressable accessibilityRole="button" accessibilityLabel="Switch language" onPress={() => setLang(lang === "en" ? "ur" : "en")}
@@ -70,9 +80,10 @@ function Shell() {
 
   if (screen.name === "login") {
     return (
-      <ScrollView contentContainerStyle={{ padding: 24, paddingTop: 56, maxWidth: 480, width: "100%", alignSelf: "center" }}>
+      <ScrollView ref={loginScroller} keyboardShouldPersistTaps="handled" onContentSizeChange={followEditor} onLayout={followEditor}
+        contentContainerStyle={{ padding: 24, paddingTop: 56, maxWidth: 480, width: "100%", alignSelf: "center" }}>
         <View style={{ alignItems: "center" }}>
-          <View style={{ width: 64, height: 64, borderRadius: 20, backgroundColor: c.accent, alignItems: "center", justifyContent: "center" }}><Text style={{ fontSize: 28, color: c.accentOn }}>🏛</Text></View>
+          <Image accessibilityIgnoresInvertColors source={require("./assets/icon.png")} style={{ width: 72, height: 72, borderRadius: 20 }} />
           <Text accessibilityRole="header" style={{ fontSize: 28, fontWeight: "600", color: c.text, marginTop: 14, letterSpacing: -0.4 }}>Meezan Digital</Text>
           <Text style={{ color: c.textMuted, marginTop: 6 }}>Sign in with a sandbox customer</Text>
         </View>
@@ -92,6 +103,7 @@ function Shell() {
           <Text style={{ color: c.accentOn, fontWeight: "600", fontSize: 16 }}>Log in</Text>
         </Pressable>
         <View style={{ alignItems: "center", marginTop: 20 }}>{LangToggle}</View>
+        {SERVER_CHANGE_ALLOWED ? <ServerSetting url={studioUrl} onChange={setStudioUrl} onEditingChange={setEditingServer} /> : null}
         <Text style={{ textAlign: "center", color: c.textFaint, fontSize: 12, marginTop: 24 }}>Sandbox build · no real money moves</Text>
       </ScrollView>
     );
@@ -154,6 +166,7 @@ function Shell() {
           </View>
         </View>
         <Text style={{ color: c.textFaint, fontSize: 12 }}>Services come from the journeys published in FinX Studio. Publish a new journey there and it appears here.</Text>
+        {SERVER_CHANGE_ALLOWED ? <Text selectable style={{ color: c.textFaint, fontSize: 12 }}>Studio: {studioUrl}</Text> : null}
       </ScrollView>
     </View>
   );
@@ -163,17 +176,25 @@ export default function App() {
   const scheme = useColorScheme();
   const mode = scheme === "dark" ? "dark" : "light";
   return (
-    <ThemeProvider mode={mode}>
-      <Root mode={mode} />
-    </ThemeProvider>
+    <SafeAreaProvider>
+      <ThemeProvider mode={mode}>
+        <Root mode={mode} />
+      </ThemeProvider>
+    </SafeAreaProvider>
   );
 }
+
+/** Android draws behind the status bar and the gesture bar, so leave room for both. */
 function Root({ mode }: { mode: "light" | "dark" }) {
   const { c } = useTheme();
+  const insets = useSafeAreaInsets();
   return (
-    <SafeAreaView style={{ flex: 1, backgroundColor: c.bg, paddingTop: Platform.OS === "android" ? StatusBar.currentHeight : 0 }}>
-      <StatusBar barStyle={mode === "dark" ? "light-content" : "dark-content"} />
-      <Shell />
-    </SafeAreaView>
+    <View style={{ flex: 1, backgroundColor: c.bg, paddingTop: insets.top, paddingBottom: insets.bottom, paddingLeft: insets.left, paddingRight: insets.right }}>
+      <StatusBar style={mode === "dark" ? "light" : "dark"} />
+      {/* Drawing edge to edge, Android no longer shrinks the window for the keyboard, so lift the content here. */}
+      <KeyboardAvoidingView style={{ flex: 1 }} behavior="padding">
+        <Shell />
+      </KeyboardAvoidingView>
+    </View>
   );
 }
