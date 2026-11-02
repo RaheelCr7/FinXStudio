@@ -14,7 +14,9 @@ const Preview = dynamic(() => import("./Preview").then((m) => m.Preview), { ssr:
 type Rec = { slug: string; draft: Journey; published?: Journey; history: { version: number; publishedAt: string; by: string }[] };
 type SaveState = "saved" | "saving" | "error";
 
-export function Builder({ initial }: { initial: Rec }) {
+const AI_STATUS: Record<string, string> = { running: "building", needs_review: "needs review", done: "published", failed: "failed" };
+
+export function Builder({ initial, aiRun }: { initial: Rec; aiRun?: { id: string; status: string; title: string } | null }) {
   const [journey, setJourney] = useState<Journey>(initial.draft);
   const [published, setPublished] = useState<Journey | undefined>(initial.published);
   const [past, setPast] = useState<Journey[]>([]);
@@ -104,6 +106,7 @@ export function Builder({ initial }: { initial: Rec }) {
         <Link href="/" className="btn sm" aria-label="Back to journeys">← Journeys</Link>
         <div style={{ fontWeight: 600, fontSize: 15 }}>{textOf(journey.name)}</div>
         <span className={status.c}>{status.t}</span>
+        {aiRun ? <Link href={`/agents/${aiRun.id}`} className="chip accent" title={aiRun.title}>✦ AI draft · {AI_STATUS[aiRun.status] ?? aiRun.status}</Link> : null}
         <span className="faint" aria-live="polite">{save === "saving" ? "Saving…" : save === "error" ? <span style={{ color: "var(--negative)" }}>{saveErr}</span> : "All changes saved"}</span>
         <div className="spacer" />
         <button className="btn sm" onClick={undo} disabled={!past.length} aria-label="Undo">↶ Undo</button>
