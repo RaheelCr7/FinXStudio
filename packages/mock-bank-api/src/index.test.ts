@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { MockBank, BankError, ADAPTER_CATALOG, describePersonas, personasFor } from "./index";
+import { MockBank, BankError, ADAPTER_CATALOG, describePersonas, personasFor, INSTRUMENTS, RANGES, portfolioSeries } from "./index";
 
 describe("mock bank sandbox", () => {
   it("lists accounts and limits for Ayesha", async () => {
@@ -112,3 +112,36 @@ describe("BankWorkx sandbox", () => {
     expect(new MockBank("sam").persona.finance!.cards).toEqual([]);
   });
 });
+
+describe("sandbox investing", () => {
+  it("lists made-up instruments and starts the demo customer with holdings and a watchlist", async () => {
+    const b = new MockBank("alex");
+    const list = await b.call("bank.invest.instruments", {});
+    expect(Object.keys(list)).toEqual(["LMRB", "APXC", "HBRE", "ORCH", "SMTH", "MRDB", "GLBX", "GRNF", "TBND"]);
+    expect(list.GLBX).toMatchObject({ kind: "fund", price: 42.18 });
+    expect(b.persona.finance!.invest.holdings.map((h) => h.symbol)).toEqual(["LMRB", "GLBX", "ORCH", "TBND"]);
+    expect(new MockBank("sam").persona.finance!.invest).toEqual({ holdings: [], watchlist: [] });
+  });
+  it("draws the same chart every time, ending at today's price", () => {
+    for (const i of INSTRUMENTS) for (const r of RANGES) { expect(i.series[r].at(-1)!.value).toBe(i.price); expect(i.series[r]).toEqual(INSTRUMENTS.find((x) => x.symbol === i.symbol)!.series[r]); }
+    expect(portfolioSeries([{ symbol: "GLBX", shares: 2, avgCost: 40 }], "1W").at(-1)!.value).toBe(84.36);
+    expect(portfolioSeries([], "1W")).toEqual([]);
+  });
+  it("buys into an existing holding at an average cost, and refuses bad orders", async () => {
+    const b = new MockBank("alex");
+    const out = await b.call("bank.invest.buy", { symbol: "GLBX", amount: 421.8, fromAccountId: "acc_main" });
+    expect(out).toMatchObject({ shares: 10, newBalance: 8298.96 });
+    const h = b.persona.finance!.invest.holdings.find((x) => x.symbol === "GLBX")!;
+    expect(h.shares).toBe(50); expect(h.avgCost).toBeCloseTo((38.5 * 40 + 421.8) / 50, 6);
+    await expect(b.call("bank.invest.buy", { symbol: "NOPE", amount: 10, fromAccountId: "acc_main" })).rejects.toMatchObject({ code: "INSTRUMENT_NOT_FOUND" });
+    await expect(b.call("bank.invest.buy", { symbol: "GLBX", amount: 0.5, fromAccountId: "acc_main" })).rejects.toMatchObject({ code: "INVALID_AMOUNT" });
+    await expect(b.call("bank.invest.buy", { symbol: "GLBX", amount: 20000, fromAccountId: "acc_main" })).rejects.toMatchObject({ code: "INSUFFICIENT_FUNDS" });
+  });
+  it("adds and removes watchlist entries", async () => {
+    const b = new MockBank("alex");
+    await b.call("bank.invest.watch", { symbol: "HBRE" });
+    await b.call("bank.invest.watch", { symbol: "APXC", on: false });
+    expect(b.persona.finance!.invest.watchlist).toEqual(["SMTH", "GRNF", "HBRE"]);
+  });
+});
+

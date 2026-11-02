@@ -106,6 +106,19 @@ export const ADAPTER_CATALOG: AdapterInfo[] = [
     input: { subscriptionId: "subscription id", fromAccountId: "account id" }, returns: "{ reference, newBalance }", moneyMoving: true,
     errors: ["SUBSCRIPTION_NOT_FOUND", "ACCOUNT_NOT_FOUND", "INSUFFICIENT_FUNDS"],
   },
+  {
+    adapter: "bank.invest.instruments", suggestedId: "instruments", description: "The stocks and funds that can be bought (BankWorkx). Made-up companies.",
+    input: {}, returns: "Object map keyed by symbol: { id, symbol, kind, sector, price, changePct, name }. Save as ctx.instruments and use it as a select source.",
+  },
+  {
+    adapter: "bank.invest.buy", suggestedId: "buyInvestment", description: "Buys a stock or fund with a dollar amount from an account (BankWorkx). Buys fractional shares at today's price.",
+    input: { symbol: "instrument symbol", amount: "number, 1 to 50000", fromAccountId: "account id" }, returns: "{ reference, symbol, name, shares, price, newBalance }", moneyMoving: true,
+    errors: ["INSTRUMENT_NOT_FOUND", "INVALID_AMOUNT", "ACCOUNT_NOT_FOUND", "INSUFFICIENT_FUNDS"],
+  },
+  {
+    adapter: "bank.invest.watch", suggestedId: "watch", description: "Adds a stock or fund to the watchlist, or removes it with on: false (BankWorkx).",
+    input: { symbol: "instrument symbol", on: "boolean, default true" }, returns: "{ watching }", errors: ["INSTRUMENT_NOT_FOUND"],
+  },
 ];
 
 /** Sandbox customers for testing. The OTP codes are sandbox-only test values. */

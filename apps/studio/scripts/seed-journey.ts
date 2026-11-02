@@ -2,15 +2,15 @@
  * Create (if needed), save and publish journey fixtures through the Studio API.
  * Usage: tsx scripts/seed-journey.ts <fixture-name | all>   (all = the BankWorkx journeys)
  */
-import { addCard, addMoney, connectAccount, createBudget, payBill, type Journey } from "@finx/journey-schema";
+import { addCard, addMoney, connectAccount, createBudget, invest, payBill, type Journey } from "@finx/journey-schema";
 
 const FIXTURES: Record<string, Journey> = {
-  "pay-a-bill": payBill, "add-money": addMoney, "add-card": addCard, "connect-account": connectAccount, "create-budget": createBudget,
+  "pay-a-bill": payBill, "add-money": addMoney, "add-card": addCard, "connect-account": connectAccount, "create-budget": createBudget, invest,
 };
 const BASE = process.env.STUDIO_URL ?? "http://localhost:3100";
 const arg = process.argv[2] ?? "";
 // "all" means the BankWorkx set. Existing journeys such as pay-a-bill are only re-seeded when named, because seeding overwrites their draft.
-const BANKWORKX = ["add-money", "add-card", "connect-account", "create-budget"];
+const BANKWORKX = ["add-money", "add-card", "connect-account", "create-budget", "invest"];
 const names = arg === "all" ? BANKWORKX : [arg];
 if (names.some((n) => !FIXTURES[n])) { console.error(`Unknown fixture. Choose one of: all, ${Object.keys(FIXTURES).join(", ")}`); process.exit(1); }
 

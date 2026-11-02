@@ -1,6 +1,8 @@
+import { alexInvest, type InvestState } from "./invest";
+
 /** Sandbox data for the BankWorkx (money management) app: spending, budgets, subscriptions, cards and linked banks. */
 
-export type Category = "food" | "income" | "shopping" | "coffee" | "rent" | "transport" | "entertainment" | "health" | "groceries" | "vehicle";
+export type Category = "food" | "income" | "shopping" | "coffee" | "rent" | "transport" | "entertainment" | "health" | "groceries" | "vehicle" | "investing";
 export type Txn = { id: string; title: string; category: Category; /** negative = money out */ amount: number; daysAgo: number; time?: string };
 export type Budget = { id: string; name: string; category: Category; limit: number; spent: number };
 export type Subscription = { id: string; name: string; amount: number; nextInDays: number; color: string };
@@ -19,6 +21,7 @@ export type Finance = {
   subscriptions: Subscription[];
   linked: LinkedBank[];
   cards: SavedCard[];
+  invest: InvestState;
 };
 
 /** The banks a customer can connect. Names are made up. */
@@ -70,6 +73,7 @@ export const alexFinance = (): Finance => ({
     { id: "s_music", name: "TuneBox", amount: 11, nextInDays: 14, color: "#1AA37A" },
   ],
   linked: [{ id: "l_summit", bank: "Summit Federal", kind: "Savings", maskedNumber: "••9876", balance: 9876.54 }],
+  invest: alexInvest(),
   cards: [{ id: "c_5832", network: "mastercard", last4: "5832", holder: "Alex Morgan", expiry: "11/28", nickname: "Everyday", isDefault: true }],
 });
 
