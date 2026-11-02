@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { addCard, addMoney, bankworkxJourneys, connectAccount, createBudget, type Journey } from "@finx/journey-schema";
+import { addCard, addMoney, bankworkxJourneys, connectAccount, createBudget, invest, type Journey } from "@finx/journey-schema";
 import { MockBank } from "@finx/mock-bank-api";
 import { JourneyRunner } from "./runner";
 import { cardExpiryValid, luhnValid } from "./card";
@@ -159,5 +159,34 @@ describe("Create a budget", () => {
     await press(r, "Continue");
     expect(r.errors["budget.category"]).toBeTruthy();
     expect(r.errors["budget.limit"]).toBe("A budget must be at least $10");
+  });
+});
+
+describe("Invest", () => {
+  it("lists the instruments and the accounts, and checks the form before continuing", async () => {
+    const { r } = mk(invest); await r.start();
+    expect(r.view().blocks.find((b) => b.type === "select")!.items.map((i: any) => i.id)).toContain("LMRB");
+    await press(r, "Continue");
+    expect(r.current).toBe("buy");
+    expect(Object.keys(r.errors).sort()).toEqual(["invest.amount", "invest.fromAccountId", "invest.symbol"]);
+  });
+  it("buys part of a share, takes the money and adds the holding", async () => {
+    const { r, bank } = mk(invest); await r.start();
+    r.set("invest.symbol", "APXC"); r.set("invest.fromAccountId", "acc_main"); r.set("invest.amount", 100);
+    await press(r, "Continue");
+    expect(r.view().blocks.find((b) => b.type === "reviewSummary")!.rows[1]).toEqual({ label: "Amount", value: "$100" });
+    await press(r, "Buy $100");
+    expect(r.current).toBe("success");
+    expect(bank.persona.accounts[0]!.balance).toBe(8620.76);
+    expect(bank.persona.finance!.invest.holdings.find((h) => h.symbol === "APXC")).toMatchObject({ shares: 1.0368 });
+    expect(r.view().blocks.find((b) => b.type === "result")!.text).toBe("You bought 1.0368 of APXC at $96.45.");
+  });
+  it("fails safely when the account cannot cover it", async () => {
+    const { r, bank } = mk(invest); await r.start();
+    r.set("invest.symbol", "LMRB"); r.set("invest.fromAccountId", "acc_main"); r.set("invest.amount", 50000);
+    await press(r, "Continue"); await press(r, "Buy $50,000");
+    expect(r.current).toBe("failed");
+    expect(bank.persona.accounts[0]!.balance).toBe(8720.76);
+    expect(bank.persona.finance!.invest.holdings.some((h) => h.symbol === "LMRB" && h.shares > 6.5)).toBe(false);
   });
 });

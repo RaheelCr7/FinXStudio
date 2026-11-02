@@ -46,6 +46,7 @@ Sandbox rules for trying the failure paths:
 | **Accounts** | Connected accounts and linked banks, search, and *All / Money in / Money out* over transactions grouped by day |
 | **Budgets** | Each budget with progress, and a dark detail screen: what is left, what was spent, and how much you can spend per day |
 | **Wallet** | Swipe through cards, and quick actions |
+| **Invest** (from the Investments card on the Dashboard) | Portfolio value with a 1D / 1W / 1M / 1Y chart, then *Portfolio*, *Watchlist* and *Explore* (search, Stocks / Funds filter, biggest movers). Tap a holding to open it. See below |
 | **+ button** | Every journey Studio has published for BankWorkx |
 
 ## Journeys (editable in Studio)
@@ -57,7 +58,18 @@ Sandbox rules for trying the failure paths:
 | **Connect account** | Account type tiles, bank tiles, sign in (the password is hidden, with Show), consent. Done, or a clear failure with *Try again* |
 | **Create budget** | Category tiles, a monthly limit with quick amounts, an alert switch. Review. Done, or *you may already have one* |
 
+| **Invest** | Choose a stock or fund, an account, and an amount ($25 / $50 / $100 / $250 or typed, from $1). Review with a risk notice. Done with the shares bought and a reference, or a failure that says nothing was bought. Opened from a stock's *Buy* button, the stock is already chosen |
+
 They carry `apps: ["bankworkx"]`, so the Meezan app never shows them. A journey with no `apps` belongs to Meezan.
+
+## Invest
+
+Nine made-up stocks and funds (Lumen Robotics, Apex Cloud, Harbor Energy, Orchard Foods, Summit Health, Meridian Bank, Global Index Fund, Green Future Fund, Treasury Bond Fund). Their prices and charts are fixed, so the same symbol always draws the same chart and ends at today's price. Alex starts with four holdings and three watchlist entries; Sam (the new customer) starts with none and sees *Start investing*.
+
+- **A stock or fund page** has the price and day change, a chart with 1D / 1W / 1M / 1Y (drag to read a point), your position (value, shares, average cost, return), key numbers, a short description, a star to add it to the watchlist, and *Buy*.
+- **Buying** is the *Invest* journey: it takes money from the chosen account, buys part of a share at today's price, and adds to the holding at a new average cost. The portfolio, the dashboard card and the transaction list update.
+- Sandbox adapters: `bank.invest.instruments`, `bank.invest.buy`, `bank.invest.watch`. There is no selling yet.
+- All of it is sandbox data and the screens say it is not investment advice.
 
 ## New building blocks
 
@@ -79,7 +91,7 @@ A bank is a **project**: see [PROJECTS.md](PROJECTS.md). In short, `packages/ui-
 
 ## Not built yet
 
-- The Invest side of the design (portfolio, watchlist, stock and fund details).
+- Selling, price alerts and real market data on the Invest screens.
 - Urdu or other languages for BankWorkx journeys (English only for now).
 - The design's custom typeface (the app uses the system font) and its illustrations.
 - A real-device build (needs an Apple developer account for iPhone).

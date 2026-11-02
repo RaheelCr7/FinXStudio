@@ -3,11 +3,12 @@ import { Pressable, ScrollView, Text, View } from "react-native";
 import { Donut, Gradient, Icon, IconTile, LineChart, Pill, ProgressBar, Segmented, useTheme } from "@finx/renderer-native";
 import type { MockBank } from "@finx/mock-bank-api";
 import { slugIs, type Entry } from "../live";
+import { portfolioTotals } from "@finx/mock-bank-api";
 import { Card, SectionTitle, TxnRow, inDays, lift, tab, type TabId } from "./ui";
 
 export type Actions = {
-  bank: MockBank; money: (n: number) => string; money2: (n: number) => string; go: (t: TabId) => void; openJourney: (slug: string) => void;
-  openBudget: (id: string) => void; paySub: (id: string) => void; journeys: Entry[]; menu: () => void; notifications: () => void;
+  bank: MockBank; money: (n: number) => string; money2: (n: number) => string; go: (t: TabId) => void; openJourney: (slug: string, initial?: Record<string, any>) => void;
+  openBudget: (id: string) => void; paySub: (id: string) => void; journeys: Entry[]; menu: () => void; notifications: () => void; openInvest: () => void;
 };
 type Range = "1W" | "1M" | "3M" | "1Y";
 type Filter = "all" | "income" | "expense";
@@ -133,6 +134,9 @@ export function Dashboard({ a }: { a: Actions }) {
             </View>
           </Card> : null}
 
+          <SectionTitle title="Investments" action="Explore" onAction={a.openInvest} />
+          <InvestCard a={a} />
+
           {fin.subscriptions.length > 0 ? <SectionTitle title="Monthly Subscriptions" /> : null}
           <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 12, paddingTop: 4, paddingBottom: 24, paddingEnd: 20 }} style={{ marginBottom: -16 }}>
             {fin.subscriptions.map((s) => (
@@ -177,5 +181,34 @@ function GetStarted({ a, first }: { a: Actions; first: string }) {
         );
       })}
     </>
+  );
+}
+
+/** The dashboard's view of the customer's investments: value and return, or an invitation to start. */
+function InvestCard({ a }: { a: Actions }) {
+  const { c } = useTheme();
+  const inv = a.bank.persona.finance!.invest;
+  const t = portfolioTotals(inv.holdings);
+  if (inv.holdings.length === 0) {
+    return (
+      <Card onPress={a.openInvest} label="Start investing" style={{ flexDirection: "row", alignItems: "center", gap: 14 }}>
+        <IconTile icon="trend" color={c.accent} bg={c.accentSoft} size={48} />
+        <View style={{ flex: 1 }}><Text style={{ color: c.text, fontWeight: "700", fontSize: 16 }}>Start investing</Text><Text style={{ color: c.textMuted, fontSize: 13, marginTop: 2 }}>Buy stocks and funds from as little as $1.</Text></View>
+        <Icon name="chevronRight" size={20} color={c.textFaint} />
+      </Card>
+    );
+  }
+  return (
+    <Card onPress={a.openInvest} label={`Investments, ${a.money2(t.value)}`} style={{ gap: 8 }}>
+      <View style={{ flexDirection: "row", alignItems: "center", gap: 12 }}>
+        <IconTile icon="trend" color={c.accent} bg={c.accentSoft} size={44} />
+        <View style={{ flex: 1 }}>
+          <Text style={{ color: c.textFaint, fontSize: 12 }}>Portfolio value</Text>
+          <Text style={[{ color: c.text, fontSize: 22, fontWeight: "800" }, tab]}>{a.money2(t.value)}</Text>
+        </View>
+        <Pill text={`${t.gain >= 0 ? "+" : "-"}${Math.abs(t.gainPct * 100).toFixed(2)}%`} tone={t.gain >= 0 ? "positive" : "negative"} />
+      </View>
+      <Text style={{ color: c.textMuted, fontSize: 13 }}>{inv.holdings.length} holdings · {inv.watchlist.length} on your watchlist</Text>
+    </Card>
   );
 }

@@ -10,6 +10,7 @@ import { DEFAULT_STUDIO_URL, SERVER_CHANGE_ALLOWED, loadStudioUrl } from "../stu
 import { bundledEntries, loadCatalog, loadJourney, slugIs, type Entry, type Live } from "../live";
 import { Dashboard, type Actions } from "./Dashboard";
 import { Accounts, BudgetDetail, Budgets, Wallet } from "./Tabs";
+import { InstrumentDetail, InvestHome } from "./Invest";
 import { Card, Sheet, TabBar, tab, type TabId } from "./ui";
 
 const SLUG_ICON: Record<string, { icon: IconName; text: string }> = {
@@ -17,6 +18,7 @@ const SLUG_ICON: Record<string, { icon: IconName; text: string }> = {
   "add-card": { icon: "card", text: "Save a debit or credit card" },
   "connect-account": { icon: "bank", text: "Link an account from another bank" },
   "create-budget": { icon: "budgets", text: "Set a monthly spending limit" },
+  invest: { icon: "trend", text: "Buy a stock or fund" },
 };
 
 /** Known actions first, in a sensible order; anything a team adds in Studio follows. */
@@ -30,12 +32,13 @@ export function BankWorkxShell() {
   const [tabId, setTabId] = useState<TabId>("dashboard");
   const [budgetId, setBudgetId] = useState<string | null>(null);
   const [sheet, setSheet] = useState<null | "fab" | "menu" | "notes">(null);
+  const [investView, setInvestView] = useState<null | { symbol?: string }>(null);
   const [subId, setSubId] = useState<string | null>(null);
   const [paying, setPaying] = useState(false);
   const [toast, setToast] = useState<{ text: string; ok: boolean } | null>(null);
   const [tick, setTick] = useState(0);
   const [catalog, setCatalog] = useState<{ entries: Entry[]; source: "studio" | "bundled" }>({ entries: bundledEntries(), source: "bundled" });
-  const [active, setActive] = useState<Live | null>(null);
+  const [active, setActive] = useState<(Live & { initial?: Record<string, any> }) | null>(null);
   const [opening, setOpening] = useState<string | null>(null);
   const [studioUrl, setStudioUrl] = useState(DEFAULT_STUDIO_URL);
   const [editingServer, setEditingServer] = useState(false);
@@ -50,12 +53,12 @@ export function BankWorkxShell() {
   const money2 = useMemo(() => (n: number) => new Intl.NumberFormat("en-US", { style: "currency", currency: "USD" }).format(n), []);
   const say = (text: string, ok = true) => { setToast({ text, ok }); if (timer.current) clearTimeout(timer.current); timer.current = setTimeout(() => setToast(null), 3200); };
 
-  async function openJourney(want: string) {
+  async function openJourney(want: string, initial?: Record<string, any>) {
     const slug = catalog.entries.find((e) => slugIs(e.slug, want))?.slug ?? want;
     setSheet(null); setOpening(slug);
     const l = await loadJourney(studioUrl, slug);
     setOpening(null);
-    if (l) { setActive(l); setScreen("journey"); } else say("That journey is not available right now.", false);
+    if (l) { setActive({ ...l, initial }); setScreen("journey"); } else say("That journey is not available right now.", false);
   }
   const closeJourney = () => { setTick((t) => t + 1); setScreen("app"); };
 
@@ -72,7 +75,7 @@ export function BankWorkxShell() {
 
   const actions: Actions = {
     bank, money, money2, journeys: catalog.entries, go: (t) => setTabId(t), openJourney, openBudget: (id) => setBudgetId(id), paySub: (id) => setSubId(id),
-    menu: () => setSheet("menu"), notifications: () => setSheet("notes"),
+    menu: () => setSheet("menu"), notifications: () => setSheet("notes"), openInvest: () => setInvestView({}),
   };
 
   if (screen === "login") {
@@ -105,9 +108,20 @@ export function BankWorkxShell() {
   }
 
   if (screen === "journey" && active) {
-    return <JourneyPlayer journey={active.journey} adapter={adapter} onClose={closeJourney} onExit={closeJourney} />;
+    return <JourneyPlayer journey={active.journey} initial={active.initial} adapter={adapter} onClose={closeJourney} onExit={closeJourney} />;
   }
 
+  // the Invest screens sit above the tabs, like the budget detail
+  if (investView && fin) {
+    const back = investView.symbol ? () => setInvestView({}) : () => setInvestView(null);
+    return (
+      <View style={{ flex: 1, backgroundColor: c.bg }}>
+        <View style={{ flex: 1, width: "100%", maxWidth: 560, alignSelf: "center" }}>
+          {investView.symbol ? <InstrumentDetail key={`${investView.symbol}-${tick}`} symbol={investView.symbol} a={actions} onBack={back} /> : <InvestHome key={tick} a={actions} onBack={back} onOpen={(symbol) => setInvestView({ symbol })} />}
+        </View>
+      </View>
+    );
+  }
   const budget = fin?.budgets.find((b) => b.id === budgetId) ?? null;
   if (budget) return <BudgetDetail b={budget} a={actions} onBack={() => setBudgetId(null)} />;
 

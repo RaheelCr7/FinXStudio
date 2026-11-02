@@ -2,6 +2,8 @@ import { evaluate } from "./expr";
 
 export const FORMATTERS: Record<string, (v: any) => string> = {
   money: (v) => (v == null || v === "" ? "" : Number(v).toLocaleString("en-US", { maximumFractionDigits: 2 })),
+  /** Always two decimals, for prices: 184.2 becomes 184.20. */
+  money2: (v) => (v == null || v === "" ? "" : Number(v).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })),
   upper: (v) => String(v ?? "").toUpperCase(),
 };
 

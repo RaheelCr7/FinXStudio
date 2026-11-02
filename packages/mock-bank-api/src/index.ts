@@ -1,5 +1,7 @@
+import { instrumentOf, INSTRUMENTS, dayChange } from "./invest";
 import { alexFinance, BANKS, cardNetwork, luhnValid, type Finance } from "./finance";
 export * from "./finance";
+export * from "./invest";
 
 export type Account = { id: string; name: string; maskedNumber: string; iban: string; balance: number; currency: string; status: "active" | "frozen"; canDebit: boolean };
 export type Beneficiary = { id: string; displayName: string; bank: string; maskedNumber: string; addedAt: number };
@@ -60,7 +62,7 @@ export const personas: Record<string, Persona> = {
   sam: {
     id: "sam", brand: "bankworkx", name: "Sam Rivera (new customer)", phone: "+1 415 555 0199",
     accounts: [], beneficiaries: [], limits: { daily: 50000, usedToday: 0 },
-    finance: { ...alexFinance(), income: 0, expense: 0, savings: 0, balanceSeries: [], ranges: { "1W": [], "1M": [], "3M": [], "1Y": [] }, spendingByCategory: [], transactions: [], budgets: [], subscriptions: [], linked: [], cards: [] },
+    finance: { ...alexFinance(), income: 0, expense: 0, savings: 0, balanceSeries: [], ranges: { "1W": [], "1M": [], "3M": [], "1Y": [] }, spendingByCategory: [], transactions: [], budgets: [], subscriptions: [], linked: [], cards: [], invest: { holdings: [], watchlist: [] } },
     behaviour: { otpCode: "123456", kyc: "verified" },
   },
   zara: {
@@ -216,6 +218,32 @@ export class MockBank {
         sub.nextInDays += 30;
         fin.transactions.unshift({ id: `t_sub${++this.seq}`, title: sub.name, category: "entertainment", amount: -sub.amount, daysAgo: 0, time: "Now" });
         return { reference: `SUB-20261102-${String(930 + this.seq).padStart(4, "0")}`, newBalance: from.balance };
+      }
+      case "bank.invest.instruments":
+        return Object.fromEntries(INSTRUMENTS.map((i) => [i.symbol, { id: i.symbol, symbol: i.symbol, kind: i.kind, sector: i.sector, price: i.price, changePct: dayChange(i).pct, name: `${i.name} (${i.symbol}) · $${i.price.toFixed(2)}` }]));
+      case "bank.invest.buy": {
+        const fin = this.p.finance; if (!fin) throw new BankError("NOT_SUPPORTED", "Not available for this customer");
+        const inst = instrumentOf(String(input.symbol));
+        if (!inst) throw new BankError("INSTRUMENT_NOT_FOUND", "Choose a stock or fund to buy");
+        const amount = Number(input.amount);
+        if (!(amount >= 1 && amount <= 50000)) throw new BankError("INVALID_AMOUNT", "Enter an amount from $1 to $50,000");
+        const from = this.p.accounts.find((a) => a.id === input.fromAccountId);
+        if (!from) throw new BankError("ACCOUNT_NOT_FOUND", "Account not found");
+        if (amount > from.balance) throw new BankError("INSUFFICIENT_FUNDS", "Insufficient funds");
+        const shares = Math.round((amount / inst.price) * 10000) / 10000;
+        const held = fin.invest.holdings.find((h) => h.symbol === inst.symbol);
+        if (held) { held.avgCost = (held.avgCost * held.shares + amount) / (held.shares + shares); held.shares = Math.round((held.shares + shares) * 10000) / 10000; }
+        else fin.invest.holdings.push({ symbol: inst.symbol, shares, avgCost: inst.price });
+        from.balance = Math.round((from.balance - amount) * 100) / 100;
+        fin.transactions.unshift({ id: `t_inv${++this.seq}`, title: `Bought ${inst.symbol}`, category: "investing", amount: -amount, daysAgo: 0, time: "Now" });
+        return { reference: `INV-20261102-${String(930 + this.seq).padStart(4, "0")}`, symbol: inst.symbol, name: inst.name, shares, price: inst.price, newBalance: from.balance };
+      }
+      case "bank.invest.watch": {
+        const fin = this.p.finance; if (!fin) throw new BankError("NOT_SUPPORTED", "Not available for this customer");
+        if (!instrumentOf(String(input.symbol))) throw new BankError("INSTRUMENT_NOT_FOUND", "Unknown stock or fund");
+        const w = fin.invest.watchlist.filter((s) => s !== input.symbol);
+        fin.invest.watchlist = input.on === false ? w : [...w, String(input.symbol)];
+        return { watching: input.on !== false };
       }
       case "bank.carriers.list":
         return Object.fromEntries(CARRIERS.map((c) => [c.id, c]));

@@ -122,7 +122,7 @@ const EXPRESSIONS = {
   literals: ["numbers", "'text' or \"text\"", "true", "false", "null", "Infinity"],
   functions: ["min(a, b, ...)", "max(a, b, ...)", "abs(x)", "round(x)", "floor(x)", "ceil(x)", "len(x)", "isEmpty(x)"],
   paths: "Dotted paths such as transfer.amount or ctx.limits.daily, and lookups with brackets such as ctx.accounts[transfer.fromAccountId].balance. A missing value is simply empty, never an error. == is a loose comparison.",
-  templates: "{{ expression }} or {{ expression | formatter }}. Formatters: money (PKR amounts with thousands separators), upper. A missing value renders as empty text. Do not use templates in bind, source, pattern or ids.",
+  templates: "{{ expression }} or {{ expression | formatter }}. Formatters: money (amounts with thousands separators, up to two decimals), money2 (always two decimals, for prices), upper. A missing value renders as empty text. Do not use templates in bind, source, pattern or ids.",
   notAvailable: ["no assignment", "no ??", "no method calls (only the functions above)", "no string concatenation in rules (use templates in text instead)"],
   examples: ["transfer.amount > (ctx.limits.daily - ctx.limits.usedToday)", "bill.amount >= 50 && bill.amount <= 5000", "ctx.accounts[topup.fromAccountId].balance", "!isEmpty(bill.reference)"],
 };
@@ -157,7 +157,7 @@ export const LINT_RULES = [
   { code: "expression_syntax", means: "A rule or {{template}} is not a valid expression, or uses an unknown function.", fix: "Fix the syntax. See the expressions section." },
   { code: "unknown_reference", means: "An expression uses a root, or a ctx name, that the journey never defines.", fix: "Use the suggested name, or add the dataModel entry or saveAs." },
   { code: "unknown_field", means: "An expression uses a path under a known root that dataModel does not declare (usually a typo).", fix: "Use the suggested path." },
-  { code: "unknown_formatter", means: "A {{x | name}} uses a formatter that does not exist.", fix: "Use money or upper." },
+  { code: "unknown_formatter", means: "A {{x | name}} uses a formatter that does not exist.", fix: "Use money, money2 or upper." },
   { code: "unknown_source", means: "A block's source is never saved by a callApi.", fix: "Add saveAs to the callApi, or fix the name." },
 ];
 

@@ -5,15 +5,15 @@ import { JourneyRunner, type Adapter } from "@finx/renderer-core";
 import { registry } from "./blocks";
 import { useTheme } from "./theme";
 
-export type JourneyPlayerProps = { journey: Journey; adapter: Adapter; lang?: string; onExit?: () => void; onClose?: () => void };
+export type JourneyPlayerProps = { journey: Journey; adapter: Adapter; lang?: string; onExit?: () => void; onClose?: () => void; /** Answers to fill in when the journey opens, by data path, for example the item the customer was looking at. */ initial?: Record<string, any> };
 
-export function JourneyPlayer({ journey, adapter, lang, onExit, onClose }: JourneyPlayerProps) {
+export function JourneyPlayer({ journey, adapter, lang, onExit, onClose, initial }: JourneyPlayerProps) {
   const { c, r: radius, fontFamily } = useTheme();
   const runner = useMemo(() => new JourneyRunner(journey, { adapter, lang }), [journey, adapter]);
   const [, force] = useReducer((x: number) => x + 1, 0);
   const scroller = useRef<React.ComponentRef<typeof ScrollView>>(null);
   useEffect(() => runner.subscribe(force), [runner]);
-  useEffect(() => { runner.start(); }, [runner]);
+  useEffect(() => { runner.start().then(() => { for (const [k, v] of Object.entries(initial ?? {})) runner.set(k, v); }); }, [runner]);
   useEffect(() => { if (lang) runner.setLang(lang); }, [lang, runner]);
 
   // Android's back button steps back through the journey, and closes it from the first or a final screen.

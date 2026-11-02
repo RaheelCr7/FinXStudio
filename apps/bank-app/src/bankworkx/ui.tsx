@@ -35,6 +35,7 @@ export function SectionTitle({ title, action, onAction }: { title: string; actio
 export function categoryStyle(c: Colors, cat: Category): { icon: IconName; fg: string; bg: string } {
   const pick = (): { icon: IconName; fg: string } => {
     switch (cat) {
+      case "investing": return { icon: "trend", fg: c.chart2 };
       case "income": return { icon: "briefcase", fg: c.accent };
       case "shopping": return { icon: "bag", fg: "#E8872B" };
       case "food": case "coffee": return { icon: "food", fg: c.chart5 };
