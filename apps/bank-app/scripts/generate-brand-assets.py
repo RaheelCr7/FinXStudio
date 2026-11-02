@@ -10,7 +10,13 @@ Needs Pillow (pip install pillow). Writes into ./assets:
 """
 import argparse
 from pathlib import Path
-from PIL import Image, ImageDraw
+try:
+    from PIL import Image, ImageDraw
+except ImportError as exc:  # missing, or installed for another CPU (an Intel copy on an Apple Silicon Mac)
+    raise SystemExit(
+        f"Pillow could not be loaded ({exc.__class__.__name__}). Install or repair it, then run this again:\n"
+        "  python3 -m pip install --upgrade --force-reinstall pillow"
+    ) from None
 
 SS = 4          # supersampling for smooth edges
 OUT = 1024
