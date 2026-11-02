@@ -1,8 +1,10 @@
 import type { ConfigContext, ExpoConfig } from "expo/config";
+import brands from "./brands.json";
 
 /**
  * The environment-dependent parts of the app configuration. app.json holds the static parts.
  *
+ *   FINX_BRAND                  "meezan" (default) or "bankworkx": which bank this build is (name, ids, icons, colours: see brands.json)
  *   FINX_ENV                    "uat" (default) or "production". Production never lets the person change the server.
  *   FINX_ANDROID_CLEARTEXT=1    allow plain http, so a UAT build can reach a Studio on a laptop. Ignored for production.
  *   FINX_ANDROID_VERSION_CODE   whole number that must go up with every build uploaded to a store (default 1)
@@ -10,10 +12,10 @@ import type { ConfigContext, ExpoConfig } from "expo/config";
  *   FINX_IOS_ALLOW_HTTP=1       iOS: allow plain http, so a UAT build can reach a Studio on a laptop. Ignored for production.
  *   FINX_IOS_BUILD_NUMBER       iOS build number (CFBundleVersion); must go up with every build uploaded to the App Store (default 1)
  */
-const BRAND = "#0F6E56";
-const BRAND_DARK = "#0A0D12";
-
 export default ({ config }: ConfigContext): ExpoConfig => {
+  const brandId = (process.env.FINX_BRAND ?? "meezan") as keyof typeof brands;
+  const brand = brands[brandId];
+  if (!brand) throw new Error(`FINX_BRAND must be one of: ${Object.keys(brands).join(", ")}`);
   const production = process.env.FINX_ENV === "production";
   const cleartext = !production && process.env.FINX_ANDROID_CLEARTEXT === "1";
   const abis = (process.env.FINX_ANDROID_ABIS ?? "arm64-v8a").split(",").map((s: string) => s.trim()).filter(Boolean);
@@ -31,17 +33,24 @@ export default ({ config }: ConfigContext): ExpoConfig => {
   // A phone asks before the app may reach a Studio on the Wi-Fi. Production talks only to an https server.
   const localNetwork = production ? {} : { NSLocalNetworkUsageDescription: "Connects to FinX Studio on your Wi-Fi to load banking journeys." };
 
+  const a = brand.assets;
   return {
     ...config,
-    name: config.name ?? "Meezan Digital",
-    slug: config.slug ?? "meezan-digital",
-    android: { ...config.android, versionCode },
-    ios: { ...config.ios, buildNumber, infoPlist: { ...config.ios?.infoPlist, NSAppTransportSecurity: ats, ...localNetwork } },
+    name: brand.name,
+    slug: brand.slug,
+    scheme: brand.scheme,
+    icon: `${a}/icon.png`,
+    android: {
+      ...config.android, package: brand.bundleId, versionCode,
+      adaptiveIcon: { backgroundColor: brand.accent, foregroundImage: `${a}/android-icon-foreground.png`, backgroundImage: `${a}/android-icon-background.png`, monochromeImage: `${a}/android-icon-monochrome.png` },
+    },
+    ios: { ...config.ios, bundleIdentifier: brand.bundleId, buildNumber, infoPlist: { ...config.ios?.infoPlist, NSAppTransportSecurity: ats, ...localNetwork } },
+    web: { ...config.web, favicon: `${a}/favicon.png`, name: brand.name, shortName: brand.shortName, themeColor: brand.accent, backgroundColor: brand.background },
     plugins: [
       ["expo-build-properties", { android: { usesCleartextTraffic: cleartext, buildArchs: abis } }],
       ["expo-splash-screen", {
-        image: "./assets/splash-icon.png", imageWidth: 200, resizeMode: "contain", backgroundColor: BRAND,
-        dark: { image: "./assets/splash-icon.png", backgroundColor: BRAND_DARK },
+        image: `${a}/splash-icon.png`, imageWidth: 200, resizeMode: "contain", backgroundColor: brand.accent,
+        dark: { image: `${a}/splash-icon.png`, backgroundColor: brand.splashDark },
       }],
     ],
   };

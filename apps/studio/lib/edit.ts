@@ -3,11 +3,12 @@ import type { Block, Journey, Screen } from "@finx/journey-schema";
 export const BLOCK_LABELS: Record<string, string> = {
   text: "Text", alert: "Alert", button: "Button", result: "Result", reviewSummary: "Review summary", consent: "Consent",
   otp: "OTP", stepper: "Progress steps", amountInput: "Amount", select: "Select", textInput: "Text input", accountPicker: "Account picker", beneficiaryPicker: "Beneficiary picker",
+  toggle: "Switch", cardForm: "Card form",
 };
 export const BLOCK_GROUPS: Array<{ name: string; types: string[] }> = [
   { name: "Content", types: ["text", "alert", "result"] },
-  { name: "Inputs", types: ["textInput", "amountInput", "select", "consent"] },
-  { name: "Banking", types: ["accountPicker", "beneficiaryPicker", "reviewSummary"] },
+  { name: "Inputs", types: ["textInput", "amountInput", "select", "toggle", "consent"] },
+  { name: "Banking", types: ["accountPicker", "beneficiaryPicker", "cardForm", "reviewSummary"] },
   { name: "Verification", types: ["otp"] },
   { name: "Actions", types: ["button"] },
 ];
@@ -17,9 +18,11 @@ export function newBlock(type: string, j: Journey): Block {
     case "text": return { type: "text", text: "New text" };
     case "alert": return { type: "alert", tone: "info", text: "Important information" };
     case "result": return { type: "result", tone: "success", title: "Done" };
-    case "amountInput": return { type: "amountInput", bind: "amount", currency: "PKR", label: "Amount", validation: { min: 1 } };
+    case "amountInput": return { type: "amountInput", bind: "amount", currency: j.apps?.includes("bankworkx") ? "USD" : "PKR", label: "Amount", validation: { min: 1 } };
     case "select": return { type: "select", bind: "choice", label: "Choose one", options: ["Option 1", "Option 2"] };
     case "textInput": return { type: "textInput", bind: "reference", label: "Reference number", placeholder: "Enter a value", keyboard: "default" };
+    case "toggle": return { type: "toggle", bind: "option", label: "Turn this on" };
+    case "cardForm": return { type: "cardForm", bind: "card" };
     case "consent": return { type: "consent", bind: "consent", termsVersion: "v1", text: "I agree to the terms", validation: { mustBeTrue: true } };
     case "accountPicker": return { type: "accountPicker", bind: "accountId", source: "ctx.accounts", showBalance: true };
     case "beneficiaryPicker": return { type: "beneficiaryPicker", bind: "beneficiaryId", source: "ctx.beneficiaries", allowAddNew: true };
@@ -38,8 +41,9 @@ export function ensureDataModel(j: Journey): Journey {
   const out = clone(j);
   out.dataModel ??= {};
   for (const s of out.screens) for (const b of s.blocks as any[]) {
+    if (b.type === "cardForm") for (const k of ["number", "holder", "expiry", "cvv"]) if (!(`${b.bind}.${k}` in out.dataModel)) out.dataModel[`${b.bind}.${k}`] = { type: "string" };
     if (b.bind && !(b.bind in out.dataModel)) {
-      out.dataModel[b.bind] = b.type === "amountInput" ? { type: "money", currency: b.currency, required: true } : b.type === "consent" ? { type: "boolean", required: true } : { type: "string", required: b.type !== "otp" };
+      out.dataModel[b.bind] = b.type === "amountInput" ? { type: "money", currency: b.currency, required: true } : b.type === "consent" ? { type: "boolean", required: true } : b.type === "toggle" ? { type: "boolean" } : b.type === "cardForm" ? { type: "object", required: true } : { type: "string", required: b.type !== "otp" };
     }
   }
   return out;
@@ -138,6 +142,8 @@ export function blockSummary(b: any): string {
     case "result": return textOf(b.title);
     case "amountInput": case "select": case "textInput": return `${textOf(b.label)} → ${b.bind}`;
     case "consent": return textOf(b.text);
+    case "toggle": return textOf(b.label);
+    case "cardForm": return "Number, name, expiry, code";
     case "otp": return `${b.length} digits → ${b.bind}`;
     case "accountPicker": case "beneficiaryPicker": return b.bind;
     case "reviewSummary": return `${b.rows.length} rows`;

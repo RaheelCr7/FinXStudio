@@ -77,21 +77,30 @@ function BlockEditor({ b, journey, onChange }: { b: any; journey: Journey; onCha
           <Field label="Max (number or rule)"><input className="input mono" value={b.validation?.max ?? ""} onChange={(e) => onChange({ validation: { ...b.validation, max: num(e.target.value) } })} /></Field></div>
         <Loc label="Min error message" journey={journey} value={b.validation?.messages?.min ?? ""} onChange={(min) => onChange({ validation: { ...b.validation, messages: { ...(b.validation?.messages ?? {}), min } } })} />
         <Loc label="Max error message" journey={journey} value={b.validation?.messages?.max ?? ""} onChange={(max) => onChange({ validation: { ...b.validation, messages: { ...(b.validation?.messages ?? {}), max } } })} />
-        <Loc label="Helper text" journey={journey} value={b.helper ?? ""} onChange={(helper) => onChange({ helper })} /></>) : null}
+        <Loc label="Helper text" journey={journey} value={b.helper ?? ""} onChange={(helper) => onChange({ helper })} />
+        <Field label="Quick amounts" hint="Numbers separated by commas, shown as one-tap chips. Leave empty for none."><input className="input mono" defaultValue={(b.quickAmounts ?? []).join(", ")} key={(b.quickAmounts ?? []).join(",")} onBlur={(e) => { const q = e.target.value.split(",").map((x) => Number(x.trim())).filter((n) => Number.isFinite(n) && n > 0); onChange({ quickAmounts: q.length ? q : undefined }); }} placeholder="50, 100, 150, 200" /></Field></>) : null}
       {b.type === "select" ? (<><Loc label="Label" journey={journey} value={b.label} onChange={(label) => onChange({ label })} />
         <BindField journey={journey} value={b.bind} onChange={(bind) => onChange({ bind })} />
         <Field label="Data source (optional)" hint="e.g. ctx.billers. Leave empty to use the fixed options below."><input className="input mono" value={b.source ?? ""} onChange={(e) => onChange({ source: e.target.value || undefined })} /></Field>
-        {!b.source ? <Field label="Options (one per line)"><textarea className="textarea" value={(b.options ?? []).join("\n")} onChange={(e) => onChange({ options: e.target.value.split("\n").map((x) => x.trim()).filter(Boolean) })} /></Field> : null}</>) : null}
+        <Field label="Look"><select className="select" value={b.variant ?? "chips"} onChange={(e) => onChange({ variant: e.target.value === "chips" ? undefined : e.target.value })}><option value="chips">Small chips</option><option value="tiles">Large tiles</option></select></Field>
+        {b.choices ? <div className="faint">{b.choices.length} choices with icons. Edit them with Claude Code or in the journey file.</div> : null}
+        {!b.source && !b.choices ? <Field label="Options (one per line)"><textarea className="textarea" value={(b.options ?? []).join("\n")} onChange={(e) => onChange({ options: e.target.value.split("\n").map((x) => x.trim()).filter(Boolean) })} /></Field> : null}</>) : null}
       {b.type === "textInput" ? (<><Loc label="Label" journey={journey} value={b.label} onChange={(label) => onChange({ label })} />
         <Loc label="Placeholder" journey={journey} value={b.placeholder ?? ""} onChange={(placeholder) => onChange({ placeholder })} />
         <BindField journey={journey} value={b.bind} onChange={(bind) => onChange({ bind })} />
         <Field label="Keyboard"><select className="select" value={b.keyboard ?? "default"} onChange={(e) => onChange({ keyboard: e.target.value })}>{["default", "number", "phone", "email"].map((k) => <option key={k}>{k}</option>)}</select></Field>
+        <label className="row" style={{ gap: 8, fontSize: 13 }}><input type="checkbox" checked={b.secure === true} onChange={(e) => onChange({ secure: e.target.checked || undefined })} />Hide what is typed (for passwords)</label>
         <Field label="Format (regular expression)" hint="e.g. ^[0-9]{10,14}$"><input className="input mono" value={b.pattern ?? ""} onChange={(e) => onChange({ pattern: e.target.value || undefined })} /></Field>
         {b.pattern ? <Loc label="Message when format is wrong" journey={journey} value={b.patternMessage ?? ""} onChange={(patternMessage) => onChange({ patternMessage })} /> : null}</>) : null}
       {b.type === "consent" ? (<><Loc label="Text" journey={journey} value={b.text} onChange={(text) => onChange({ text })} />
         <BindField journey={journey} value={b.bind} onChange={(bind) => onChange({ bind })} />
         <Field label="Terms version"><input className="input" value={b.termsVersion} onChange={(e) => onChange({ termsVersion: e.target.value })} /></Field>
         <Loc label="Error when unticked" journey={journey} value={b.validation?.messages?.mustBeTrue ?? ""} onChange={(m) => onChange({ validation: { ...b.validation, mustBeTrue: true, messages: { ...(b.validation?.messages ?? {}), mustBeTrue: m } } })} /></>) : null}
+      {b.type === "toggle" ? (<><Loc label="Label" journey={journey} value={b.label} onChange={(label) => onChange({ label })} />
+        <BindField journey={journey} value={b.bind} onChange={(bind) => onChange({ bind })} />
+        <Loc label="Helper text" journey={journey} value={b.helper ?? ""} onChange={(helper) => onChange({ helper })} /></>) : null}
+      {b.type === "cardForm" ? (<><BindField journey={journey} value={b.bind} onChange={(bind) => onChange({ bind })} />
+        <div className="faint">The form saves the card number, name, expiry and security code under this path, and checks each when a button validates.</div></>) : null}
       {b.type === "otp" ? (<><BindField journey={journey} value={b.bind} onChange={(bind) => onChange({ bind })} />
         <Field label="Digits"><input className="input" type="number" min={4} max={8} value={b.length} onChange={(e) => onChange({ length: Math.min(8, Math.max(4, Number(e.target.value) || 6)) })} /></Field>
         <Loc label="Hint" journey={journey} value={b.hint ?? ""} onChange={(hint) => onChange({ hint })} /></>) : null}

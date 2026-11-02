@@ -22,6 +22,9 @@ pnpm android:apk
 
 # iOS: build the app for the iPhone Simulator and open it (needs Xcode and CocoaPods; first build about 3 minutes), see docs/IOS.md
 pnpm ios:sim --install
+
+# A second bank on the same platform: BankWorkx (see docs/BANKWORKX.md)
+cd apps/studio && npx tsx scripts/seed-journey.ts all   # then: pnpm ios:sim --brand bankworkx --install
 ```
 
 Sandbox logins: **Ayesha** (happy path, OTP `482100`), **Bilal** (core fails after OTP `111111`), **Zara** (KYC rejected).

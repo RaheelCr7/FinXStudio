@@ -16,6 +16,7 @@ import { closeSync, createWriteStream, existsSync, mkdirSync, openSync, readFile
 import { platform } from "node:os";
 import { delimiter, dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
+import { brandConfig, brandIds } from "./lib/brands.mjs";
 import { formatDuration } from "./lib/common.mjs";
 import { atsSummary, findPod, iosArtifactName, iosHintFor, isHermesBytecode, pickSimulator, plistProblems, simulatorDevices } from "./lib/ios-build.mjs";
 
@@ -27,6 +28,7 @@ const MIN_IOS = "16.4"; // Expo SDK 58's deployment target
 
 const HELP = `Usage: build-ios.mjs [options]
 
+  --brand meezan|bankworkx  Which bank this build is (name, ids, icons, look). Default meezan. See brands.json.
   --env uat|production    uat (default) allows changing the server inside the app and plain http.
                           production never does.
   --studio-url <url>      Studio address baked into the app as its default. The Simulator reaches this Mac at
@@ -42,11 +44,12 @@ const HELP = `Usage: build-ios.mjs [options]
 
 // ---------- arguments ----------------------------------------------------------------------------------------------
 const args = process.argv.slice(2);
-const opt = { env: "uat", studioUrl: undefined, buildNumber: "1", clean: false, install: false, device: undefined };
+const opt = { brand: "meezan", env: "uat", studioUrl: undefined, buildNumber: "1", clean: false, install: false, device: undefined };
 for (let i = 0; i < args.length; i++) {
   const a = args[i];
   const next = () => { const v = args[++i]; if (v === undefined) fail(`${a} needs a value`); return v; };
   if (a === "-h" || a === "--help") { console.log(HELP); process.exit(0); }
+  else if (a === "--brand") opt.brand = next();
   else if (a === "--env") opt.env = next();
   else if (a === "--studio-url") opt.studioUrl = next();
   else if (a === "--build-number") opt.buildNumber = next();
@@ -55,6 +58,8 @@ for (let i = 0; i < args.length; i++) {
   else if (a === "--device") opt.device = next();
   else fail(`Unknown option ${a}\n\n${HELP}`);
 }
+if (!brandIds.includes(opt.brand)) fail(`--brand must be one of: ${brandIds.join(", ")}`);
+const brand = brandConfig(opt.brand);
 if (!["uat", "production"].includes(opt.env)) fail("--env must be uat or production");
 if (!/^[1-9][0-9]*$/.test(opt.buildNumber)) fail("--build-number must be a whole number of 1 or more");
 if (opt.studioUrl && !/^https?:\/\/[^\s/]+/.test(opt.studioUrl)) fail("--studio-url must look like http://192.168.1.20:3100");
@@ -96,6 +101,8 @@ const childEnv = {
   EXPO_NO_TELEMETRY: "1",
   NODE_ENV: "production",
   LANG: process.env.LANG ?? "en_US.UTF-8", // CocoaPods needs a UTF-8 locale
+  FINX_BRAND: opt.brand,
+  EXPO_PUBLIC_FINX_BRAND: opt.brand,
   FINX_ENV: opt.env,
   EXPO_PUBLIC_FINX_ENV: opt.env,
   FINX_IOS_ALLOW_HTTP: opt.env === "production" ? "0" : "1",
@@ -129,7 +136,7 @@ const elapsed = () => formatDuration(Date.now() - started);
 // ---------- build ------------------------------------------------------------------------------------------------------
 // The generated project keeps its native libraries (Pods) and Xcode's build cache between runs, which saves minutes.
 // It is regenerated from scratch when asked, or when the environment or server differs from the last build.
-const wanted = JSON.stringify({ env: opt.env, studioUrl });
+const wanted = JSON.stringify({ brand: opt.brand, env: opt.env, studioUrl });
 const previous = existsSync(MARKER) ? readFileSync(MARKER, "utf8") : null;
 const fresh = opt.clean || (existsSync(IOS) && previous !== wanted);
 step(2, `Generating the native iOS project (${opt.env}${fresh ? ", from scratch" : ""})`);
@@ -165,7 +172,7 @@ const appName = existsSync(products) ? readdirSync(products).find((f) => f.endsW
 if (!appName) fail(`The build finished but no .app was found in ${products}.`);
 const appPath = join(products, appName);
 const appJson = JSON.parse(readFileSync(join(APP, "app.json"), "utf8")).expo;
-const base = iosArtifactName({ slug: appJson.slug, version: appJson.version, buildNumber: opt.buildNumber, env: opt.env });
+const base = iosArtifactName({ slug: brand.slug, version: appJson.version, buildNumber: opt.buildNumber, env: opt.env });
 const zip = join(DIST, `${base}.app.zip`);
 rmSync(zip, { force: true });
 const z = run1("ditto", ["-c", "-k", "--sequesterRsrc", "--keepParent", appPath, zip]);
@@ -173,7 +180,7 @@ if (z.status !== 0) fail(`Could not zip the app: ${z.stderr}`);
 
 step(6, "Verifying the app");
 const plist = JSON.parse(run1("plutil", ["-convert", "json", "-o", "-", join(appPath, "Info.plist")]).stdout || "{}");
-const problems = plistProblems(plist, { bundleId: appJson.ios.bundleIdentifier, version: appJson.version, buildNumber: opt.buildNumber, env: opt.env, minOs: MIN_IOS });
+const problems = plistProblems(plist, { bundleId: brand.bundleId, version: appJson.version, buildNumber: opt.buildNumber, env: opt.env, minOs: MIN_IOS });
 const jsBundle = join(appPath, "main.jsbundle");
 if (!existsSync(jsBundle)) problems.push("main.jsbundle is missing, so the app would need a development server");
 else if (!isHermesBytecode(firstBytes(jsBundle, 4))) problems.push("main.jsbundle is not precompiled (Hermes), so the app would start slowly");

@@ -41,6 +41,8 @@ function describeBlock(b: Record<string, any>): string | null {
     case "otp": return `otp[${b.bind}]="${b.value ?? ""}"`;
     case "amountInput": return `amount[${b.bind}]=${b.value ?? ""}${b.helper ? ` helper "${clip(b.helper, 60)}"` : ""}`;
     case "select": return `select[${b.bind}]=${b.value ?? ""} options: ${(b.items ?? []).map((i: any) => i.name).join(", ")}`;
+    case "toggle": return `toggle[${b.bind}]=${b.value === true} "${clip(b.label, 40)}"`;
+    case "cardForm": { const v = b.value ?? {}; return `cardForm[${b.bind}] number "${v.number ?? ""}" holder "${v.holder ?? ""}" expiry "${v.expiry ?? ""}"${Object.values(b.errors ?? {}).some(Boolean) ? ` errors: ${Object.entries(b.errors).filter(([, m]) => m).map(([k, m]) => `${k}: ${m}`).join("; ")}` : ""}`; }
     case "textInput": return `input[${b.bind}]="${b.value ?? ""}" label "${clip(b.label, 40)}"`;
     case "accountPicker": case "beneficiaryPicker": return `${b.type}[${b.bind}]=${b.value ?? ""} (${(b.items ?? []).length} choices)`;
     case "button": return `button "${clip(b.label, 40)}"`;

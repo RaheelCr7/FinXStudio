@@ -2,50 +2,22 @@ import React, { useEffect, useMemo, useRef, useState } from "react";
 import { Image, KeyboardAvoidingView, Pressable, ScrollView, Text, View, useColorScheme } from "react-native";
 import { StatusBar } from "expo-status-bar";
 import { SafeAreaProvider, useSafeAreaInsets } from "react-native-safe-area-context";
-import { Journey, localTransfer, payBill } from "@finx/journey-schema";
-import { MockBank, personas } from "@finx/mock-bank-api";
-import { lintAll, localize } from "@finx/renderer-core";
+import { MockBank, personasFor } from "@finx/mock-bank-api";
+import { localize } from "@finx/renderer-core";
 import { JourneyPlayer, ThemeProvider, useTheme } from "@finx/renderer-native";
-import { formatMoney, radius } from "@finx/ui-kit";
+import { formatMoney } from "@finx/ui-kit";
 import { ServerSetting } from "./src/ServerSetting";
 import { DEFAULT_STUDIO_URL, SERVER_CHANGE_ALLOWED, loadStudioUrl } from "./src/studio-config";
+import { BRAND } from "./src/brand";
+import { bundledEntries, loadCatalog, loadJourney, type Entry, type Live } from "./src/live";
+import { BankWorkxShell } from "./src/bankworkx/Shell";
 
 type Screen = { name: "login" } | { name: "home" } | { name: "journey" };
-type Live = { journey: Journey; source: "studio" | "bundled" };
-
-// Over-the-air journeys: the app asks Studio what is published, and never trusts a journey blindly.
-const BUNDLED: Record<string, Journey> = { [localTransfer.slug]: localTransfer, [payBill.slug]: payBill };
-type Entry = { slug: string; name: any; version: number };
-const bundledEntries = (): Entry[] => Object.values(BUNDLED).map((j) => ({ slug: j.slug, name: j.name, version: j.version }));
-
-async function timedFetch(url: string) {
-  const ctl = new AbortController();
-  const t = setTimeout(() => ctl.abort(), 2500);
-  try { const res = await fetch(url, { signal: ctl.signal }); if (!res.ok) throw new Error(String(res.status)); return await res.json(); }
-  finally { clearTimeout(t); }
-}
-async function loadCatalog(studio: string): Promise<{ entries: Entry[]; source: "studio" | "bundled" }> {
-  try {
-    const list = await timedFetch(`${studio}/api/journeys`);
-    const entries = (list as any[]).filter((j) => j.publishedVersion != null).map((j) => ({ slug: j.slug, name: j.name, version: j.publishedVersion }));
-    return { entries, source: "studio" };
-  } catch { return { entries: bundledEntries(), source: "bundled" }; }
-}
-async function loadJourney(studio: string, slug: string): Promise<Live | null> {
-  try {
-    const parsed = Journey.safeParse(await timedFetch(`${studio}/api/journeys/${slug}?env=published`));
-    if (!parsed.success || lintAll(parsed.data).length) throw new Error("invalid journey");
-    return { journey: parsed.data, source: "studio" };
-  } catch {
-    const fallback = BUNDLED[slug];
-    return fallback ? { journey: fallback, source: "bundled" } : null;
-  }
-}
 
 const tab = { fontVariant: ["tabular-nums" as const] };
 
-function Shell() {
-  const { c, mode } = useTheme();
+function MeezanShell() {
+  const { c, r: radius, mode } = useTheme();
   const [screen, setScreen] = useState<Screen>({ name: "login" });
   const [personaId, setPersonaId] = useState("ayesha");
   const [lang, setLang] = useState("en");
@@ -88,7 +60,7 @@ function Shell() {
           <Text style={{ color: c.textMuted, marginTop: 6 }}>Sign in with a sandbox customer</Text>
         </View>
         <View style={{ marginTop: 32, gap: 10 }}>
-          {Object.values(personas).map((p) => {
+          {personasFor("meezan").map((p) => {
             const on = p.id === personaId;
             return (
               <Pressable key={p.id} accessibilityRole="radio" accessibilityState={{ selected: on }} onPress={() => setPersonaId(p.id)}
@@ -177,7 +149,7 @@ export default function App() {
   const mode = scheme === "dark" ? "dark" : "light";
   return (
     <SafeAreaProvider>
-      <ThemeProvider mode={mode}>
+      <ThemeProvider mode={mode} brand={BRAND}>
         <Root mode={mode} />
       </ThemeProvider>
     </SafeAreaProvider>
@@ -193,7 +165,7 @@ function Root({ mode }: { mode: "light" | "dark" }) {
       <StatusBar style={mode === "dark" ? "light" : "dark"} />
       {/* Drawing edge to edge, Android no longer shrinks the window for the keyboard, so lift the content here. */}
       <KeyboardAvoidingView style={{ flex: 1 }} behavior="padding">
-        <Shell />
+        {BRAND === "bankworkx" ? <BankWorkxShell /> : <MeezanShell />}
       </KeyboardAvoidingView>
     </View>
   );

@@ -2,6 +2,7 @@ import type { Journey, Screen, Block } from "@finx/journey-schema";
 import { evaluate, getPath, setPath } from "./expr";
 import { interpolate, localize } from "./template";
 import { ui } from "./strings";
+import { cardExpiryValid, luhnValid } from "./card";
 
 export type Adapter = (adapterId: string, input: Record<string, any>) => Promise<any>;
 export type RunnerOptions = { adapter: Adapter; lang?: string };
@@ -67,6 +68,7 @@ export class JourneyRunner {
     for (const b of this.screen.blocks as any[]) {
       if (b.visibleWhen && !this.safeEval(b.visibleWhen)) continue;
       if (!b.bind) continue;
+      if (b.type === "cardForm") { this.validateCard(b.bind); continue; }
       const v = this.get(b.bind);
       const def = this.journey.dataModel?.[b.bind];
       const empty = v == null || v === "" || v === false && b.type !== "consent";
@@ -89,6 +91,15 @@ export class JourneyRunner {
     }
     this.emit();
     return Object.keys(this.errors).length === 0;
+  }
+
+  /** Checks the four card fields and records one error per field. */
+  private validateCard(bind: string) {
+    const c = (this.get(bind) ?? {}) as Record<string, string>;
+    if (!luhnValid(String(c.number ?? ""))) this.errors[`${bind}.number`] = ui(this.lang, "cardNumber");
+    if (String(c.holder ?? "").trim().length < 2) this.errors[`${bind}.holder`] = ui(this.lang, "cardHolder");
+    if (!cardExpiryValid(String(c.expiry ?? ""))) this.errors[`${bind}.expiry`] = ui(this.lang, "cardExpiry");
+    if (!/^[0-9]{3,4}$/.test(String(c.cvv ?? ""))) this.errors[`${bind}.cvv`] = ui(this.lang, "cardCvv");
   }
 
   private num(x: number | string): number { return typeof x === "number" ? x : Number(this.safeEval(x)); }
@@ -188,7 +199,12 @@ export class JourneyRunner {
     if (b.bind) { out.value = this.get(b.bind); out.error = this.errors[b.bind]; }
     if (b.type === "reviewSummary") out.rows = b.rows.map((r: any) => ({ label: this.tx(r.label), value: this.tx(r.value) }));
     if (b.type === "accountPicker") out.items = Object.values(this.get(b.source) ?? {}).filter((a: any) => !b.filter || evaluate(b.filter, { account: a }));
-    if (b.type === "select") out.items = b.source ? Object.values(this.get(b.source) ?? {}).map((x: any) => ({ id: x.id, name: x.name })) : (b.options ?? []).map((o: string) => ({ id: o, name: o }));
+    if (b.type === "select") {
+      out.items = b.choices
+        ? b.choices.map((o: any) => ({ id: o.id, name: this.tx(o.label), icon: o.icon, sub: o.text ? this.tx(o.text) : undefined }))
+        : b.source ? Object.values(this.get(b.source) ?? {}).map((x: any) => ({ id: x.id, name: x.name, color: x.color, sub: x.sub })) : (b.options ?? []).map((o: string) => ({ id: o, name: o }));
+    }
+    if (b.type === "cardForm") out.errors = Object.fromEntries(["number", "holder", "expiry", "cvv"].map((k) => [k, this.errors[`${b.bind}.${k}`]]));
     if (b.type === "beneficiaryPicker") out.items = Object.values(this.get(b.source) ?? {});
     if (b.type === "button") out.label = this.tx(b.label);
     return out;

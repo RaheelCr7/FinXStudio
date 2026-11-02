@@ -2,7 +2,8 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Moon, RotateCcw, Sun } from "lucide-react";
 import type { Journey } from "@finx/journey-schema";
-import { MockBank, personas } from "@finx/mock-bank-api";
+import { MockBank, personasFor } from "@finx/mock-bank-api";
+import type { BrandId } from "@finx/ui-kit";
 import { JourneyPlayer, ThemeProvider } from "@finx/renderer-native";
 
 function useDebounced<T>(value: T, ms: number) {
@@ -14,7 +15,10 @@ function useDebounced<T>(value: T, ms: number) {
 const PHONE = { w: 340, h: 690 };
 
 export function Preview({ journey }: { journey: Journey }) {
-  const [persona, setPersona] = useState("ayesha");
+  // A journey tagged for BankWorkx previews with that bank's look and customers; everything else is Meezan
+  const brand: BrandId = journey.apps?.includes("bankworkx") ? "bankworkx" : "meezan";
+  const people = personasFor(brand);
+  const [persona, setPersona] = useState(people[0]!.id);
   const [lang, setLang] = useState("en");
   const [dark, setDark] = useState(false);
   const [seed, setSeed] = useState(0);
@@ -40,7 +44,7 @@ export function Preview({ journey }: { journey: Journey }) {
     <>
       <div className="row wrap" style={{ width: "100%", maxWidth: 360, gap: 6, justifyContent: "center" }}>
         <select className="select" style={{ flex: 1, minWidth: 140, height: 30, fontSize: 13 }} value={persona} onChange={(e) => { setPersona(e.target.value); restart(); }} aria-label="Sandbox customer">
-          {Object.values(personas).map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
+          {people.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
         </select>
         <div className="row" style={{ gap: 4 }}>
           {supported.length > 1 ? <button className="btn sm" onClick={() => setLang(lang === "en" ? supported.find((l) => l !== "en") ?? "en" : "en")} aria-label="Switch preview language">{lang === "en" ? "اردو" : "English"}</button> : null}
@@ -53,7 +57,7 @@ export function Preview({ journey }: { journey: Journey }) {
           <div className="phone" role="region" aria-label="Phone preview" style={{ transform: `scale(${scale})`, transformOrigin: "top left" }}>
             <div className="screen">
               <div>
-                <ThemeProvider mode={dark ? "dark" : "light"}>
+                <ThemeProvider mode={dark ? "dark" : "light"} brand={brand}>
                   <JourneyPlayer key={seed} journey={live} adapter={adapter} lang={lang} onClose={restart} onExit={restart} />
                 </ThemeProvider>
               </div>

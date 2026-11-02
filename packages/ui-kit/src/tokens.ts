@@ -84,5 +84,60 @@ export function toCssVars(theme: Theme): string {
 
 /** Format money with tabular-friendly grouping. */
 export function formatMoney(amount: number, currency = "PKR", locale = "en-US"): string {
+  if (currency !== "PKR") {
+    try { return new Intl.NumberFormat(locale, { style: "currency", currency, minimumFractionDigits: Number.isInteger(amount) ? 0 : 2, maximumFractionDigits: 2 }).format(amount); } catch { /* unknown currency: fall through */ }
+  }
   return `${currency} ${amount.toLocaleString(locale, { minimumFractionDigits: 0, maximumFractionDigits: 2 })}`;
+}
+
+/** BankWorkx: a fintech look with a lavender canvas, a blue hero gradient, cyan highlights and a mint action button. */
+const bankworkxLight = {
+  bg: "#F6F4FC", surface: "#FFFFFF", surfaceMuted: "#EFEDF8", border: "#E7E4F3", borderStrong: "#D6D2E8",
+  text: "#151A3D", textMuted: "#646A90", textFaint: "#979CBA",
+  positive: "#0A7A60", positiveBg: "#DDF7F0", negative: "#C92A30", negativeBg: "#FDECEC", warning: "#9A5F00", warningBg: "#FFF3DC", info: "#3155CE", infoBg: "#E8EDFB",
+  accent: "#3155CE", accentOn: "#FFFFFF", accentSoft: "#E8EDFB",
+  accent2: "#0BB5E3", accent2Soft: "#DDF4FB", fab: "#25D0A6", fabOn: "#FFFFFF",
+  heroFrom: "#2B88DA", heroTo: "#14489F", ink: "#181818", inkText: "#FFFFFF", inkMuted: "#A7A7B3",
+  chart1: "#3155CE", chart2: "#0BB5E3", chart3: "#25D0A6", chart4: "#F5A23A", chart5: "#8B5CF6", chart6: "#EF6B8A",
+};
+const bankworkxDark = {
+  bg: "#0D1022", surface: "#171B35", surfaceMuted: "#1F2445", border: "#2A3059", borderStrong: "#3A4274",
+  text: "#F2F3FF", textMuted: "#A5ABD3", textFaint: "#7078A6",
+  positive: "#3FD9B3", positiveBg: "#10332C", negative: "#FF7A80", negativeBg: "#3A1A22", warning: "#F5C066", warningBg: "#35260A", info: "#8DA6FF", infoBg: "#1B2450",
+  accent: "#7C9BFF", accentOn: "#0B1130", accentSoft: "#1D2552",
+  accent2: "#2DC8F0", accent2Soft: "#0F3340", fab: "#2ED8AE", fabOn: "#06231C",
+  heroFrom: "#2B88DA", heroTo: "#14489F", ink: "#05060F", inkText: "#FFFFFF", inkMuted: "#A7A7B3",
+  chart1: "#7C9BFF", chart2: "#2DC8F0", chart3: "#2ED8AE", chart4: "#F5B25A", chart5: "#A98BFF", chart6: "#FF8CA6",
+};
+
+export type BrandId = "meezan" | "bankworkx";
+export type Brand = { id: BrandId; name: string; light: Theme; dark: Theme; radius: Record<keyof typeof radius, number>; currency: string; locale: string };
+
+/** Everything that makes one bank's app look different. Journeys and the engine never change per brand. */
+export const brands: Record<BrandId, Brand> = {
+  meezan: { id: "meezan", name: "Meezan Digital", light: themes.meezanLight, dark: themes.meezanDark, radius, currency: "PKR", locale: "en-PK" },
+  bankworkx: {
+    id: "bankworkx", name: "BankWorkx",
+    light: { name: "bankworkx-light", colors: bankworkxLight }, dark: { name: "bankworkx-dark", colors: bankworkxDark },
+    radius: { sm: 10, md: 14, lg: 20, xl: 26, pill: 999 }, currency: "USD", locale: "en-US",
+  },
+};
+
+/** Every colour a component may use. Brands that do not define an extra one fall back through completeColors. */
+export type ColorKey =
+  | "bg" | "surface" | "surfaceMuted" | "border" | "borderStrong" | "text" | "textMuted" | "textFaint"
+  | "positive" | "positiveBg" | "negative" | "negativeBg" | "warning" | "warningBg" | "info" | "infoBg"
+  | "accent" | "accentOn" | "accentSoft" | "accent2" | "accent2Soft" | "fab" | "fabOn" | "heroFrom" | "heroTo" | "ink" | "inkText" | "inkMuted"
+  | "chart1" | "chart2" | "chart3" | "chart4" | "chart5" | "chart6";
+export type Colors = Record<ColorKey, string>;
+
+export function completeColors(c: Record<string, string>): Colors {
+  const g = (k: string, fb: string) => c[k] ?? fb;
+  const accent = g("accent", "#0F6E56");
+  return {
+    ...c,
+    accent2: g("accent2", accent), accent2Soft: g("accent2Soft", g("accentSoft", "#E1F5EE")), fab: g("fab", accent), fabOn: g("fabOn", g("accentOn", "#FFFFFF")),
+    heroFrom: g("heroFrom", accent), heroTo: g("heroTo", accent), ink: g("ink", "#0E1217"), inkText: g("inkText", "#FFFFFF"), inkMuted: g("inkMuted", "#A3ACB9"),
+    chart1: g("chart1", accent), chart2: g("chart2", "#2563EB"), chart3: g("chart3", "#16A34A"), chart4: g("chart4", "#F59E0B"), chart5: g("chart5", "#8B5CF6"), chart6: g("chart6", "#EF4444"),
+  } as Colors;
 }

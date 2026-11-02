@@ -7,7 +7,7 @@ import { NewJourney } from "./NewJourney";
 
 export type Row = {
   slug: string; name: any; publishedVersion: number | null; draftDiffers: boolean; screens: number; channels: string[];
-  updatedAt: string; issues: number; languages: string[]; shape: Shape;
+  updatedAt: string; issues: number; languages: string[]; apps: string[]; shape: Shape;
 };
 type Filter = "all" | "live" | "changes" | "draft" | "issues";
 
@@ -121,6 +121,7 @@ export function JourneyList({ journeys, defaultNew }: { journeys: Row[]; default
               <div className="thumb"><FlowThumb shape={j.shape} /><span className="open">Open <ArrowUpRight size={14} aria-hidden /></span></div>
               <div className="body">
                 <div className="row"><h3 style={{ flex: 1 }}>{en(j.name)}</h3><Status r={j} /></div>
+                <div className="row" style={{ marginTop: -2 }}><span className="chip accent">{(j.apps.length ? j.apps : ["meezan"]).map((a) => (a === "bankworkx" ? "BankWorkx" : a === "meezan" ? "Meezan Digital" : a)).join(" · ")}</span></div>
                 {ur(j.name) ? <div className="ur" dir="rtl" lang="ur" style={{ textAlign: "left" }}>{ur(j.name)}</div> : null}
                 <div className="meta">
                   <span title="Screens"><Layers size={14} aria-hidden />{j.screens} screens</span>

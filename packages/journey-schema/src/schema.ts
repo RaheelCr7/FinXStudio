@@ -40,13 +40,24 @@ export const Block = z.discriminatedUnion("type", [
   z.object({
     ...base, type: z.literal("amountInput"), bind: z.string(), currency: z.string(), label: LocalizedText.optional(),
     helper: LocalizedText.optional(),
+    /** One-tap amounts shown under the field, for example [50, 100, 150, 200]. */
+    quickAmounts: z.array(z.number()).optional(),
     validation: z.object({ min: z.union([z.number(), z.string()]).optional(), max: z.union([z.number(), z.string()]).optional(), messages: z.record(z.string(), LocalizedText).optional() }).optional(),
   }),
-  z.object({ ...base, type: z.literal("select"), bind: z.string(), label: LocalizedText, options: z.array(z.string()).optional(), source: z.string().optional() }),
+  z.object({
+    ...base, type: z.literal("select"), bind: z.string(), label: LocalizedText, options: z.array(z.string()).optional(), source: z.string().optional(),
+    /** chips (default) are small pills. tiles are larger cards, good for banks or account types. */
+    variant: z.enum(["chips", "tiles"]).optional(),
+    /** Richer fixed options with an icon and a line of help. Used instead of options when present. */
+    choices: z.array(z.object({ id: z.string(), label: LocalizedText, icon: z.string().optional(), text: LocalizedText.optional() })).optional(),
+  }),
   z.object({
     ...base, type: z.literal("textInput"), bind: z.string(), label: LocalizedText, placeholder: LocalizedText.optional(),
-    keyboard: z.enum(["default", "number", "phone", "email"]).optional(), pattern: z.string().optional(), patternMessage: LocalizedText.optional(),
+    keyboard: z.enum(["default", "number", "phone", "email"]).optional(), secure: z.boolean().optional(), pattern: z.string().optional(), patternMessage: LocalizedText.optional(),
   }),
+  z.object({ ...base, type: z.literal("toggle"), bind: z.string(), label: LocalizedText, helper: LocalizedText.optional() }),
+  /** Card number, name, expiry and security code with a live card picture. bind is the object the four fields are saved in. */
+  z.object({ ...base, type: z.literal("cardForm"), bind: z.string() }),
   z.object({ ...base, type: z.literal("alert"), tone: z.enum(["info", "warning", "error", "success"]), text: LocalizedText }),
   z.object({ ...base, type: z.literal("reviewSummary"), rows: z.array(z.object({ label: LocalizedText, value: LocalizedText })) }),
   z.object({
@@ -82,6 +93,8 @@ export const Journey = z.object({
   version: z.number().int(),
   status: z.enum(["draft", "in_review", "published", "archived"]),
   channels: z.array(z.enum(["web", "mobile"])),
+  /** Which bank apps show this journey (for example ["bankworkx"]). Empty or missing means the original Meezan app. */
+  apps: z.array(z.string()).optional(),
   locale: z.object({ default: z.string(), supported: z.array(z.string()), rtl: z.array(z.string()).optional() }),
   entryScreen: z.string(),
   dataModel: z.record(z.string(), z.object({ type: z.string(), required: z.boolean().optional(), currency: z.string().optional(), pattern: z.string().optional() })).optional(),

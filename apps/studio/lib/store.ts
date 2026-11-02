@@ -58,6 +58,7 @@ export async function listJourneys() {
     draftDiffers: !sameContent(r.draft, r.published),
     screens: r.draft.screens.length,
     channels: r.draft.channels,
+    apps: r.draft.apps ?? [],
     updatedAt: r.updatedAt,
     issues: lintAll(r.draft).length,
     languages: r.draft.locale.supported,

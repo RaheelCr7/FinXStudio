@@ -1,12 +1,19 @@
+import { alexFinance, BANKS, cardNetwork, luhnValid, type Finance } from "./finance";
+export * from "./finance";
+
 export type Account = { id: string; name: string; maskedNumber: string; iban: string; balance: number; currency: string; status: "active" | "frozen"; canDebit: boolean };
 export type Beneficiary = { id: string; displayName: string; bank: string; maskedNumber: string; addedAt: number };
 export type Persona = {
   id: string;
+  /** Which bank app this sandbox customer belongs to. */
+  brand: "meezan" | "bankworkx";
   name: string;
   phone: string;
   accounts: Account[];
   beneficiaries: Beneficiary[];
   limits: { daily: number; usedToday: number };
+  /** Spending, budgets and cards, for the BankWorkx app. */
+  finance?: Finance;
   /** deterministic failure modes for testing unhappy paths */
   behaviour: { otpCode: string; transferFails?: boolean; kyc: "verified" | "pending" | "rejected" };
 };
@@ -20,7 +27,7 @@ export const CARRIERS = [{ id: "jazz", name: "Jazz" }, { id: "zong", name: "Zong
 
 export const personas: Record<string, Persona> = {
   ayesha: {
-    id: "ayesha", name: "Ayesha Rahman", phone: "+92 300 1234471",
+    id: "ayesha", brand: "meezan", name: "Ayesha Rahman", phone: "+92 300 1234471",
     accounts: [
       { id: "acc_current", name: "Current", maskedNumber: "••7710", iban: "PK36 MEZN 0000 1234 5678 7710", balance: 184250, currency: "PKR", status: "active", canDebit: true },
       { id: "acc_savings", name: "Savings", maskedNumber: "••2204", iban: "PK12 MEZN 0000 1234 5678 2204", balance: 1250000, currency: "PKR", status: "active", canDebit: true },
@@ -33,20 +40,40 @@ export const personas: Record<string, Persona> = {
     behaviour: { otpCode: "482100", kyc: "verified" },
   },
   bilal: {
-    id: "bilal", name: "Bilal Raza (transfer fails)", phone: "+92 301 5550192",
+    id: "bilal", brand: "meezan", name: "Bilal Raza (transfer fails)", phone: "+92 301 5550192",
     accounts: [{ id: "acc_current", name: "Current", maskedNumber: "••3301", iban: "PK50 MEZN 0000 7777 0000 3301", balance: 92000, currency: "PKR", status: "active", canDebit: true }],
     beneficiaries: [{ id: "ben_9001", displayName: "Hira Builders", bank: "MCB", maskedNumber: "••9001", addedAt: Date.now() - 12 * day }],
     limits: { daily: 50000, usedToday: 40000 },
     behaviour: { otpCode: "111111", transferFails: true, kyc: "verified" },
   },
+  alex: {
+    id: "alex", brand: "bankworkx", name: "Alex Morgan", phone: "+1 415 555 0142",
+    accounts: [
+      { id: "acc_main", name: "Main", maskedNumber: "••4410", iban: "US00 BWX 0000 0000 4410", balance: 8720.76, currency: "USD", status: "active", canDebit: true },
+      { id: "acc_save", name: "Savings", maskedNumber: "••7731", iban: "US00 BWX 0000 0000 7731", balance: 15254.37, currency: "USD", status: "active", canDebit: true },
+    ],
+    beneficiaries: [],
+    limits: { daily: 50000, usedToday: 0 },
+    finance: alexFinance(),
+    behaviour: { otpCode: "482100", kyc: "verified" },
+  },
+  sam: {
+    id: "sam", brand: "bankworkx", name: "Sam Rivera (new customer)", phone: "+1 415 555 0199",
+    accounts: [], beneficiaries: [], limits: { daily: 50000, usedToday: 0 },
+    finance: { ...alexFinance(), income: 0, expense: 0, savings: 0, balanceSeries: [], ranges: { "1W": [], "1M": [], "3M": [], "1Y": [] }, spendingByCategory: [], transactions: [], budgets: [], subscriptions: [], linked: [], cards: [] },
+    behaviour: { otpCode: "123456", kyc: "verified" },
+  },
   zara: {
-    id: "zara", name: "Zara Ali (KYC rejected)", phone: "+92 333 2000123",
+    id: "zara", brand: "meezan", name: "Zara Ali (KYC rejected)", phone: "+92 333 2000123",
     accounts: [],
     beneficiaries: [],
     limits: { daily: 25000, usedToday: 0 },
     behaviour: { otpCode: "123456", kyc: "rejected" },
   },
 };
+
+/** The sandbox customers for one bank app. */
+export const personasFor = (brand: Persona["brand"]) => Object.values(personas).filter((p) => p.brand === brand);
 
 export class MockBank {
   private p: Persona;
@@ -119,6 +146,76 @@ export class MockBank {
         this.otpVerified = false;
         this.seq += 1;
         return { reference: `${isBill ? "BILL" : "TOP"}-20261102-${String(930 + this.seq).padStart(4, "0")}`, newBalance: from.balance };
+      }
+      case "bank.banks.list":
+        return Object.fromEntries(BANKS.map((b) => [b.id, { id: b.id, name: b.name, color: b.color }]));
+      case "bank.cards.list":
+        return Object.fromEntries((this.p.finance?.cards ?? []).map((c) => [c.id, { ...c, name: `${c.nickname} ••${c.last4}` }]));
+      case "bank.budgets.list":
+        return Object.fromEntries((this.p.finance?.budgets ?? []).map((b) => [b.id, b]));
+      case "bank.subscriptions.list":
+        return Object.fromEntries((this.p.finance?.subscriptions ?? []).map((x) => [x.id, x]));
+      case "bank.deposit.create": {
+        const fin = this.p.finance; if (!fin) throw new BankError("NOT_SUPPORTED", "Not available for this customer");
+        const to = this.p.accounts.find((a) => a.id === input.toAccountId);
+        if (!to) throw new BankError("ACCOUNT_NOT_FOUND", "Account not found");
+        const amount = Number(input.amount);
+        if (!(amount >= 1 && amount <= 50000)) throw new BankError("INVALID_AMOUNT", "Enter an amount from $1 to $50,000");
+        if (!fin.cards.some((c) => c.id === input.fromCardId)) throw new BankError("CARD_NOT_FOUND", "Choose a card to add money from");
+        to.balance = Math.round((to.balance + amount) * 100) / 100;
+        fin.transactions.unshift({ id: `t_dep${++this.seq}`, title: "Added money", category: "income", amount, daysAgo: 0, time: "Now" });
+        return { reference: `ADD-20261102-${String(930 + this.seq).padStart(4, "0")}`, newBalance: to.balance };
+      }
+      case "bank.cards.add": {
+        const fin = this.p.finance; if (!fin) throw new BankError("NOT_SUPPORTED", "Not available for this customer");
+        const num = String(input.number ?? "").replace(/\s/g, "");
+        if (!luhnValid(num)) throw new BankError("CARD_INVALID", "That card number is not valid");
+        const m = /^(0[1-9]|1[0-2])\/?([0-9]{2})$/.exec(String(input.expiry ?? "").replace(/\s/g, ""));
+        if (!m) throw new BankError("EXPIRY_INVALID", "Enter the expiry as MM/YY");
+        const exp = new Date(2000 + Number(m[2]), Number(m[1]), 0, 23, 59);
+        if (exp.getTime() < Date.UTC(2026, 10, 2)) throw new BankError("CARD_EXPIRED", "This card has expired");
+        if (!/^[0-9]{3,4}$/.test(String(input.cvv ?? ""))) throw new BankError("CVV_INVALID", "Enter the 3 or 4 digit security code");
+        if (fin.cards.some((c) => c.last4 === num.slice(-4))) throw new BankError("CARD_EXISTS", "This card is already added");
+        const makeDefault = input.makeDefault === true || fin.cards.length === 0;
+        if (makeDefault) fin.cards.forEach((c) => { c.isDefault = false; });
+        const card = { id: `c_${num.slice(-4)}`, network: cardNetwork(num), last4: num.slice(-4), holder: String(input.holder ?? this.p.name), expiry: `${m[1]}/${m[2]}`, nickname: String(input.nickname || "My card"), isDefault: makeDefault };
+        fin.cards.push(card);
+        return { cardId: card.id, last4: card.last4, network: card.network };
+      }
+      case "bank.accounts.connect": {
+        const fin = this.p.finance; if (!fin) throw new BankError("NOT_SUPPORTED", "Not available for this customer");
+        const bank = BANKS.find((b) => b.id === input.bankId);
+        if (!bank) throw new BankError("BANK_NOT_FOUND", "Choose a bank to connect");
+        if (!String(input.username ?? "").trim() || String(input.password ?? "").length < 6) throw new BankError("BANK_AUTH_FAILED", "Check your username and password");
+        if (String(input.password) === "invalid123") throw new BankError("BANK_AUTH_FAILED", `${bank.name} did not accept these details`);
+        if (fin.linked.some((l) => l.id === `l_${bank.id}`)) throw new BankError("ALREADY_CONNECTED", `${bank.name} is already connected`);
+        const kind = input.accountType === "credit" ? "Credit" : "Savings";
+        const linked = { id: `l_${bank.id}`, bank: bank.name, kind, maskedNumber: `••${String(1000 + (String(input.username).length * 977) % 9000).slice(-4)}`, balance: kind === "Credit" ? 1240.5 : 4210.25 } as const;
+        fin.linked.push(linked);
+        return { connectedId: linked.id, bank: bank.name, kind, maskedNumber: linked.maskedNumber, balance: linked.balance };
+      }
+      case "bank.budgets.create": {
+        const fin = this.p.finance; if (!fin) throw new BankError("NOT_SUPPORTED", "Not available for this customer");
+        const limit = Number(input.limit);
+        if (!(limit >= 10 && limit <= 100000)) throw new BankError("INVALID_AMOUNT", "A budget must be between $10 and $100,000");
+        const name = String(input.category ?? "").trim();
+        if (!name) throw new BankError("CATEGORY_REQUIRED", "Choose a category");
+        if (fin.budgets.some((b) => b.name.toLowerCase() === name.toLowerCase())) throw new BankError("BUDGET_EXISTS", `You already have a ${name} budget`);
+        const b = { id: `b_${name.toLowerCase().replace(/[^a-z]+/g, "_")}`, name, category: "shopping" as const, limit, spent: 0 };
+        fin.budgets.push(b);
+        return { budgetId: b.id, name, limit };
+      }
+      case "bank.subscriptions.pay": {
+        const fin = this.p.finance; if (!fin) throw new BankError("NOT_SUPPORTED", "Not available for this customer");
+        const sub = fin.subscriptions.find((x) => x.id === input.subscriptionId);
+        if (!sub) throw new BankError("SUBSCRIPTION_NOT_FOUND", "Subscription not found");
+        const from = this.p.accounts.find((a) => a.id === input.fromAccountId);
+        if (!from) throw new BankError("ACCOUNT_NOT_FOUND", "Account not found");
+        if (sub.amount > from.balance) throw new BankError("INSUFFICIENT_FUNDS", "Insufficient funds");
+        from.balance = Math.round((from.balance - sub.amount) * 100) / 100;
+        sub.nextInDays += 30;
+        fin.transactions.unshift({ id: `t_sub${++this.seq}`, title: sub.name, category: "entertainment", amount: -sub.amount, daysAgo: 0, time: "Now" });
+        return { reference: `SUB-20261102-${String(930 + this.seq).padStart(4, "0")}`, newBalance: from.balance };
       }
       case "bank.carriers.list":
         return Object.fromEntries(CARRIERS.map((c) => [c.id, c]));
