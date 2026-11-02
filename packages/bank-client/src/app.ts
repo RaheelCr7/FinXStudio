@@ -115,9 +115,13 @@ export class BankApp {
     this.set({ studioUrl: url });
     if (this.state.screen !== "login") void this.refreshCatalog();
   }
-  /** Opens a journey by name, matching copies made for this bank (add-money-acme for add-money). Fails with a notice, never an exception. */
+  /** The slug of the journey to open for a name, matching copies made for this bank (add-money-acme for add-money). */
+  resolveSlug(want: string) { return this.state.catalog.entries.find((e) => slugIs(e.slug, want))?.slug ?? want; }
+  /** Loads a journey (from Studio, else the bundled copy) without changing the screen. For apps where the address decides the screen. */
+  fetchJourney(want: string) { return this.deps.live.loadJourney(this.state.studioUrl, this.resolveSlug(want)); }
+  /** Opens a journey by name. Fails with a notice, never an exception. */
   async openJourney(want: string, initial?: Record<string, any>) {
-    const slug = this.state.catalog.entries.find((e) => slugIs(e.slug, want))?.slug ?? want;
+    const slug = this.resolveSlug(want);
     this.set({ sheet: null, opening: slug });
     const l = await this.deps.live.loadJourney(this.state.studioUrl, slug);
     if (l) this.set({ opening: null, active: { ...l, initial }, screen: "journey" });

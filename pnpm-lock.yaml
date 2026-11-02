@@ -79,6 +79,55 @@ importers:
         specifier: ~6.0.3
         version: 6.0.3
 
+  apps/bank-web:
+    dependencies:
+      '@finx/bank-client':
+        specifier: workspace:*
+        version: link:../../packages/bank-client
+      '@finx/journey-schema':
+        specifier: workspace:*
+        version: link:../../packages/journey-schema
+      '@finx/mock-bank-api':
+        specifier: workspace:*
+        version: link:../../packages/mock-bank-api
+      '@finx/renderer-core':
+        specifier: workspace:*
+        version: link:../../packages/renderer-core
+      '@finx/renderer-web':
+        specifier: workspace:*
+        version: link:../../packages/renderer-web
+      '@finx/ui-kit':
+        specifier: workspace:*
+        version: link:../../packages/ui-kit
+      '@fontsource-variable/inter':
+        specifier: 5.3.0
+        version: 5.3.0
+      '@fontsource/noto-nastaliq-urdu':
+        specifier: 5.3.0
+        version: 5.3.0
+      next:
+        specifier: 16.4.4
+        version: 16.4.4(@babel/core@7.29.7)(@types/node@22.20.5)(babel-plugin-react-compiler@1.0.0)(react-dom@19.3.0(react@19.3.0))(react@19.3.0)
+      react:
+        specifier: 19.3.0
+        version: 19.3.0
+      react-dom:
+        specifier: 19.3.0
+        version: 19.3.0(react@19.3.0)
+    devDependencies:
+      '@types/node':
+        specifier: ^22.10.0
+        version: 22.20.5
+      '@types/react':
+        specifier: ~19.3.0
+        version: 19.3.0
+      '@types/react-dom':
+        specifier: ~19.3.0
+        version: 19.3.0(@types/react@19.3.0)
+      vitest:
+        specifier: 2.1.8
+        version: 2.1.8(@types/node@22.20.5)(happy-dom@20.0.2)(lightningcss@1.33.0)(terser@5.51.2)
+
   apps/studio:
     dependencies:
       '@finx/codegen':
@@ -1159,6 +1208,9 @@ packages:
 
   '@fontsource-variable/inter@5.3.0':
     resolution: {integrity: sha512-OupL48va4JNofb97w6NYeF9S7W/kHNKM0Er8Dem5nqi4jeOLrVJDoE8tZEpnMJmtkvNbB1EIPPwHcdkF6b1oUA==}
+
+  '@fontsource/noto-nastaliq-urdu@5.3.0':
+    resolution: {integrity: sha512-rhozTu22mlnDp5R8A4gGeNJvoLroHEV0TytCwly20w1LMA+VXs/MyhORGJu3i3SWZFdyeCFe5EF5xzraq6zd6A==}
 
   '@img/colour@1.1.0':
     resolution: {integrity: sha512-Td76q7j57o/tLVdgS746cYARfSyxk8iEfRxewL9h4OMzYhbW4TAcppl0mT4eyqXddh6L/jwoM75mo7ixa/pCeQ==}
@@ -4705,6 +4757,8 @@ snapshots:
       js-yaml: 4.3.2
 
   '@fontsource-variable/inter@5.3.0': {}
+
+  '@fontsource/noto-nastaliq-urdu@5.3.0': {}
 
   '@img/colour@1.1.0':
     optional: true

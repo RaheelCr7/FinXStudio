@@ -101,6 +101,20 @@ describe("journeys", () => {
   });
 });
 
+describe("fetching a journey for an address-driven app", () => {
+  it("resolves names to this bank's copies and loads without changing the screen", async () => {
+    const copy = { ...addMoney, slug: "add-money-acme", id: "jrn_add_money_acme" };
+    const a = make("bankworkx", studio([{ slug: "add-money-acme", name: "Add money", publishedVersion: 1, apps: ["bankworkx"] }], { "/api/journeys/add-money-acme?env=published": copy }));
+    a.login(); await vi.waitFor(() => expect(a.getState().catalog.source).toBe("studio"));
+    expect(a.resolveSlug("add-money")).toBe("add-money-acme");
+    expect(a.resolveSlug("invest")).toBe("invest");
+    const l = await a.fetchJourney("add-money");
+    expect(l).toMatchObject({ source: "studio" });
+    expect(a.getState().screen).toBe("app");
+    expect(await make("bankworkx").fetchJourney("nope")).toBeNull();
+  });
+});
+
 describe("payments and notices", () => {
   it("pays a subscription from the first account and says so", async () => {
     const a = make("bankworkx"); a.login();

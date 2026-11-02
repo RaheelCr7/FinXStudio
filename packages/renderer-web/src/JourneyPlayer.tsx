@@ -63,7 +63,7 @@ export function JourneyPlayer({ journey, adapter, lang, initial, onClose, onExit
       </header>
 
       {/* announced when the screen changes, without moving the visible layout */}
-      <p className="fx-sr" role="status" aria-live="polite">{v.title}{layout.steps ? `. ${layout.steps.label}` : ""}</p>
+      <p className="fx-sr" role="status" aria-live="polite">{layout.steps ? `${v.title}. ${layout.steps.label}` : ""}</p>
       {v.toast ? <div className="fx-toast-error" role="alert">{v.toast}</div> : null}
 
       <form className="fx-player-form" noValidate onSubmit={(e) => { e.preventDefault(); if (primary && !v.busy) void controller.press(primary.actions); }}>
