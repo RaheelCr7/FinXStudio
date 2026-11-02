@@ -18,7 +18,7 @@ async function connect(studio: FakeStudio, readOnly = false) {
   return { client, call, studio };
 }
 
-const TOOLS = ["finx_get_catalog", "finx_get_example", "finx_list_journeys", "finx_list_projects", "finx_get_journey", "finx_create_journey", "finx_save_draft", "finx_patch_journey", "finx_lint_journey", "finx_simulate_journey", "finx_publish_journey", "finx_report_run"];
+const TOOLS = ["finx_get_catalog", "finx_get_example", "finx_list_journeys", "finx_list_projects", "finx_list_catalog", "finx_add_from_catalog", "finx_get_journey", "finx_create_journey", "finx_save_draft", "finx_patch_journey", "finx_lint_journey", "finx_simulate_journey", "finx_publish_journey", "finx_report_run"];
 
 describe("FinX MCP server", () => {
   let studio: FakeStudio;
@@ -67,6 +67,19 @@ describe("FinX MCP server", () => {
     expect(created.json.journey.apps).toEqual(["bankworkx"]);
     expect((await call("finx_create_journey", { name: "Other gift", project: "nobody" })).isError).toBe(true);
     expect((await call("finx_create_journey", { name: "Plain journey" })).json.journey.apps).toBeUndefined();
+  });
+
+  it("browses the catalog and adds a ready-made journey to a project as a draft, never published", async () => {
+    const { call } = await connect(studio);
+    const before = await call("finx_list_catalog", { project: "bankworkx" });
+    expect(before.json.catalog.map((c: any) => c.id)).toContain("add-money");
+    expect(before.json.catalog.find((c: any) => c.id === "add-money").added).toBeNull();
+    const added = await call("finx_add_from_catalog", { id: "add-money", project: "bankworkx" });
+    expect(added.json.slug).toBe("add-money-bankworkx");
+    expect((await call("finx_get_journey", { slug: "add-money-bankworkx" })).json).toMatchObject({ publishedVersion: null });
+    expect((await call("finx_list_catalog", { project: "bankworkx" })).json.catalog.find((c: any) => c.id === "add-money").added).toBe("add-money-bankworkx");
+    expect((await call("finx_add_from_catalog", { id: "add-money", project: "bankworkx" })).isError).toBe(true);
+    expect((await call("finx_add_from_catalog", { id: "nope", project: "bankworkx" })).isError).toBe(true);
   });
 
   it("creates, saves, simulates and hands over a whole journey the way the skill does", async () => {

@@ -11,12 +11,17 @@ export type RunRecord = { id: string; status: string; title: string };
 /** A bank app in Studio. Journeys belong to one or more of these. */
 export type ProjectSummary = { id: string; name: string; preset: string; currency: string; bundleId: string; journeys: number };
 
+/** One ready-made journey in the catalog. `added` is the slug of the project's copy, when it has one. */
+export type CatalogSummary = { id: string; name: string; category: string; summary: string; highlights: string[]; screens: number; languages: string[]; currencies: string[]; madeFor: string; added: string | null };
+
 /** Everything the tools need from FinX Studio. The HTTP client implements it; tests use an in-memory one. */
 export interface StudioClient {
   readonly baseUrl: string;
   listJourneys(): Promise<JourneySummary[]>;
   getRecord(slug: string): Promise<JourneyRecord>;
   listProjects(): Promise<ProjectSummary[]>;
+  listCatalog(project?: string): Promise<CatalogSummary[]>;
+  addFromCatalog(id: string, project: string): Promise<{ slug: string }>;
   createJourney(name: string, project?: string): Promise<JourneyRecord>;
   saveDraft(slug: string, journey: Journey): Promise<void>;
   publish(slug: string): Promise<{ version: number }>;
@@ -54,6 +59,8 @@ export class HttpStudioClient implements StudioClient {
   listJourneys() { return this.request<JourneySummary[]>("GET", "/api/journeys"); }
   getRecord(slug: string) { return this.request<JourneyRecord & { issues: LintIssue[] }>("GET", `/api/journeys/${encodeURIComponent(slug)}?env=draft`); }
   async listProjects() { return (await this.request<{ projects: ProjectSummary[] }>("GET", "/api/projects")).projects.map(({ id, name, preset, currency, bundleId, journeys }) => ({ id, name, preset, currency, bundleId, journeys })); }
+  async listCatalog(project?: string) { return (await this.request<{ entries: CatalogSummary[] }>("GET", `/api/catalog${project ? `?project=${encodeURIComponent(project)}` : ""}`)).entries; }
+  addFromCatalog(id: string, project: string) { return this.request<{ slug: string }>("POST", `/api/catalog/${encodeURIComponent(id)}/add`, { project }); }
   createJourney(name: string, project?: string) { return this.request<JourneyRecord>("POST", "/api/journeys", { name, ...(project ? { apps: [project] } : {}) }); }
   async saveDraft(slug: string, journey: Journey) { await this.request("PUT", `/api/journeys/${encodeURIComponent(slug)}`, journey); }
   publish(slug: string) { return this.request<{ version: number }>("POST", `/api/journeys/${encodeURIComponent(slug)}/publish`); }
