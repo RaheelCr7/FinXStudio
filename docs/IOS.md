@@ -41,6 +41,7 @@ How long it takes, measured on an Apple M5 with 16 GB of memory:
 |---|---|
 | First build (downloads the native libraries, compiles React Native) | 3 min 17 s |
 | Next build after an app change | about 30 s |
+| Switching between UAT and production (regenerates the project) | about 1 min |
 
 The zipped app is about 8 MB. `apps/bank-app/ios/` is **generated** from `app.json`, `app.config.ts` and the assets, and is not committed. It is kept between builds so they stay fast, and regenerated automatically when the environment or server changes (or with `--clean`). Change the configuration, not the generated files.
 
@@ -80,7 +81,7 @@ Run these after each build that goes to testers. The last full pass was on 2 Nov
 8. Dark mode and large text sizes still read well. At the largest accessibility sizes the home screen's tile titles can be cut off at the edge of their card.
 9. No crash report appears in `~/Library/Logs/DiagnosticReports`.
 
-Not covered yet: a physical iPhone, VoiceOver, iPad, the production build, iOS versions other than 26.5, and the on-screen keyboard over the sign-in form (the Simulator used the Mac keyboard in this pass).
+The production build was built and its https-only policy verified, but not run in the Simulator. Not covered yet: a physical iPhone, VoiceOver, iPad, iOS versions other than 26.5, and the on-screen keyboard over the sign-in form (the Simulator used the Mac keyboard in this pass).
 
 ## Real iPhone and the App Store (not set up yet)
 
