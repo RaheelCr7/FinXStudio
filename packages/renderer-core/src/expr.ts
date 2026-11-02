@@ -1,5 +1,5 @@
 /** Safe expression evaluator: no eval, no function constructor, whitelisted functions only. */
-type Tok = { t: "num" | "str" | "id" | "op" | "eof"; v: string };
+type Tok = { t: "num" | "str" | "id" | "op" | "eof"; v: string; /** where the token starts and ends in the source */ s?: number; e?: number };
 
 const OPS = ["&&", "||", "==", "!=", "<=", ">=", "<", ">", "+", "-", "*", "/", "%", "!", "(", ")", "[", "]", ",", ".", "?", ":"];
 
@@ -9,12 +9,12 @@ function tokenize(src: string): Tok[] {
   while (i < src.length) {
     const c = src[i]!;
     if (/\s/.test(c)) { i++; continue; }
-    if (/[0-9]/.test(c)) { let j = i; while (j < src.length && /[0-9._]/.test(src[j]!)) j++; out.push({ t: "num", v: src.slice(i, j).replace(/_/g, "") }); i = j; continue; }
-    if (c === '"' || c === "'") { let j = i + 1; while (j < src.length && src[j] !== c) j++; out.push({ t: "str", v: src.slice(i + 1, j) }); i = j + 1; continue; }
-    if (/[A-Za-z_$]/.test(c)) { let j = i; while (j < src.length && /[A-Za-z0-9_$]/.test(src[j]!)) j++; out.push({ t: "id", v: src.slice(i, j) }); i = j; continue; }
+    if (/[0-9]/.test(c)) { let j = i; while (j < src.length && /[0-9._]/.test(src[j]!)) j++; out.push({ t: "num", v: src.slice(i, j).replace(/_/g, ""), s: i, e: j }); i = j; continue; }
+    if (c === '"' || c === "'") { let j = i + 1; while (j < src.length && src[j] !== c) j++; out.push({ t: "str", v: src.slice(i + 1, j), s: i, e: j + 1 }); i = j + 1; continue; }
+    if (/[A-Za-z_$]/.test(c)) { let j = i; while (j < src.length && /[A-Za-z0-9_$]/.test(src[j]!)) j++; out.push({ t: "id", v: src.slice(i, j), s: i, e: j }); i = j; continue; }
     const op = OPS.find((o) => src.startsWith(o, i));
     if (!op) throw new Error(`Unexpected character '${c}' in expression`);
-    out.push({ t: "op", v: op }); i += op.length;
+    out.push({ t: "op", v: op, s: i, e: i + op.length }); i += op.length;
   }
   out.push({ t: "eof", v: "" });
   return out;
@@ -133,6 +133,9 @@ export function checkExpression(src: string): string | null {
     return (e as Error).message;
   }
 }
+
+/** The tokens of an expression with their positions, for tools that read or rewrite rules. Throws on an unreadable character. */
+export const tokensOf = (src: string) => tokenize(src);
 
 const LITERALS = new Set(["true", "false", "null", "Infinity"]);
 
