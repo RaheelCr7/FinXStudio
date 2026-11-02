@@ -1,6 +1,7 @@
 import { promises as fs } from "node:fs";
 import path from "node:path";
-import { Journey, lintJourney, localTransfer, type LintIssue } from "@finx/journey-schema";
+import { localTransfer, validateJourney, type Journey, type LintIssue } from "@finx/journey-schema";
+import { lintAll } from "@finx/renderer-core";
 import { sameContent } from "./edit";
 
 export type HistoryEntry = { version: number; publishedAt: string; by: string };
@@ -50,7 +51,7 @@ export async function listJourneys() {
     screens: r.draft.screens.length,
     channels: r.draft.channels,
     updatedAt: r.updatedAt,
-    issues: lintJourney(r.draft).length,
+    issues: lintAll(r.draft).length,
   })).sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
 }
 
@@ -63,16 +64,16 @@ export async function getRecord(slug: string): Promise<JourneyRecord> {
 
 export async function saveDraft(slug: string, body: unknown) {
   assertSlug(slug);
-  const parsed = Journey.safeParse(body);
-  if (!parsed.success) throw new StoreError(422, "Journey does not match the schema: " + parsed.error.issues.slice(0, 3).map((i) => `${i.path.join(".")} ${i.message}`).join("; "));
-  if (parsed.data.slug !== slug) throw new StoreError(422, "Slug cannot be changed");
+  const v = validateJourney(body);
+  if (!v.ok) throw new StoreError(422, "Journey does not match the schema: " + v.errors.slice(0, 5).join("; "));
+  if (v.journey.slug !== slug) throw new StoreError(422, "Slug cannot be changed");
   const db = await read();
   const rec = db.journeys[slug];
   if (!rec) throw new StoreError(404, "Journey not found");
-  rec.draft = { ...parsed.data, status: "draft" };
+  rec.draft = { ...v.journey, status: "draft" };
   rec.updatedAt = new Date().toISOString();
   await write(db);
-  return { record: rec, issues: lintJourney(rec.draft) };
+  return { record: rec, issues: lintAll(rec.draft), warnings: v.warnings };
 }
 
 export async function publish(slug: string, by = "studio") {
@@ -80,7 +81,7 @@ export async function publish(slug: string, by = "studio") {
   const db = await read();
   const rec = db.journeys[slug];
   if (!rec) throw new StoreError(404, "Journey not found");
-  const issues = lintJourney(rec.draft);
+  const issues = lintAll(rec.draft);
   if (issues.length) throw new StoreError(422, `Cannot publish: ${issues.length} lint issue(s)`, issues);
   const version = (rec.published?.version ?? 0) + 1;
   rec.published = { ...structuredClone(rec.draft), version, status: "published" };

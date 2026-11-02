@@ -53,4 +53,21 @@ describe("journey store", () => {
     await expect(store.createJourney("Mobile top-up")).rejects.toMatchObject({ status: 409 });
     await expect(store.getRecord("../etc/passwd")).rejects.toMatchObject({ status: 400 });
   });
+
+  it("warns about misspelled optional fields instead of silently dropping them", async () => {
+    const draft: any = structuredClone((await store.getRecord("fund-transfer-local")).draft);
+    draft.screens[2].blocks[0].helperr = "typo";
+    const saved = await store.saveDraft("fund-transfer-local", draft);
+    expect(saved.warnings.join(" ")).toContain("screens[2].blocks[0].helperr");
+    expect(JSON.stringify(saved.record.draft)).not.toContain("helperr");
+  });
+
+  it("refuses to publish when a rule refers to data that does not exist", async () => {
+    const draft: any = structuredClone((await store.getRecord("fund-transfer-local")).draft);
+    draft.screens[2].navigation.rules[0].when = "transfer.amout > 5";
+    const saved = await store.saveDraft("fund-transfer-local", draft);
+    expect(saved.issues.map((i) => i.code)).toContain("unknown_field");
+    await expect(store.publish("fund-transfer-local")).rejects.toMatchObject({ status: 422 });
+  });
 });
+

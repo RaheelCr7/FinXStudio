@@ -123,3 +123,34 @@ class Parser {
 export function evaluate(expr: string, scope: any): any {
   return new Parser(tokenize(expr), scope).parse();
 }
+
+/** Syntax and function check without needing real data. Returns an error message, or null when the expression parses. */
+export function checkExpression(src: string): string | null {
+  try {
+    new Parser(tokenize(src), new Proxy({}, { get: () => undefined })).parse();
+    return null;
+  } catch (e) {
+    return (e as Error).message;
+  }
+}
+
+const LITERALS = new Set(["true", "false", "null", "Infinity"]);
+
+/** Static dotted data paths an expression reads, e.g. `ctx.limits.daily`, including paths inside `[...]`. */
+export function pathsOf(src: string): string[] {
+  const toks = tokenize(src);
+  const out: string[] = [];
+  for (let i = 0; i < toks.length; i++) {
+    const t = toks[i]!;
+    if (t.t !== "id" || LITERALS.has(t.v)) continue;
+    const prev = toks[i - 1];
+    const next = toks[i + 1];
+    if (prev && prev.t === "op" && prev.v === ".") continue;
+    if (next && next.t === "op" && next.v === "(") continue;
+    let path = t.v;
+    let j = i + 1;
+    while (toks[j]?.t === "op" && toks[j]!.v === "." && toks[j + 1]?.t === "id") { path += "." + toks[j + 1]!.v; j += 2; }
+    out.push(path);
+  }
+  return out;
+}

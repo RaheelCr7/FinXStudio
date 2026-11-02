@@ -1,6 +1,6 @@
 import { getRecord, saveDraft } from "@/lib/store";
 import { fail, json, preflight } from "@/lib/http";
-import { lintJourney } from "@finx/journey-schema";
+import { lintAll } from "@finx/renderer-core";
 
 export const dynamic = "force-dynamic";
 export const OPTIONS = preflight;
@@ -12,7 +12,7 @@ export async function GET(req: Request, { params }: Ctx) {
     const { slug } = await params;
     const rec = await getRecord(slug);
     const env = new URL(req.url).searchParams.get("env") ?? "published";
-    if (env === "draft") return json({ ...rec, issues: lintJourney(rec.draft) });
+    if (env === "draft") return json({ ...rec, issues: lintAll(rec.draft) });
     if (!rec.published) return json({ error: "Journey is not published yet" }, 404);
     return json(rec.published);
   } catch (e) { return fail(e); }
@@ -20,7 +20,7 @@ export async function GET(req: Request, { params }: Ctx) {
 export async function PUT(req: Request, { params }: Ctx) {
   try {
     const { slug } = await params;
-    const { record, issues } = await saveDraft(slug, await req.json());
-    return json({ ...record, issues });
+    const { record, issues, warnings } = await saveDraft(slug, await req.json());
+    return json({ ...record, issues, warnings });
   } catch (e) { return fail(e); }
 }
