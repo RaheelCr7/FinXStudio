@@ -1,0 +1,9 @@
+{
+  "mcpServers": {
+    "finx": {
+      "command": "node_modules/.bin/tsx",
+      "args": ["packages/finx-mcp/src/server.ts"],
+      "env": { "FINX_STUDIO_URL": "${FINX_STUDIO_URL:-http://localhost:3100}" }
+    }
+  }
+}

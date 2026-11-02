@@ -134,3 +134,5 @@ export class BankError extends Error {
     this.name = "BankError";
   }
 }
+
+export * from "./catalog";

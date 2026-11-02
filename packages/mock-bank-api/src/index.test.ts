@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { MockBank, BankError } from "./index";
+import { MockBank, BankError, ADAPTER_CATALOG, describePersonas } from "./index";
 
 describe("mock bank sandbox", () => {
   it("lists accounts and limits for Ayesha", async () => {
@@ -52,4 +52,21 @@ describe("mock bank sandbox", () => {
     await expect(b.call("bank.topup.create", { fromAccountId: "acc_current", amount: 9000 })).rejects.toMatchObject({ code: "INVALID_AMOUNT" });
     expect((await b.call("bank.topup.create", { fromAccountId: "acc_current", amount: 500 })).reference).toMatch(/^TOP-/);
   });
+
+  it("every adapter in the catalog is implemented by the sandbox", async () => {
+    for (const a of ADAPTER_CATALOG) {
+      const b = new MockBank("ayesha");
+      const r = await b.call(a.adapter, {}).catch((e) => e);
+      expect(r instanceof BankError && r.code === "UNKNOWN_ADAPTER", a.adapter).toBe(false);
+    }
+  });
+  it("catalog ids are unique and OTP verification uses the id the engine counts failures for", () => {
+    const ids = ADAPTER_CATALOG.map((a) => a.suggestedId);
+    expect(new Set(ids).size).toBe(ids.length);
+    expect(ADAPTER_CATALOG.find((a) => a.adapter === "bank.otp.verify")!.suggestedId).toBe("otpVerify");
+  });
+  it("describes the three sandbox customers with their test OTPs", () => {
+    expect(describePersonas().map((p) => [p.id, p.otpCode])).toEqual([["ayesha", "482100"], ["bilal", "111111"], ["zara", "123456"]]);
+  });
 });
+

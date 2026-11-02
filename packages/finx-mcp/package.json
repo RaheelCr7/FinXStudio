@@ -1,0 +1,27 @@
+{
+  "name": "@finx/mcp",
+  "version": "0.0.1",
+  "private": true,
+  "type": "module",
+  "description": "FinX MCP server: lets Claude Code build, lint, simulate and report on banking journeys in FinX Studio",
+  "main": "src/index.ts",
+  "scripts": {
+    "start": "tsx src/server.ts",
+    "test": "vitest run",
+    "typecheck": "tsc -p .",
+    "sync-skills": "tsx scripts/sync-skills.ts",
+    "smoke": "tsx scripts/smoke.ts"
+  },
+  "dependencies": {
+    "@finx/journey-schema": "workspace:*",
+    "@finx/mock-bank-api": "workspace:*",
+    "@finx/renderer-core": "workspace:*",
+    "@modelcontextprotocol/server": "2.4.0",
+    "zod": "^4.2.0"
+  },
+  "devDependencies": {
+    "@modelcontextprotocol/client": "2.4.0",
+    "@types/node": "^22.10.0",
+    "tsx": "4.23.15"
+  }
+}
