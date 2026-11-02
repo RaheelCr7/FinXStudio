@@ -99,7 +99,7 @@ export function SelectChips({ b, set }: P) {
           const on = b.value === o.id;
           return (
             <Pressable key={o.id} accessibilityRole="radio" accessibilityState={{ selected: on }} onPress={() => set(b.bind, o.id)}
-              style={{ paddingHorizontal: 14, height: 40, borderRadius: radius.pill, justifyContent: "center", borderWidth: on ? 2 : 1, borderColor: on ? c.accent : c.border, backgroundColor: on ? c.accentSoft : c.surface }}>
+              style={{ paddingHorizontal: 14, minHeight: 40, paddingVertical: 6, borderRadius: radius.pill, justifyContent: "center", borderWidth: on ? 2 : 1, borderColor: on ? c.accent : c.border, backgroundColor: on ? c.accentSoft : c.surface }}>
               <Text style={{ color: on ? c.accent : c.text, fontWeight: "500", fontSize: 14 }}>{o.name}</Text>
             </Pressable>
           );
@@ -217,7 +217,7 @@ export function Button({ b, press, busy, strings }: P) {
   // leaves the description "busy" behind after the button has been busy once.
   return (
     <Pressable accessibilityRole="button" accessibilityLabel={label} accessibilityState={{ busy, disabled: busy }} onPress={() => press(b.actions)}
-      style={({ pressed }) => ({ height: 54, borderRadius: radius.lg, alignItems: "center", justifyContent: "center", backgroundColor: primary ? c.accent : "transparent", borderWidth: primary ? 0 : 1, borderColor: c.borderStrong, opacity: busy ? 0.6 : pressed ? 0.88 : 1, transform: [{ scale: pressed ? 0.985 : 1 }] })}>
+      style={({ pressed }) => ({ minHeight: 54, paddingVertical: 8, borderRadius: radius.lg, alignItems: "center", justifyContent: "center", backgroundColor: primary ? c.accent : "transparent", borderWidth: primary ? 0 : 1, borderColor: c.borderStrong, opacity: busy ? 0.6 : pressed ? 0.88 : 1, transform: [{ scale: pressed ? 0.985 : 1 }] })}>
       <Text style={{ color: primary ? c.accentOn : c.text, fontSize: 16, fontWeight: "600" }}>{label}</Text>
     </Pressable>
   );
