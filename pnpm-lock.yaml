@@ -78,6 +78,9 @@ importers:
 
   apps/studio:
     dependencies:
+      '@finx/codegen':
+        specifier: workspace:*
+        version: link:../../packages/codegen
       '@finx/journey-schema':
         specifier: workspace:*
         version: link:../../packages/journey-schema
@@ -130,6 +133,22 @@ importers:
       '@types/react-dom':
         specifier: ~19.3.0
         version: 19.3.0(@types/react@19.3.0)
+      vitest:
+        specifier: 2.1.8
+        version: 2.1.8(@types/node@22.20.5)(lightningcss@1.33.0)(terser@5.51.2)
+
+  packages/codegen:
+    dependencies:
+      '@finx/journey-schema':
+        specifier: workspace:*
+        version: link:../journey-schema
+      '@finx/ui-kit':
+        specifier: workspace:*
+        version: link:../ui-kit
+    devDependencies:
+      '@types/node':
+        specifier: ^22.10.0
+        version: 22.20.5
       vitest:
         specifier: 2.1.8
         version: 2.1.8(@types/node@22.20.5)(lightningcss@1.33.0)(terser@5.51.2)
