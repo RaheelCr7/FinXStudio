@@ -5,6 +5,7 @@ import type { Journey, LintIssue } from "@finx/journey-schema";
 import { BLOCK_GROUPS, BLOCK_LABELS, blockSummary, deleteScreen, moveBlock, removeBlock, textOf, updateScreen } from "@/lib/edit";
 import { BLOCK_HELP, BLOCK_ICONS } from "@/lib/blocks-ui";
 import { BindField, Field, Loc, ScreenSelect } from "./fields";
+import { RuleField } from "./RuleField";
 
 type Props = {
   journey: Journey; screenId: string; blockIndex: number | null; issues: LintIssue[]; onChange: (j: Journey) => void;
@@ -114,7 +115,7 @@ function BlockEditor({ b, journey, onChange }: { b: any; journey: Journey; onCha
             <button className="btn sm danger" onClick={() => onChange({ rows: b.rows.filter((_: any, k: number) => k !== i) })}>Remove row</button>
           </div>))}
         <button className="btn sm" onClick={() => onChange({ rows: [...b.rows, { label: "Label", value: "Value" }] })}>+ Add row</button></div>) : null}
-      <Field label="Visible when (rule)" hint="Leave empty to always show"><input className="input mono" value={b.visibleWhen ?? ""} onChange={(e) => onChange({ visibleWhen: e.target.value || undefined })} placeholder="transfer.amount > 10000" /></Field>
+      <RuleField journey={journey} label="Show this block when" none="Always shown" value={b.visibleWhen} onChange={(visibleWhen) => onChange({ visibleWhen })} />
     </div>
   );
 }
@@ -232,7 +233,7 @@ export function Inspector({ journey, screenId, blockIndex, issues, onChange, onS
         <div className="stack" style={{ gap: 8 }}>
           {(screen.navigation?.rules ?? []).map((r, i) => (
             <div key={i} className="card" style={{ padding: 10, gap: 8, borderRadius: 10, boxShadow: "none" }}>
-              <Field label="When"><input className="input mono" value={r.when} onChange={(e) => edit((s) => { s.navigation.rules[i].when = e.target.value; })} placeholder="amount > limit" /></Field>
+              <RuleField journey={journey} label="Rule" alwaysValue="true" none="Always" value={r.when} onChange={(when) => edit((s) => { s.navigation.rules[i].when = when ?? "true"; })} />
               <ScreenSelect journey={journey} label="Go to" value={r.to} onChange={(to) => edit((s) => { s.navigation.rules[i].to = to; })} />
               <button className="btn sm danger" onClick={() => edit((s) => { s.navigation.rules.splice(i, 1); })}><Trash2 size={13} aria-hidden />Remove rule</button>
             </div>))}

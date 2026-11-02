@@ -332,3 +332,14 @@ button.workspace:hover { background: rgba(255,255,255,.08); border-color: #2a344
 .preset-card[aria-pressed="true"] { border-color: var(--accent); background: var(--accent-soft); }
 .mock { width: 232px; border-radius: 28px; padding: 12px; background: #0d1118; box-shadow: var(--shadow-lg); }
 .mock .scr { border-radius: 20px; padding: 14px 12px 12px; display: flex; flex-direction: column; gap: 10px; min-height: 380px; }
+
+/* rule editor */
+.rule-field .btn.on { background: var(--accent-soft); color: var(--accent-text); }
+.rule-rows { display: flex; flex-direction: column; gap: 6px; }
+.rule-row { display: grid; grid-template-columns: 54px 1fr; gap: 6px; align-items: center; padding: 8px; border: 1px solid var(--border); border-radius: 10px; background: var(--surface-2); }
+.rule-row .join { font-size: 12.5px; height: 28px; padding: 0 4px; display: flex; align-items: center; }
+.rule-row .input, .rule-row .select { min-width: 0; }
+.rule-row > :nth-child(n+3) { grid-column: 2; }
+.rule-row > .btn { grid-column: 2; justify-self: end; }
+.rule-test { display: flex; flex-direction: column; gap: 6px; padding: 10px; border: 1px dashed var(--border-strong); border-radius: 10px; }
+.rule-test code { font-family: var(--mono); font-size: 12px; }
