@@ -9,8 +9,13 @@ Step 1 of multi-currency (plan section 15). One place knows how each currency is
 - **Template filter:** `{{ amount | money:JOD }}` or `{{ amount | money:account.currency }}` writes money in that currency. `{{ amount | money }}` without a currency is unchanged (a plain number).
 - **A bank's own currency:** `validateCustomCurrency` checks a code, name, symbol and decimals; `currencyInfo(code, custom)` prefers the bank's own entry. Nothing stores or edits them yet.
 
+## In journeys (step 3)
+- **Currency from data:** `amountInput.currency` is a code (`"JOD"`) or a path (`"{{ account.currency }}"`), read when the screen is shown. The block's symbol, keypad and decimals follow it.
+- **Decimals:** the amount field takes the currency's own places (JOD 3, USD 2, JPY 0) with a decimal keypad; a trailing point stays while you type ("12." then "12.5"), extra places are cut, and a number with too many places is refused on Continue ("Use at most 3 decimal places", "Enter a whole amount, without decimals"; English and Urdu).
+- **Lint:** `amount_no_currency`, `amount_currency_invalid` (neither a code nor a path), `currency_mismatch` (differs from the dataModel entry), `mixed_currency` (more than one fixed currency in a journey; fine for a conversion). `{{ x | money:JOD }}` and a path argument are accepted by the formatter lint.
+- Limit: a currency a bank added itself is not known to the engine yet, so it is treated as 2 decimals inside a journey.
+
 ## Not built yet (next steps, in order)
-1. Studio **Currencies** page: pick which currencies a project offers, a base currency, add a custom one (stored in `brands.json`).
-2. Amounts with decimals in the amount field (today it types whole units), `amountInput.currency` as a data path, lint for mixed-currency sums.
-3. Sandbox accounts in several currencies, pickers and statements grouped by currency.
-4. FX: rate table with spread and fee, quotes that expire, a convert journey and cross-currency transfer with the rate on the review screen.
+1. Sandbox accounts in several currencies, pickers and statements grouped by currency.
+2. FX: rate table with spread and fee, quotes that expire, a convert journey and cross-currency transfer with the rate on the review screen.
+3. Pass a project's own currencies to the engine.

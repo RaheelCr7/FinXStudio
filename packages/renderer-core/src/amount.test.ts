@@ -43,3 +43,73 @@ describe("amount validation messages", () => {
     expect(r.errors["t.amount"]).toBe("کم از کم 50 ہے");
   });
 });
+
+import { typedAmount, amountText } from "./blocks/money";
+import { lintJourney } from "@finx/journey-schema";
+
+describe("typing an amount", () => {
+  it("keeps whole currencies whole and groups thousands", () => {
+    expect(typedAmount("12000")).toEqual({ text: "12,000", value: 12000 });
+    expect(typedAmount("12.5")).toEqual({ text: "125", value: 125 }); // no point for a currency without decimals
+    expect(typedAmount("")).toEqual({ text: "", value: undefined });
+    expect(typedAmount("abc")).toEqual({ text: "", value: undefined });
+  });
+  it("keeps a trailing point while the person is still typing, and cuts extra places", () => {
+    expect(typedAmount("12.", 3)).toEqual({ text: "12.", value: 12 });
+    expect(typedAmount("12.5", 3)).toEqual({ text: "12.5", value: 12.5 });
+    expect(typedAmount("12.5678", 3)).toEqual({ text: "12.567", value: 12.567 });
+    expect(typedAmount("1234.5", 2)).toEqual({ text: "1,234.5", value: 1234.5 });
+    expect(typedAmount(".5", 2)).toEqual({ text: "0.5", value: 0.5 });
+    expect(typedAmount("1.2.3", 3)).toEqual({ text: "1.23", value: 1.23 });
+  });
+  it("shows a stored amount with the currency's decimals at most", () => {
+    expect(amountText(12.5, 3)).toBe("12.5");
+    expect(amountText(12000)).toBe("12,000");
+    expect(amountText(undefined, 3)).toBe("");
+  });
+});
+
+describe("amount currency and decimals", () => {
+  const withCurrency = (currency: string, data: Record<string, unknown> = {}) => {
+    const c = structuredClone(j) as any;
+    c.screens[0].blocks[0].currency = currency;
+    c.screens[0].blocks[0].validation = {};
+    c.dataModel["t.amount"].currency = undefined;
+    const bank = new MockBank("ayesha");
+    const r = new JourneyRunner(c, { adapter: (id, input) => bank.call(id, input), lang: "en" });
+    for (const [k, v] of Object.entries(data)) r.set(k, v);
+    return r;
+  };
+  it("reads the currency from the data and tells the view its decimals", async () => {
+    const r = withCurrency("{{ acct.currency }}", { acct: { currency: "JOD" } });
+    await r.start(); r.set("acct", { currency: "JOD" });
+    const b = r.view().blocks.find((x: any) => x.type === "amountInput") as any;
+    expect([b.currency, b.decimals]).toEqual(["JOD", 3]);
+    r.set("acct", { currency: "JPY" });
+    expect((r.view().blocks.find((x: any) => x.type === "amountInput") as any).decimals).toBe(0);
+  });
+  it("refuses more places than the currency has", async () => {
+    const press = async (currency: string, amount: number) => {
+      const r = withCurrency(currency); await r.start(); r.set("t.amount", amount);
+      await r.press((r.view().blocks.find((b: any) => b.type === "button") as any).actions);
+      return r.errors["t.amount"];
+    };
+    expect(await press("JOD", 12.5)).toBeUndefined();
+    expect(await press("JOD", 12.5555)).toBe("Use at most 3 decimal places");
+    expect(await press("USD", 10.555)).toBe("Use at most 2 decimal places");
+    expect(await press("JPY", 100.5)).toBe("Enter a whole amount, without decimals");
+    expect(await press("JPY", 100)).toBeUndefined();
+  });
+});
+
+describe("currency lint", () => {
+  const lint = (mutate: (c: any) => void) => { const c = structuredClone(j) as any; mutate(c); return lintJourney(c).filter((i) => /currency/.test(i.code)).map((i) => i.code); };
+  it("accepts a code and a path, and flags the rest", () => {
+    expect(lint(() => {})).toEqual([]);
+    expect(lint((c) => { c.screens[0].blocks[0].currency = "{{ account.currency }}"; })).toEqual([]);
+    expect(lint((c) => { c.screens[0].blocks[0].currency = ""; })).toEqual(["amount_no_currency"]);
+    expect(lint((c) => { c.screens[0].blocks[0].currency = "rupees"; })).toEqual(["amount_currency_invalid"]);
+    expect(lint((c) => { c.screens[0].blocks[0].currency = "USD"; })).toEqual(["currency_mismatch"]);
+    expect(lint((c) => { c.screens[0].blocks.splice(1, 0, { type: "amountInput", bind: "t.other", currency: "USD" }); c.dataModel["t.other"] = { type: "money", currency: "USD" }; })).toEqual(["mixed_currency"]);
+  });
+});

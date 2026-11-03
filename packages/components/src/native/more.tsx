@@ -149,7 +149,7 @@ export function ChoiceGroup({ label, look = "chips", options, onChange, error, f
   );
 }
 
-export function AmountField({ label, value, symbol, onChange, helper, error, quick = [], onQuick, quickLabel }: AmountFieldProps) {
+export function AmountField({ label, value, symbol, decimals = 0, onChange, helper, error, quick = [], onQuick, quickLabel }: AmountFieldProps) {
   const { c, r } = useKit();
   const [focus, setFocus] = useState(false);
   return (
@@ -157,7 +157,7 @@ export function AmountField({ label, value, symbol, onChange, helper, error, qui
       <Legend>{label}</Legend>
       <View style={{ flexDirection: "row", alignItems: "baseline", borderBottomWidth: 2, borderBottomColor: error ? c.negative : focus ? c.accent : c.borderStrong, paddingBottom: 8 }}>
         <Text style={{ fontSize: 20, fontWeight: "500", color: c.textMuted, marginEnd: 8 }}>{symbol}</Text>
-        <TextInput accessibilityLabel={label} value={value} placeholder="0" placeholderTextColor={c.textFaint} keyboardType="number-pad" onFocus={() => setFocus(true)} onBlur={() => setFocus(false)} onChangeText={onChange}
+        <TextInput accessibilityLabel={label} value={value} placeholder="0" placeholderTextColor={c.textFaint} keyboardType={decimals ? "decimal-pad" : "number-pad"} onFocus={() => setFocus(true)} onBlur={() => setFocus(false)} onChangeText={onChange}
           style={[{ flex: 1, fontSize: 40, fontWeight: "600", color: c.text, padding: 0 }, tabular, noOutline]} />
       </View>
       {helper ? <Text style={[{ color: c.textMuted, fontSize: 13, marginTop: 8 }, tabular]}>{helper}</Text> : null}

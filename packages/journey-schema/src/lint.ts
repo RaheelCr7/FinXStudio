@@ -91,6 +91,20 @@ export function lintJourney(j: Journey): LintIssue[] {
     }
   }
 
+  // amounts: each names a currency (a code, or a path to one in the data), the same one the data model says, and a journey does not mix currencies by accident
+  const literal = new Set<string>();
+  for (const s of j.screens) for (const b of s.blocks as any[]) {
+    if (b.type !== "amountInput") continue;
+    const c = String(b.currency ?? "").trim();
+    if (!c) { issues.push({ code: "amount_no_currency", message: `Amount ${b.bind} has no currency`, screen: s.id }); continue; }
+    if (c.includes("{{")) continue;
+    if (!/^[A-Z]{3,4}$/.test(c)) { issues.push({ code: "amount_currency_invalid", message: `Amount ${b.bind} has currency "${c}": use a code like JOD or a path like {{account.currency}}`, screen: s.id }); continue; }
+    literal.add(c);
+    const declared = j.dataModel?.[b.bind]?.currency;
+    if (declared && !declared.includes("{{") && declared !== c) issues.push({ code: "currency_mismatch", message: `Amount ${b.bind} is in ${c} but dataModel says ${declared}`, screen: s.id });
+  }
+  if (literal.size > 1) issues.push({ code: "mixed_currency", message: `Amounts in ${[...literal].join(" and ")} in one journey. Fine for a conversion; otherwise use one currency.` });
+
   // translations complete
   const langs = j.locale.supported.filter((l) => l !== j.locale.default);
   const missing = new Set<string>();
