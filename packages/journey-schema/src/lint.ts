@@ -115,6 +115,18 @@ export function lintJourney(j: Journey): LintIssue[] {
     issues.push({ code: "authorisation_missing", message: "A journey that starts or approves a company payment must say which role may use it (authorisation)" });
   }
 
+  // acceptance criteria and the scenarios that prove them
+  const criteria = new Set((j.acceptance ?? []).map((a) => a.id));
+  const dupAc = (j.acceptance ?? []).map((a) => a.id).filter((id, i, all) => all.indexOf(id) !== i);
+  for (const id of new Set(dupAc)) issues.push({ code: "acceptance_duplicate", message: `Acceptance criterion ${id} is used more than once` });
+  const dupT = (j.scenarios ?? []).map((t) => t.id).filter((id, i, all) => all.indexOf(id) !== i);
+  for (const id of new Set(dupT)) issues.push({ code: "scenario_duplicate", message: `Scenario ${id} is used more than once` });
+  for (const t of j.scenarios ?? []) for (const c of t.covers) if (!criteria.has(c)) issues.push({ code: "scenario_unknown_criterion", message: `Scenario ${t.id} covers ${c}, which is not an acceptance criterion of this journey` });
+  if (criteria.size) {
+    const covered = new Set((j.scenarios ?? []).flatMap((t) => t.covers));
+    for (const id of criteria) if (!covered.has(id)) issues.push({ code: "criterion_uncovered", message: `Acceptance criterion ${id} has no scenario that covers it` });
+  }
+
   // translations complete
   const langs = j.locale.supported.filter((l) => l !== j.locale.default);
   const missing = new Set<string>();

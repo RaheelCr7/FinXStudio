@@ -1,6 +1,6 @@
 import type { Journey } from "@finx/journey-schema";
 import { JourneyRunner, localize, type View } from "@finx/renderer-core";
-import { MockBank, personas } from "@finx/mock-bank-api";
+import { MockBank, personas, type Flaws, type ProviderId } from "@finx/mock-bank-api";
 
 /** One scripted action or check. Actions change state; expectations only check it. */
 export type Step =
@@ -9,7 +9,9 @@ export type Step =
   | { expectScreen: string }
   | { expectText: string }
   | { expectError: string }
-  | { expectToast: string };
+  | { expectToast: string }
+  /** Reads the bank with a read adapter and checks one value: { adapter, input?, path, equals } (for example that no money has moved). An input value of the form {{path}} is read from the journey's data. */
+  | { expectBank: { adapter: string; input?: Record<string, unknown>; path: string; equals: unknown } };
 
 export type Frame = { step: number; did: string; screen: string; title: string; kind: string; errors: Record<string, string>; toast?: string; blocks: string[] };
 export type SimResult = {
@@ -61,16 +63,33 @@ function visibleStrings(view: View): string[] {
   return out.filter(Boolean);
 }
 
-export async function simulate(opts: { journey: Journey; persona: string; lang: string; steps: Step[] }): Promise<SimResult> {
+export type SimOptions = {
+  journey: Journey; persona: string; lang: string; steps: Step[];
+  /** The corporate bank API behind corp.* adapters (reference by default). */
+  provider?: ProviderId;
+  /** The sandbox clock, in milliseconds since 1970. */
+  now?: number;
+  /** Calls made on the bank before the walk starts. */
+  setup?: { adapter: string; input?: Record<string, unknown> }[];
+  /** Rules switched off in the sandbox, for mutation checks. */
+  flaws?: Flaws;
+};
+
+export async function simulate(opts: SimOptions): Promise<SimResult> {
   const { journey, persona, lang, steps } = opts;
   if (!(persona in personas)) throw new Error(`Unknown persona "${persona}". Use one of: ${Object.keys(personas).join(", ")}`);
   if (!journey.locale.supported.includes(lang)) throw new Error(`Language "${lang}" is not supported by this journey (supported: ${journey.locale.supported.join(", ")})`);
   if (steps.length > MAX_STEPS) throw new Error(`Too many steps (${steps.length}). The limit is ${MAX_STEPS}.`);
 
-  const bank = new MockBank(persona);
+  const bank = new MockBank(persona, { corpProvider: opts.provider, corpFlaws: opts.flaws });
+  if (opts.now !== undefined) bank.now = () => opts.now!;
+  const setupFailures: string[] = [];
+  for (const [k, call] of (opts.setup ?? []).entries()) {
+    try { await bank.call(call.adapter, (call.input ?? {}) as Record<string, any>); } catch (e) { setupFailures.push(`Setup ${k + 1} (${call.adapter}) failed: ${(e as Error).message}`); }
+  }
   const runner = new JourneyRunner(journey, { adapter: (id, input) => bank.call(id, input), lang });
   const frames: Frame[] = [];
-  const failures: string[] = [];
+  const failures: string[] = [...setupFailures];
   const visited = new Set<string>();
 
   const snap = (step: number, did: string) => {
@@ -98,8 +117,10 @@ export async function simulate(opts: { journey: Journey; persona: string; lang: 
       for (const [path, value] of Object.entries(step.set)) runner.set(path, value);
       view = snap(n, `set ${Object.keys(step.set).join(", ")}`);
     } else if ("press" in step) {
-      const buttons = (runner.view().blocks as any[]).filter((b) => b.type === "button");
-      const raw = (runner.screen.blocks as any[]).filter((b) => b.type === "button");
+      // a button, or a row of a menu (a list row, a shortcut) with that label
+      const rows = (runner.view().blocks as any[]).filter((b) => b.type === "menu" || b.type === "shortcuts").flatMap((b) => (b.items ?? []).map((i: any) => ({ type: "button", label: i.label, actions: i.actions })));
+      const buttons = [...(runner.view().blocks as any[]).filter((b) => b.type === "button"), ...rows];
+      const raw = [...(runner.screen.blocks as any[]).filter((b) => b.type === "button"), ...rows];
       const want = String(step.press).trim().toLowerCase();
       const idx = buttons.findIndex((b, k) => String(b.label).trim().toLowerCase() === want || localize(raw[k]?.label, journey.locale.default, journey.locale.default).trim().toLowerCase() === want);
       if (idx < 0) {
@@ -129,11 +150,20 @@ export async function simulate(opts: { journey: Journey; persona: string; lang: 
         did = `expect validation error "${step.expectError}"`;
         const q = String(step.expectError).toLowerCase();
         if (!Object.entries(runner.errors).some(([k, m]) => k.toLowerCase() === q || m.toLowerCase().includes(q))) fail(n, `${did}: there is no such error on screen "${view.screenId}"`, view);
+      } else if ("expectBank" in step) {
+        const e = step.expectBank;
+        did = `expect bank ${e.adapter} ${e.path} = ${JSON.stringify(e.equals)}`;
+        try {
+          // an input value that is exactly {{path}} is read from the journey's data (for example the id of the payment just chosen)
+          const input = Object.fromEntries(Object.entries(e.input ?? {}).map(([k, v]) => [k, typeof v === "string" && /^\{\{[^}]+\}\}$/.test(v) ? runner.get(v.slice(2, -2).trim()) : v]));
+          const got = e.path.split(".").reduce((o: any, k: string) => o?.[k], await bank.call(e.adapter, input as Record<string, any>));
+          if (JSON.stringify(got) !== JSON.stringify(e.equals)) fail(n, `${did}: it is ${JSON.stringify(got)}`, view);
+        } catch (err) { fail(n, `${did}: the bank call failed: ${(err as Error).message}`, view); }
       } else if ("expectToast" in step) {
         did = `expect message "${step.expectToast}"`;
         if (!view.toast || !view.toast.toLowerCase().includes(String(step.expectToast).toLowerCase())) fail(n, `${did}: the message shown is ${view.toast ? `"${view.toast}"` : "none"}`, view);
       } else {
-        failures.push(`Step ${n} is not a known action. Use set, press, expectScreen, expectText, expectError or expectToast.`);
+        failures.push(`Step ${n} is not a known action. Use set, press, expectScreen, expectText, expectError, expectToast or expectBank.`);
         stopped = true;
         break;
       }

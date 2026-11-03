@@ -47,7 +47,15 @@ The **mapping layer** (`mapping.ts`) turns the bank-neutral shapes the journeys 
 - Both banks give the same company, the same payments (apart from each bank's own id), the same pending lists, the same balances, and the same refusals with the same code and wording, in a table of nine rules plus the approval steps.
 - Every field a journey can read is mapped, and every error code Bank B can answer has a mapping.
 
+## Tests that travel with a journey, and the mutation check
+A journey can carry its own proof: **`acceptance`** (criteria `AC-1 …`, each a sentence that must be true) and **`scenarios`** (`T-1 …`): scripted walks through the journey against the sandbox bank, each saying which criteria it `covers`, with an optional `setup` (calls made on the bank first, such as a payment waiting for approval), a fixed clock `now`, and the steps of `finx_simulate_journey` plus `expectBank` (read the bank with an adapter and check one value, for example that no money moved; `{{path}}` inputs are read from the journey's data). Lint reports a scenario that covers an unknown criterion and a criterion no scenario covers.
+
+- `finx_run_scenarios` (and `runScenarios` in `packages/finx-mcp/src/scenarios.ts`) runs them and reports, per criterion, **proved** (a passing scenario covers it), **failing** or **uncovered**; `provider: "bank-b"` runs the corporate adapters against the second API.
+- `finx_mutation_check` breaks the journey one thing at a time (each validation step, each one-time-code check, each error path, each navigation rule, the confirmation, the amount limits, the role check) and, for company journeys, switches off one bank rule at a time (roles, approved list, user and company limits, second approver, four eyes, cut-off), then re-runs the scenarios. A mutant is **killed** when a scenario fails. A survivor is a mistake the tests would let through.
+- **Both corporate journeys carry them**: 11 and 8 criteria, 12 and 10 scenarios, all proved on both bank APIs. The mutation check kills every mutant except the ones listed, with the reason for each, in `packages/finx-mcp/src/scenarios.test.ts` (another layer already stops the case, or the sandbox cannot produce it, for example the company limit of 8,000,000 is above the sum of every initiator's limit). The test fails on any new survivor, so changing a journey makes the tests prove themselves again.
+- The `/finx-generate` skill is the workflow around this: plan and wait for a yes, draft, write scenarios, run, mutation check, report.
+
 ## Not built yet
-- Bulk payments, payroll, and the generator that writes these journeys from a brief and criteria. The mutation check of the gate (change a limit or skip the approver and the generated tests fail) needs the generator's tests.
-- Choosing the bank API per project in Studio (a "Connection" setting); today it is chosen when the sandbox bank is created.
-- A real vendor behind a mapping file (Temenos, Finacle, open banking): the contract and the mapping format are ready for one.
+- Bulk payments and payroll (more journeys for the generator to try).
+- A checkpoint of a generator run that can be undone in one click (Studio's journey history covers published versions only), and a Studio view of scenarios and coverage.
+- Choosing the bank API per project in Studio, and a real vendor behind a mapping file.

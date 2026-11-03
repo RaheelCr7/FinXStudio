@@ -1,4 +1,4 @@
-import { catalog, catalogEntry, localTransfer, payBill, validateJourney, type Journey } from "@finx/journey-schema";
+import { catalog, catalogEntry, corporatePayment, localTransfer, payBill, validateJourney, type Journey } from "@finx/journey-schema";
 import { lintAll } from "@finx/renderer-core";
 import { StudioError, type CatalogSummary, type JourneyRecord, type JourneySummary, type ProjectSummary, type RunInput, type RunRecord, type StudioClient } from "../studio-client";
 import { SKELETON } from "../catalog";
@@ -11,10 +11,10 @@ export class FakeStudio implements StudioClient {
   runs = new Map<string, RunRecord & Record<string, unknown>>();
   calls: string[] = [];
 
-  constructor(seed: Array<"fund-transfer-local" | "pay-a-bill"> = ["fund-transfer-local"]) {
+  constructor(seed: Array<"fund-transfer-local" | "pay-a-bill" | "corporate-payment"> = ["fund-transfer-local"]) {
     const now = new Date().toISOString();
     for (const name of seed) {
-      const j = structuredClone(name === "pay-a-bill" ? payBill : localTransfer);
+      const j = structuredClone(name === "pay-a-bill" ? payBill : name === "corporate-payment" ? corporatePayment : localTransfer);
       this.records.set(j.slug, { slug: j.slug, draft: structuredClone(j), published: structuredClone(j), history: [{ version: j.version, publishedAt: now, by: "seed" }], updatedAt: now });
     }
   }

@@ -1,5 +1,5 @@
 import { ApiError, BankBApi } from "./corporate-b";
-import { CorporateSandbox, type CorporateBankAdapter, type CorpCompany, type CorpPayment, type InitiateInput } from "./corporate";
+import { CorporateSandbox, type CorporateBankAdapter, type CorpCompany, type CorpPayment, type Flaws, type InitiateInput } from "./corporate";
 import { build, mapError, responseRules, type MappingSpec } from "./mapping";
 import bankBSpec from "./mappings/bank-b.corporate.json";
 
@@ -45,10 +45,10 @@ class ReferenceProvider extends CorporateSandbox implements CorporateProvider {
   getCompany() { return this.summary; }
 }
 
-export function createCorporateProvider(id: ProviderId, company: CorpCompany): CorporateProvider {
+export function createCorporateProvider(id: ProviderId, company: CorpCompany, flaws: Flaws = {}): CorporateProvider {
   if (id === "bank-b") {
-    const api = new BankBApi(company);
+    const api = new BankBApi(company, flaws);
     return new MappedCorporateProvider(bankBSpec as unknown as MappingSpec, api, { companyId: company.id }, (fn) => { api.now = fn; });
   }
-  return new ReferenceProvider(company);
+  return new ReferenceProvider(company, flaws);
 }
