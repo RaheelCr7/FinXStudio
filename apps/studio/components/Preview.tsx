@@ -1,5 +1,5 @@
 "use client";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { MousePointerClick, Moon, RotateCcw, Sparkles, Sun } from "lucide-react";
 import type { Journey } from "@finx/journey-schema";
 import { MockBank, defaultPersonaFor, personasFor } from "@finx/mock-bank-api";
@@ -35,6 +35,17 @@ export function Preview({ journey, onPick, picked, onAsk, select = false, onSele
     return (id: string, input: Record<string, any>) => bank.call(id, input);
   }, [persona, seed]);
   const restart = () => setSeed((s) => s + 1);
+  // runs played here are recorded (screens, mistakes, failures; never answers), batched so typing is never slowed down
+  const queue = useRef<unknown[]>([]);
+  const flush = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const onEvent = useCallback((e: unknown) => {
+    queue.current.push(e);
+    if (flush.current) return;
+    flush.current = setTimeout(() => {
+      const events = queue.current.splice(0); flush.current = null;
+      fetch("/api/analytics", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ events, source: "preview" }) }).catch(() => {});
+    }, 800);
+  }, []);
   const supported = journey.locale.supported;
 
   // Shrink the phone to fit the panel (never grow it), so the whole device is always visible.
@@ -65,7 +76,7 @@ export function Preview({ journey, onPick, picked, onAsk, select = false, onSele
               onClickCapture={select && onPick ? (e) => { const at = blockAt(e.target); e.preventDefault(); e.stopPropagation(); if (at) onPick(at.screen, at.index); } : undefined}>
               <div>
                 <ThemeProvider mode={dark ? "dark" : "light"} brand={brand}>
-                  <JourneyPlayer key={seed} journey={live} adapter={adapter} lang={lang} onClose={restart} onExit={restart} />
+                  <JourneyPlayer key={seed} journey={live} adapter={adapter} lang={lang} onEvent={onEvent} onClose={restart} onExit={restart} />
                 </ThemeProvider>
               </div>
             </div>

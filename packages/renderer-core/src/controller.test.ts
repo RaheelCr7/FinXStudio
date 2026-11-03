@@ -58,3 +58,37 @@ describe("JourneyController", () => {
     off(); c.set("bill.reference", "12"); expect(n).toBe(1);
   });
 });
+
+describe("run events (analytics)", () => {
+  it("reports screen views, mistakes, bank failures, back and exit, without any answers", async () => {
+    const { Journey } = await import("@finx/journey-schema");
+    const events: any[] = [];
+    const j = Journey.parse({
+      id: "jrn_ev", slug: "ev", version: 3, status: "draft", channels: ["mobile"], name: { en: "Ev" }, locale: { default: "en", supported: ["en"] }, entryScreen: "a",
+      integrations: [{ id: "boom", adapter: "bank.boom", mode: "sandbox" }],
+      dataModel: { "form.name": { type: "string", required: true } },
+      screens: [
+        { id: "a", title: { en: "A" }, blocks: [{ type: "textInput", bind: "form.name", label: { en: "Name" } }, { type: "button", label: { en: "Go" }, actions: [{ type: "validate" }, { type: "callApi", integration: "boom", onError: { navigate: "c" } }, { type: "navigate", to: "b" }] }], navigation: { next: "b" } },
+        { id: "b", title: { en: "B" }, blocks: [{ type: "button", label: { en: "Quit" }, actions: [{ type: "exit" }] }] },
+        { id: "c", title: { en: "C" }, kind: "terminal", blocks: [] },
+      ],
+    });
+    const c = new JourneyController(j, { adapter: async () => { throw Object.assign(new Error("no"), { code: "ERR-9" }); }, onEvent: (e) => events.push(e) });
+    await c.start();
+    await c.press(c.layout().buttons[0]!.actions); // the name is empty: a mistake
+    c.set("form.name", "secret-name");
+    await c.press(c.layout().buttons[0]!.actions); // the bank call fails and sends the person to c
+    expect(events.map((e) => e.type)).toEqual(["screen", "invalid", "apiError", "screen"]);
+    expect(events[1]).toMatchObject({ screen: "a", fields: ["form.name"] });
+    expect(events[2]).toMatchObject({ screen: "a", integration: "boom", code: "ERR-9" });
+    expect(events[3]).toMatchObject({ screen: "c", kind: "terminal", slug: "ev", version: 3, lang: "en" });
+    expect(new Set(events.map((e) => e.session)).size).toBe(1);
+    expect(JSON.stringify(events)).not.toContain("secret-name");
+  });
+
+  it("a listener that throws never breaks the journey", async () => {
+    const { Journey, corporatePayment } = await import("@finx/journey-schema");
+    const c = new JourneyController(Journey.parse(corporatePayment), { adapter: async () => ({}), onEvent: () => { throw new Error("analytics down"); } });
+    await expect(c.start()).resolves.toBeUndefined();
+  });
+});

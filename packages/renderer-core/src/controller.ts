@@ -1,7 +1,12 @@
 import type { Journey } from "@finx/journey-schema";
-import { JourneyRunner, type Adapter, type View } from "./runner";
+import { JourneyRunner, type Adapter, type RunEvent, type View } from "./runner";
+
+/** A run event with where and when it happened. `session` groups the events of one play-through. */
+export type JourneyEvent = RunEvent & { session: string; slug: string; version: number; lang: string; at: string };
 
 export type JourneyControllerOptions = {
+  /** Called for every event of the run (screen views, mistakes, bank failures, exits). Never receives answers. */
+  onEvent?: (e: JourneyEvent) => void;
   adapter: Adapter;
   lang?: string;
   /** Answers to fill in when the journey opens, by data path, for example the item the customer was looking at. */
@@ -34,7 +39,11 @@ export type PlayerLayout = {
 export class JourneyController {
   readonly runner: JourneyRunner;
   constructor(journey: Journey, private opts: JourneyControllerOptions) {
-    this.runner = new JourneyRunner(journey, { adapter: opts.adapter, lang: opts.lang });
+    const session = `${Date.now().toString(36)}${Math.random().toString(36).slice(2, 8)}`;
+    this.runner = new JourneyRunner(journey, {
+      adapter: opts.adapter, lang: opts.lang,
+      onEvent: opts.onEvent ? (e) => opts.onEvent!({ ...e, session, slug: journey.slug, version: journey.version, lang: this.runner.lang, at: new Date().toISOString() }) : undefined,
+    });
   }
 
   /** Opens the first screen, then fills in any initial answers. */

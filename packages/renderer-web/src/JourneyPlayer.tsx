@@ -1,7 +1,7 @@
 "use client";
 import { useEffect, useMemo, useReducer, useRef } from "react";
 import type { Journey } from "@finx/journey-schema";
-import { JourneyController, ui, type Adapter, type BlockType } from "@finx/renderer-core";
+import { JourneyController, ui, type Adapter, type BlockType, type JourneyEvent } from "@finx/renderer-core";
 import type { BrandLook } from "@finx/ui-kit";
 import { AppBar, componentsCss } from "@finx/components";
 import { Button, registry } from "./blocks/blocks";
@@ -13,6 +13,8 @@ export type JourneyPlayerProps = {
   lang?: string;
   /** Answers to fill in when the journey opens, by data path. */
   initial?: Record<string, any>;
+  /** Receives screen views, mistakes, bank failures and exits (never answers), for analytics. */
+  onEvent?: (e: JourneyEvent) => void;
   /** The close button, and back from the first screen. */
   onClose?: () => void;
   /** The journey asked to exit (its last screen's button). */
@@ -27,8 +29,8 @@ export type JourneyPlayerProps = {
  * this draws it with real form elements: labels, error messages that are announced, a step list, Enter to continue,
  * and focus that moves to the screen title (or the first mistake) so keyboard and screen-reader users are never left behind.
  */
-export function JourneyPlayer({ journey, adapter, lang, initial, onClose, onExit, look, brandName }: JourneyPlayerProps) {
-  const controller = useMemo(() => new JourneyController(journey, { adapter, lang, initial }), [journey, adapter]);
+export function JourneyPlayer({ journey, adapter, lang, initial, onEvent, onClose, onExit, look, brandName }: JourneyPlayerProps) {
+  const controller = useMemo(() => new JourneyController(journey, { adapter, lang, initial, onEvent }), [journey, adapter]);
   const [, force] = useReducer((x: number) => x + 1, 0);
   useEffect(() => controller.subscribe(force), [controller]);
   useEffect(() => { void controller.start(); }, [controller]);
