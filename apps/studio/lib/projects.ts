@@ -1,7 +1,7 @@
 import { promises as fs } from "node:fs";
 import path from "node:path";
 import { spawnSync } from "node:child_process";
-import { PRESETS, accentProblem, resolveBrand, type Brand, type BrandDef } from "@finx/ui-kit";
+import { PRESETS, accentProblem, defaultComponentTokens, resolveBrand, type Brand, type BrandDef, type ComponentTokenOverrides } from "@finx/ui-kit";
 import { StoreError } from "./store";
 import { brandsFile } from "./brand-ids";
 
@@ -92,6 +92,33 @@ export async function updateProjectAccent(id: string, accentInput: unknown): Pro
   await fs.rename(tmp, file);
   const icons = makeIcons(id, accent);
   return { project: toProject(id, updated), iconsMade: icons.ok, iconWarning: icons.warning, previous: def.accent };
+}
+
+/** Sets the sizes of a project's shared components (field, button, bar, row, keypad). Only values that differ from the defaults are stored. */
+export async function updateProjectComponents(id: string, input: unknown): Promise<{ project: Project; previous?: ComponentTokenOverrides }> {
+  const all = await read();
+  const def = all[id];
+  if (!def) throw new StoreError(404, `No project called ${id}`);
+  if (!input || typeof input !== "object") throw new StoreError(400, "Send the component sizes as an object");
+  const overrides: Record<string, Record<string, number>> = {};
+  for (const [group, defaults] of Object.entries(defaultComponentTokens)) {
+    const given = (input as Record<string, unknown>)[group];
+    if (given === undefined) continue;
+    if (!given || typeof given !== "object") throw new StoreError(400, `${group} must be an object`);
+    for (const key of Object.keys(defaults)) {
+      const v = (given as Record<string, unknown>)[key];
+      if (v === undefined) continue;
+      if (typeof v !== "number" || !Number.isFinite(v) || v < 0 || v > 200) throw new StoreError(400, `${group}.${key} must be a number from 0 to 200`);
+      if (v !== (defaults as Record<string, number>)[key]) (overrides[group] ??= {})[key] = v;
+    }
+  }
+  const { components: previous, ...rest } = def;
+  const updated: BrandDef = Object.keys(overrides).length ? { ...rest, components: overrides as ComponentTokenOverrides } : rest;
+  const file = brandsFile();
+  const tmp = `${file}.${process.pid}.tmp`;
+  await fs.writeFile(tmp, JSON.stringify({ ...all, [id]: updated }, null, 2) + "\n");
+  await fs.rename(tmp, file);
+  return { project: toProject(id, updated), previous };
 }
 
 /** The app icons come from the accent colour. If Python or Pillow is missing, the build script makes them later. */

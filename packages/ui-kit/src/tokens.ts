@@ -1,4 +1,5 @@
 import brandData from "./brands.json";
+import type { ComponentTokenOverrides } from "./components";
 
 /** FinX Design System (FDS) tokens. Single source of truth for Studio and the bank apps. */
 
@@ -145,9 +146,11 @@ export type BrandDef = {
   /** Folder with the app icons, relative to apps/bank-app. */
   assets: string; background: string; splashDark: string;
   look?: BrandLook;
+  /** Sizes of the shared components (field, button, bar, row, keypad) when the bank's design differs from the defaults. */
+  components?: ComponentTokenOverrides;
 };
 export type BrandId = string;
-export type Brand = { id: BrandId; name: string; preset: Preset; light: Theme; dark: Theme; radius: Record<keyof typeof radius, number>; currency: string; locale: string; look?: BrandLook };
+export type Brand = { id: BrandId; name: string; preset: Preset; light: Theme; dark: Theme; radius: Record<keyof typeof radius, number>; currency: string; locale: string; look?: BrandLook; components?: ComponentTokenOverrides };
 
 // ---- colour helpers ---------------------------------------------------------------------------------------------------
 const toRgb = (hex: string): [number, number, number] => { const n = parseInt(hex.slice(1), 16); return [(n >> 16) & 255, (n >> 8) & 255, n & 255]; };
@@ -202,7 +205,7 @@ export function resolveBrand(id: BrandId, def: BrandDef): Brand {
     }
     return { name: `${id}-${mode}`, colors: c };
   };
-  return { id, name: def.name, preset: def.preset, light: make("light"), dark: make("dark"), radius: base.radius, currency: def.currency, locale: def.locale, ...(def.look ? { look: def.look } : {}) };
+  return { id, name: def.name, preset: def.preset, light: make("light"), dark: make("dark"), radius: base.radius, currency: def.currency, locale: def.locale, ...(def.look ? { look: def.look } : {}), ...(def.components ? { components: def.components } : {}) };
 }
 
 /** Every bank in brands.json. Journeys and the engine never change per bank; only this does. */

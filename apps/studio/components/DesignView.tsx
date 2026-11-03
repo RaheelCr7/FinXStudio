@@ -26,7 +26,7 @@ async function readPicture(file: File): Promise<{ url: string; palette: Swatch[]
   return { url, palette: extractPalette(ctx.getImageData(0, 0, w, h).data) };
 }
 
-export function DesignView() {
+export function ColoursTab() {
   const router = useRouter();
   const { current } = useProjects();
   const { can } = useWho();
@@ -65,13 +65,8 @@ export function DesignView() {
   }
 
   return (
-    <div className="page">
-      <div className="page-head">
-        <div>
-          <h1>Design</h1>
-          <p className="sub">Choose a picture of a bank&rsquo;s design. Studio finds its colours and shows <b>{current.name}</b> in them before you change anything. The picture stays in your browser.</p>
-        </div>
-      </div>
+    <>
+      <p className="sub" style={{ margin: 0 }}>Choose a picture of a bank&rsquo;s design. Studio finds its colours and shows <b>{current.name}</b> in them before you change anything. The picture stays in your browser.</p>
       {err ? <div role="alert" style={{ color: "var(--negative)", fontSize: 13.5 }}>{err}</div> : null}
 
       <div className="design-wrap">
@@ -136,6 +131,6 @@ export function DesignView() {
           </div>
         </div>
       </div>
-    </div>
+    </>
   );
 }
