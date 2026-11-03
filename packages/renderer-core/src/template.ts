@@ -1,19 +1,27 @@
+import { formatMoney } from "@finx/ui-kit";
 import { evaluate } from "./expr";
 
-export const FORMATTERS: Record<string, (v: any) => string> = {
-  money: (v) => (v == null || v === "" ? "" : Number(v).toLocaleString("en-US", { maximumFractionDigits: 2 })),
+export const FORMATTERS: Record<string, (v: any, arg?: string) => string> = {
+  /** A plain number with thousands separators. With a currency ({{ amount | money:JOD }}) it is that currency's own money: symbol, its decimals (JPY 0, JOD 3). */
+  money: (v, currency) => (v == null || v === "" ? "" : currency ? formatMoney(Number(v), currency) : Number(v).toLocaleString("en-US", { maximumFractionDigits: 2 })),
   /** Always two decimals, for prices: 184.2 becomes 184.20. */
-  money2: (v) => (v == null || v === "" ? "" : Number(v).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })),
+  money2: (v, _currency) => (v == null || v === "" ? "" : Number(v).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })),
   upper: (v) => String(v ?? "").toUpperCase(),
 };
 
 /** Interpolates {{ expr | formatter }} using the safe evaluator. Missing values render as empty string. */
 export function interpolate(text: string, scope: any): string {
   return text.replace(/\{\{\s*([^}]+?)\s*\}\}/g, (_m, inner: string) => {
-    const [exprPart, fmt] = inner.split("|").map((s) => s.trim());
+    const [exprPart, fmtPart] = inner.split("|").map((s) => s.trim());
+    const [fmt, argPart] = (fmtPart ?? "").split(":").map((s) => s.trim());
     let val: any;
     try { val = evaluate(exprPart!, scope); } catch { val = undefined; }
-    if (fmt && FORMATTERS[fmt]) return FORMATTERS[fmt]!(val);
+    if (fmt && FORMATTERS[fmt]) {
+      // the currency is a code (JOD) or a path to one ({{ amount | money:account.currency }})
+      let arg = argPart;
+      if (arg && !/^[A-Z]{3,4}$/.test(arg)) { try { arg = String(evaluate(arg, scope) ?? ""); } catch { arg = ""; } }
+      return FORMATTERS[fmt]!(val, arg || undefined);
+    }
     return val == null ? "" : String(val);
   });
 }

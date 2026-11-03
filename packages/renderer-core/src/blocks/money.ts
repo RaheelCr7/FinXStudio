@@ -1,8 +1,5 @@
-/** "$" for USD, "PKR" for PKR: the short form people expect in front of an amount. A table, because a phone's Intl does not always know symbols. */
-const SYMBOLS: Record<string, string> = { USD: "$", EUR: "€", GBP: "£", INR: "₹", AED: "AED", PKR: "PKR" };
-export const symbolOf = (currency: string) => SYMBOLS[currency] ?? currency;
-/** Symbols that are a single character sit tight against the number ($50); codes get a space (PKR 50). */
-export const prefixOf = (currency: string) => { const s = symbolOf(currency); return s.length > 1 ? `${s} ` : s; };
+import { prefixOf, symbolOf } from "@finx/ui-kit";
+export { prefixOf, symbolOf };
 
 /** The amount as typed text, with thousands separators: 12000 becomes "12,000", nothing becomes "". */
 export const amountText = (value: unknown) => (value ? Number(value).toLocaleString("en-US") : "");
