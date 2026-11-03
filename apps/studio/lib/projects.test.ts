@@ -20,19 +20,21 @@ beforeEach(async () => {
 const good = { name: "Acme Bank", preset: "bankworkx", accent: "#7C3AED", currency: "USD" };
 
 describe("projects", () => {
-  it("lists the two original banks with their themes", async () => {
+  it("lists the banks already in the file, the two original ones first, with their themes", async () => {
     const list = await projects.listProjects();
-    expect(list.map((p) => p.id)).toEqual(["meezan", "bankworkx"]);
+    expect(list.map((p) => p.id).slice(0, 2)).toEqual(["meezan", "bankworkx"]);
+    expect(list.map((p) => p.id)).toEqual(Object.keys(JSON.parse(readFileSync(file, "utf8"))));
     expect(list[1]!.brand.light.colors.accent).toBe("#3155CE");
   });
 
   it("creates a project in the file the apps build from, with sensible defaults", async () => {
+    const before = Object.keys(JSON.parse(readFileSync(file, "utf8")));
     const { project, iconsMade, iconWarning } = await projects.createProject(good);
     expect(project).toMatchObject({ id: "acme-bank", slug: "acme-bank", bundleId: "com.acmebank.app", scheme: "acmebank", preset: "bankworkx", accent: "#7C3AED", currency: "USD", locale: "en-US", assets: "./assets/acme-bank" });
     expect(iconsMade).toBe(false);
     expect(iconWarning).toMatch(/first time/);
     const saved = JSON.parse(readFileSync(file, "utf8"));
-    expect(Object.keys(saved)).toEqual(["meezan", "bankworkx", "acme-bank"]);
+    expect(Object.keys(saved)).toEqual([...before, "acme-bank"]);
     expect(saved["meezan"].name).toBe("Meezan Digital"); // existing banks untouched
     expect((await projects.getProject("acme-bank"))!.brand.light.colors.accent).toBe("#7C3AED");
   });
