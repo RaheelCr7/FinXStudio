@@ -34,6 +34,8 @@ You can also start from Studio: the Agents page and the Builder's **Ask Claude**
 /finx-code Add a block that shows a download button
 ```
 
+**Checkpoints.** Once a session has reported a run, every draft it writes is tagged with the run (an `X-Finx-Run` header the FinX server adds). Studio keeps each journey as it was before the run's first write, and the run's page on the Agents board shows what it changed with an **Undo this run** button: a journey the run changed gets its old draft back, a journey the run created is removed. A journey a person edited after the run is left alone unless you confirm *Undo anyway*, and a journey the run created that has since been published stays (restore an older version instead). Published versions are never touched by an undo.
+
 A review run appears on the Agents board as *Review agent*, done, with the report as its summary. A code run ends as a pull request. Design colours do not need Claude: see [DESIGN.md](DESIGN.md).
 
 ## The tools

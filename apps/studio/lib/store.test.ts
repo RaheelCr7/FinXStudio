@@ -188,3 +188,45 @@ describe("version history", () => {
     expect(list.length).toBeGreaterThan(store.KEEP_VERSIONS); // older publishes stay in the list, but cannot be restored
   });
 });
+
+describe("run checkpoints", () => {
+  const edit = async (slug: string, title: string, run?: string) => {
+    const d = structuredClone((await store.getRecord(slug)).draft); (d.screens[0] as any).title = title;
+    await store.saveDraft(slug, d, undefined, run);
+  };
+  it("undo puts a journey the run changed back, and removes one the run created", async () => {
+    const run = await store.upsertRun({ title: "Generate" });
+    const before = structuredClone((await store.getRecord("fund-transfer-local")).draft);
+    await edit("fund-transfer-local", "Changed by the run", run.id);
+    await edit("fund-transfer-local", "Changed again", run.id); // the checkpoint stays at the first write
+    await store.createJourney("Run journey", undefined, undefined, run.id);
+    expect((await store.checkpointOf(run.id)).map((j) => [j.slug, j.created, j.editedSince])).toEqual([["fund-transfer-local", false, false], ["run-journey", true, false]]);
+    expect(await store.undoRun(run.id)).toEqual({ restored: ["fund-transfer-local"], removed: ["run-journey"] });
+    expect((await store.getRecord("fund-transfer-local")).draft).toEqual(before);
+    await expect(store.getRecord("run-journey")).rejects.toThrow("not found");
+    expect((await store.getRun(run.id)).steps.at(-1)!.text).toContain("Undone");
+    await expect(store.undoRun(run.id)).rejects.toThrow("already undone");
+  });
+  it("leaves a journey a person edited afterwards alone unless told to overwrite it", async () => {
+    const run = await store.upsertRun({ title: "Generate" });
+    await edit("fund-transfer-local", "By the run", run.id);
+    await edit("fund-transfer-local", "By a person"); // no run id: a human edit
+    expect((await store.checkpointOf(run.id))[0]!.editedSince).toBe(true);
+    await expect(store.undoRun(run.id)).rejects.toThrow("edited after this run");
+    expect((await store.getRecord("fund-transfer-local")).draft.screens[0]).toMatchObject({ title: "By a person" });
+    await store.undoRun(run.id, { force: true });
+    expect((await store.getRecord("fund-transfer-local")).draft.screens[0]!.title).not.toBe("By a person");
+  });
+  it("does not remove a journey the run created once it has been published", async () => {
+    const run = await store.upsertRun({ title: "Generate" });
+    await store.createJourney("Shipped", undefined, undefined, run.id);
+    await store.publish("shipped");
+    await expect(store.undoRun(run.id, { force: true })).rejects.toThrow("been published");
+    expect((await store.getRecord("shipped")).published).toBeTruthy();
+  });
+  it("tracks nothing for a write without a run, and says so when there is nothing to undo", async () => {
+    const run = await store.upsertRun({ title: "Chat only" });
+    await edit("fund-transfer-local", "By a person");
+    await expect(store.undoRun(run.id)).rejects.toThrow("nothing to undo");
+  });
+});

@@ -3,12 +3,13 @@ import { createServer, type Server } from "node:http";
 import type { AddressInfo } from "node:net";
 import { HttpStudioClient, StudioError } from "./studio-client";
 
-let server: Server; let base = ""; const seen: Array<{ method?: string; url?: string; auth?: string; body: string }> = [];
+let server: Server; let base = ""; const seen: Array<{ method?: string; url?: string; auth?: string; run?: string; body: string }> = [];
 beforeAll(async () => {
   server = createServer((req, res) => {
     let body = ""; req.on("data", (c) => (body += c));
     req.on("end", () => {
-      seen.push({ method: req.method, url: req.url, auth: req.headers.authorization, body });
+      seen.push({ method: req.method, url: req.url, auth: req.headers.authorization, run: req.headers["x-finx-run"] as string | undefined, body });
+      if (req.url === "/api/runs" && body.includes("tagged")) { res.setHeader("Content-Type", "application/json"); return res.end(JSON.stringify({ id: "run_1" })); }
       if (req.url === "/api/journeys" && req.method === "GET") { res.setHeader("Content-Type", "application/json"); return res.end(JSON.stringify([{ slug: "a" }])); }
       if (req.url === "/api/journeys/bad" && req.method === "PUT") { res.statusCode = 422; res.setHeader("Content-Type", "application/json"); return res.end(JSON.stringify({ error: "Journey does not match the schema", issues: [{ code: "x" }] })); }
       res.statusCode = 404; res.setHeader("Content-Type", "text/html"); res.end("<!DOCTYPE html><html>not found</html>");
@@ -20,6 +21,16 @@ beforeAll(async () => {
 afterAll(() => server.close());
 
 describe("HttpStudioClient", () => {
+  it("tags its writes with the run it reported, so Studio can checkpoint them", async () => {
+    const c = new HttpStudioClient(base);
+    await c.saveDraft("bad", {} as any).catch(() => {});
+    expect(seen.at(-1)!.run).toBeUndefined(); // no run yet
+    await c.reportRun({ title: "tagged" });
+    await c.saveDraft("bad", {} as any).catch(() => {});
+    expect(seen.at(-1)!.run).toBe("run_1");
+    await c.listJourneys();
+    expect(seen.at(-1)!.run).toBeUndefined(); // reads are not tagged
+  });
   it("calls the Studio API and sends the bearer token when configured", async () => {
     const c = new HttpStudioClient(`${base}/`, "secret");
     expect(await c.listJourneys()).toEqual([{ slug: "a" }]);

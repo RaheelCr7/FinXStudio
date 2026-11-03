@@ -33,13 +33,16 @@ export class HttpStudioClient implements StudioClient {
     this.baseUrl = baseUrl.replace(/\/+$/, "");
   }
 
+  /** The run this session reported, sent with every write so Studio can checkpoint what the run changes. */
+  private runId?: string;
+
   private async request<T>(method: string, path: string, body?: unknown): Promise<T> {
     const ctl = new AbortController();
     const timer = setTimeout(() => ctl.abort(), this.timeoutMs);
     try {
       const res = await fetch(`${this.baseUrl}${path}`, {
         method, signal: ctl.signal,
-        headers: { "Content-Type": "application/json", ...(this.token ? { Authorization: `Bearer ${this.token}` } : {}) },
+        headers: { "Content-Type": "application/json", ...(this.token ? { Authorization: `Bearer ${this.token}` } : {}), ...(this.runId && method !== "GET" ? { "X-Finx-Run": this.runId } : {}) },
         body: body === undefined ? undefined : JSON.stringify(body),
       });
       const data: any = await res.json().catch(() => ({}));
@@ -64,5 +67,5 @@ export class HttpStudioClient implements StudioClient {
   createJourney(name: string, project?: string) { return this.request<JourneyRecord>("POST", "/api/journeys", { name, ...(project ? { apps: [project] } : {}) }); }
   async saveDraft(slug: string, journey: Journey) { await this.request("PUT", `/api/journeys/${encodeURIComponent(slug)}`, journey); }
   publish(slug: string) { return this.request<{ version: number }>("POST", `/api/journeys/${encodeURIComponent(slug)}/publish`); }
-  reportRun(input: RunInput) { return this.request<RunRecord>("POST", "/api/runs", input); }
+  async reportRun(input: RunInput) { const run = await this.request<RunRecord>("POST", "/api/runs", input); if (run?.id) this.runId = run.id; return run; }
 }
