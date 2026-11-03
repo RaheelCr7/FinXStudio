@@ -34,13 +34,13 @@ const route = (rules: { when: string; to: string }[]) => ({ rules });
 
 /** The two password fields and the bank's rules, shared by activation and reset. */
 const passwordFields = (bind: string, confirm: string): Block[] => [
-  input(bind, L("New password", "كلمة المرور الجديدة"), { secure: true }),
-  input(confirm, L("Re-enter new password", "أعد إدخال كلمة المرور الجديدة"), { secure: true }),
-  text(L("Security requirements", "متطلبات الأمان"), "caption"),
-  text(L("• At least {{policy.minLength}} characters", "• {{policy.minLength}} أحرف على الأقل"), "caption"),
-  text(L("• At least {{policy.differentChars}} different characters", "• {{policy.differentChars}} أحرف مختلفة على الأقل"), "caption"),
-  text(L("• No more than {{policy.maxLength}} characters", "• لا يزيد عن {{policy.maxLength}} حرف"), "caption"),
-  text(L("• Must not contain your username", "• يجب ألا تحتوي على اسم المستخدم"), "caption"),
+  input(bind, L("New Password", "كلمة المرور الجديدة"), { secure: true, placeholder: L("Enter a new password", "أدخل كلمة مرور جديدة") }),
+  input(confirm, L("Re-Enter Your New Password", "أعد إدخال كلمة المرور الجديدة"), { secure: true, placeholder: L("Re-enter your new password", "أعد إدخال كلمة المرور الجديدة") }),
+  text(L("Security Requirements:", "متطلبات الأمان:"), "caption"),
+  text(L("- Password must contain {{policy.differentChars}} different characters", "- يجب أن تحتوي كلمة المرور على {{policy.differentChars}} أحرف مختلفة"), "caption"),
+  text(L("- Password must contain at least {{policy.minLength}} characters", "- يجب أن تحتوي كلمة المرور على {{policy.minLength}} أحرف على الأقل"), "caption"),
+  text(L("- Password must not exceed {{policy.maxLength}} characters", "- يجب ألا تتجاوز كلمة المرور {{policy.maxLength}} حرف"), "caption"),
+  text(L("- Password must not contain username", "- يجب ألا تحتوي كلمة المرور على اسم المستخدم"), "caption"),
 ];
 
 /* ============================================================== 1. Sign in */
@@ -60,9 +60,9 @@ export const signIn: Journey = {
         hero,
         header(L("Welcome", "مرحباً"), "language"),
         { type: "menu", items: [
-          { id: "login", label: L("Existing user login", "تسجيل دخول مستخدم حالي"), text: L("Log in to access your Cairo Amman digital account", "سجّل الدخول للوصول إلى حسابك الرقمي في بنك القاهرة عمّان"), icon: "user", actions: [go("login")] },
           { id: "explore", label: L("Explore products", "استكشف المنتجات"), text: L("Choose from our diverse selection of products to meet your financial needs", "اختر من مجموعتنا المتنوعة من المنتجات التي تلبي احتياجاتك المالية"), icon: "search", actions: [go("fullapp")] },
-          { id: "resume", label: L("Resume application", "استئناف الطلب"), text: L("Pick up where you left off with your existing application", "تابع من حيث توقفت في طلبك الحالي"), icon: "refresh", actions: [go("fullapp")] },
+          { id: "resume", label: L("Resume Application", "استئناف الطلب"), text: L("Would you like to resume your existing application", "تابع من حيث توقفت في طلبك الحالي"), icon: "refresh", actions: [go("fullapp")] },
+          { id: "login", label: L("Existing user login", "تسجيل دخول مستخدم حالي"), text: L("Log in to access your Cairo Amman digital account", "سجّل الدخول للوصول إلى حسابك الرقمي في بنك القاهرة عمّان"), icon: "user", actions: [go("login")] },
         ] },
         shortcuts(),
       ],
@@ -185,10 +185,10 @@ export const defaultSignIn: Journey = {
       navigation: route([{ when: "pin.confirm == pin.value", to: "pin-intro" }]),
     },
     {
-      id: "pin-intro", title: L("PIN sign in", "تسجيل الدخول بالرقم السري"),
+      id: "pin-intro", title: L("PIN Sign In", "تسجيل الدخول بالرقم السري"),
       blocks: [
-        text(L("Use this PIN to sign in on this device", "استخدم هذا الرقم السري لتسجيل الدخول على هذا الجهاز"), "title"),
-        alert("info", L("Your PIN stays on this device and is stored encrypted.", "يبقى الرقم السري على هذا الجهاز ويُخزَّن مشفّراً.")),
+        text(L("PIN", "الرقم السري"), "title"),
+        text(L("Do you want to set up PIN authentication for secure and convenient sign in?", "هل تريد إعداد المصادقة بالرقم السري لتسجيل دخول آمن ومريح؟")),
         button(L("Set as default", "تعيين كافتراضي"), [
           { type: "callApi", integration: "setDefault", input: { mode: "pin", pin: "{{pin.value}}" }, onError: { showToast: L("We couldn't save your PIN. Try again.", "تعذّر حفظ الرقم السري. حاول مرة أخرى.") } },
           go("done"),
@@ -198,8 +198,8 @@ export const defaultSignIn: Journey = {
     {
       id: "biometric", title: L("Biometric", "البصمة"),
       blocks: [
-        text(L("You can use your device biometrics to simplify sign in", "يمكنك استخدام بصمة جهازك لتسهيل تسجيل الدخول"), "title"),
-        alert("info", L("Your fingerprint or face never leaves your device.", "لا تغادر بصمتك أو ملامح وجهك جهازك أبداً.")),
+        text(L("Biometric", "البصمة"), "title"),
+        text(L("You can use your device biometrics to simplify Sign In", "يمكنك استخدام بصمة جهازك لتسهيل تسجيل الدخول")),
         button(L("Set as default", "تعيين كافتراضي"), [
           { type: "callApi", integration: "setDefault", input: { mode: "biometric" }, onError: { showToast: L("We couldn't save this setting. Try again.", "تعذّر حفظ هذا الإعداد. حاول مرة أخرى.") } },
           go("done"),
@@ -232,7 +232,7 @@ export const accountPreview: Journey = {
       onEnter: [{ type: "callApi", integration: "preview", saveAs: "preview" }, { type: "callApi", integration: "previewAccounts", saveAs: "ctx.previewAccounts" }],
       blocks: [
         text(L("See your account and card balances without having to sign in", "اطّلع على أرصدة حساباتك وبطاقاتك دون الحاجة إلى تسجيل الدخول"), "title"),
-        { type: "toggle", bind: "preview.enabled", label: L("Enable account preview", "تفعيل معاينة الحساب") },
+        { type: "toggle", bind: "preview.enabled", label: L("Enable Account Preview", "تفعيل معاينة الحساب") },
         alert("info", L("Anyone holding this device can see your balances on the sign-in screen while this is on.", "يمكن لأي شخص يحمل هذا الجهاز رؤية أرصدتك في شاشة تسجيل الدخول طالما أن هذه الميزة مفعّلة.")),
         button(L("Save", "حفظ"), [
           { type: "callApi", integration: "previewSet", input: { enabled: "{{preview.enabled}}" }, onError: { showToast: L("We couldn't save this setting. Try again.", "تعذّر حفظ هذا الإعداد. حاول مرة أخرى.") } },
@@ -313,7 +313,7 @@ export const enroll: Journey = {
       id: "entity", title: L("Legal entity", "الكيان القانوني"),
       onEnter: [{ type: "callApi", integration: "legalEntities", saveAs: "legal.list" }],
       blocks: [
-        text(L("Select the legal entity", "اختر الكيان القانوني"), "title"),
+        text(L("Select the Legal Entity", "اختر الكيان القانوني"), "title"),
         { type: "select", bind: "enroll.entity", label: L("Legal entity", "الكيان القانوني"), source: "legal.list", variant: "rows" },
         { type: "select", bind: "enroll.kind", label: L("Select an enrollment option", "اختر خيار التسجيل"), variant: "rows", choices: [{ id: "personal", label: L("Personal Banking", "الخدمات المصرفية الشخصية") }, { id: "business", label: L("Business Banking", "خدمات الأعمال المصرفية") }] },
         button(L("Continue", "متابعة"), [{ type: "validate" }, { type: "navigate" }]),
@@ -344,7 +344,7 @@ export const enroll: Journey = {
     {
       id: "dob", title: L("Date of birth", "تاريخ الميلاد"),
       blocks: [
-        text(L("Enter your birth date", "أدخل تاريخ ميلادك"), "title"),
+        text(L("Enter Your Birth Date", "أدخل تاريخ ميلادك"), "title"),
         input("enroll.dob", L("Date of birth", "تاريخ الميلاد"), { placeholder: L("DD / MM / YYYY", "يوم / شهر / سنة"), keyboard: "number", patternMessage: L("Use the format DD / MM / YYYY", "استخدم الصيغة يوم / شهر / سنة") }),
         button(L("Continue", "متابعة"), [{ type: "validate" }, go("verify")]),
       ],
@@ -357,9 +357,8 @@ export const enroll: Journey = {
           { label: L("Last name", "اسم العائلة"), value: "{{enroll.lastName}}" }, { label: L("National ID", "الرقم الوطني"), value: "{{enroll.nationalId}}" },
           { label: L("Date of birth", "تاريخ الميلاد"), value: "{{enroll.dob}}" },
         ] },
-        text(L("Type the code shown below", "اكتب الرمز الظاهر أدناه"), "caption"),
         text(L("{{captcha.text ? captcha.text : '-----'}}", "{{captcha.text ? captcha.text : '-----'}}"), "title"),
-        input("enroll.captcha", L("Code", "الرمز")),
+        input("enroll.captcha", L("Code", "الرمز"), { placeholder: L("Enter the above text here", "أدخل النص أعلاه هنا") }),
         alert("error", L("That code doesn't match. Check it or ask for a new one.", "الرمز غير مطابق. تحقق منه أو اطلب رمزاً جديداً."), "enroll.result.code == 'CAPTCHA_WRONG'"),
         button(L("New code", "رمز جديد"), [{ type: "callApi", integration: "captcha", saveAs: "captcha" }], "ghost"),
         button(L("Continue", "متابعة"), [
@@ -372,8 +371,8 @@ export const enroll: Journey = {
     },
     end("enrolled", L("Enrolled", "تم التسجيل"), [
       result("success", L("You have successfully enrolled to retail banking", "تم تسجيلك بنجاح في الخدمات المصرفية للأفراد"),
-        L("Your user ID and an activation code have been sent to {{enroll.result.maskedEmail}} and {{enroll.result.maskedPhone}}. Activate your profile to start using digital banking.", "تم إرسال معرّف المستخدم ورمز التفعيل إلى {{enroll.result.maskedEmail}} و{{enroll.result.maskedPhone}}. فعّل ملفك الشخصي لبدء استخدام الخدمات المصرفية الرقمية.")),
-      done,
+        L("Your user ID and an activation code have been sent to {{enroll.result.maskedEmail}} and {{enroll.result.maskedPhone}}. Please activate your profile to start using personal banking.", "تم إرسال معرّف المستخدم ورمز التفعيل إلى {{enroll.result.maskedEmail}} و{{enroll.result.maskedPhone}}. يرجى تفعيل ملفك الشخصي لبدء استخدام الخدمات المصرفية الشخصية.")),
+      button(L("Activate your profile", "فعّل ملفك الشخصي"), [{ type: "exit" }]),
     ]),
     end("cant-enroll", L("Can't enroll", "تعذّر التسجيل"), [
       result("error", L("We couldn't enroll you", "تعذّر تسجيلك"), L("The details don't match the bank's records. Check them and try again, or call support.", "التفاصيل لا تطابق سجلات البنك. تحقق منها وحاول مرة أخرى أو اتصل بالدعم.")),
@@ -401,9 +400,9 @@ export const activateProfile: Journey = {
     {
       id: "credentials", title: L("Profile activation", "تفعيل الملف الشخصي"),
       blocks: [
-        alert("info", L("Please enter the user ID and activation code that were sent to your email and phone", "يرجى إدخال معرّف المستخدم ورمز التفعيل اللذين أُرسلا إلى بريدك الإلكتروني وهاتفك")),
+        alert("info", L("Please enter user ID and Activation code that was sent to your email and phone", "يرجى إدخال معرّف المستخدم ورمز التفعيل اللذين أُرسلا إلى بريدك الإلكتروني وهاتفك")),
         input("activate.username", L("Username", "اسم المستخدم"), { placeholder: L("Enter username", "أدخل اسم المستخدم") }),
-        input("activate.code", L("Activation code", "رمز التفعيل"), { placeholder: L("Enter activation code", "أدخل رمز التفعيل") }),
+        input("activate.code", L("Activation Code", "رمز التفعيل"), { placeholder: L("Enter activation code", "أدخل رمز التفعيل") }),
         alert("error", L("You've entered an incorrect username or activation code. {{activation.result.attemptsLeft}} attempt(s) left.", "أدخلت اسم مستخدم أو رمز تفعيل غير صحيح. تبقّت {{activation.result.attemptsLeft}} محاولة."), "activation.result.code == 'INVALID'"),
         button(L("Verify", "تحقق"), [
           { type: "validate" },
@@ -464,7 +463,7 @@ export const cantSignIn: Journey = {
       id: "entity", title: L("Legal entity", "الكيان القانوني"),
       onEnter: [{ type: "callApi", integration: "legalEntities", saveAs: "legal.list" }],
       blocks: [
-        text(L("Select the legal entity", "اختر الكيان القانوني"), "title"),
+        text(L("Select the Legal Entity", "اختر الكيان القانوني"), "title"),
         { type: "select", bind: "recover.entity", label: L("Legal entity", "الكيان القانوني"), source: "legal.list" },
         button(L("Continue", "متابعة"), [{ type: "validate" }, go("email")]),
       ],
@@ -473,11 +472,10 @@ export const cantSignIn: Journey = {
       id: "email", title: L("Let's verify it's you", "لنتحقق من هويتك"),
       onEnter: [{ type: "callApi", integration: "captcha", saveAs: "captcha" }],
       blocks: [
-        text(L("Enter the email address on your profile", "أدخل عنوان البريد الإلكتروني في ملفك الشخصي"), "title"),
+        text(L("Enter Recipient E-mail ID", "أدخل البريد الإلكتروني للمستلم"), "title"),
         input("recover.email", L("Email", "البريد الإلكتروني"), { keyboard: "email", patternMessage: L("Enter a valid email address", "أدخل بريداً إلكترونياً صالحاً") }),
-        text(L("Type the code shown below", "اكتب الرمز الظاهر أدناه"), "caption"),
         text(L("{{captcha.text ? captcha.text : '-----'}}", "{{captcha.text ? captcha.text : '-----'}}"), "title"),
-        input("recover.captcha", L("Code", "الرمز")),
+        input("recover.captcha", L("Code", "الرمز"), { placeholder: L("Enter the above text here", "أدخل النص أعلاه هنا") }),
         alert("error", L("Wrong code entered. Check it or ask for a new one.", "الرمز المُدخل غير صحيح. تحقق منه أو اطلب رمزاً جديداً."), "captchaState.ok == false"),
         button(L("New code", "رمز جديد"), [{ type: "callApi", integration: "captcha", saveAs: "captcha" }], "ghost"),
         button(L("Continue", "متابعة"), [
@@ -491,7 +489,7 @@ export const cantSignIn: Journey = {
     {
       id: "phone", title: L("Let's verify it's you", "لنتحقق من هويتك"),
       blocks: [
-        text(L("Enter your phone number", "أدخل رقم هاتفك"), "title"),
+        text(L("Enter Phone Number", "أدخل رقم الهاتف"), "title"),
         input("recover.phone", L("Phone number", "رقم الهاتف"), { keyboard: "phone", placeholder: L("+962 34 56 78 90", "+962 34 56 78 90"), patternMessage: L("Enter at least 7 digits", "أدخل 7 أرقام على الأقل") }),
         button(L("Continue", "متابعة"), [{ type: "validate" }, go("dob")]),
       ],
@@ -499,7 +497,7 @@ export const cantSignIn: Journey = {
     {
       id: "dob", title: L("Let's verify it's you", "لنتحقق من هويتك"),
       blocks: [
-        text(L("Enter your birth date", "أدخل تاريخ ميلادك"), "title"),
+        text(L("Enter Your Birth Date", "أدخل تاريخ ميلادك"), "title"),
         input("recover.dob", L("Date of birth", "تاريخ الميلاد"), { placeholder: L("DD / MM / YYYY", "يوم / شهر / سنة"), keyboard: "number", patternMessage: L("Use the format DD / MM / YYYY", "استخدم الصيغة يوم / شهر / سنة") }),
         button(L("Continue", "متابعة"), [
           { type: "validate" },
@@ -543,7 +541,7 @@ export const cantSignIn: Journey = {
       ],
     },
     {
-      id: "new-password", title: L("Change password", "تغيير كلمة المرور"),
+      id: "new-password", title: L("Change Password", "تغيير كلمة المرور"),
       onEnter: [{ type: "callApi", integration: "policy", saveAs: "policy" }],
       blocks: [
         ...passwordFields("recover.password", "recover.confirm"),
@@ -584,12 +582,12 @@ export const locateUs: Journey = {
   screens: [
     {
       id: "search", title: L("Locate us", "مواقعنا"),
-      onEnter: [{ type: "setData", path: "loc.kind", value: "all" }, { type: "setData", path: "loc.range", value: "5" }],
+      onEnter: [{ type: "setData", path: "loc.kind", value: "branch" }, { type: "setData", path: "loc.range", value: "5" }],
       blocks: [
         text(L("Find a branch or ATM", "ابحث عن فرع أو صراف آلي"), "title"),
-        { type: "select", bind: "loc.kind", label: L("Show", "عرض"), choices: [{ id: "branch", label: L("Branches", "الفروع") }, { id: "atm", label: L("ATMs", "أجهزة الصراف") }, { id: "all", label: L("All", "الكل") }] },
-        { type: "select", bind: "loc.range", label: L("Search range (miles)", "نطاق البحث (أميال)"), options: ["5", "10", "25", "50", "100"] },
-        input("loc.query", L("Search by city, street or name", "ابحث بالمدينة أو الشارع أو الاسم"), { placeholder: L("Optional", "اختياري") }),
+        { type: "select", bind: "loc.kind", label: L("Show", "عرض"), choices: [{ id: "branch", label: L("Branches", "الفروع") }, { id: "atm", label: L("ATM", "الصراف الآلي") }, { id: "all", label: L("All", "الكل") }] },
+        { type: "select", bind: "loc.range", label: L("Select search range", "اختر نطاق البحث"), choices: ["5", "10", "25", "50", "100"].map((n) => ({ id: n, label: L(`${n} miles`, `${n} ميلاً`) })) },
+        input("loc.query", L("Search", "بحث"), { placeholder: L("Search by zip code, city, street", "ابحث بالرمز البريدي أو المدينة أو الشارع") }),
         button(L("Search", "بحث"), [
           { type: "callApi", integration: "locations", input: { kind: "{{loc.kind}}", rangeMiles: "{{loc.range}}", query: "{{loc.query}}" }, saveAs: "loc.found", onError: { showToast: L("We couldn't search right now. Try again.", "تعذّر البحث الآن. حاول مرة أخرى.") } },
           { type: "navigate" },
@@ -598,7 +596,7 @@ export const locateUs: Journey = {
       navigation: route([{ when: "len(loc.found) == 0", to: "none" }, { when: "len(loc.found) > 0", to: "results" }]),
     },
     {
-      id: "results", title: L("Locations", "المواقع"),
+      id: "results", title: L("{{loc.kind == 'atm' ? 'ATM' : (loc.kind == 'branch' ? 'Branches' : 'All')}}", "{{loc.kind == 'atm' ? 'الصراف الآلي' : (loc.kind == 'branch' ? 'الفروع' : 'الكل')}}"),
       blocks: [
         text(L("{{len(loc.found)}} location(s) found", "تم العثور على {{len(loc.found)}} موقع"), "title"),
         { type: "select", bind: "loc.selected", label: L("Choose a location", "اختر موقعاً"), source: "loc.found", variant: "rows" },
@@ -614,7 +612,7 @@ export const locateUs: Journey = {
       ],
     },
     {
-      id: "details", title: L("{{loc.detail.type ? loc.detail.type : 'Location'}}", "{{loc.detail.type ? loc.detail.type : 'الموقع'}}"), kind: "terminal",
+      id: "details", title: L("Locate us", "مواقعنا"), kind: "terminal",
       blocks: [
         text(L("{{loc.detail.name ? loc.detail.name : 'Location'}}", "{{loc.detail.name ? loc.detail.name : 'الموقع'}}"), "title"),
         { type: "reviewSummary", rows: [
@@ -648,8 +646,9 @@ export const support: Journey = {
           { id: "terms", label: L("Terms & Conditions", "الشروط والأحكام"), actions: [go("terms")] },
           { id: "privacy", label: L("Privacy Policy", "سياسة الخصوصية"), actions: [go("privacy")] },
         ] },
-        text(L("Hours", "ساعات العمل"), "title"),
-        text(L("Monday - Friday: 8 am to 10 pm. Saturday: 8 am to 6:30 pm.", "الاثنين - الجمعة: 8 صباحاً حتى 10 مساءً. السبت: 8 صباحاً حتى 6:30 مساءً.")),
+        { type: "reviewSummary", rows: [
+          { label: L("Monday - Friday", "الاثنين - الجمعة"), value: L("8 am to 10 pm", "8 صباحاً حتى 10 مساءً") }, { label: L("Saturday", "السبت"), value: L("8 am to 6:30 pm", "8 صباحاً حتى 6:30 مساءً") },
+        ] },
         button(L("Call Us", "اتصل بنا"), [go("call")]),
       ],
     },
@@ -681,7 +680,7 @@ export const support: Journey = {
       ],
     },
     {
-      id: "terms", title: L("Terms & conditions", "الشروط والأحكام"),
+      id: "terms", title: L("Terms & Conditions", "الشروط والأحكام"),
       blocks: [
         text(L("Using Cairo Amman Bank digital banking means you accept these terms. You are responsible for keeping your username, password and one-time codes private, and for telling the bank at once if you think someone else knows them.", "باستخدامك الخدمات المصرفية الرقمية لبنك القاهرة عمّان فإنك توافق على هذه الشروط. أنت مسؤول عن الحفاظ على سرية اسم المستخدم وكلمة المرور والرموز لمرة واحدة، وعن إبلاغ البنك فوراً إذا اعتقدت أن شخصاً آخر يعرفها.")),
         text(L("Sample text: the bank's approved terms replace this.", "نص تجريبي: ستحل محله الشروط المعتمدة من البنك."), "caption"),
@@ -689,7 +688,7 @@ export const support: Journey = {
       ],
     },
     {
-      id: "privacy", title: L("Privacy policy", "سياسة الخصوصية"),
+      id: "privacy", title: L("Privacy Policy", "سياسة الخصوصية"),
       blocks: [
         text(L("At CAB, safeguarding your account information is our top priority. We use encryption, firewalls and secure transmission to keep your information confidential, and we keep you informed about current security issues.", "في بنك القاهرة عمّان، تُعد حماية معلومات حسابك أولويتنا القصوى. نستخدم التشفير وجدران الحماية والنقل الآمن للحفاظ على سرية معلوماتك، ونبقيك على اطلاع بمستجدات الأمان.")),
         text(L("Sample text: the bank's approved policy replaces this.", "نص تجريبي: ستحل محله السياسة المعتمدة من البنك."), "caption"),
