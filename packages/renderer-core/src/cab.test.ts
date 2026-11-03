@@ -280,6 +280,7 @@ describe("Can't sign in", () => {
     expect(x.r.view().blocks.find((b) => b.type === "text" && String(b.text).startsWith("Welcome back"))!.text).toBe("Welcome back, Nour!");
     expect(x.r.view().blocks.some((b) => b.type === "text" && String(b.text).includes("username: nour"))).toBe(true);
     expect(menuLabels(x.r)).toEqual(["Sign in as nour", "Reset your password"]);
+    expect(x.r.view().blocks.filter((b) => b.type === "divider").map((b) => b.label)).toEqual(["OR"]);
     await tap(x.r, "Reset your password");
     x.r.set("recover.channel", "sms"); await press(x.r, "Send code");
     expect(x.r.current).toBe("otp");
@@ -345,15 +346,14 @@ describe("Locate us", () => {
 });
 
 describe("Support", () => {
-  it("shows the FAQ answers for the chosen topic only", async () => {
+  it("shows the FAQs as one accordion screen of six topics, with questions and answers inside", async () => {
     const { r } = mk(cabSupport); await r.start();
     await tap(r, "FAQs");
-    r.set("faq.category", "account"); await press(r, "Show answers");
-    const texts = r.view().blocks.filter((b) => b.type === "text").map((b) => String(b.text));
-    expect(texts.some((t) => t.includes("Which account types"))).toBe(true);
-    expect(texts.some((t) => t.includes("How do I freeze my card"))).toBe(false);
-    await press(r, "Back to topics"); r.set("faq.category", "cards"); await press(r, "Show answers");
-    expect(r.view().blocks.some((b) => b.type === "text" && String(b.text).includes("How do I freeze my card"))).toBe(true);
+    expect(r.current).toBe("faqs");
+    const acc = r.view().blocks.find((b) => b.type === "accordion")!;
+    expect(acc.items.map((i: any) => i.title)).toEqual(["Account Activity", "Alerts & Communication", "Bill Payments", "Cards", "Person-To-Person", "Profile Management"]);
+    expect(acc.items[0].text).toContain("Which account types are listed");
+    expect(acc.items[3].text).toContain("How do I freeze my card?\nOpen the card in the app");
   });
   it("reaches terms, privacy and the phone number", async () => {
     for (const [label, screen] of [["Terms & Conditions", "terms"], ["Privacy Policy", "privacy"]] as const) {

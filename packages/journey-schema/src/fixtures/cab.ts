@@ -524,6 +524,9 @@ export const cantSignIn: Journey = {
         text(L("We found you with username: {{recover.result.username}}", "وجدنا ملفك الشخصي باسم المستخدم: {{recover.result.username}}")),
         { type: "menu", visibleWhen: "recover.result.status == 'ACTIVE'", items: [
           { id: "signin", label: L("Sign in as {{recover.result.username}}", "تسجيل الدخول باسم {{recover.result.username}}"), icon: "user", actions: [{ type: "exit" }] },
+        ] },
+        { type: "divider", label: L("OR", "أو"), visibleWhen: "recover.result.status == 'ACTIVE'" },
+        { type: "menu", visibleWhen: "recover.result.status == 'ACTIVE'", items: [
           { id: "reset", label: L("Reset your password", "إعادة تعيين كلمة المرور"), icon: "refresh", actions: [go("channel")] },
         ] },
         { type: "menu", visibleWhen: "recover.result.status == 'NEW'", items: [
@@ -639,20 +642,20 @@ export const locateUs: Journey = {
 };
 
 /* ============================================================== 9. Support */
-const faq = (category: string, q: ReturnType<typeof L>, a: ReturnType<typeof L>): Block[] => [
-  { type: "text", text: q, variant: "title", visibleWhen: `faq.category == '${category}'` },
-  { type: "text", text: a, visibleWhen: `faq.category == '${category}'` },
-];
+const qa = (id: string, title: ReturnType<typeof L>, items: [ReturnType<typeof L>, ReturnType<typeof L>][]) => ({
+  id, title,
+  text: L(items.map(([q, a]) => `${q.en}\n${a.en}`).join("\n\n"), items.map(([q, a]) => `${q.ar}\n${a.ar}`).join("\n\n")),
+});
 export const support: Journey = {
   ...base, id: "jrn_cab_support", slug: "support", name: L("Support", "الدعم"), entryScreen: "home",
-  dataModel: { "faq.category": { type: "string", required: true } },
+  dataModel: {},
   integrations: [],
   screens: [
     {
       id: "home", title: L("Support", "الدعم"),
       blocks: [
         { type: "menu", items: [
-          { id: "faqs", label: L("FAQs", "الأسئلة الشائعة"), actions: [go("faq-categories")] },
+          { id: "faqs", label: L("FAQs", "الأسئلة الشائعة"), actions: [go("faqs")] },
           { id: "terms", label: L("Terms & Conditions", "الشروط والأحكام"), actions: [go("terms")] },
           { id: "privacy", label: L("Privacy Policy", "سياسة الخصوصية"), actions: [go("privacy")] },
         ] },
@@ -663,30 +666,22 @@ export const support: Journey = {
       ],
     },
     {
-      id: "faq-categories", title: L("FAQs", "الأسئلة الشائعة"),
+      // one screen, as in the design: six topics that open to show their questions and answers
+      id: "faqs", title: L("FAQs", "الأسئلة الشائعة"),
       blocks: [
-        { type: "select", bind: "faq.category", label: L("Choose a topic", "اختر موضوعاً"), variant: "rows", choices: [
-          { id: "account", label: L("Account activity", "نشاط الحساب") }, { id: "alerts", label: L("Alerts & communication", "التنبيهات والتواصل") },
-          { id: "bills", label: L("Bill payments", "دفع الفواتير") }, { id: "cards", label: L("Cards", "البطاقات") },
-          { id: "p2p", label: L("Person-to-person", "من شخص إلى شخص") }, { id: "profile", label: L("Profile management", "إدارة الملف الشخصي") },
+        { type: "accordion", items: [
+          qa("account", L("Account Activity", "نشاط الحساب"), [
+            [L("Which account types are listed in the mobile and online banking apps?", "ما أنواع الحسابات المعروضة في تطبيق الهاتف والخدمات المصرفية عبر الإنترنت؟"), L("Savings, checking, credit cards, loans, deposits and lines of credit.", "الحسابات الجارية والتوفير وبطاقات الائتمان والقروض والودائع وخطوط الائتمان.")],
+            [L("Why do I see only some of my accounts on the dashboard?", "لماذا أرى بعض حساباتي فقط في لوحة المعلومات؟"), L("Only accounts marked as favorites are listed on the dashboard. Select Show All Accounts to see the rest, and use the star to add or remove favorites.", "تظهر في لوحة المعلومات الحسابات المفضّلة فقط. اختر عرض كل الحسابات لرؤية الباقي، واستخدم النجمة لإضافة المفضلة أو إزالتها.")],
+          ]),
+          qa("alerts", L("Alerts & Communication", "التنبيهات والتواصل"), [[L("How do I get alerts?", "كيف أحصل على التنبيهات؟"), L("Turn on the alerts you want from Settings, then choose how you receive them.", "فعّل التنبيهات التي تريدها من الإعدادات ثم اختر طريقة استلامها.")]]),
+          qa("bills", L("Bill Payments", "دفع الفواتير"), [[L("When is my bill payment processed?", "متى تتم معالجة دفعة الفاتورة؟"), L("Payments made before the daily cut-off are processed the same day.", "تتم معالجة الدفعات التي تُجرى قبل موعد الإغلاق اليومي في اليوم نفسه.")]]),
+          qa("cards", L("Cards", "البطاقات"), [[L("How do I freeze my card?", "كيف أجمّد بطاقتي؟"), L("Open the card in the app and choose Freeze. You can unfreeze it any time.", "افتح البطاقة في التطبيق واختر تجميد. يمكنك إلغاء التجميد في أي وقت.")]]),
+          qa("p2p", L("Person-To-Person", "من شخص إلى شخص"), [[L("How do I send money to a person?", "كيف أرسل أموالاً إلى شخص؟"), L("Choose Transfers, pick the person and the amount, then confirm with a one-time code.", "اختر التحويلات ثم الشخص والمبلغ وأكّد برمز لمرة واحدة.")]]),
+          qa("profile", L("Profile Management", "إدارة الملف الشخصي"), [[L("How do I change my password?", "كيف أغيّر كلمة المرور؟"), L("Go to Settings, then Change Password, and follow the steps.", "انتقل إلى الإعدادات ثم تغيير كلمة المرور واتبع الخطوات.")]]),
         ] },
-        button(L("Show answers", "عرض الإجابات"), [{ type: "validate" }, go("faq-answer")]),
-        button(L("Back", "رجوع"), [go("home")], "secondary"),
-      ],
-    },
-    {
-      id: "faq-answer", title: L("FAQs", "الأسئلة الشائعة"),
-      blocks: [
-        ...faq("account", L("Which account types are listed in the mobile and online banking apps?", "ما أنواع الحسابات المعروضة في تطبيق الهاتف والخدمات المصرفية عبر الإنترنت؟"), L("Savings, checking, credit cards, loans, deposits and lines of credit.", "الحسابات الجارية والتوفير وبطاقات الائتمان والقروض والودائع وخطوط الائتمان.")),
-        ...faq("account", L("Why do I see only some of my accounts on the dashboard?", "لماذا أرى بعض حساباتي فقط في لوحة المعلومات؟"), L("Only accounts marked as favorites are listed on the dashboard. Select Show All Accounts to see the rest, and use the star to add or remove favorites.", "تظهر في لوحة المعلومات الحسابات المفضّلة فقط. اختر عرض كل الحسابات لرؤية الباقي، واستخدم النجمة لإضافة المفضلة أو إزالتها.")),
-        ...faq("alerts", L("How do I get alerts?", "كيف أحصل على التنبيهات؟"), L("Turn on the alerts you want from Settings, then choose how you receive them.", "فعّل التنبيهات التي تريدها من الإعدادات ثم اختر طريقة استلامها.")),
-        ...faq("bills", L("When is my bill payment processed?", "متى تتم معالجة دفعة الفاتورة؟"), L("Payments made before the daily cut-off are processed the same day.", "تتم معالجة الدفعات التي تُجرى قبل موعد الإغلاق اليومي في اليوم نفسه.")),
-        ...faq("cards", L("How do I freeze my card?", "كيف أجمّد بطاقتي؟"), L("Open the card in the app and choose Freeze. You can unfreeze it any time.", "افتح البطاقة في التطبيق واختر تجميد. يمكنك إلغاء التجميد في أي وقت.")),
-        ...faq("p2p", L("How do I send money to a person?", "كيف أرسل أموالاً إلى شخص؟"), L("Choose Transfers, pick the person and the amount, then confirm with a one-time code.", "اختر التحويلات ثم الشخص والمبلغ وأكّد برمز لمرة واحدة.")),
-        ...faq("profile", L("How do I change my password?", "كيف أغيّر كلمة المرور؟"), L("Go to Settings, then Change Password, and follow the steps.", "انتقل إلى الإعدادات ثم تغيير كلمة المرور واتبع الخطوات.")),
         text(L("Sample answers: the bank's content team replaces these with approved text.", "إجابات تجريبية: سيستبدلها فريق المحتوى في البنك بنص معتمد."), "caption"),
-        button(L("Back to topics", "العودة إلى المواضيع"), [go("faq-categories")], "secondary"),
-        done,
+        button(L("Back", "رجوع"), [go("home")], "secondary"),
       ],
     },
     {

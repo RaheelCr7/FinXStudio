@@ -15,6 +15,8 @@ import { CodeInput } from "./web/CodeInput";
 import { SectionHeader } from "./web/SectionHeader";
 import { Shortcuts } from "./web/Shortcuts";
 import { Hero } from "./web/Hero";
+import { Divider } from "./web/Divider";
+import { Accordion } from "./web/Accordion";
 
 const LONG = "A very long label that has to wrap onto a second line without breaking the layout";
 
@@ -269,5 +271,27 @@ catalog.push(
     props: [{ name: "name", type: "string", description: "The bank's name; also the logo's alternative text." }, { name: "logo", type: "string", description: "Address of the logo image." }],
     states: [{ name: "Name only", props: { name: "Cairo Amman Bank" } }],
     a11y: ["The logo has the bank's name as alternative text."],
+  },
+);
+
+catalog.push(
+  {
+    name: "Divider", group: "Lists", Component: Divider, purpose: "A thin line between groups, with an optional word in the middle such as OR.",
+    props: [{ name: "label", type: "string", description: "A word in the middle of the line. Without it, a plain line." }],
+    states: [{ name: "With a word", props: { label: "OR" } }, { name: "Plain line", props: {} }],
+    a11y: ["With a label it is a separator named by that word; without one it is a plain horizontal rule."],
+  },
+  {
+    name: "Accordion", group: "Lists", Component: Accordion, purpose: "Questions that open to show their answers, one at a time (FAQs).",
+    props: [
+      { name: "items", type: "{ id, title, text }[]", description: "Each question and its answer." },
+      { name: "defaultOpen", type: "string", description: "The id of the item open to start with." },
+    ],
+    states: [
+      { name: "All closed", props: { items: [{ id: "a", title: "Account activity", text: "Savings, checking and credit cards are listed." }, { id: "b", title: "Alerts & communication", text: "Turn alerts on in Settings." }] } },
+      { name: "One open", props: { defaultOpen: "a", items: [{ id: "a", title: "Account activity", text: "Savings, checking and credit cards are listed." }, { id: "b", title: "Alerts & communication", text: "Turn alerts on in Settings." }] } },
+    ],
+    a11y: ["Each question is a button with aria-expanded that controls its answer region.", "Only one answer is open at a time; the chevron points up when open.", "Titles are headings, so a screen reader can jump between questions."],
+    tokens: ["radius.lg"],
   },
 );

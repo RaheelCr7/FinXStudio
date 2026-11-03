@@ -1,6 +1,6 @@
 # Component library (`@finx/components`)
 
-One place that owns how things look. Every shared visual (button, text field, app bar, list row, keypad, PIN boxes, amount field, choice group, switch, checkbox, code boxes, alert, result, summary list, section header, shortcuts, hero) is a component here, with a web version and a phone-app (React Native) version that take exactly the same props (`src/props.ts`).
+One place that owns how things look. Every shared visual (button, text field, app bar, list row, keypad, PIN boxes, amount field, choice group, switch, checkbox, code boxes, alert, result, summary list, section header, shortcuts, hero, divider, accordion) is a component here, with a web version and a phone-app (React Native) version that take exactly the same props (`src/props.ts`).
 
 | | |
 |---|---|

@@ -1,4 +1,4 @@
-import { Alert as KitAlert, AmountField, Button as KitButton, Checkbox, ChoiceGroup, CodeInput, Hero as KitHero, Keypad as KitKeypad, ListRow as KitListRow, PinDots as KitPinDots, Result as KitResult, SectionHeader as KitSectionHeader, Shortcuts as KitShortcuts, SummaryList, Switch, TextField as KitTextField } from "@finx/components/native";
+import { Alert as KitAlert, AmountField, Button as KitButton, Accordion as KitAccordion, Checkbox, ChoiceGroup, CodeInput, Divider as KitDivider, Hero as KitHero, Keypad as KitKeypad, ListRow as KitListRow, PinDots as KitPinDots, Result as KitResult, SectionHeader as KitSectionHeader, Shortcuts as KitShortcuts, SummaryList, Switch, TextField as KitTextField } from "@finx/components/native";
 import React from "react";
 import { Image, Pressable, Text, TextInput, View, StyleSheet, Platform } from "react-native";
 import { mix, space } from "@finx/ui-kit";
@@ -140,6 +140,9 @@ export function Shortcuts({ b, press }: P) {
   return <KitShortcuts items={b.items.map((it: any) => ({ id: it.id, label: it.label, icon: it.icon, onPress: () => press(it.actions) }))} />;
 }
 
+export const Divider = ({ b }: P) => <KitDivider label={b.label || undefined} />;
+export const AccordionBlock = ({ b }: P) => <KitAccordion items={b.items} />;
+
 /** Rows that each do something when tapped, with an icon, a title, a chevron and an optional line of help below. */
 export function Menu({ b, press }: P) {
   return (
@@ -154,6 +157,6 @@ const s = StyleSheet.create({
 });
 export const registry: Record<BlockType, (p: P) => React.ReactElement | null> = {
   accountPicker: AccountPicker, beneficiaryPicker: BeneficiaryPicker, amountInput: AmountInput, select: SelectChips, textInput: TextField,
-  alert: Alert, toggle: Toggle, cardForm: CardForm, reviewSummary: ReviewSummary, consent: Consent, otp: Otp, result: Result, text: TextBlock, button: Button, stepper: () => null, hero: Hero, sectionHeader: SectionHeader, shortcuts: Shortcuts, menu: Menu,
+  alert: Alert, toggle: Toggle, cardForm: CardForm, reviewSummary: ReviewSummary, consent: Consent, otp: Otp, result: Result, text: TextBlock, button: Button, stepper: () => null, hero: Hero, sectionHeader: SectionHeader, shortcuts: Shortcuts, menu: Menu, divider: Divider, accordion: AccordionBlock,
 };
 export { space };

@@ -273,3 +273,22 @@ describe("a bank's own screens", () => {
     expect(await axeCheck(container)).toHaveNoViolations();
   });
 });
+
+describe("divider and accordion", () => {
+  it("draws a divider with a word, and an accordion that opens one answer at a time", async () => {
+    const line = renderBlock("divider", { label: "OR" }, {});
+    expect(screen.getByRole("separator", { name: "OR" })).toBeTruthy();
+    line.unmount();
+    const { container, unmount } = renderBlock("accordion", { items: [{ id: "a", title: "First", text: "Answer one" }, { id: "b", title: "Second", text: "Answer two" }] }, {});
+    const first = screen.getByRole("button", { name: "First" }), second = screen.getByRole("button", { name: "Second" });
+    expect([first.getAttribute("aria-expanded"), second.getAttribute("aria-expanded")]).toEqual(["false", "false"]);
+    expect(screen.queryByRole("region", { name: "First" })).toBeNull(); // a closed answer is hidden from the accessibility tree
+    await userEvent.click(first);
+    expect(first.getAttribute("aria-expanded")).toBe("true");
+    expect(screen.getByRole("region", { name: "First" }).textContent).toBe("Answer one");
+    await userEvent.click(second);
+    expect([first.getAttribute("aria-expanded"), second.getAttribute("aria-expanded")]).toEqual(["false", "true"]);
+    expect(await axeCheck(container)).toHaveNoViolations();
+    unmount();
+  });
+});
