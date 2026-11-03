@@ -6,7 +6,7 @@ import { useProjects } from "../Projects";
 import { nativeComponents } from "@finx/components/native";
 import { NativeThemed, Themed } from "./Preview";
 
-const GROUPS = ["Actions", "Inputs", "Navigation", "Lists", "Verification"] as const;
+const GROUPS = ["Actions", "Inputs", "Navigation", "Lists", "Verification", "Feedback"] as const;
 
 /** Every shared component with all its states, in the current bank's look. The same components draw the real screens. */
 export function ComponentsTab() {

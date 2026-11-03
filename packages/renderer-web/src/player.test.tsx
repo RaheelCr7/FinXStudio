@@ -100,7 +100,7 @@ describe("a bank with its own look", () => {
     expect(container.querySelector(".fx-player")!.getAttribute("data-chrome")).toBe("bar");
     expect(container.querySelector(".fx-player")!.hasAttribute("data-hero")).toBe(true);
     expect(screen.getByRole("button", { name: "Existing user login" })).toBeTruthy();
-    expect(container.querySelector(".fx-player-body")!.lastElementChild!.querySelector(".fx-shortcuts")).toBeTruthy();
+    expect(container.querySelector(".fx-player-body")!.lastElementChild!.querySelector(".fxc-shortcuts")).toBeTruthy();
     expect((container.querySelector(".fx-player") as HTMLElement).style.getPropertyValue("--bar-bg")).toBe("#00853E");
     expect(await axeCheck(container)).toHaveNoViolations();
   });

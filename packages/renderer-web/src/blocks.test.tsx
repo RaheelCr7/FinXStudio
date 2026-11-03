@@ -75,7 +75,7 @@ describe("select, text, toggle, alert", () => {
     expect(set).toHaveBeenCalledWith("bill.b", "l");
     unmount();
     const t = renderBlock("select", { bind: "bill.b", label: "Biller", items, value: "l", variant: "tiles" });
-    expect(t.container.querySelectorAll(".fx-tile").length).toBe(2);
+    expect(t.container.querySelectorAll(".fxc-tile").length).toBe(2);
     expect(await axeCheck(t.container)).toHaveNoViolations();
   });
 
@@ -189,8 +189,8 @@ describe("review, consent, one-time code, result, text, button", () => {
     const { container } = renderBlock("otp", { bind: "otp.code", length: 6, value: "48", hint: "Enter the code sent to +92 300 •••4471" }, { set });
     const input = screen.getByLabelText("One-time code, 6 digits") as HTMLInputElement;
     expect([input.getAttribute("autocomplete"), input.getAttribute("inputmode"), input.maxLength, input.value]).toEqual(["one-time-code", "numeric", 6, "48"]);
-    expect(container.querySelectorAll(".fx-otp-cell").length).toBe(6);
-    expect(container.querySelector(".fx-otp")!.getAttribute("dir")).toBe("ltr");
+    expect(container.querySelectorAll(".fxc-code-cell").length).toBe(6);
+    expect(container.querySelector(".fxc-code")!.getAttribute("dir")).toBe("ltr");
     fireEvent.change(input, { target: { value: "4821x0" } });
     expect(set).toHaveBeenCalledWith("otp.code", "48210");
   });

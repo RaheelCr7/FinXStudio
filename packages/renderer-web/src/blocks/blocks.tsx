@@ -4,116 +4,32 @@ import {
   accountRows, amountText, applyKey, beneficiaryRows, caretAfterFormat, cardFields, cardNetwork, cleanOtp, keyboardKind, otpCells, otpLabel, parseAmountText,
   quickAmounts, selectChoices, symbolOf, ui, type BlockProps, type BlockType, type PickerRow,
 } from "@finx/renderer-core";
-import { Button as KitButton, Keypad, ListRow, PinDots, TextField as KitTextField } from "@finx/components";
+import { Alert as KitAlert, AmountField, Button as KitButton, Checkbox, ChoiceGroup, CodeInput, Hero as KitHero, Keypad, ListRow, PinDots, Result as KitResult, SectionHeader as KitSectionHeader, Shortcuts as KitShortcuts, SummaryList, Switch, TextField as KitTextField, type ChoiceOption } from "@finx/components";
 import { CardVisual } from "../widgets/CardVisual";
-import { Icon, IconTile } from "../widgets/Icon";
-import { FieldError, FieldLabel, describedBy, useFieldIds } from "./field";
+import { FieldError, FieldLabel, useFieldIds } from "./field";
 import { useLook } from "../look";
 
 type P = BlockProps;
 
-/** A group of radio options (accounts, beneficiaries, chips, tiles): real radio inputs, so arrow keys and screen readers work without extra code. */
-function RadioGroup({ legend, name, error, children, className }: { legend: string; name: string; error?: string; children: React.ReactNode; className?: string }) {
-  const ids = useFieldIds();
-  return (
-    <fieldset className={`fx-field ${className ?? ""}`} aria-describedby={describedBy(ids, !!error)} data-name={name}>
-      <legend className="fx-label">{legend}</legend>
-      {children}
-      <FieldError id={ids.error} text={error} />
-    </fieldset>
-  );
-}
-function Radio({ name, checked, onChange, label, children, className, invalid }: { name: string; checked: boolean; onChange: () => void; label: string; children: React.ReactNode; className: string; invalid?: boolean }) {
-  return (
-    <label className={`${className} ${checked ? "is-on" : ""}`}>
-      <input className="fx-radio-input" type="radio" name={name} checked={checked} onChange={onChange} aria-label={label} aria-invalid={invalid ? true : undefined} />
-      {children}
-    </label>
-  );
-}
-const Avatar = ({ text, round }: { text: string; round?: boolean }) => <span className={`fx-avatar ${round ? "is-round" : ""}`} aria-hidden>{text}</span>;
-const PickerRows = ({ rows, name, onPick, invalid }: { rows: PickerRow[]; name: string; onPick: (id: string) => void; invalid?: boolean }) => (
-  <>
-    {rows.map((r) => (
-      <Radio key={r.id} name={name} checked={r.selected} onChange={() => onPick(r.id)} label={r.label} className="fx-row" invalid={invalid}>
-        <Avatar text={r.avatar} round={r.round} />
-        <span className="fx-row-text"><span className="fx-row-title">{r.title}</span>{r.sub ? <span className="fx-row-sub">{r.sub}</span> : null}</span>
-      </Radio>
-    ))}
-  </>
-);
+const toOptions = (rows: PickerRow[]): ChoiceOption[] => rows.map((r) => ({ id: r.id, title: r.title, sub: r.sub, selected: r.selected, label: r.label, avatar: r.avatar, round: r.round }));
 
 export function AccountPicker({ b, set, strings }: P) {
-  return (
-    <RadioGroup legend={strings.account!} name={b.bind} error={b.error}>
-      <PickerRows rows={accountRows(b as any)} name={b.bind} onPick={(id) => set(b.bind, id)} invalid={!!b.error} />
-    </RadioGroup>
-  );
+  return <ChoiceGroup label={strings.account!} name={b.bind} look="cards" options={toOptions(accountRows(b as any))} onChange={(id) => set(b.bind, id)} error={b.error} />;
 }
 
 export function BeneficiaryPicker({ b, set, strings }: P) {
-  return (
-    <RadioGroup legend={strings.payTo!} name={b.bind} error={b.error}>
-      <PickerRows rows={beneficiaryRows(b as any)} name={b.bind} onPick={(id) => set(b.bind, id)} invalid={!!b.error} />
-      {b.allowAddNew ? <p className="fx-link-text">{strings.addBeneficiary}</p> : null}
-    </RadioGroup>
-  );
+  return <ChoiceGroup label={strings.payTo!} name={b.bind} look="cards" options={toOptions(beneficiaryRows(b as any))} onChange={(id) => set(b.bind, id)} error={b.error} footer={b.allowAddNew ? strings.addBeneficiary : undefined} />;
 }
 
 export function AmountInput({ b, set, lang }: P) {
-  const ids = useFieldIds();
-  const chips = quickAmounts(b as any);
-  return (
-    <div className="fx-field">
-      <FieldLabel htmlFor={ids.input}>{b.label}</FieldLabel>
-      <div className={`fx-amount ${b.error ? "has-error" : ""}`}>
-        <span className="fx-amount-symbol" aria-hidden>{symbolOf(b.currency)}</span>
-        {/* text with a numeric keypad, not type=number: no spinner, no scroll-to-change, no "e" */}
-        <input id={ids.input} className="fx-amount-input" type="text" inputMode="numeric" autoComplete="off" enterKeyHint="next" placeholder="0" value={amountText(b.value)}
-          aria-invalid={b.error ? true : undefined} aria-describedby={describedBy(ids, !!b.error, !!b.helper)} onChange={(e) => set(b.bind, parseAmountText(e.target.value))} />
-      </div>
-      {b.helper ? <p id={ids.help} className="fx-help">{b.helper}</p> : null}
-      {chips.length ? (
-        <div className="fx-chips" role="radiogroup" aria-label={ui(lang, "quickAmounts")}>
-          {chips.map((q) => (
-            <button key={q.value} type="button" role="radio" aria-checked={q.selected} aria-label={q.aria} className={`fx-chip ${q.selected ? "is-on" : ""}`} onClick={() => set(b.bind, q.value)}>{q.label}</button>
-          ))}
-        </div>
-      ) : null}
-      <FieldError id={ids.error} text={b.error} />
-    </div>
-  );
+  const quick = quickAmounts(b as any);
+  return <AmountField label={b.label} symbol={symbolOf(b.currency)} value={amountText(b.value)} onChange={(t) => set(b.bind, parseAmountText(t))} helper={b.helper} error={b.error} quick={quick} onQuick={(v) => set(b.bind, v)} quickLabel={ui(lang, "quickAmounts")} />;
 }
 
 export function SelectChips({ b, set }: P) {
   const { tiles, rows, choices } = selectChoices(b as any);
-  if (rows) {
-    return (
-      <RadioGroup legend={b.label} name={b.bind} error={b.error} className="fx-rows">
-        {choices.map((o) => (
-          <Radio key={o.id} name={b.bind} checked={o.selected} onChange={() => set(b.bind, o.id)} label={o.name} className="fx-listrow" invalid={!!b.error}>
-            <span className="fx-row-text"><span className="fx-row-title">{o.name}</span>{o.sub ? <span className="fx-row-sub">{o.sub}</span> : null}</span>
-            <span className="fx-radio-dot" aria-hidden />
-          </Radio>
-        ))}
-      </RadioGroup>
-    );
-  }
-  return (
-    <RadioGroup legend={b.label} name={b.bind} error={b.error} className={tiles ? "fx-tiles" : "fx-chips"}>
-      {choices.map((o) => (
-        <Radio key={o.id} name={b.bind} checked={o.selected} onChange={() => set(b.bind, o.id)} label={o.name} className={tiles ? "fx-tile" : "fx-chip"} invalid={!!b.error}>
-          {tiles ? (
-            <>
-              {o.icon ? <IconTile icon={o.icon} size={40} tone={o.selected ? "accent2" : "accent"} /> : <span className="fx-letter" style={o.color ? { background: o.color } : undefined} aria-hidden>{o.letter}</span>}
-              <span className="fx-row-text"><span className="fx-row-title">{o.name}</span>{o.sub ? <span className="fx-row-sub">{o.sub}</span> : null}</span>
-              {o.selected ? <span className="fx-tick" aria-hidden><Icon name="check" size={13} stroke={3} /></span> : null}
-            </>
-          ) : o.name}
-        </Radio>
-      ))}
-    </RadioGroup>
-  );
+  const options: ChoiceOption[] = choices.map((o) => ({ id: o.id, title: o.name, sub: o.sub, selected: o.selected, icon: o.icon, color: o.color }));
+  return <ChoiceGroup label={b.label} name={b.bind} look={rows ? "rows" : tiles ? "tiles" : "chips"} options={options} onChange={(id) => set(b.bind, id)} error={b.error} />;
 }
 
 export function TextField({ b, set, lang }: P) {
@@ -126,27 +42,11 @@ export function TextField({ b, set, lang }: P) {
 }
 
 export function Alert({ b }: P) {
-  // errors and warnings interrupt a screen reader; information and success wait their turn
-  const urgent = b.tone === "error" || b.tone === "warning";
-  return <div className={`fx-alert fx-alert-${b.tone}`} role={urgent ? "alert" : "status"}>{b.text}</div>;
+  return <KitAlert tone={b.tone} text={b.text} />;
 }
 
 export function Toggle({ b, set, press }: P) {
-  const ids = useFieldIds();
-  const toggle = (
-    <label className="fx-toggle" htmlFor={ids.input}>
-      <span className="fx-row-text"><span className="fx-row-title">{b.label}</span>{b.helper ? <span className="fx-row-sub" id={ids.help}>{b.helper}</span> : null}</span>
-      <input id={ids.input} className="fx-switch-input" type="checkbox" role="switch" checked={b.value === true} aria-describedby={b.helper ? ids.help : undefined} onChange={(e) => set(b.bind, e.target.checked)} />
-      <span className="fx-switch" aria-hidden />
-    </label>
-  );
-  if (!b.link) return toggle;
-  return (
-    <div className="fx-toggle-row">
-      <button type="button" className="fx-link" onClick={() => press(b.link.actions)}>{b.link.label}</button>
-      {toggle}
-    </div>
-  );
+  return <Switch label={b.label} helper={b.helper} checked={b.value === true} onChange={(v) => set(b.bind, v)} link={b.link ? { label: b.link.label, onPress: () => press(b.link.actions) } : undefined} />;
 }
 
 /** A text input that reformats as it is typed (spaces in a card number, a slash in an expiry) and keeps the caret where it was. */
@@ -198,25 +98,11 @@ export function CardForm({ b, set, lang }: P) {
 }
 
 export function ReviewSummary({ b }: P) {
-  return (
-    <dl className="fx-review">
-      {b.rows.map((r: any, i: number) => <div key={i} className="fx-review-row"><dt>{r.label}</dt><dd>{r.value}</dd></div>)}
-    </dl>
-  );
+  return <SummaryList rows={b.rows} />;
 }
 
 export function Consent({ b, set }: P) {
-  const ids = useFieldIds();
-  return (
-    <div className="fx-field">
-      <label className="fx-consent" htmlFor={ids.input}>
-        <input id={ids.input} className="fx-check-input" type="checkbox" checked={b.value === true} aria-invalid={b.error ? true : undefined} aria-describedby={describedBy(ids, !!b.error)} onChange={(e) => set(b.bind, e.target.checked)} />
-        <span className="fx-check" aria-hidden><Icon name="check" size={14} stroke={3} /></span>
-        <span>{b.text}</span>
-      </label>
-      <FieldError id={ids.error} text={b.error} />
-    </div>
-  );
+  return <Checkbox label={b.text} checked={b.value === true} onChange={(v) => set(b.bind, v)} error={b.error} />;
 }
 
 /** A code typed on the bank's own number pad: dashes that fill in, then three keys across. */
@@ -238,35 +124,11 @@ function KeypadCode({ b, set, lang }: P) {
 export const Otp = (p: P) => (p.b.keypad ? <KeypadCode {...p} /> : <CodeCells {...p} />);
 
 function CodeCells({ b, set, lang }: P) {
-  const ids = useFieldIds();
-  const ref = useRef<HTMLInputElement>(null);
-  const v = String(b.value ?? "");
-  return (
-    <div className="fx-field">
-      {b.hint ? <p id={ids.help} className="fx-help">{b.hint}</p> : null}
-      {/* one real input, so a code from an SMS can be filled in by the browser; the cells only mirror it */}
-      <div className="fx-otp" dir="ltr" onClick={() => ref.current?.focus()}>
-        <div className="fx-otp-cells" aria-hidden>
-          {otpCells(v, b.length).map((cell, i) => <span key={i} className={`fx-otp-cell ${cell.active ? "is-active" : ""} ${b.error ? "has-error" : ""}`}>{cell.char}</span>)}
-        </div>
-        <input ref={ref} id={ids.input} className="fx-otp-input" type="text" inputMode="numeric" autoComplete="one-time-code" pattern="[0-9]*" maxLength={b.length} value={v}
-          aria-label={otpLabel(lang, b.length)} aria-invalid={b.error ? true : undefined} aria-describedby={describedBy(ids, !!b.error, !!b.hint)} onChange={(e) => set(b.bind, cleanOtp(e.target.value))} />
-      </div>
-      <FieldError id={ids.error} text={b.error} />
-    </div>
-  );
+  return <CodeInput label={otpLabel(lang, b.length)} length={b.length} value={String(b.value ?? "")} onChange={(t) => set(b.bind, cleanOtp(t))} hint={b.hint} error={b.error} />;
 }
 
 export function Result({ b }: P) {
-  const ok = b.tone === "success";
-  return (
-    <div className="fx-result" role="status">
-      <span className={`fx-result-icon ${ok ? "is-ok" : "is-bad"}`} aria-hidden>{ok ? <Icon name="check" size={40} stroke={2.5} /> : <span>!</span>}</span>
-      <h2 className="fx-result-title">{b.title}</h2>
-      {b.text ? <p className="fx-result-text">{b.text}</p> : null}
-      {b.meta ? <p className="fx-result-meta">{b.meta}</p> : null}
-    </div>
-  );
+  return <KitResult tone={b.tone === "success" ? "success" : "error"} title={b.title} text={b.text} meta={b.meta} />;
 }
 
 export function TextBlock({ b }: P) {
@@ -277,34 +139,17 @@ export function Button({ b, press, busy, strings, submit }: P & { submit?: boole
   return <KitButton label={busy ? strings.wait : b.label} variant={(b.variant ?? "primary") === "primary" ? "primary" : "secondary"} busy={busy} type={submit ? "submit" : "button"} onPress={() => press(b.actions)} />;
 }
 
-/** The bank's banner: its logo (or its name) on the accent colour. The player draws the sheet that overlaps its bottom edge. */
 export function Hero(_: P) {
   const { look, name } = useLook();
-  return <div className="fx-hero">{look?.logo ? <img className="fx-hero-logo" src={look.logo} alt={name ?? ""} /> : <span className="fx-hero-name">{name}</span>}</div>;
+  return <KitHero name={name ?? ""} logo={look?.logo} />;
 }
 
-/** A heading with a link on the same row ("Welcome" … "English ⌄"). */
 export function SectionHeader({ b, press }: P) {
-  return (
-    <div className="fx-sectionhead">
-      <h2>{b.title}</h2>
-      {b.action ? <button type="button" className="fx-sectionhead-link" onClick={() => press(b.action.actions)}>{b.action.label}<Icon name="chevronDown" size={14} /></button> : null}
-    </div>
-  );
+  return <KitSectionHeader title={b.title} action={b.action ? { label: b.action.label, onPress: () => press(b.action.actions) } : undefined} />;
 }
 
-/** Icon buttons in a row, for the shortcuts at the foot of a sign-in screen. */
 export function Shortcuts({ b, press }: P) {
-  return (
-    <div className="fx-shortcuts" role="group">
-      {b.items.map((it: any) => (
-        <button key={it.id} type="button" className="fx-shortcut" onClick={() => press(it.actions)}>
-          <span className="fx-shortcut-tile" aria-hidden>{it.icon ? <Icon name={it.icon} size={22} /> : null}</span>
-          <span>{it.label}</span>
-        </button>
-      ))}
-    </div>
-  );
+  return <KitShortcuts items={b.items.map((it: any) => ({ id: it.id, label: it.label, icon: it.icon, onPress: () => press(it.actions) }))} />;
 }
 
 /** Rows that each do something when tapped, with an icon, a title, a chevron and an optional line of help below. */

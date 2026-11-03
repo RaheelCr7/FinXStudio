@@ -1,4 +1,4 @@
-import { AppBar as KitAppBar, Button as KitButton, Keypad as KitKeypad, ListRow as KitListRow, PinDots as KitPinDots, TextField as KitTextField } from "@finx/components/native";
+import { Alert as KitAlert, AmountField, Button as KitButton, Checkbox, ChoiceGroup, CodeInput, Hero as KitHero, Keypad as KitKeypad, ListRow as KitListRow, PinDots as KitPinDots, Result as KitResult, SectionHeader as KitSectionHeader, Shortcuts as KitShortcuts, SummaryList, Switch, TextField as KitTextField } from "@finx/components/native";
 import React from "react";
 import { Image, Pressable, Text, TextInput, View, StyleSheet, Platform } from "react-native";
 import { mix, space } from "@finx/ui-kit";
@@ -18,152 +18,23 @@ const ErrorText = ({ e }: { e?: string }) => {
   return e ? <Text accessibilityRole="alert" style={{ color: c.negative, fontSize: 13, marginTop: 6 }}>{e}</Text> : null;
 };
 
-export function Row({ children, selected, onPress, label }: { children: React.ReactNode; selected: boolean; onPress: () => void; label: string }) {
-  const { c, r: radius } = useTheme();
-  return (
-    <Pressable accessibilityRole="radio" accessibilityState={{ selected }} accessibilityLabel={label} onPress={onPress}
-      style={({ pressed }) => [s.row, { borderRadius: radius.lg, backgroundColor: c.surface, borderColor: selected ? c.accent : c.border, borderWidth: selected ? 2 : 1, opacity: pressed ? 0.85 : 1 }]}>
-      {children}
-    </Pressable>
-  );
-}
-const Avatar = ({ text, round }: { text: string; round?: boolean }) => {
-  const { c, r: radius } = useTheme();
-  return <View style={{ width: 40, height: 40, borderRadius: round ? 20 : radius.md, backgroundColor: c.accentSoft, alignItems: "center", justifyContent: "center", marginEnd: 12 }}><Text style={{ color: c.accent, fontWeight: "600", fontSize: 13 }}>{text}</Text></View>;
-};
+const toOptions = (rows: ReturnType<typeof accountRows>) => rows.map((r) => ({ id: r.id, title: r.title, sub: r.sub, selected: r.selected, label: r.label, avatar: r.avatar, round: r.round }));
 
 export function AccountPicker({ b, set, strings }: P) {
-  const { c } = useTheme();
-  return (
-    <View accessibilityRole="radiogroup">
-      <Label>{strings.account}</Label>
-      {accountRows(b as any).map((a) => (
-        <Row key={a.id} label={a.label} selected={a.selected} onPress={() => set(b.bind, a.id)}>
-          <Avatar text={a.avatar} />
-          <View style={{ flex: 1 }}>
-            <Text style={{ color: c.text, fontWeight: "600", fontSize: 15 }}>{a.title}</Text>
-            {a.sub && <Text style={[{ color: c.textMuted, fontSize: 13, marginTop: 2 }, tab]}>{a.sub}</Text>}
-          </View>
-        </Row>
-      ))}
-      <ErrorText e={b.error} />
-    </View>
-  );
+  return <ChoiceGroup label={strings.account!} name={b.bind} look="cards" options={toOptions(accountRows(b as any))} onChange={(id) => set(b.bind, id)} error={b.error} />;
 }
 
 export function BeneficiaryPicker({ b, set, strings }: P) {
-  const { c } = useTheme();
-  return (
-    <View accessibilityRole="radiogroup">
-      <Label>{strings.payTo}</Label>
-      {beneficiaryRows(b as any).map((x) => (
-        <Row key={x.id} label={x.label} selected={x.selected} onPress={() => set(b.bind, x.id)}>
-          <Avatar round text={x.avatar} />
-          <View style={{ flex: 1 }}>
-            <Text style={{ color: c.text, fontWeight: "600", fontSize: 15 }}>{x.title}</Text>
-            <Text style={{ color: c.textMuted, fontSize: 13, marginTop: 2 }}>{x.sub}</Text>
-          </View>
-        </Row>
-      ))}
-      {b.allowAddNew && <Text style={{ color: c.accent, fontWeight: "600", marginTop: 4 }}>{strings.addBeneficiary}</Text>}
-      <ErrorText e={b.error} />
-    </View>
-  );
+  return <ChoiceGroup label={strings.payTo!} name={b.bind} look="cards" options={toOptions(beneficiaryRows(b as any))} onChange={(id) => set(b.bind, id)} error={b.error} footer={b.allowAddNew ? strings.addBeneficiary : undefined} />;
 }
 
-export function AmountInput({ b, set }: P) {
-  const { c, r: radius } = useTheme();
-  const [focus, setFocus] = React.useState(false);
-  const text = amountText(b.value);
-  return (
-    <View>
-      <Label>{b.label}</Label>
-      <View style={{ flexDirection: "row", alignItems: "baseline", borderBottomWidth: 2, borderBottomColor: b.error ? c.negative : focus ? c.accent : c.borderStrong, paddingBottom: 8 }}>
-        <Text style={{ fontSize: 20, fontWeight: "500", color: c.textMuted, marginEnd: 8 }}>{symbolOf(b.currency)}</Text>
-        <TextInput accessibilityLabel={b.label} value={text} placeholder="0" placeholderTextColor={c.textFaint} keyboardType="number-pad"
-          onFocus={() => setFocus(true)} onBlur={() => setFocus(false)}
-          onChangeText={(t) => set(b.bind, parseAmountText(t))}
-          style={[{ flex: 1, fontSize: 40, fontWeight: "600", color: c.text, padding: 0 }, tab, Platform.OS === "web" ? ({ outlineStyle: "none" } as any) : null]} />
-      </View>
-      {b.helper ? <Text style={[{ color: c.textMuted, fontSize: 13, marginTop: 8 }, tab]}>{b.helper}</Text> : null}
-      {quickAmounts(b as any).length ? (
-        <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8, marginTop: 14 }} accessibilityRole="radiogroup">
-          {quickAmounts(b as any).map((q) => (
-            <Pressable key={q.value} accessibilityRole="radio" accessibilityState={{ selected: q.selected }} accessibilityLabel={q.aria} onPress={() => set(b.bind, q.value)}
-              style={({ pressed }) => ({ minWidth: 64, minHeight: 40, paddingHorizontal: 16, borderRadius: radius.md, alignItems: "center", justifyContent: "center", backgroundColor: q.selected ? c.accent2 : c.surface, borderWidth: 1, borderColor: q.selected ? c.accent2 : c.border, opacity: pressed ? 0.85 : 1 })}>
-              <Text style={[{ color: q.selected ? "#fff" : c.text, fontWeight: "700", fontSize: 15 }, tab]}>{q.label}</Text>
-            </Pressable>
-          ))}
-        </View>
-      ) : null}
-      <ErrorText e={b.error} />
-    </View>
-  );
+export function AmountInput({ b, set, lang }: P) {
+  return <AmountField label={b.label} symbol={symbolOf(b.currency)} value={amountText(b.value)} onChange={(t) => set(b.bind, parseAmountText(t))} helper={b.helper} error={b.error} quick={quickAmounts(b as any)} onQuick={(v) => set(b.bind, v)} quickLabel={ui(lang, "quickAmounts")} />;
 }
 
 export function SelectChips({ b, set }: P) {
-  const { c, r: radius } = useTheme();
   const { tiles, rows, choices } = selectChoices(b as any);
-  if (rows) {
-    return (
-      <View accessibilityRole="radiogroup">
-        {b.label ? <Text style={{ fontSize: 13, color: c.textMuted, marginBottom: 4 }}>{b.label}</Text> : null}
-        {choices.map((o) => (
-          <Pressable key={o.id} accessibilityRole="radio" accessibilityState={{ selected: o.selected }} accessibilityLabel={o.name} onPress={() => set(b.bind, o.id)}
-            style={{ flexDirection: "row", alignItems: "center", paddingVertical: 14, borderBottomWidth: 1, borderBottomColor: c.border }}>
-            <View style={{ flex: 1 }}>
-              <Text style={{ color: c.text, fontWeight: "600", fontSize: 15 }}>{o.name}</Text>
-              {o.sub ? <Text style={{ color: c.textMuted, fontSize: 12, marginTop: 2 }}>{o.sub}</Text> : null}
-            </View>
-            <View style={{ width: 22, height: 22, borderRadius: 11, borderWidth: 2, borderColor: o.selected ? c.accent : c.borderStrong, alignItems: "center", justifyContent: "center" }}>
-              {o.selected ? <View style={{ width: 10, height: 10, borderRadius: 5, backgroundColor: c.accent }} /> : null}
-            </View>
-          </Pressable>
-        ))}
-        <ErrorText e={b.error} />
-      </View>
-    );
-  }
-  if (tiles) {
-    return (
-      <View>
-        <Label>{b.label}</Label>
-        <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 12 }} accessibilityRole="radiogroup">
-          {choices.map((o) => {
-            const on = o.selected;
-            const tint = o.color ?? c.accent;
-            return (
-              <Pressable key={o.id} accessibilityRole="radio" accessibilityState={{ selected: on }} accessibilityLabel={o.name} onPress={() => set(b.bind, o.id)}
-                style={({ pressed }) => ({ width: "47%", flexGrow: 1, padding: 14, borderRadius: radius.lg, gap: 10, backgroundColor: c.surface, borderWidth: 2, borderColor: on ? c.accent2 : c.border, opacity: pressed ? 0.88 : 1 })}>
-                {o.icon ? <IconTile icon={o.icon} color={on ? c.accent2 : c.accent} bg={on ? c.accent2Soft : c.accentSoft} size={40} />
-                  : <View style={{ width: 40, height: 40, borderRadius: 13, backgroundColor: tint, alignItems: "center", justifyContent: "center" }}><Text style={{ color: "#fff", fontWeight: "800", fontSize: 16 }}>{o.letter}</Text></View>}
-                <View><Text style={{ color: c.text, fontWeight: "700", fontSize: 15 }}>{o.name}</Text>{o.sub ? <Text style={{ color: c.textMuted, fontSize: 12, marginTop: 2 }}>{o.sub}</Text> : null}</View>
-                {on ? <View style={{ position: "absolute", top: 10, right: 10, width: 22, height: 22, borderRadius: 11, backgroundColor: c.accent2, alignItems: "center", justifyContent: "center" }}><Icon name="check" size={13} color="#fff" stroke={3} /></View> : null}
-              </Pressable>
-            );
-          })}
-        </View>
-        <ErrorText e={b.error} />
-      </View>
-    );
-  }
-  return (
-    <View>
-      <Label>{b.label}</Label>
-      <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8 }} accessibilityRole="radiogroup">
-        {choices.map((o) => {
-          const on = o.selected;
-          return (
-            <Pressable key={o.id} accessibilityRole="radio" accessibilityState={{ selected: on }} onPress={() => set(b.bind, o.id)}
-              style={{ paddingHorizontal: 14, minHeight: 40, paddingVertical: 6, borderRadius: radius.pill, justifyContent: "center", borderWidth: on ? 2 : 1, borderColor: on ? c.accent : c.border, backgroundColor: on ? c.accentSoft : c.surface }}>
-              <Text style={{ color: on ? c.accent : c.text, fontWeight: "500", fontSize: 14 }}>{o.name}</Text>
-            </Pressable>
-          );
-        })}
-      </View>
-      <ErrorText e={b.error} />
-    </View>
-  );
+  return <ChoiceGroup label={b.label} name={b.bind} look={rows ? "rows" : tiles ? "tiles" : "chips"} options={choices.map((o) => ({ id: o.id, title: o.name, sub: o.sub, selected: o.selected, icon: o.icon, color: o.color }))} onChange={(id) => set(b.bind, id)} error={b.error} />;
 }
 
 export function TextField({ b, set, lang }: P) {
@@ -175,26 +46,7 @@ export function TextField({ b, set, lang }: P) {
 }
 
 export function Toggle({ b, set, press }: P) {
-  const { c } = useTheme();
-  const on = b.value === true;
-  const toggle = (
-    <Pressable accessibilityRole="switch" accessibilityState={{ checked: on }} accessibilityLabel={b.label} onPress={() => set(b.bind, !on)} style={{ flexDirection: "row", alignItems: "center", gap: 14 }}>
-      <View style={{ flex: 1 }}>
-        <Text style={{ color: c.text, fontSize: 15, fontWeight: "600" }}>{b.label}</Text>
-        {b.helper ? <Text style={{ color: c.textMuted, fontSize: 13, marginTop: 2 }}>{b.helper}</Text> : null}
-      </View>
-      <View style={{ width: 50, height: 30, borderRadius: 15, padding: 3, backgroundColor: on ? c.accent2 : c.borderStrong, alignItems: on ? "flex-end" : "flex-start", justifyContent: "center" }}>
-        <View style={{ width: 24, height: 24, borderRadius: 12, backgroundColor: "#fff" }} />
-      </View>
-    </Pressable>
-  );
-  if (!b.link) return toggle;
-  return (
-    <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 12 }}>
-      <Pressable accessibilityRole="link" accessibilityLabel={b.link.label} onPress={() => press(b.link.actions)} hitSlop={8}><Text style={{ color: c.accent, fontSize: 13, fontWeight: "600" }}>{b.link.label}</Text></Pressable>
-      {toggle}
-    </View>
-  );
+  return <Switch label={b.label} helper={b.helper} checked={b.value === true} onChange={(v) => set(b.bind, v)} link={b.link ? { label: b.link.label, onPress: () => press(b.link.actions) } : undefined} />;
 }
 
 export function CardForm({ b, set, lang }: P) {
@@ -224,39 +76,15 @@ export function CardForm({ b, set, lang }: P) {
 }
 
 export function Alert({ b }: P) {
-  const { c, r: radius } = useTheme();
-  const tone = { warning: [c.warningBg, c.warning], error: [c.negativeBg, c.negative], success: [c.positiveBg, c.positive], info: [c.infoBg, c.info] }[b.tone as string] ?? [c.infoBg, c.info];
-  return <View accessibilityRole="alert" style={{ backgroundColor: tone[0], padding: 14, borderRadius: radius.md }}><Text style={{ color: tone[1], fontSize: 14, lineHeight: 20 }}>{b.text}</Text></View>;
+  return <KitAlert tone={b.tone} text={b.text} />;
 }
 
 export function ReviewSummary({ b }: P) {
-  const { c, r: radius } = useTheme();
-  return (
-    <View style={{ borderWidth: 1, borderColor: c.border, backgroundColor: c.surface, borderRadius: radius.lg, paddingHorizontal: 16 }}>
-      {b.rows.map((r: any, i: number) => (
-        <View key={i} style={{ flexDirection: "row", justifyContent: "space-between", paddingVertical: 14, borderTopWidth: i ? 1 : 0, borderTopColor: c.border }}>
-          <Text style={{ color: c.textMuted, fontSize: 14 }}>{r.label}</Text>
-          <Text style={[{ color: c.text, fontSize: 14, fontWeight: "600" }, tab]}>{r.value}</Text>
-        </View>
-      ))}
-    </View>
-  );
+  return <SummaryList rows={b.rows} />;
 }
 
 export function Consent({ b, set }: P) {
-  const { c, r: radius } = useTheme();
-  const on = b.value === true;
-  return (
-    <View>
-      <Pressable accessibilityRole="checkbox" accessibilityState={{ checked: on }} onPress={() => set(b.bind, !on)} style={{ flexDirection: "row", alignItems: "flex-start" }}>
-        <View style={{ width: 24, height: 24, borderRadius: 7, borderWidth: 2, borderColor: on ? c.accent : c.borderStrong, backgroundColor: on ? c.accent : "transparent", alignItems: "center", justifyContent: "center", marginEnd: 12 }}>
-          {on ? <Text style={{ color: c.accentOn, fontWeight: "700", fontSize: 14 }}>✓</Text> : null}
-        </View>
-        <Text style={{ flex: 1, color: c.text, fontSize: 15, lineHeight: 22 }}>{b.text}</Text>
-      </Pressable>
-      <ErrorText e={b.error} />
-    </View>
-  );
+  return <Checkbox label={b.text} checked={b.value === true} onChange={(v) => set(b.bind, v)} error={b.error} />;
 }
 
 /** A code typed on the bank's own number pad: dashes that fill in, then three keys across. The device keyboard is not used. */
@@ -276,43 +104,12 @@ function KeypadCode({ b, set, lang }: P) {
 }
 
 export function Otp({ b, set, lang }: P) {
-  const { c, r: radius } = useTheme();
-  const ref = React.useRef<React.ComponentRef<typeof TextInput>>(null);
-  const v = String(b.value ?? "");
   if (b.keypad) return <KeypadCode b={b} set={set} press={() => {}} busy={false} lang={lang} strings={{}} />;
-  return (
-    <View>
-      {b.hint ? <Text style={{ color: c.textMuted, fontSize: 14, marginBottom: 16, lineHeight: 20 }}>{b.hint}</Text> : null}
-      <Pressable onPress={() => ref.current?.focus()} accessibilityLabel={otpLabel(lang, b.length)}>
-        <View style={{ flexDirection: "row", justifyContent: "space-between", direction: "ltr" as any }}>
-          {otpCells(v, b.length).map((cell, i) => (
-            <View key={i} style={{ width: 46, height: 56, borderRadius: radius.md, borderWidth: cell.active ? 2 : 1, borderColor: b.error ? c.negative : cell.active ? c.accent : c.borderStrong, backgroundColor: c.surface, alignItems: "center", justifyContent: "center" }}>
-              <Text style={[{ fontSize: 24, fontWeight: "600", color: c.text }, tab]}>{cell.char}</Text>
-            </View>
-          ))}
-        </View>
-        <TextInput ref={ref} autoFocus value={v} keyboardType="number-pad" maxLength={b.length} textContentType="oneTimeCode" autoComplete="one-time-code"
-          onChangeText={(t) => set(b.bind, cleanOtp(t))}
-          style={{ position: "absolute", opacity: 0, width: "100%", height: "100%" }} />
-      </Pressable>
-      <ErrorText e={b.error} />
-    </View>
-  );
+  return <CodeInput label={otpLabel(lang, b.length)} length={b.length} value={String(b.value ?? "")} onChange={(t) => set(b.bind, cleanOtp(t))} hint={b.hint} error={b.error} />;
 }
 
 export function Result({ b }: P) {
-  const { c, r: radius } = useTheme();
-  const ok = b.tone === "success";
-  return (
-    <View style={{ alignItems: "center", paddingTop: 32 }}>
-      <View style={{ width: 88, height: 88, borderRadius: 44, backgroundColor: ok ? c.positiveBg : c.negativeBg, alignItems: "center", justifyContent: "center" }}>
-        <Text style={{ fontSize: 40, color: ok ? c.positive : c.negative }}>{ok ? "✓" : "!"}</Text>
-      </View>
-      <Text accessibilityRole="header" style={{ fontSize: 24, fontWeight: "600", color: c.text, marginTop: 20, textAlign: "center" }}>{b.title}</Text>
-      {b.text ? <Text style={{ color: c.textMuted, fontSize: 15, marginTop: 8, textAlign: "center", lineHeight: 22 }}>{b.text}</Text> : null}
-      {b.meta ? <Text style={{ marginTop: 14, paddingHorizontal: 12, paddingVertical: 5, borderRadius: radius.pill, backgroundColor: c.surfaceMuted, color: c.textMuted, fontSize: 12, fontFamily: Platform.OS === "web" ? "ui-monospace, Menlo, monospace" : undefined }}>{b.meta}</Text> : null}
-    </View>
-  );
+  return <KitResult tone={b.tone === "success" ? "success" : "error"} title={b.title} text={b.text} meta={b.meta} />;
 }
 
 export function TextBlock({ b }: P) {
@@ -325,47 +122,17 @@ export function Button({ b, press, busy, strings }: P) {
   return <KitButton label={busy ? strings.wait : b.label} variant={(b.variant ?? "primary") === "primary" ? "primary" : "secondary"} busy={busy} onPress={() => press(b.actions)} />;
 }
 
-/** The bank's banner: its logo (or its name) on the accent colour. The player draws the sheet that overlaps its bottom edge. */
-export function Hero({ b }: P) {
-  const { c, look, brand } = useTheme();
-  return (
-    <View accessibilityRole="header" style={{ backgroundColor: look?.bar ?? c.accent, height: 200, alignItems: "center", justifyContent: "center" }}>
-      {look?.logo ? <Image accessibilityLabel={brand} source={{ uri: look.logo }} resizeMode="contain" style={{ width: 230, height: 70 }} />
-        : <Text style={{ color: c.accentOn, fontSize: 26, fontWeight: "700" }}>{brand}</Text>}
-    </View>
-  );
+export function Hero(_: P) {
+  const { look, brand } = useTheme();
+  return <KitHero name={brand} logo={look?.logo} />;
 }
 
-/** A heading with a link on the same row ("Welcome" … "English ⌄"). */
 export function SectionHeader({ b, press }: P) {
-  const { c } = useTheme();
-  return (
-    <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between" }}>
-      <Text accessibilityRole="header" style={{ fontSize: 16, fontWeight: "700", color: c.text }}>{b.title}</Text>
-      {b.action ? (
-        <Pressable accessibilityRole="button" onPress={() => press(b.action.actions)} hitSlop={8} style={{ flexDirection: "row", alignItems: "center", gap: 4 }}>
-          <Text style={{ fontSize: 13, color: c.text }}>{b.action.label}</Text><Icon name="chevronDown" size={14} color={c.text} />
-        </Pressable>
-      ) : null}
-    </View>
-  );
+  return <KitSectionHeader title={b.title} action={b.action ? { label: b.action.label, onPress: () => press(b.action.actions) } : undefined} />;
 }
 
-/** Icon buttons in a row, for the shortcuts at the foot of a sign-in screen. */
 export function Shortcuts({ b, press }: P) {
-  const { c } = useTheme();
-  return (
-    <View style={{ flexDirection: "row", justifyContent: "space-around", paddingVertical: 4 }}>
-      {b.items.map((it: any) => (
-        <Pressable key={it.id} accessibilityRole="button" accessibilityLabel={it.label} onPress={() => press(it.actions)} style={{ alignItems: "center", gap: 8, minWidth: 88 }}>
-          <View style={{ width: 50, height: 50, borderRadius: 14, backgroundColor: mix(c.accent, "#000000", 0.35), alignItems: "center", justifyContent: "center" }}>
-            {it.icon ? <Icon name={it.icon} size={22} color="#FFFFFF" /> : null}
-          </View>
-          <Text style={{ fontSize: 12, fontWeight: "500", color: c.text }}>{it.label}</Text>
-        </Pressable>
-      ))}
-    </View>
-  );
+  return <KitShortcuts items={b.items.map((it: any) => ({ id: it.id, label: it.label, icon: it.icon, onPress: () => press(it.actions) }))} />;
 }
 
 /** Rows that each do something when tapped, with an icon, a title, a chevron and an optional line of help below. */

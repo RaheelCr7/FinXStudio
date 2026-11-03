@@ -4,7 +4,7 @@ import type { ComponentType } from "react";
 export type ComponentSpec<P = any> = {
   name: string;
   purpose: string;
-  group: "Actions" | "Inputs" | "Navigation" | "Lists" | "Verification";
+  group: "Actions" | "Inputs" | "Navigation" | "Lists" | "Verification" | "Feedback";
   Component: ComponentType<P>;
   props: { name: string; type: string; default?: string; description: string }[];
   /** Every state worth seeing: empty, filled, error, disabled, long text, and so on. */

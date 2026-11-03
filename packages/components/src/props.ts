@@ -56,3 +56,83 @@ export type KeypadKey = "0" | "1" | "2" | "3" | "4" | "5" | "6" | "7" | "8" | "9
 export type KeypadProps = { onKey?: (key: KeypadKey) => void; labels?: { back: string } };
 
 export type PinDotsProps = { length: number; filled: number; masked?: boolean; digits?: string; label: string };
+
+export type AlertProps = { tone: "info" | "warning" | "error" | "success"; text: string };
+
+export type ResultProps = { tone: "success" | "error"; title: string; text?: string; /** A reference or time, in a small pill. */ meta?: string };
+
+export type SummaryListProps = { rows: { label: string; value: string }[] };
+
+export type SwitchProps = {
+  label: string;
+  helper?: string;
+  checked: boolean;
+  onChange?: (checked: boolean) => void;
+  /** A link on the same row, to the start of the switch ("Forgot password?" … switch). */
+  link?: { label: string; onPress: () => void };
+};
+
+export type CheckboxProps = { label: string; checked: boolean; onChange?: (checked: boolean) => void; error?: string };
+
+export type ChoiceOption = {
+  id: string;
+  title: string;
+  sub?: string;
+  selected: boolean;
+  /** What a screen reader says, when it should differ from the title. */
+  label?: string;
+  /** cards: initials in a square, or a circle when round. */
+  avatar?: string;
+  round?: boolean;
+  /** tiles: a shared icon, or else the first letter on a coloured square. */
+  icon?: string;
+  color?: string;
+};
+
+export type ChoiceGroupProps = {
+  label: string;
+  /** Groups the radio buttons; usually the field it fills. */
+  name: string;
+  /** chips: pills in a row. tiles: a grid of cards with an icon. rows: a list with a radio dot. cards: rows with initials (accounts, people). */
+  look?: "chips" | "tiles" | "rows" | "cards";
+  options: ChoiceOption[];
+  onChange?: (id: string) => void;
+  error?: string;
+  /** A line under the options, such as "Add a beneficiary". */
+  footer?: string;
+};
+
+export type QuickAmount = { value: number; label: string; aria: string; selected: boolean };
+
+export type AmountFieldProps = {
+  label: string;
+  /** The amount as typed text; the screen parses it. */
+  value: string;
+  /** The currency symbol before the amount. */
+  symbol: string;
+  onChange?: (text: string) => void;
+  helper?: string;
+  error?: string;
+  /** Preset amounts shown as chips under the field. */
+  quick?: QuickAmount[];
+  onQuick?: (value: number) => void;
+  /** Names the preset amounts for a screen reader. */
+  quickLabel?: string;
+};
+
+export type CodeInputProps = {
+  /** Spoken name, for example "Enter the 6-digit code". */
+  label: string;
+  length: number;
+  value: string;
+  /** Called with what was typed or pasted; the screen keeps the digits. */
+  onChange?: (typed: string) => void;
+  hint?: string;
+  error?: string;
+};
+
+export type SectionHeaderProps = { title: string; action?: { label: string; onPress: () => void } };
+
+export type ShortcutsProps = { items: { id: string; label: string; icon?: string; onPress?: () => void }[] };
+
+export type HeroProps = { name: string; logo?: string };
