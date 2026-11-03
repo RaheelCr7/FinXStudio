@@ -210,6 +210,7 @@ export class MockBank {
         to.balance = roundMoney(to.balance + q.to.amount, to.currency);
         q.used = true; this.otpVerified = false; this.seq += 1;
         return { reference: `FX-20261102-${String(930 + this.seq).padStart(4, "0")}`, from: { currency: from.currency, newBalance: from.balance }, to: { currency: to.currency, newBalance: to.balance }, quoteId: q.quoteId };
+      }
       case "bank.accounts.totals": {
         // balances added up per currency, never across currencies; a record keyed by currency so it can feed a list
         const out: Record<string, { id: string; currency: string; total: number; count: number }> = {};

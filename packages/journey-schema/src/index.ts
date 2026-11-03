@@ -2,6 +2,7 @@ export * from "./schema";
 export * from "./lint";
 export * from "./validate";
 export { localTransfer } from "./fixtures/local-transfer";
+export { convertCurrency } from "./fixtures/convert-currency";
 export { payBill } from "./fixtures/pay-bill";
 export { addMoney, addCard, connectAccount, createBudget, invest, sellInvestment, bankworkxJourneys } from "./fixtures/bankworkx";
 export { signIn as cabSignIn, defaultSignIn as cabDefaultSignIn, accountPreview as cabAccountPreview, changeLanguage as cabChangeLanguage, enroll as cabEnroll, activateProfile as cabActivateProfile, cantSignIn as cabCantSignIn, locateUs as cabLocateUs, support as cabSupport, cabJourneys } from "./fixtures/cab";
