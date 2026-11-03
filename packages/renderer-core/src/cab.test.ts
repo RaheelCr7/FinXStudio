@@ -154,18 +154,24 @@ describe("Account preview", () => {
 });
 
 describe("Change language", () => {
-  it("asks to confirm, then changes it", async () => {
+  it("opens with the language in use ticked, asks to confirm by name, then changes it and ends back on sign in", async () => {
     const { r, bank } = mk(cabChangeLanguage); await r.start();
     expect(r.view().blocks.find((b) => b.type === "select")!.items.map((i: any) => i.name)).toEqual(["US English", "UK English", "French", "Arabic"]);
-    await press(r, "Update Language"); expect(r.current).toBe("choose"); // a language must be chosen first
+    expect(r.get("language.code")).toBe("en_US"); // the design opens with the current language selected
     r.set("language.code", "ar_AE"); await press(r, "Update Language");
     expect(r.current).toBe("confirm");
+    expect(r.view().blocks.find((b) => b.type === "text")!.text).toBe("Are you sure you want to change your language setting to Arabic?");
+    expect(r.view().blocks.filter((b) => b.type === "button").map((b) => b.label)).toEqual(["No", "Yes"]); // No on the left, Yes on the right
     await press(r, "No"); expect(r.current).toBe("choose");
     expect(r.get("language.code")).toBe("ar_AE"); // the choice is kept
     await press(r, "Update Language"); await press(r, "Yes");
-    expect(r.current).toBe("done");
-    expect(resultOf(r)!.text).toBe("Your language is now Arabic.");
+    expect(r.view().exited).toBe(true); // no "Language updated" screen: the app is back on sign in
     expect((await bank.call("cab.language.current")).current).toBe("ar_AE");
+  });
+  it("opens on the language that is already in use", async () => {
+    const { r, bank } = mk(cabChangeLanguage); await bank.call("cab.language.set", { code: "fr_FR" });
+    await r.start();
+    expect(r.get("language.code")).toBe("fr_FR");
   });
 });
 
@@ -174,7 +180,11 @@ describe("Enroll", () => {
     const { r, bank } = mk(cabEnroll, persona); await r.start();
     expect(menuLabels(r)).toEqual(["Enroll your account", "Activate your account"]);
     await tap(r, "Enroll your account");
-    fill(r, { "enroll.entity": "mb", "enroll.kind": "personal" }); await press(r, "Continue");
+    fill(r, { "enroll.entity": "mb" }); await press(r, "Continue");
+    expect(r.current).toBe("option");
+    expect(r.view().blocks.find((b) => b.type === "reviewSummary")!.rows).toEqual([{ label: "Selected Entity", value: "Model Bank" }]);
+    await tap(r, "Personal Banking");
+    expect(r.current).toBe("last-name");
     fill(r, { "enroll.lastName": over.lastName ?? "Hegazy" }); await press(r, "Continue");
     fill(r, { "enroll.nationalId": over.nationalId ?? "194324" }); await press(r, "Continue");
     fill(r, { "enroll.dob": over.dob ?? "01 / 01 / 2001" }); await press(r, "Continue");
@@ -205,13 +215,15 @@ describe("Enroll", () => {
     const { r } = mk(cabEnroll, "sara"); await r.start();
     await tap(r, "Activate your account"); expect(r.current).toBe("to-activate");
     const b = mk(cabEnroll, "sara"); await b.r.start(); await tap(b.r, "Enroll your account");
-    fill(b.r, { "enroll.entity": "mb", "enroll.kind": "business" }); await press(b.r, "Continue");
+    fill(b.r, { "enroll.entity": "mb" }); await press(b.r, "Continue");
+    await tap(b.r, "Business Banking");
     expect(b.r.current).toBe("business");
   });
   it("checks the date format before going on", async () => {
     const { r } = mk(cabEnroll, "sara"); await r.start(); await tap(r, "Enroll your account");
-    fill(r, { "enroll.entity": "mb", "enroll.kind": "personal", "enroll.lastName": "Hegazy", "enroll.nationalId": "194324" });
-    await press(r, "Continue"); await press(r, "Continue"); await press(r, "Continue");
+    fill(r, { "enroll.entity": "mb" }); await press(r, "Continue"); await tap(r, "Personal Banking");
+    fill(r, { "enroll.lastName": "Hegazy", "enroll.nationalId": "194324" });
+    await press(r, "Continue"); await press(r, "Continue");
     expect(r.current).toBe("dob");
     r.set("enroll.dob", "1/1/01"); await press(r, "Continue");
     expect(r.current).toBe("dob");
