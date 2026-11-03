@@ -190,7 +190,7 @@ export function CodeInput({ label, length, value, onChange, hint, error }: CodeI
             </View>
           ))}
         </View>
-        <TextInput ref={ref} value={value} keyboardType="number-pad" maxLength={length} textContentType="oneTimeCode" autoComplete="one-time-code" onChangeText={onChange} style={{ position: "absolute", opacity: 0, width: "100%", height: "100%" }} />
+        <TextInput ref={ref} autoFocus value={value} keyboardType="number-pad" maxLength={length} textContentType="oneTimeCode" autoComplete="one-time-code" onChangeText={onChange} style={{ position: "absolute", opacity: 0, width: "100%", height: "100%" }} />
       </Pressable>
       <ErrorText text={error} />
     </View>
