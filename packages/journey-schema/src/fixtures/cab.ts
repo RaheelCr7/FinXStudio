@@ -224,7 +224,7 @@ export const defaultSignIn: Journey = {
 /* ============================================= 3. Account preview before sign in */
 export const accountPreview: Journey = {
   ...base, id: "jrn_cab_account_preview", slug: "account-preview", name: L("Account preview", "معاينة الحساب"), entryScreen: "settings",
-  dataModel: { "preview.enabled": { type: "boolean" }, "preview.pick": { type: "string" } },
+  dataModel: { "preview.enabled": { type: "boolean" } },
   integrations: [{ id: "preview", adapter: "cab.preview.get", mode: "sandbox" }, { id: "previewAccounts", adapter: "cab.preview.accounts", mode: "sandbox" }, { id: "previewSet", adapter: "cab.preview.set", mode: "sandbox" }],
   screens: [
     {
@@ -243,9 +243,10 @@ export const accountPreview: Journey = {
     {
       id: "saved", title: L("Account preview", "معاينة الحساب"), kind: "terminal",
       blocks: [
-        result("success", L("Account preview is {{preview.enabled ? 'on' : 'off'}}", "معاينة الحساب {{preview.enabled ? 'مفعّلة' : 'متوقفة'}}")),
-        text(L("This is what the sign-in screen shows", "هذا ما تعرضه شاشة تسجيل الدخول"), "caption"),
-        { type: "accountPicker", bind: "preview.pick", source: "ctx.previewAccounts", showBalance: true, visibleWhen: "preview.enabled" },
+        { ...result("success", L("Account preview is off", "معاينة الحساب متوقفة")), visibleWhen: "!preview.enabled" } as Block,
+        // as on the sign-in screen: the heading with its "As of" time, then each account with its type, balance and a note
+        { type: "sectionHeader", title: L("Account Preview", "معاينة الحساب"), subtitle: L("As of {{preview.asOf | datetime}}", "اعتباراً من {{preview.asOf | datetime}}"), visibleWhen: "preview.enabled" },
+        { type: "balanceList", source: "ctx.previewAccounts", visibleWhen: "preview.enabled" },
         done,
       ],
     },

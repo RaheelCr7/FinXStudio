@@ -82,9 +82,11 @@ export const Block = z.discriminatedUnion("type", [
   /** A bold heading with an optional link on the same row, for example "Welcome" and the language. */
   /** A thin line between groups, with an optional word in the middle ("OR"). */
   z.object({ ...base, type: z.literal("divider"), label: LocalizedText.optional() }),
+  /** Read-only rows of accounts: name and number, a type tag, the balance and a note under it. `source` is a path to the accounts (a list or a record). */
+  z.object({ ...base, type: z.literal("balanceList"), source: z.string() }),
   /** Questions that open to show their answer, one at a time. */
   z.object({ ...base, type: z.literal("accordion"), items: z.array(z.object({ id: z.string(), title: LocalizedText, text: LocalizedText })).min(1) }),
-  z.object({ ...base, type: z.literal("sectionHeader"), title: LocalizedText, action: z.object({ label: LocalizedText, actions: z.array(Action) }).optional() }),
+  z.object({ ...base, type: z.literal("sectionHeader"), title: LocalizedText, subtitle: LocalizedText.optional(), action: z.object({ label: LocalizedText, actions: z.array(Action) }).optional() }),
   /** A row of icon buttons, for example Enroll, Locate us and Support at the bottom of a sign-in screen. */
   z.object({ ...base, type: z.literal("shortcuts"), items: z.array(z.object({ id: z.string(), label: LocalizedText, icon: z.string().optional(), actions: z.array(Action) })) }),
   /** A list of rows that each do something when tapped, with an optional icon and a line of help. */

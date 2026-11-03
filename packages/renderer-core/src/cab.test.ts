@@ -141,15 +141,21 @@ describe("Account preview", () => {
     const { r, bank } = mk(cabAccountPreview); await r.start();
     r.set("preview.enabled", true); await press(r, "Save");
     expect(r.current).toBe("saved");
-    expect(resultOf(r)!.title).toBe("Account preview is on");
-    expect(r.view().blocks.find((b) => b.type === "accountPicker")!.items).toHaveLength(3);
+    expect(resultOf(r)).toBeUndefined(); // the design shows the list, not a banner
+    const head = r.view().blocks.find((b) => b.type === "sectionHeader")!;
+    expect(head.title).toBe("Account Preview");
+    expect(head.subtitle).toMatch(/^As of \d{2}\/\d{2}\/\d{4} \d{2}:\d{2} (AM|PM)$/);
+    const rows = r.view().blocks.find((b) => b.type === "balanceList")!.rows;
+    expect(rows).toHaveLength(3);
+    expect(rows[0]).toEqual({ id: "cab_cur", title: "Kmart Corporation...0375", tag: "Current Account", amount: "JOD 2,173.420", caption: "Available balance" });
+    expect(rows[1]).toMatchObject({ tag: "Savings Account", amount: "-JOD 3,085.310", caption: "Overdrawn" });
     expect((await bank.call("cab.preview.get")).enabled).toBe(true);
   });
   it("hides the balances when it is off", async () => {
     const { r } = mk(cabAccountPreview); await r.start();
     r.set("preview.enabled", false); await press(r, "Save");
     expect(resultOf(r)!.title).toBe("Account preview is off");
-    expect(r.view().blocks.some((b) => b.type === "accountPicker")).toBe(false);
+    expect(r.view().blocks.some((b) => b.type === "balanceList")).toBe(false);
   });
 });
 

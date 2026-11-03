@@ -141,6 +141,7 @@ describe("settings, language, locations", () => {
     const p = await b.call("cab.preview.get");
     expect(p.enabled).toBe(true);
     expect(Object.keys(p.accounts)).toHaveLength(3);
+    expect(p.accounts.cab_cur).toMatchObject({ name: "Kmart Corporation", maskedNumber: "••0375", type: "Current Account", note: "Available balance" });
   });
   it("changes language to one the app offers", async () => {
     const b = new MockBank("nour");
