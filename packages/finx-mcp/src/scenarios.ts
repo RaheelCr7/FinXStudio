@@ -89,8 +89,9 @@ export function journeyMutants(journey: Journey): Mutant[] {
 
 /** The sandbox bank's rules, one at a time switched off. Only meaningful for journeys that call the corporate adapters. */
 export function bankMutants(journey: Journey): Mutant[] {
-  const calls = (name: string) => journey.integrations.some((i) => i.adapter === `corp.payments.${name}` || (name === "initiate" && /^corp\.bulk\.(check|submit)$/.test(i.adapter)));
-  const bulk = journey.integrations.some((i) => /^corp\.bulk\./.test(i.adapter));
+  const calls = (name: string) => journey.integrations.some((i) => i.adapter === `corp.payments.${name}` || (name === "initiate" && /^corp\.(bulk|payroll)\.(check|submit)$/.test(i.adapter)));
+  const bulk = journey.integrations.some((i) => /^corp\.(bulk|payroll)\./.test(i.adapter));
+  const payroll = journey.integrations.some((i) => /^corp\.payroll\./.test(i.adapter));
   // only the rules this journey can reach: starting a payment, or approving and rejecting one
   const all: [keyof Flaws, string, boolean][] = [
     ["roles", "The bank ignores who may start and who may approve", calls("initiate") || calls("approve")],
@@ -101,6 +102,8 @@ export function bankMutants(journey: Journey): Mutant[] {
     ["fourEyes", "The bank lets people approve their own payments", calls("approve")],
     ["cutoff", "The bank ignores the cut-off time", calls("initiate")],
     ["lineChecks", "The bank accepts every row of a bulk file without checking it", bulk],
+    ["employeeChecks", "The bank pays anyone, and any amount, on a payroll file", payroll],
+    ["payrollPeriod", "The bank takes any pay period and lets a period be paid twice", payroll],
   ];
   const rules = all.filter(([, , reachable]) => reachable).map(([k, what]) => [k, what] as [keyof Flaws, string]);
   return rules.map(([k, what]) => ({ id: `bank-${k}`, what, kind: "bank" as const, flaws: { [k]: false } as Flaws }));

@@ -12,6 +12,8 @@ export type CorpRole = "initiator" | "approver";
 export type CorpUser = { id: string; name: string; roles: CorpRole[]; /** most this person may send in a day, in the company's currency */ dailyLimit: number; usedToday: number };
 export type CorpAccount = { id: string; name: string; maskedNumber: string; currency: string; balance: number };
 export type CorpBeneficiary = { id: string; name: string; bank: string; maskedNumber: string };
+/** A person on the company's payroll register. `salary` is their monthly pay; a payroll line may not exceed it by more than half again. */
+export type CorpEmployee = { id: string; name: string; bank: string; maskedNumber: string; salary: number };
 export type CorpCompany = {
   id: string; name: string;
   /** The currency the limits and the approval rule are written in. */
@@ -19,6 +21,8 @@ export type CorpCompany = {
   accounts: CorpAccount[]; users: CorpUser[];
   /** Only these may be paid. */
   whitelist: CorpBeneficiary[];
+  /** Only these may be paid by a payroll run. Absent for a company that has no payroll. */
+  employees?: CorpEmployee[];
   companyDailyLimit: number; companyUsedToday: number;
   /** A payment above this needs two different approvers instead of one. */
   dualApprovalAbove: number;
@@ -42,11 +46,15 @@ export type CorpPayment = {
   releasedAt?: string; releaseReference?: string;
   /** A bulk payment pays many beneficiaries at once and is approved as one: `amount` is the total and `beneficiaryId` is "bulk". */
   lines?: { n: number; beneficiaryId: string; amount: number; reference: string }[];
+  /** A payroll run is a bulk payment to employees for one pay period (YYYY-MM): `beneficiaryId` is "payroll" and the lines are employee ids. */
+  period?: string;
 };
 
 /** One row of a bulk file, as the person gave it. */
 export type BulkLineInput = { beneficiaryId: string; amount: number; reference?: string };
-export type BulkLineCode = "BENEFICIARY_NOT_WHITELISTED" | "INVALID_AMOUNT" | "DUPLICATE_LINE";
+export type BulkLineCode = "BENEFICIARY_NOT_WHITELISTED" | "INVALID_AMOUNT" | "DUPLICATE_LINE" | "NOT_AN_EMPLOYEE" | "ABOVE_SALARY_CAP";
+/** A payroll line may be at most this many times the employee's monthly salary (a bonus fits; a typo does not). */
+export const SALARY_CAP_FACTOR = 1.5;
 export type BulkLineResult = { n: number; beneficiaryId: string; amount: number; reference: string; ok: boolean; code?: BulkLineCode };
 export type BatchCheck = { lines: BulkLineResult[]; validCount: number; invalidCount: number; /** the sum of the lines that passed */ total: number };
 /** Most rows a bulk file may have. */
@@ -64,6 +72,10 @@ export interface CorporateBankAdapter {
   checkBatch(input: { userId: string; fromAccountId: string; lines: BulkLineInput[] }): BatchCheck;
   /** Starts one bulk payment of the rows that pass the checks (the rest are left out). It is approved as one and counts as one payment against the limits. */
   initiateBulk(input: { userId: string; fromAccountId: string; lines: BulkLineInput[]; reference?: string }): CorpPayment;
+  /** Checks a payroll file for a pay period: every row must be an employee, once, within the salary cap. Also fails when the period is not valid or has already been run. Moves nothing. */
+  checkPayroll(input: { userId: string; fromAccountId: string; period: string; lines: BulkLineInput[] }): BatchCheck;
+  /** Starts one payroll run. It always needs two different approvers, however small. */
+  initiatePayroll(input: { userId: string; fromAccountId: string; period: string; lines: BulkLineInput[] }): CorpPayment;
   /** What a person can act on: as an approver, what waits for them; as an initiator, what they started. `as` defaults to approver for anyone who holds that role. */
   listPending(input: { userId: string; as?: "approver" | "initiator" }): CorpPayment[];
 }
@@ -75,7 +87,7 @@ const dayOf = (ms: number) => new Date(ms).toISOString().slice(0, 10);
  * Rules that can be switched off, to check that a test suite notices: a mutation check runs the scenarios against a sandbox with
  * one rule missing and expects at least one to fail. Every rule is on by default; nothing in the apps ever turns one off.
  */
-export type Flaws = { roles?: false; whitelist?: false; userLimit?: false; companyLimit?: false; dualApproval?: false; fourEyes?: false; cutoff?: false; lineChecks?: false };
+export type Flaws = { roles?: false; whitelist?: false; userLimit?: false; companyLimit?: false; dualApproval?: false; fourEyes?: false; cutoff?: false; lineChecks?: false; employeeChecks?: false; payrollPeriod?: false };
 
 export class CorporateSandbox implements CorporateBankAdapter {
   private payments = new Map<string, CorpPayment>();
@@ -141,7 +153,7 @@ export class CorporateSandbox implements CorporateBankAdapter {
   }
 
   /** What a payment or a bulk payment has to pass whatever its rows: currency, funds, the limits. Then it waits for approval. */
-  private start(user: CorpUser, from: CorpAccount, amount: number, beneficiaryId: string, reference: string, lines?: CorpPayment["lines"]): CorpPayment {
+  private start(user: CorpUser, from: CorpAccount, amount: number, beneficiaryId: string, reference: string, lines?: CorpPayment["lines"], payroll?: { period: string }): CorpPayment {
     const c = this.company;
     if (from.currency !== c.currency) throw new BankError("CURRENCY_NOT_SUPPORTED", `Payments are limited in ${c.currency}: choose a ${c.currency} account`);
     if (amount > from.balance) throw new BankError("INSUFFICIENT_FUNDS", "Insufficient funds");
@@ -151,9 +163,9 @@ export class CorporateSandbox implements CorporateBankAdapter {
     this.seq += 1;
     const { valueDate, afterCutoff } = this.valueDate();
     const p: CorpPayment = {
-      id: `pay_${this.seq}`, companyId: c.id, fromAccountId: from.id, beneficiaryId, amount, currency: from.currency, reference, ...(lines ? { lines } : {}),
+      id: `pay_${this.seq}`, companyId: c.id, fromAccountId: from.id, beneficiaryId, amount, currency: from.currency, reference, ...(lines ? { lines } : {}), ...(payroll ? { period: payroll.period } : {}),
       status: "pending_approval", initiatedBy: user.id, initiatedAt: new Date(this.now()).toISOString(), valueDate, afterCutoff,
-      required: this.flaws.dualApproval !== false && amount > c.dualApprovalAbove ? 2 : 1, approvals: [],
+      required: this.flaws.dualApproval !== false && (payroll || amount > c.dualApprovalAbove) ? 2 : 1, approvals: [],
     };
     this.payments.set(p.id, p);
     return structuredClone(p);
@@ -186,6 +198,45 @@ export class CorporateSandbox implements CorporateBankAdapter {
     const user = this.user(input.userId);
     const from = this.account(input.fromAccountId);
     return this.start(user, from, check.total, "bulk", input.reference ?? "", check.lines.filter((l) => l.ok).map(({ n, beneficiaryId, amount, reference }) => ({ n, beneficiaryId, amount, reference })));
+  }
+
+  private checkPeriod(period: string) {
+    if (this.flaws.payrollPeriod === false) return;
+    const m = /^(\d{4})-(0[1-9]|1[0-2])$/.exec(period);
+    if (!m || period > dayOf(this.now()).slice(0, 7)) throw new BankError("INVALID_PERIOD", "Choose a pay period as YYYY-MM, not later than this month");
+    if ([...this.payments.values()].some((p) => p.period === period && p.status !== "rejected")) throw new BankError("PAYROLL_ALREADY_RUN", `Payroll for ${period} has already been started`);
+  }
+
+  checkPayroll(input: { userId: string; fromAccountId: string; period: string; lines: BulkLineInput[] }): BatchCheck {
+    const user = this.user(input.userId);
+    if (this.flaws.roles !== false && !user.roles.includes("initiator")) throw new BankError("NOT_AUTHORISED", `${user.name} is not allowed to initiate payments`);
+    const from = this.account(input.fromAccountId);
+    this.checkPeriod(String(input.period ?? ""));
+    if (!input.lines.length) throw new BankError("EMPTY_BATCH", "The file has no payment lines");
+    if (input.lines.length > MAX_BULK_LINES) throw new BankError("BATCH_TOO_LARGE", `A file may have at most ${MAX_BULK_LINES} payment lines`);
+    const seen = new Set<string>();
+    const lines = input.lines.map((l, i): BulkLineResult => {
+      const row = { n: i + 1, beneficiaryId: l.beneficiaryId, amount: Number(l.amount), reference: l.reference ?? "" };
+      if (this.flaws.lineChecks === false) return { ...row, ok: true };
+      const emp = (this.company.employees ?? []).find((e) => e.id === l.beneficiaryId);
+      if (!emp && this.flaws.employeeChecks !== false) return { ...row, ok: false, code: "NOT_AN_EMPLOYEE" };
+      if (!this.validAmount(row.amount, from.currency)) return { ...row, ok: false, code: "INVALID_AMOUNT" };
+      if (emp && this.flaws.employeeChecks !== false && row.amount > emp.salary * SALARY_CAP_FACTOR) return { ...row, ok: false, code: "ABOVE_SALARY_CAP" };
+      // an employee is paid once per run, whatever the amount
+      if (seen.has(row.beneficiaryId)) return { ...row, ok: false, code: "DUPLICATE_LINE" };
+      seen.add(row.beneficiaryId);
+      return { ...row, ok: true };
+    });
+    const ok = lines.filter((l) => l.ok);
+    return { lines, validCount: ok.length, invalidCount: lines.length - ok.length, total: roundMoney(ok.reduce((s, l) => s + l.amount, 0), from.currency) };
+  }
+
+  initiatePayroll(input: { userId: string; fromAccountId: string; period: string; lines: BulkLineInput[] }): CorpPayment {
+    const check = this.checkPayroll(input);
+    if (!check.validCount) throw new BankError("NO_VALID_LINES", "None of the lines can be paid");
+    const user = this.user(input.userId);
+    const from = this.account(input.fromAccountId);
+    return this.start(user, from, check.total, "payroll", `Payroll ${input.period}`, check.lines.filter((l) => l.ok).map(({ n, beneficiaryId, amount, reference }) => ({ n, beneficiaryId, amount, reference })), { period: input.period });
   }
 
   approvePayment(input: { userId: string; paymentId: string }): CorpPayment {
@@ -270,4 +321,10 @@ export const ACME: CorpCompany = {
   dualApprovalAbove: 1_000_000,
   cutoff: "16:00",
   holidays: ["2026-11-09"],
+  employees: [
+    { id: "emp_ali", name: "Ali Hamdan", bank: "HBL", maskedNumber: "••4410", salary: 180_000 },
+    { id: "emp_sana", name: "Sana Malik", bank: "UBL", maskedNumber: "••5521", salary: 240_000 },
+    { id: "emp_bilal", name: "Bilal Ahmed", bank: "MCB", maskedNumber: "••6632", salary: 150_000 },
+    { id: "emp_hina", name: "Hina Rauf", bank: "Meezan", maskedNumber: "••7743", salary: 320_000 },
+  ],
 };

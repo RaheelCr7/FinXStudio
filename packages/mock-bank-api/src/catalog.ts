@@ -67,6 +67,16 @@ export const ADAPTER_CATALOG: AdapterInfo[] = [
     returns: "The payment (payee shows '3 payments'; lines lists what it pays), 'pending_approval'. Errors: OTP_REQUIRED, NOT_AUTHORISED, NO_VALID_LINES, EMPTY_BATCH, BATCH_TOO_LARGE, INSUFFICIENT_FUNDS, LIMIT_USER_EXCEEDED, LIMIT_COMPANY_EXCEEDED, CURRENCY_NOT_SUPPORTED. Approve, reject and withdraw it with the corp.payments.* adapters like any payment.",
   },
   {
+    adapter: "corp.payroll.check", suggestedId: "checkPayroll", description: "Checks a payroll file for one pay period (rows of `employee,amount,reference`, an optional header row) without starting anything. Each row must be an employee on the payroll register, paid once, with a valid amount of at most 1.5 times their monthly salary. The whole run fails when the period is not a month (YYYY-MM, not later than this month) or payroll for it has already been started.",
+    input: { userId: "the initiator", fromAccountId: "the company account to pay from", period: "the pay period, YYYY-MM", file: "the text of the file, as the person pasted it" },
+    returns: "{ lines (object keyed by row number: n, payee, amount, reference, ok, code, message), problems (only the rows that fail), validCount, invalidCount, total, requiredApprovers (always 2), period, currency }. Errors: NOT_AUTHORISED, ACCOUNT_NOT_FOUND, INVALID_PERIOD, PAYROLL_ALREADY_RUN, EMPTY_BATCH, BATCH_TOO_LARGE. Row codes: NOT_AN_EMPLOYEE, INVALID_AMOUNT, ABOVE_SALARY_CAP, DUPLICATE_LINE.",
+  },
+  {
+    adapter: "corp.payroll.submit", suggestedId: "submitPayroll", description: "Starts ONE payroll run of the rows that pass the checks and sends it for approval. A payroll run always needs two different approvers. Counts against the person's and the company's daily limits. Moves no money until approved. Needs the one-time code first. Withdraw, reject and approve it with corp.payments.*; withdrawing or rejecting frees the period for a new run.",
+    input: { userId: "the initiator", fromAccountId: "the account to pay from", period: "the pay period, YYYY-MM", file: "the same file text that was checked" },
+    returns: "The payment (payee shows 'Payroll 2026-10 · 3 employees'; period; lines lists the employees), 'pending_approval' with required 2. Errors: OTP_REQUIRED, NOT_AUTHORISED, INVALID_PERIOD, PAYROLL_ALREADY_RUN, NO_VALID_LINES, INSUFFICIENT_FUNDS, LIMIT_USER_EXCEEDED, LIMIT_COMPANY_EXCEEDED, CURRENCY_NOT_SUPPORTED.",
+  },
+  {
     adapter: "corp.payments.approve", suggestedId: "approvePayment", description: "Approves a pending payment. The last approval releases it: the money moves. Needs the one-time code first.",
     input: { userId: "an approver other than the one who started it", paymentId: "from corp.payments.pending" },
     returns: "The payment, 'released' (with releaseReference) or still 'pending_approval' when a second approver is needed. Errors: OTP_REQUIRED, NOT_AUTHORISED, SELF_APPROVAL, ALREADY_APPROVED, PAYMENT_NOT_PENDING, PAYMENT_NOT_FOUND, INSUFFICIENT_FUNDS, LIMIT_COMPANY_EXCEEDED.",

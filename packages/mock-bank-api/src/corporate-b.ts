@@ -21,6 +21,8 @@ export type BTransaction = {
   execRef?: string; executedTs?: string; cancelledBy?: string; cancelNote?: string; cancelledTs?: string;
   /** A batch: what it pays, row by row. */
   batchItems?: { seq: number; creditorRef: string; amountValue: string; remark: string }[];
+  /** A salary run: the month it pays for (YYYY-MM). */
+  payPeriod?: string;
 };
 /** A row of a batch as this bank takes it and answers it. */
 export type BBatchItem = { creditorRef: string; amountValue: string; remark?: string };
@@ -28,6 +30,8 @@ export type BCompanyProfile = {
   companyId: string; legalName: string; baseCcy: string;
   accounts: { accountNo: string; title: string; last4: string; ccy: string; available: number }[];
   approvedCreditors: { ref: string; name: string; bank: string; last4: string }[];
+  /** the salary register; absent when the company has no payroll */
+  salaryRegister?: { staffRef: string; name: string; bank: string; last4: string; baseMonthly: number }[];
   staff: { id: string; name: string; perms: ("MAKE" | "SIGN")[]; cap: { perDay: number; spentToday: number } }[];
   limits: { companyPerDay: number; companySpent: number };
   signOffAbove: number; cutOffUtc: string;
@@ -48,18 +52,19 @@ export class BankBApi {
   private shape(p: CorpPayment): BTransaction {
     const digits = currencyInfo(p.currency).decimals;
     return {
-      txnId: this.txnId(p.id), state: STATE[p.status], initiator: p.initiatedBy, debit: { accountNo: p.fromAccountId }, creditor: { ref: p.lines ? "BULK" : p.beneficiaryId },
+      txnId: this.txnId(p.id), state: STATE[p.status], initiator: p.initiatedBy, debit: { accountNo: p.fromAccountId }, creditor: { ref: p.period ? "PAYROLL" : p.lines ? "BULK" : p.beneficiaryId },
       amount: { value: p.amount.toFixed(digits), ccy: p.currency }, remittanceInfo: p.reference,
       authChain: { needed: p.required, signedBy: p.approvals.map((a) => ({ user: a.userId, ts: a.at })) },
       valueDt: p.valueDate, pastCutOff: p.afterCutoff, createdTs: p.initiatedAt,
       ...(p.releaseReference ? { execRef: p.releaseReference, executedTs: p.releasedAt } : {}),
+      ...(p.period ? { payPeriod: p.period } : {}),
       ...(p.lines ? { batchItems: p.lines.map((l) => ({ seq: l.n, creditorRef: l.beneficiaryId, amountValue: l.amount.toFixed(digits), remark: l.reference })) } : {}),
       ...(p.status === "rejected" ? { cancelledBy: p.rejectedBy, cancelNote: p.rejectReason ?? "", cancelledTs: p.rejectedAt } : {}),
     };
   }
 
   /** Our rules, in this bank's words: a numbered code, an HTTP-like status, its own wording and the facts the wording needs. */
-  private fail(e: unknown, ctx: { action: "create" | "authorise" | "decline" | "cancel"; user: string; txnState?: string; ccy?: string }): never {
+  private fail(e: unknown, ctx: { action: "create" | "authorise" | "decline" | "cancel"; user: string; txnState?: string; ccy?: string; period?: string }): never {
     if (!(e instanceof BankError)) throw e;
     const who = this.name(ctx.user);
     const verb = { create: "initiate", authorise: "approve", decline: "reject", cancel: "withdraw" }[ctx.action];
@@ -80,6 +85,8 @@ export class BankBApi {
       EMPTY_BATCH: ["ERR-4101", 422, "Batch has no items", {}],
       BATCH_TOO_LARGE: ["ERR-4102", 422, "Batch exceeds the item limit", { max: MAX_BULK_LINES }],
       NO_VALID_LINES: ["ERR-4103", 422, "Batch has no acceptable item", {}],
+      INVALID_PERIOD: ["ERR-4111", 422, "Pay period is not a valid month, or lies in the future", {}],
+      PAYROLL_ALREADY_RUN: ["ERR-4112", 409, "A salary run for this period is already open or executed", { period: ctx.period ?? "" }],
     };
     const row = table[e.code];
     if (!row) throw new ApiError("ERR-5000", 500, e.message);
@@ -122,6 +129,15 @@ export class BankBApi {
           return this.verdicts(this.inner.checkBatch(input), this.inner.summary.currency);
         } catch (e) { return this.fail(e, { action: "create", user }); }
       }
+      case "payrolls.validate": case "payrolls.create": {
+        const user = String(body.maker ?? "");
+        const items = (Array.isArray(body.items) ? body.items : []) as BBatchItem[];
+        const input = { userId: user, fromAccountId: String(body.debit?.accountNo ?? ""), period: String(body.payPeriod ?? ""), lines: items.map((i) => ({ beneficiaryId: String(i.creditorRef ?? ""), amount: Number(i.amountValue), reference: i.remark })) };
+        try {
+          if (op === "payrolls.create") return this.shape(this.inner.initiatePayroll(input));
+          return this.verdicts(this.inner.checkPayroll(input), this.inner.summary.currency);
+        } catch (e) { return this.fail(e, { action: "create", user, period: input.period }); }
+      }
       case "payments.get": {
         const id = this.innerId(String(body.txnId ?? ""));
         try { return this.shape(this.inner.getPayment(id)); } catch (e) { return this.fail(e, { action: "create", user: "" }); }
@@ -138,7 +154,7 @@ export class BankBApi {
   /** A batch check in this bank's words: a verdict and a reason code per item, and the totals. */
   private verdicts(check: BatchCheck, ccy: string) {
     const digits = currencyInfo(ccy).decimals;
-    const REASON = { BENEFICIARY_NOT_WHITELISTED: "B-201", INVALID_AMOUNT: "B-202", DUPLICATE_LINE: "B-203" } as const;
+    const REASON = { BENEFICIARY_NOT_WHITELISTED: "B-201", INVALID_AMOUNT: "B-202", DUPLICATE_LINE: "B-203", NOT_AN_EMPLOYEE: "B-204", ABOVE_SALARY_CAP: "B-205" } as const;
     return {
       items: check.lines.map((l) => ({ seq: l.n, creditorRef: l.beneficiaryId, amountValue: Number.isFinite(l.amount) ? l.amount.toFixed(digits) : String(l.amount), remark: l.reference, verdict: l.ok ? "OK" : "REJECT", ...(l.code ? { reason: REASON[l.code] } : {}) })),
       okCount: check.validCount, rejectCount: check.invalidCount, okTotal: { value: check.total.toFixed(digits), ccy },
@@ -151,6 +167,7 @@ export class BankBApi {
       companyId: c.id, legalName: c.name, baseCcy: c.currency,
       accounts: c.accounts.map((a) => ({ accountNo: a.id, title: a.name, last4: a.maskedNumber.replace(/[^0-9]/g, ""), ccy: a.currency, available: a.balance })),
       approvedCreditors: c.whitelist.map((b) => ({ ref: b.id, name: b.name, bank: b.bank, last4: b.maskedNumber.replace(/[^0-9]/g, "") })),
+      ...(c.employees ? { salaryRegister: c.employees.map((e) => ({ staffRef: e.id, name: e.name, bank: e.bank, last4: e.maskedNumber.replace(/[^0-9]/g, ""), baseMonthly: e.salary })) } : {}),
       staff: c.users.map((u) => ({ id: u.id, name: u.name, perms: [...(u.roles.includes("initiator") ? ["MAKE" as const] : []), ...(u.roles.includes("approver") ? ["SIGN" as const] : [])], cap: { perDay: u.dailyLimit, spentToday: u.usedToday } })),
       limits: { companyPerDay: c.companyDailyLimit, companySpent: c.companyUsedToday },
       signOffAbove: c.dualApprovalAbove, cutOffUtc: c.cutoff,

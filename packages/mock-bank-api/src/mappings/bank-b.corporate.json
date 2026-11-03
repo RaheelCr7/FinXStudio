@@ -56,6 +56,19 @@
         "holidays": {
           "from": "response.holidayList",
           "default": []
+        },
+        "employees": {
+          "from": "response.salaryRegister",
+          "each": {
+            "id": "item.staffRef",
+            "name": "item.name",
+            "bank": "item.bank",
+            "maskedNumber": {
+              "from": "item.last4",
+              "as": "mask4"
+            },
+            "salary": "item.baseMonthly"
+          }
         }
       }
     },
@@ -205,6 +218,85 @@
         "remittanceInfo": "input.reference"
       },
       "response": "payment"
+    },
+    "checkPayroll": {
+      "call": "payrolls.validate",
+      "request": {
+        "maker": "input.userId",
+        "debit.accountNo": "input.fromAccountId",
+        "payPeriod": "input.period",
+        "items": {
+          "from": "input.lines",
+          "each": {
+            "creditorRef": "item.beneficiaryId",
+            "amountValue": {
+              "from": "item.amount",
+              "as": "string"
+            },
+            "remark": "item.reference"
+          }
+        }
+      },
+      "response": {
+        "lines": {
+          "from": "response.items",
+          "each": {
+            "n": "item.seq",
+            "beneficiaryId": "item.creditorRef",
+            "amount": {
+              "from": "item.amountValue",
+              "as": "number"
+            },
+            "reference": {
+              "from": "item.remark",
+              "default": ""
+            },
+            "ok": {
+              "from": "item.verdict",
+              "map": {
+                "OK": true,
+                "REJECT": false
+              }
+            },
+            "code": {
+              "from": "item.reason",
+              "map": {
+                "B-201": "BENEFICIARY_NOT_WHITELISTED",
+                "B-202": "INVALID_AMOUNT",
+                "B-203": "DUPLICATE_LINE",
+                "B-204": "NOT_AN_EMPLOYEE",
+                "B-205": "ABOVE_SALARY_CAP"
+              }
+            }
+          }
+        },
+        "validCount": "response.okCount",
+        "invalidCount": "response.rejectCount",
+        "total": {
+          "from": "response.okTotal.value",
+          "as": "number"
+        }
+      }
+    },
+    "initiatePayroll": {
+      "call": "payrolls.create",
+      "request": {
+        "maker": "input.userId",
+        "debit.accountNo": "input.fromAccountId",
+        "payPeriod": "input.period",
+        "items": {
+          "from": "input.lines",
+          "each": {
+            "creditorRef": "item.beneficiaryId",
+            "amountValue": {
+              "from": "item.amount",
+              "as": "string"
+            },
+            "remark": "item.reference"
+          }
+        }
+      },
+      "response": "payment"
     }
   },
   "shapes": {
@@ -225,7 +317,8 @@
       "beneficiaryId": {
         "from": "response.creditor.ref",
         "map": {
-          "BULK": "bulk"
+          "BULK": "bulk",
+          "PAYROLL": "payroll"
         }
       },
       "amount": {
@@ -263,7 +356,8 @@
             "default": ""
           }
         }
-      }
+      },
+      "period": "response.payPeriod"
     }
   },
   "errors": {
@@ -341,6 +435,14 @@
     "ERR-4103": {
       "code": "NO_VALID_LINES",
       "message": "None of the lines can be paid"
+    },
+    "ERR-4111": {
+      "code": "INVALID_PERIOD",
+      "message": "Choose a pay period as YYYY-MM, not later than this month"
+    },
+    "ERR-4112": {
+      "code": "PAYROLL_ALREADY_RUN",
+      "message": "Payroll for {period} has already been started"
     }
   },
   "unmapped": {
