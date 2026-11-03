@@ -235,6 +235,19 @@ async function insertCopy(db: Db, base: Journey, sourceSlug: string, projectId: 
   return publishBy ? publish(slug, publishBy) : db.journeys[slug]!;
 }
 
+/** Adds a journey that came from outside (a git file) as a draft of its own. The slug must be free. */
+export async function importDraft(body: unknown, by?: { id: string; name: string }) {
+  const v = validateJourney(body);
+  if (!v.ok) throw new StoreError(422, "Journey does not match the schema: " + v.errors.slice(0, 5).join("; "));
+  assertSlug(v.journey.slug);
+  const db = await read();
+  if (db.journeys[v.journey.slug]) throw new StoreError(409, `A journey called ${v.journey.slug} already exists`);
+  const j: Journey = { ...v.journey, status: "draft" };
+  db.journeys[j.slug] = { slug: j.slug, draft: j, history: [], updatedAt: new Date().toISOString(), ...(by ? { editedBy: by } : {}) };
+  await write(db);
+  return db.journeys[j.slug]!;
+}
+
 // ---- agent runs -----------------------------------------------------------------------------------------------
 
 const STATUSES: RunStatus[] = ["running", "needs_review", "done", "failed"];
