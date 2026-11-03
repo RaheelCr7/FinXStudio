@@ -1,18 +1,18 @@
 import React, { useEffect, useMemo, useReducer, useRef } from "react";
 import { BackHandler, Platform, Pressable, ScrollView, Text, View } from "react-native";
 import type { Journey } from "@finx/journey-schema";
-import { JourneyController, type Adapter } from "@finx/renderer-core";
+import { JourneyController, type Adapter, type JourneyEvent } from "@finx/renderer-core";
 import { registry } from "./blocks";
 import type { BlockType } from "@finx/renderer-core";
 import { AppBar as KitAppBar, KitProvider, useKit } from "@finx/components/native";
 import { useTheme } from "./theme";
 import { Icon } from "./widgets";
 
-export type JourneyPlayerProps = { journey: Journey; adapter: Adapter; lang?: string; onExit?: () => void; onClose?: () => void; /** Answers to fill in when the journey opens, by data path, for example the item the customer was looking at. */ initial?: Record<string, any> };
+export type JourneyPlayerProps = { journey: Journey; adapter: Adapter; lang?: string; onExit?: () => void; onClose?: () => void; /** Answers to fill in when the journey opens, by data path, for example the item the customer was looking at. */ initial?: Record<string, any>; /** Receives screen views, mistakes, bank failures and exits (never answers), for analytics. */ onEvent?: (e: JourneyEvent) => void };
 
-export function JourneyPlayer({ journey, adapter, lang, onExit, onClose, initial }: JourneyPlayerProps) {
+export function JourneyPlayer({ journey, adapter, lang, onExit, onClose, initial, onEvent }: JourneyPlayerProps) {
   const { c, r: radius, fontFamily, look } = useTheme();
-  const controller = useMemo(() => new JourneyController(journey, { adapter, lang, initial }), [journey, adapter]);
+  const controller = useMemo(() => new JourneyController(journey, { adapter, lang, initial, onEvent }), [journey, adapter]);
   const [, force] = useReducer((x: number) => x + 1, 0);
   const scroller = useRef<React.ComponentRef<typeof ScrollView>>(null);
   useEffect(() => controller.subscribe(force), [controller]);

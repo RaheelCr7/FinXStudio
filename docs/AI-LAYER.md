@@ -140,3 +140,9 @@ What the runs found, and what changed because of it:
 - **The `finx` tools are missing:** approve the project MCP server in Claude Code, and run from the repo root (`.mcp.json` uses a path relative to it).
 - **"Cannot reach FinX Studio":** start Studio (`cd apps/studio && pnpm dev`) or set `FINX_STUDIO_URL`.
 - **HTTP 403 "Origin not allowed":** a browser page on another origin called the API. Add it to `FINX_STUDIO_ALLOWED_ORIGINS` if intended.
+
+## Journey analytics
+
+`JourneyController` takes an `onEvent` callback (also a prop of both `JourneyPlayer`s). It reports `screen` (a screen opened), `invalid` (a check failed, with the field paths), `apiError` (a bank call failed, with integration and code), `back` and `exit`, each with a session id, journey slug and version, language and time. Answers are never included. A listener that throws is ignored.
+
+Studio's preview posts them to `POST /api/analytics` (batched, source `preview`); they are kept in `.data/analytics.json` (capped at 20,000, unknown fields dropped). `GET /api/journeys/<slug>/analytics` returns the funnel and the Analytics page (button in the builder) shows runs, finished and left-early shares, the biggest leak, per-screen reach, mistakes by field, bank failures and back steps. A run "left" where its last screen is not an end screen. Real apps can report the same events to the same endpoint with their own `source`.

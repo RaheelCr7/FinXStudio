@@ -15,7 +15,14 @@ function bindItem(node: any, scope: any): any {
 }
 
 export type Adapter = (adapterId: string, input: Record<string, any>) => Promise<any>;
-export type RunnerOptions = { adapter: Adapter; lang?: string };
+/** What happened during a run, for analytics. No answers or personal data: only where the person was and what stopped them. */
+export type RunEvent =
+  | { type: "screen"; screen: string; kind: "screen" | "branch" | "terminal" }
+  | { type: "invalid"; screen: string; fields: string[] }
+  | { type: "apiError"; screen: string; integration: string; code: string }
+  | { type: "back"; screen: string }
+  | { type: "exit"; screen: string };
+export type RunnerOptions = { adapter: Adapter; lang?: string; onEvent?: (e: RunEvent) => void };
 export type ViewBlock = Block & { _error?: string };
 export type View = {
   screenId: string;
@@ -50,6 +57,7 @@ export class JourneyRunner {
 
   subscribe(fn: () => void): () => void { this.listeners.add(fn); return () => { this.listeners.delete(fn); }; }
   private emit() { this.listeners.forEach((l) => l()); }
+  private note(e: RunEvent) { try { this.opts.onEvent?.(e); } catch { /* analytics must never break a journey */ } }
 
   get screen(): Screen { return this.journey.screens.find((s) => s.id === this.current)!; }
   get isRtl() { return (this.journey.locale.rtl ?? []).includes(this.lang); }
@@ -68,6 +76,7 @@ export class JourneyRunner {
     this.toast = undefined;
     this.emit();
     const s = this.screen;
+    this.note({ type: "screen", screen: id, kind: s.kind ?? "screen" });
     if (s.onEnter?.length) await this.runActions(s.onEnter, s);
     // a journey for one role: once the person's roles are known, anyone without the role is sent to the denied screen
     const au = this.journey.authorisation;
@@ -108,7 +117,9 @@ export class JourneyRunner {
       if (def?.pattern && v != null && !new RegExp(def.pattern).test(String(v))) this.errors[b.bind] ??= ui(this.lang, "invalid");
     }
     this.emit();
-    return Object.keys(this.errors).length === 0;
+    const bad = Object.keys(this.errors);
+    if (bad.length) this.note({ type: "invalid", screen: this.current, fields: bad });
+    return bad.length === 0;
   }
 
   /** Checks the four card fields and records one error per field. */
@@ -151,7 +162,7 @@ export class JourneyRunner {
         }
         case "setData": setPath(this.state, a.path, a.value); break;
         case "showToast": this.toast = this.tx(a.text); this.emit(); break;
-        case "exit": this.exited = true; this.emit(); return;
+        case "exit": this.exited = true; this.note({ type: "exit", screen: this.current }); this.emit(); return;
         case "share": break;
         case "callApi": {
           const integ = this.journey.integrations.find((i) => i.id === a.integration);
@@ -163,6 +174,7 @@ export class JourneyRunner {
             if (a.integration === "otpVerify") this.otpFailures = 0;
           } catch (err: any) {
             // what went wrong, for the screen that follows: {{ctx.error.message}} and routes on {{ctx.error.code}}
+            this.note({ type: "apiError", screen: this.current, integration: a.integration, code: String(err?.code ?? "ERROR") });
             setPath(this.state, "ctx.error", { code: err?.code ?? "ERROR", message: err?.message ?? "Something went wrong", integration: a.integration });
             const oe = a.onError;
             if (!oe) throw err;
@@ -192,7 +204,7 @@ export class JourneyRunner {
 
   back() {
     const prev = this.history.pop();
-    if (prev) { this.current = prev; this.toast = undefined; this.emit(); }
+    if (prev) { const from = this.current; this.current = prev; this.toast = undefined; this.note({ type: "back", screen: from }); this.emit(); }
   }
 
   /** A render-ready view model, with all text localized and interpolated and invisible blocks removed. */

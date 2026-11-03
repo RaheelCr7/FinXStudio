@@ -3,7 +3,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import dynamic from "next/dynamic";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { Check, ChevronRight, CircleCheck, Eye, EyeOff, Layers, LoaderCircle, Plus, Redo2, Rocket, Settings2, Sparkles, TriangleAlert, Undo2, X } from "lucide-react";
+import { BarChart3, Check, ChevronRight, CircleCheck, Eye, EyeOff, Layers, LoaderCircle, Plus, Redo2, Rocket, Settings2, Sparkles, TriangleAlert, Undo2, X } from "lucide-react";
 import type { Journey } from "@finx/journey-schema";
 import { lintAll } from "@finx/renderer-core";
 import { appsOfJourney, useProjects } from "./Projects";
@@ -191,6 +191,7 @@ export function Builder({ initial, aiRun }: { initial: Rec; aiRun?: { id: string
             </div>
           ) : null}
         </div>
+        <Link href={`/journeys/${journey.slug}/analytics`} className="btn" title="Funnel: where people go and where they leave"><BarChart3 size={15} aria-hidden />Analytics</Link>
         {journey.acceptance?.length ? <Link href={`/journeys/${journey.slug}/proof`} className="btn" title="Acceptance criteria and the tests that prove them"><CircleCheck size={15} aria-hidden />Proof</Link> : null}
         <Copilot slug={journey.slug} name={textOf(journey.name)} run={aiRun} focus={picked ?? undefined} openTick={askTick} />
         <button className="btn" onClick={togglePreview} aria-pressed={previewOn} title="Phone preview">{previewOn ? <EyeOff size={15} aria-hidden /> : <Eye size={15} aria-hidden />}Preview</button>
