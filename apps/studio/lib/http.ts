@@ -21,6 +21,9 @@ export function guardWrite(req: Request): NextResponse | null {
   return originAllowed(req.headers.get("origin")) ? null : json(req, { error: "Origin not allowed" }, 403);
 }
 
+/** The agent run a write belongs to, sent by the FinX MCP server, so Studio can checkpoint what the run changes. */
+export const runIdOf = (req: Request) => req.headers.get("x-finx-run") ?? undefined;
+
 export function fail(e: unknown, req?: Request) {
   if (e instanceof StoreError) return json(req, { error: e.message, issues: e.issues }, e.status);
   console.error(e);

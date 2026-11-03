@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { getRecord, getRun, StoreError } from "@/lib/store";
+import { checkpointOf, getRecord, getRun, StoreError } from "@/lib/store";
+import { UndoRun } from "@/components/UndoRun";
 import { AGENT_LABEL, fmtTime, STATUS } from "@/lib/runs-ui";
 import { AutoRefresh } from "@/components/AutoRefresh";
 
@@ -11,6 +12,7 @@ export default async function RunPage({ params }: { params: Promise<{ id: string
   let run;
   try { run = await getRun(id); } catch (e) { if (e instanceof StoreError) notFound(); throw e; }
   const rec = run.journeySlug ? await getRecord(run.journeySlug).catch(() => null) : null;
+  const checkpoint = await checkpointOf(id).catch(() => []);
   const text = (t: any) => (typeof t === "string" ? t : t?.en ?? "");
   return (
     <main className="page" style={{ maxWidth: 860 }}>
@@ -33,6 +35,9 @@ export default async function RunPage({ params }: { params: Promise<{ id: string
           <div className="muted" style={{ fontSize: 13 }}>{rec.draft.screens.length} screens · /{rec.slug}</div>
         </div>
       ) : null}
+
+      <UndoRun runId={run.id} journeys={checkpoint} />
+      {run.undoneAt ? <p className="faint" style={{ marginTop: 12 }}>This run was undone {fmtTime(run.undoneAt)}.</p> : null}
 
       {run.summary ? (<><div className="label-section">Summary</div><div className="card" style={{ whiteSpace: "pre-wrap" }}>{run.summary}</div></>) : null}
       {run.brief ? (<><div className="label-section">Brief</div><div className="card muted" style={{ whiteSpace: "pre-wrap" }}>{run.brief}</div></>) : null}

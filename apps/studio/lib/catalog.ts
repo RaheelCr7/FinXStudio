@@ -26,7 +26,7 @@ export async function listCatalog(projectId: string): Promise<CatalogCard[]> {
 }
 
 /** Copies a catalog journey into a project. It starts as a draft unless publishNow is set. */
-export async function addFromCatalog(id: string, projectId: string, opts: { publishNow?: boolean } = {}) {
+export async function addFromCatalog(id: string, projectId: string, opts: { publishNow?: boolean; runId?: string } = {}) {
   const entry = catalogEntry(id);
   if (!entry) throw new StoreError(404, `No catalog journey called ${id}`);
   if (!(await getProject(projectId))) throw new StoreError(404, `No project called ${projectId}`);

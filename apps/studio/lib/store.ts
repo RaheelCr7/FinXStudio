@@ -6,6 +6,7 @@ import { sameContent } from "./edit";
 import { shapeOf } from "./graph";
 import { describeChanges } from "./diff";
 import { appIds } from "./brand-ids";
+import { createHash } from "node:crypto";
 
 export type HistoryEntry = { version: number; publishedAt: string; by: string };
 /** Published copies kept for rolling back. Older versions than this are dropped. */
@@ -14,7 +15,18 @@ export type JourneyRecord = { slug: string; draft: Journey; published?: Journey;
 export type RunStatus = "running" | "needs_review" | "done" | "failed";
 export type RunStep = { at: string; text: string };
 /** One piece of work an AI agent (a Claude Code skill) did, reported back through the FinX MCP server. */
-export type AgentRun = { id: string; agent: string; title: string; brief?: string; status: RunStatus; summary?: string; journeySlug?: string; steps: RunStep[]; startedAt: string; updatedAt: string };
+/** A journey as it was before a run first wrote to it, and a fingerprint of what the run left, so undo can tell whether a person edited it since. */
+export type Checkpoint = { at: string; existed: boolean; before?: Journey; after: string };
+export type AgentRun = { id: string; agent: string; title: string; brief?: string; status: RunStatus; summary?: string; journeySlug?: string; steps: RunStep[]; startedAt: string; updatedAt: string; checkpoints?: Record<string, Checkpoint>; undoneAt?: string };
+const fingerprint = (j: Journey) => createHash("sha1").update(JSON.stringify(j)).digest("hex");
+/** Called inside a write, before it is saved: remembers how the journey was before this run's first write, and what the run left. */
+function track(db: Db, runId: string | undefined, slug: string, before: Journey | undefined, after: Journey) {
+  const run = runId ? db.runs?.[runId] : undefined;
+  if (!run) return;
+  run.checkpoints ??= {};
+  run.checkpoints[slug] ??= { at: new Date().toISOString(), existed: !!before, ...(before ? { before: structuredClone(before) } : {}), after: "" };
+  run.checkpoints[slug]!.after = fingerprint(after);
+}
 type Db = { journeys: Record<string, JourneyRecord>; runs?: Record<string, AgentRun> };
 
 const file = () => path.join(process.env.FINX_DATA_DIR ?? path.join(process.cwd(), ".data"), "journeys.json");
@@ -77,7 +89,7 @@ export async function getRecord(slug: string): Promise<JourneyRecord> {
   return r;
 }
 
-export async function saveDraft(slug: string, body: unknown, by?: { id: string; name: string }) {
+export async function saveDraft(slug: string, body: unknown, by?: { id: string; name: string }, runId?: string) {
   assertSlug(slug);
   const v = validateJourney(body);
   if (!v.ok) throw new StoreError(422, "Journey does not match the schema: " + v.errors.slice(0, 5).join("; "));
@@ -85,7 +97,9 @@ export async function saveDraft(slug: string, body: unknown, by?: { id: string; 
   const db = await read();
   const rec = db.journeys[slug];
   if (!rec) throw new StoreError(404, "Journey not found");
+  const before = rec.draft;
   rec.draft = { ...v.journey, status: "draft" };
+  track(db, runId, slug, before, rec.draft);
   if (by) rec.editedBy = by;
   rec.updatedAt = new Date().toISOString();
   await write(db);
@@ -160,7 +174,7 @@ export async function restoreVersion(slug: string, version: number, by?: { id: s
   return rec;
 }
 
-export async function createJourney(name: string, appsInput?: unknown, by?: { id: string; name: string }) {
+export async function createJourney(name: string, appsInput?: unknown, by?: { id: string; name: string }, runId?: string) {
   const apps = await cleanApps(appsInput);
   // Meezan journeys start in English and Urdu. Another app's journeys start in English only, so nothing is flagged as untranslated.
   const english = !!apps && !apps.includes("meezan");
@@ -186,6 +200,7 @@ export async function createJourney(name: string, appsInput?: unknown, by?: { id
   };
   const now = new Date().toISOString();
   db.journeys[slug] = { slug, draft: j, history: [], updatedAt: now, ...(by ? { editedBy: by } : {}) };
+  track(db, runId, slug, undefined, j);
   await write(db);
   return db.journeys[slug]!;
 }
@@ -203,11 +218,11 @@ export async function cloneJourney(sourceSlug: string, projectId: string, opts: 
 }
 
 /** Adds a copy of any journey (a catalog entry, say) to a project, as a journey of its own. */
-export async function addJourneyCopy(template: Journey, projectId: string, opts: { publishNow?: boolean } = {}) {
-  return insertCopy(await read(), template, template.slug, projectId, opts.publishNow ? "catalog" : undefined);
+export async function addJourneyCopy(template: Journey, projectId: string, opts: { publishNow?: boolean; runId?: string } = {}) {
+  return insertCopy(await read(), template, template.slug, projectId, opts.publishNow ? "catalog" : undefined, opts.runId);
 }
 
-async function insertCopy(db: Db, base: Journey, sourceSlug: string, projectId: string, publishBy?: string) {
+async function insertCopy(db: Db, base: Journey, sourceSlug: string, projectId: string, publishBy?: string, runId?: string) {
   const apps = (await cleanApps([projectId]))!;
   const slug = `${sourceSlug}-${projectId}`.slice(0, 62).replace(/-+$/, "");
   assertSlug(slug);
@@ -215,6 +230,7 @@ async function insertCopy(db: Db, base: Journey, sourceSlug: string, projectId: 
   const j: Journey = { ...structuredClone(base), id: `jrn_${slug.replace(/-/g, "_")}`, slug, version: 0, status: "draft", apps };
   const now = new Date().toISOString();
   db.journeys[slug] = { slug, draft: j, history: [], updatedAt: now };
+  track(db, runId, slug, undefined, j);
   await write(db);
   return publishBy ? publish(slug, publishBy) : db.journeys[slug]!;
 }
@@ -286,4 +302,45 @@ export async function getRun(id: string): Promise<AgentRun> {
 
 export async function latestRunForJourney(slug: string): Promise<AgentRun | undefined> {
   return (await listRuns()).find((r) => r.journeySlug === slug && r.agent === "journey");
+}
+
+/** What undoing a run would do, journey by journey, and whether a person has edited any of them since the run. */
+export async function checkpointOf(id: string) {
+  const db = await read();
+  const run = db.runs?.[id];
+  if (!run) throw new StoreError(404, "Run not found");
+  return Object.entries(run.checkpoints ?? {}).map(([slug, cp]) => {
+    const rec = db.journeys[slug];
+    return { slug, name: rec ? (typeof rec.draft.name === "string" ? rec.draft.name : rec.draft.name.en ?? slug) : slug, created: !cp.existed, gone: !rec, editedSince: !!rec && fingerprint(rec.draft) !== cp.after, published: !!rec && (!!rec.published || rec.history.length > 0) };
+  });
+}
+
+/**
+ * Puts every journey the run touched back as it was: a journey the run changed gets its old draft, a journey the run created is
+ * removed (unless it has been published). A journey a person has edited since is left alone unless `force` says to overwrite it.
+ */
+export async function undoRun(id: string, opts: { force?: boolean } = {}) {
+  const db = await read();
+  const run = db.runs?.[id];
+  if (!run) throw new StoreError(404, "Run not found");
+  if (!Object.keys(run.checkpoints ?? {}).length) throw new StoreError(409, run.undoneAt ? "This run was already undone" : "This run changed no journey, so there is nothing to undo");
+  const plan = Object.entries(run.checkpoints!).map(([slug, cp]) => ({ slug, cp, rec: db.journeys[slug] }));
+  if (!opts.force) {
+    const edited = plan.filter((p) => p.rec && fingerprint(p.rec.draft) !== p.cp.after).map((p) => p.slug);
+    if (edited.length) throw new StoreError(409, `${edited.join(", ")} ${edited.length > 1 ? "were" : "was"} edited after this run. Undo anyway to overwrite those edits.`);
+  }
+  const blocked = plan.filter((p) => p.rec && !p.cp.existed && (p.rec.published || p.rec.history.length)).map((p) => p.slug);
+  if (blocked.length) throw new StoreError(409, `${blocked.join(", ")} ${blocked.length > 1 ? "have" : "has"} been published, so the run's own journey cannot be removed. Restore an older version instead.`);
+  const restored: string[] = [], removed: string[] = [];
+  const now = new Date().toISOString();
+  for (const { slug, cp, rec } of plan) {
+    if (!rec) continue;
+    if (cp.existed && cp.before) { rec.draft = structuredClone(cp.before); rec.updatedAt = now; restored.push(slug); }
+    else { delete db.journeys[slug]; removed.push(slug); }
+  }
+  run.undoneAt = now; delete run.checkpoints;
+  run.steps.push({ at: now, text: `Undone: ${[restored.length ? `restored ${restored.join(", ")}` : "", removed.length ? `removed ${removed.join(", ")}` : ""].filter(Boolean).join("; ") || "nothing left to change"}` });
+  run.updatedAt = now;
+  await write(db);
+  return { restored, removed };
 }
