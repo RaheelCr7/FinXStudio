@@ -2,7 +2,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import { Coins, FilePlus2, FolderKanban, LibraryBig, Code2, Palette, Users, Monitor, Moon, PanelLeftClose, PanelLeftOpen, Search, Sparkles, Sun, Workflow } from "lucide-react";
+import { ClipboardCheck, Coins, FilePlus2, FolderKanban, LibraryBig, Code2, Palette, Users, Monitor, Moon, PanelLeftClose, PanelLeftOpen, Search, Sparkles, Sun, Workflow } from "lucide-react";
 import { CommandsProvider, useCommandPalette, type Command } from "./CommandPalette";
 import { ProjectSwitcher } from "./ProjectSwitcher";
 import { UserSwitcher } from "./UserSwitcher";
@@ -44,6 +44,7 @@ export function Shell({ children }: { children: React.ReactNode }) {
     ...projects.filter((p) => p.id !== current.id).map((p) => ({ id: `sw:${p.id}`, title: `Switch to ${p.name}`, group: "Projects", icon: FolderKanban, hint: p.bundleId, keywords: "project bank app", run: () => setCurrent(p.id) })),
     { id: "go:catalog", title: "Catalog", group: "Go to", icon: LibraryBig, hint: "Ready-made journeys", keywords: "templates library add", run: () => router.push("/catalog") },
     { id: "go:currencies", title: "Currencies", group: "Go to", icon: Coins, hint: "Which currencies the project offers", keywords: "money currency base fx dollar dinar rupee decimals", run: () => router.push("/currencies") },
+    { id: "go:requirements", title: "Requirements", group: "Go to", icon: ClipboardCheck, hint: "What the bank wants built, approved first", keywords: "requirement spec acceptance criteria approve questions", run: () => router.push("/requirements") },
     { id: "go:design", title: "Design", group: "Go to", icon: Palette, hint: "Colours from a picture", keywords: "colours theme brand upload image logo", run: () => router.push("/design") },
     { id: "go:code", title: "Code", group: "Go to", icon: Code2, hint: "Generated source of this project", keywords: "export source download repo", run: () => router.push("/code") },
     { id: "go:people", title: "People and roles", group: "Go to", icon: Users, hint: "Who can edit and publish", keywords: "users permissions team", run: () => router.push("/people") },
@@ -68,6 +69,7 @@ export function Shell({ children }: { children: React.ReactNode }) {
             <Link href="/projects" className={path.startsWith("/projects") ? "on" : ""} aria-current={path.startsWith("/projects") ? "page" : undefined} title="Projects"><FolderKanban size={18} aria-hidden /><span className="lbl">Projects</span></Link>
             <Link href="/design" className={path.startsWith("/design") ? "on" : ""} aria-current={path.startsWith("/design") ? "page" : undefined} title="Design"><Palette size={18} aria-hidden /><span className="lbl">Design</span></Link>
             <Link href="/currencies" className={path.startsWith("/currencies") ? "on" : ""} aria-current={path.startsWith("/currencies") ? "page" : undefined} title="Currencies"><Coins size={18} aria-hidden /><span className="lbl">Currencies</span></Link>
+            <Link href="/requirements" className={path.startsWith("/requirements") ? "on" : ""} aria-current={path.startsWith("/requirements") ? "page" : undefined} title="Requirements"><ClipboardCheck size={18} aria-hidden /><span className="lbl">Requirements</span></Link>
             <Link href="/code" className={path.startsWith("/code") ? "on" : ""} aria-current={path.startsWith("/code") ? "page" : undefined} title="Code"><Code2 size={18} aria-hidden /><span className="lbl">Code</span></Link>
             <Link href="/people" className={path.startsWith("/people") ? "on" : ""} aria-current={path.startsWith("/people") ? "page" : undefined} title="People"><Users size={18} aria-hidden /><span className="lbl">People</span></Link>
             <Link href="/agents" className={path.startsWith("/agents") ? "on" : ""} aria-current={path.startsWith("/agents") ? "page" : undefined} title="Agents"><Sparkles size={18} aria-hidden /><span className="lbl">Agents</span></Link>
