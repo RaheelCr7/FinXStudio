@@ -107,6 +107,7 @@ describe("Default sign in", () => {
     const { r, bank } = await start();
     expect((r.view().blocks.find((b) => b.type === "select")!.items).map((i: any) => i.id)).toEqual(["password", "biometric", "pin"]);
     expect(r.view().blocks.find((b) => b.type === "select")).toMatchObject({ variant: "rows" });
+    expect(r.get("signin.mode")).toBe("password"); // opens with the current default ticked
     r.set("signin.mode", "pin"); await press(r, "Continue");
     expect(r.current).toBe("pin-new");
     expect(r.view().blocks.find((b) => b.type === "otp")).toMatchObject({ keypad: true, masked: true, length: 6 });
@@ -121,7 +122,9 @@ describe("Default sign in", () => {
     expect(r.current).toBe("pin-intro");
     await press(r, "Set as default");
     expect(r.current).toBe("done");
-    expect(resultOf(r)!.text).toContain("PIN sign in as default");
+    expect(r.view().blocks.find((b) => b.type === "alert")!.text).toBe("You have successfully set below Sign In method as default Sign In");
+    expect(r.view().blocks.find((b) => b.type === "reviewSummary")!.rows).toEqual([{ label: "PIN SIGN IN", value: "Generated" }]);
+    expect(r.view().blocks.find((b) => b.type === "sectionHeader")!.action.label).toBe("Change");
     expect(await bank.call("cab.device.options")).toMatchObject({ default: "pin", pinSet: true });
   });
   it("sets biometric and password as the default", async () => {
@@ -130,9 +133,17 @@ describe("Default sign in", () => {
     const b = await start(); b.r.set("signin.mode", "password"); await press(b.r, "Continue"); await press(b.r, "Set as default");
     expect(await b.bank.call("cab.device.options")).toMatchObject({ default: "password" });
   });
-  it("needs a choice before continuing", async () => {
-    const { r } = await start(); await press(r, "Continue");
+  it("shows the status words under each way, and Change goes back to the list with the new default ticked", async () => {
+    const { r } = await start();
+    const words = () => r.view().blocks.find((b) => b.type === "select")!.items.map((i: any) => [i.id, i.sub ?? ""]);
+    expect(words()).toEqual([["password", "Default sign in"], ["biometric", "Enabled"], ["pin", ""]]);
+    r.set("signin.mode", "pin"); await press(r, "Continue");
+    r.set("pin.value", "482910"); await press(r, "Continue"); r.set("pin.confirm", "482910"); await press(r, "Continue");
+    await press(r, "Set as default"); expect(r.current).toBe("done");
+    await r.press(r.view().blocks.find((b) => b.type === "sectionHeader")!.action.actions);
     expect(r.current).toBe("choose");
+    expect(r.get("signin.mode")).toBe("pin");
+    expect(words()).toEqual([["password", ""], ["biometric", "Enabled"], ["pin", "Default sign in"]]);
   });
 });
 
