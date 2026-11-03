@@ -2,14 +2,13 @@
 import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Check, ChevronsUpDown, Users } from "lucide-react";
-import { ROLE_INFO } from "@/lib/roles";
 import { useWho } from "./Who";
 
 const initials = (n: string) => n.split(/\s+/).map((w) => w[0]).slice(0, 2).join("").toUpperCase();
 
 /** Sidebar footer: who you are working as. Switching shows what each role can and cannot do. */
 export function UserSwitcher() {
-  const { people, you, setYou } = useWho();
+  const { people, you, setYou, roleName } = useWho();
   const router = useRouter();
   const [open, setOpen] = useState(false);
   const btn = useRef<HTMLButtonElement>(null);
@@ -26,9 +25,9 @@ export function UserSwitcher() {
   }, [open]);
   return (
     <>
-      <button ref={btn} className="workspace who" aria-haspopup="menu" aria-expanded={open} onClick={() => setOpen(!open)} title={`${you.name} · ${ROLE_INFO[you.role].label} · switch person`}>
+      <button ref={btn} className="workspace who" aria-haspopup="menu" aria-expanded={open} onClick={() => setOpen(!open)} title={`${you.name} · ${roleName(you)} · switch person`}>
         <span className="av" style={{ width: 26, height: 26, borderRadius: 8, fontSize: 11, background: "var(--accent-solid)" }}>{initials(you.name)}</span>
-        <span className="t"><b>{you.name}</b><span>{ROLE_INFO[you.role].label}</span></span>
+        <span className="t"><b>{you.name}</b><span>{roleName(you)}</span></span>
         <ChevronsUpDown size={14} aria-hidden className="chev" />
       </button>
       {open ? (
@@ -37,7 +36,7 @@ export function UserSwitcher() {
           {people.map((p) => (
             <button key={p.id} role="menuitemradio" aria-checked={p.id === you.id} className="mi" onClick={() => { setOpen(false); if (p.id !== you.id) setYou(p.id); }}>
               <span className="av" style={{ width: 28, height: 28, borderRadius: 8, fontSize: 11, background: "var(--text-3)" }}>{initials(p.name)}</span>
-              <span className="mt"><b>{p.name}</b><span>{ROLE_INFO[p.role].label}</span></span>
+              <span className="mt"><b>{p.name}</b><span>{roleName(p)}</span></span>
               {p.id === you.id ? <Check size={16} aria-hidden /> : null}
             </button>
           ))}
