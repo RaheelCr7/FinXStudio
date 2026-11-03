@@ -1,6 +1,8 @@
 import { instrumentOf, INSTRUMENTS, dayChange } from "./invest";
 import { alexFinance, BANKS, cardNetwork, luhnValid, type Finance } from "./finance";
+import { CabSandbox, CAB_PROFILES, type CabProfile } from "./cab";
 export * from "./finance";
+export { CAB_PROFILES, CAB_CURRENCY, PASSWORD_RULES, passwordProblems, type CabProfile } from "./cab";
 export * from "./invest";
 
 export type Account = { id: string; name: string; maskedNumber: string; iban: string; balance: number; currency: string; status: "active" | "frozen"; canDebit: boolean };
@@ -9,6 +11,10 @@ export type Persona = {
   id: string;
   /** Which bank app this sandbox customer belongs to. */
   brand: "meezan" | "bankworkx";
+  /** A sandbox customer that belongs to one project (bank app) in particular, on top of its look. */
+  project?: string;
+  /** Sign-in, enrolment and recovery details, for the Cairo Amman Bank access journeys. */
+  cab?: CabProfile;
   name: string;
   phone: string;
   accounts: Account[];
@@ -72,25 +78,62 @@ export const personas: Record<string, Persona> = {
     limits: { daily: 25000, usedToday: 0 },
     behaviour: { otpCode: "123456", kyc: "rejected" },
   },
+  nour: {
+    id: "nour", brand: "meezan", project: "cab", name: "Nour Haddad (active customer)", phone: "+962 34 56 78 90", cab: CAB_PROFILES.nour!,
+    accounts: [], beneficiaries: [], limits: { daily: 5000, usedToday: 0 },
+    behaviour: { otpCode: "482100", kyc: "verified" },
+  },
+  sara: {
+    id: "sara", brand: "meezan", project: "cab", name: "Sara Hegazy (new customer, not enrolled)", phone: "+962 79 123 4567", cab: CAB_PROFILES.sara!,
+    accounts: [], beneficiaries: [], limits: { daily: 5000, usedToday: 0 },
+    behaviour: { otpCode: "482100", kyc: "verified" },
+  },
+  yasmin: {
+    id: "yasmin", brand: "meezan", project: "cab", name: "Yasmin Khoury (enrolled, not activated)", phone: "+962 79 333 0172", cab: CAB_PROFILES.yasmin!,
+    accounts: [], beneficiaries: [], limits: { daily: 5000, usedToday: 0 },
+    behaviour: { otpCode: "482100", kyc: "verified" },
+  },
+  lina: {
+    id: "lina", brand: "meezan", project: "cab", name: "Lina Qasem (profile locked)", phone: "+962 77 555 0188", cab: CAB_PROFILES.lina!,
+    accounts: [], beneficiaries: [], limits: { daily: 5000, usedToday: 0 },
+    behaviour: { otpCode: "482100", kyc: "verified" },
+  },
+  omar: {
+    id: "omar", brand: "meezan", project: "cab", name: "Omar Nassar (password expired)", phone: "+962 78 222 0150", cab: CAB_PROFILES.omar!,
+    accounts: [], beneficiaries: [], limits: { daily: 5000, usedToday: 0 },
+    behaviour: { otpCode: "482100", kyc: "verified" },
+  },
 };
 
-/** The sandbox customers for one bank app. */
-export const personasFor = (brand: Persona["brand"]) => Object.values(personas).filter((p) => p.brand === brand);
+/**
+ * The sandbox customers for one bank app: the ones made for that project when there are any, otherwise the ones
+ * for its look (a project that only chose a look shares that look's customers).
+ */
+export function personasFor(brand: Persona["brand"], project?: string) {
+  const mine = project ? Object.values(personas).filter((p) => p.project === project) : [];
+  return mine.length ? mine : Object.values(personas).filter((p) => p.brand === brand && !p.project);
+}
 
 export class MockBank {
   private p: Persona;
   private otpAttempts = 0;
   private otpVerified = false;
   private seq = 0;
+  private cab: CabSandbox;
   constructor(personaId = "ayesha") {
     const base = personas[personaId];
     if (!base) throw new Error(`Unknown persona ${personaId}`);
     this.p = structuredClone(base);
+    this.cab = new CabSandbox(this.p, { otpVerified: () => this.otpVerified, clearOtp: () => { this.otpVerified = false; } });
   }
   get persona() { return this.p; }
 
   /** Single entry point used by journeys: adapter id + input -> result. */
   async call(adapter: string, input: Record<string, any> = {}): Promise<any> {
+    if (this.cab.handles(adapter)) {
+      const out = this.cab.call(adapter, input);
+      if (out !== undefined) return out;
+    }
     switch (adapter) {
       case "bank.accounts.list":
         return Object.fromEntries(this.p.accounts.map((a) => [a.id, a]));

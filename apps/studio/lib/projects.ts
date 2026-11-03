@@ -25,7 +25,7 @@ export async function getProject(id: string): Promise<Project | undefined> {
   return def ? toProject(id, def) : undefined;
 }
 
-export const CURRENCIES: Record<string, string> = { USD: "en-US", EUR: "en-IE", GBP: "en-GB", PKR: "en-PK", INR: "en-IN", AED: "en-AE", SAR: "en-SA", CAD: "en-CA", AUD: "en-AU" };
+export const CURRENCIES: Record<string, string> = { USD: "en-US", EUR: "en-IE", GBP: "en-GB", PKR: "en-PK", INR: "en-IN", AED: "en-AE", SAR: "en-SA", CAD: "en-CA", AUD: "en-AU", JOD: "en-JO", EGP: "en-EG", KWD: "en-KW", QAR: "en-QA", BHD: "en-BH", OMR: "en-OM" };
 const RESERVED = new Set(["all", "new", "api", "projects", "journeys", "agents"]);
 const PRESET_LOOK: Record<string, { background: string; splashDark: string }> = {
   meezan: { background: "#F6F7F9", splashDark: "#0A0D12" },

@@ -128,6 +128,50 @@ export const ADAPTER_CATALOG: AdapterInfo[] = [
     adapter: "bank.invest.watch", suggestedId: "watch", description: "Adds a stock or fund to the watchlist, or removes it with on: false (BankWorkx).",
     input: { symbol: "instrument symbol", on: "boolean, default true" }, returns: "{ watching }", errors: ["INSTRUMENT_NOT_FOUND"],
   },
+  // ---- Cairo Amman Bank access journeys: outcomes come back as data ({ ok, code }) so a journey can route on them ----
+  { adapter: "cab.legalEntities.list", suggestedId: "legalEntities", description: "The legal entities a customer can choose from.", input: {}, returns: "Object map keyed by id: { id, name }. Save as legal.list and use with select source." },
+  { adapter: "cab.captcha.generate", suggestedId: "captcha", description: "A picture-code challenge. The sandbox returns its text so a journey can show it.", input: {}, returns: "{ serviceKey, text }. Save as captcha; send serviceKey and what the customer typed to a call that checks it." },
+  { adapter: "cab.captcha.verify", suggestedId: "captchaCheck", description: "Checks what the customer typed for a picture code.", input: { serviceKey: "captcha.serviceKey", value: "the typed text" }, returns: "{ ok }" },
+  {
+    adapter: "cab.auth.signIn", suggestedId: "signIn", description: "Checks a username and password.", input: { username: "text", password: "text" },
+    returns: "{ ok: true, firstName, lastLogin, accountCount, netWorth, currency, defaultSignIn } or { ok: false, code } where code is INVALID_CREDENTIALS (with attemptsLeft), LOCKED (lockMinutes, after 3 mistakes), PASSWORD_EXPIRED or INACTIVE. Save as auth.result and route with navigation rules.",
+    errors: [],
+  },
+  { adapter: "cab.device.options", suggestedId: "deviceOptions", description: "Which sign-in options the customer has set up on this device.", input: {}, returns: "{ default: 'password'|'pin'|'biometric', pinSet, biometricAvailable }" },
+  { adapter: "cab.device.setDefault", suggestedId: "setDefault", description: "Sets the default way to sign in; a PIN is six digits.", input: { mode: "'password' | 'pin' | 'biometric'", pin: "six digits, for pin" }, returns: "{ ok, default }", errors: ["INVALID_MODE", "PIN_INVALID"] },
+  { adapter: "cab.device.verifyPin", suggestedId: "verifyPin", description: "Checks the sign-in PIN.", input: { pin: "six digits" }, returns: "{ ok }" },
+  { adapter: "cab.preview.get", suggestedId: "preview", description: "Whether account preview before sign-in is on, and the balances it would show.", input: {}, returns: "{ enabled, accounts: map of { id, name, sub, balance, currency, maskedNumber }, asOf }" },
+  { adapter: "cab.preview.accounts", suggestedId: "previewAccounts", description: "The balances account preview shows before sign-in, ready for accountPicker.", input: {}, returns: "Object map keyed by account id: { id, name, balance, currency, maskedNumber }. Save as ctx.previewAccounts." },
+  { adapter: "cab.preview.set", suggestedId: "previewSet", description: "Turns account preview before sign-in on or off.", input: { enabled: "true or false" }, returns: "{ ok, enabled }" },
+  { adapter: "cab.language.list", suggestedId: "languages", description: "Languages the app offers.", input: {}, returns: "Object map keyed by language code: { id, name, sub }. Save as ctx.languages and use with select source." },
+  { adapter: "cab.language.current", suggestedId: "currentLanguage", description: "The language the app uses now.", input: {}, returns: "{ current, name }" },
+  { adapter: "cab.language.set", suggestedId: "setLanguage", description: "Changes the app language.", input: { code: "en_US, en_GB, fr_FR or ar_AE" }, returns: "{ ok, current, name }", errors: ["LANGUAGE_UNSUPPORTED"] },
+  {
+    adapter: "cab.enroll.retail", suggestedId: "enroll", description: "Enrols a retail customer from the details the bank holds, after a picture-code check.",
+    input: { captchaKey: "captcha.serviceKey", captchaValue: "typed text", lastName: "text", nationalId: "text", dob: "DD/MM/YYYY" },
+    returns: "{ ok: true, firstName, username, activationCodeSent, maskedEmail, maskedPhone } or { ok: false, code } with CAPTCHA_WRONG, NOT_FOUND or ALREADY_ENROLLED.",
+  },
+  {
+    adapter: "cab.activate.validate", suggestedId: "activate", description: "Checks a username and the activation code that was sent after enrolment.", input: { username: "text", code: "text" },
+    returns: "{ ok: true } or { ok: false, code } with INVALID (attemptsLeft) or BLOCKED after 3 mistakes.",
+  },
+  { adapter: "cab.activate.regenerate", suggestedId: "regenerate", description: "Sends a new activation code (after the customer was found by cab.recover.verifyUser).", input: {}, returns: "{ ok, sent, maskedEmail, maskedPhone }", errors: ["VERIFY_FIRST"] },
+  { adapter: "cab.password.policy", suggestedId: "policy", description: "The password rules the bank enforces.", input: {}, returns: "{ minLength: 8, maxLength: 100, differentChars: 5, notContainUsername: true }" },
+  {
+    adapter: "cab.activate.setPassword", suggestedId: "setPassword", description: "Creates the first password, activating the profile.", input: { password: "text", confirm: "text, optional: MISMATCH is returned when it differs" },
+    returns: "{ ok: true } or { ok: false, code: 'MISMATCH' | 'POLICY', problems: [MIN_LENGTH | MAX_LENGTH | DIFFERENT_CHARS | CONTAINS_USERNAME] }", errors: ["ACTIVATION_REQUIRED"],
+  },
+  {
+    adapter: "cab.recover.verifyUser", suggestedId: "verifyUser", description: "Finds a customer who cannot sign in from email, phone and date of birth, after a picture-code check.",
+    input: { captchaKey: "captcha.serviceKey", captchaValue: "typed text", email: "text", phone: "digits", dob: "DD/MM/YYYY" },
+    returns: "{ ok: true, username, firstName, status: 'ACTIVE'|'NEW', maskedEmail, maskedPhone } or { ok: false, code: 'CAPTCHA_WRONG'|'NOT_FOUND' }",
+  },
+  {
+    adapter: "cab.recover.resetPassword", suggestedId: "resetPassword", description: "Sets a new password. The one-time code (bank.otp.send then bank.otp.verify) must be verified first.", input: { password: "text", confirm: "text, optional" },
+    returns: "{ ok: true } or { ok: false, code: 'MISMATCH' | 'POLICY', problems }", requiresOtp: true, errors: ["VERIFY_FIRST", "OTP_REQUIRED"],
+  },
+  { adapter: "cab.locations.search", suggestedId: "locations", description: "Branches and ATMs.", input: { kind: "'branch' | 'atm' | 'all'", rangeMiles: "5, 10, 25, 50 or 100", query: "optional text" }, returns: "Object map keyed by location id: { id, name, sub }. Save as loc.found; use len(loc.found) for the count and select source to list them." },
+  { adapter: "cab.locations.details", suggestedId: "locationDetail", description: "One branch or ATM.", input: { id: "location id" }, returns: "{ id, name, type, status, address, hours, phone, distanceKm, services }", errors: ["LOCATION_NOT_FOUND"] },
 ];
 
 /** Sandbox customers for testing. The OTP codes are sandbox-only test values. */

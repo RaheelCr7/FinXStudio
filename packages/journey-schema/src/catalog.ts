@@ -2,12 +2,13 @@ import type { Journey } from "./schema";
 import { localTransfer } from "./fixtures/local-transfer";
 import { payBill } from "./fixtures/pay-bill";
 import { addMoney, addCard, connectAccount, createBudget, invest, sellInvestment } from "./fixtures/bankworkx";
+import { cabJourneys } from "./fixtures/cab";
 
 /**
  * The journey catalog: ready-made journeys a project can add to its own app.
  * Each entry is the journey exactly as shipped, so adding it never depends on what someone later edited in Studio.
  */
-export const CATEGORIES = ["Payments", "Accounts", "Cards", "Budgeting", "Investing"] as const;
+export const CATEGORIES = ["Payments", "Accounts", "Cards", "Budgeting", "Investing", "Access"] as const;
 export type CatalogCategory = (typeof CATEGORIES)[number];
 
 export type CatalogEntry = {
@@ -19,7 +20,7 @@ export type CatalogEntry = {
   /** What the journey shows off, as short phrases. */
   highlights: string[];
   /** The look the journey was made in, so a new bank knows what it is getting. */
-  madeFor: "meezan" | "bankworkx";
+  madeFor: "meezan" | "bankworkx" | "cab";
   journey: Journey;
 };
 
@@ -64,6 +65,21 @@ export const catalog: CatalogEntry[] = [
     summary: "Sell part or all of a holding and have the money paid into an account.",
     highlights: ["Holding picker", "Amount capped by what you own", "Failure path with nothing sold"],
   },
+  // Cairo Amman Bank: the access journeys from its design file
+  ...(
+    [
+      ["sign-in", "Sign in with username and password, with attempts left, a locked profile, an expired password and a profile not yet activated.", ["Attempts left, then locked", "Locked, expired and inactive screens", "English and Arabic"]],
+      ["default-sign-in", "Choose how to sign in by default: password, biometric, or a six-digit PIN entered twice.", ["PIN entered twice", "Biometric option", "Mismatch check"]],
+      ["account-preview", "Turn on balances before sign-in, and see what the sign-in screen will show.", ["Toggle", "Balances picture", "Privacy notice"]],
+      ["change-language", "Change the app language, with a confirmation step.", ["Language list", "Confirm before changing"]],
+      ["enroll", "Enrol a retail customer from last name, national ID and date of birth, with a picture code.", ["Picture code", "Records check", "Already enrolled and not found paths"]],
+      ["activate-profile", "Activate a profile with the username and activation code, then create a password under the bank's rules.", ["Activation code blocks after 3 mistakes", "Password rules", "Passwords must match"]],
+      ["cant-sign-in", "Find a customer who cannot sign in, verify with a one-time code and set a new password, or send a new activation code.", ["Picture code", "One-time code with lock after 3 mistakes", "Reset or reactivate"]],
+      ["locate-us", "Find branches and ATMs by kind, range and text, and see hours and distance.", ["Filters", "Results list", "Call from the details"]],
+      ["support", "FAQs by topic, terms, privacy and calling the bank.", ["FAQ topics", "Terms and privacy", "Call us"]],
+    ] as const
+  ).map(([slug, summary, highlights]) => ({ id: slug, category: "Access" as const, madeFor: "cab" as const, journey: cabJourneys.find((j) => j.slug === slug)!, summary, highlights: [...highlights] })),
 ];
+
 
 export const catalogEntry = (id: string) => catalog.find((c) => c.id === id);

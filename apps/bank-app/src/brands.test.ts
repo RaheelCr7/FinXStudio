@@ -20,7 +20,11 @@ describe("brands", () => {
   it("rejects an unknown brand with a helpful message", () => {
     expect(() => brandConfig("nope")).toThrow(/meezan, bankworkx/);
   });
-  it("uses the brand accent colour for the app's accent", () => {
-    for (const id of brandIds) expect(brands[id]!.light.colors.accent!.toLowerCase()).toBe(brandConfig(id).accent.toLowerCase());
+  it("uses the brand accent colour for the app's accent, nudged only as far as it needs to stay readable on its own soft background", () => {
+    const rgb = (hex: string) => [1, 3, 5].map((i) => parseInt(hex.slice(i, i + 2), 16));
+    for (const id of brandIds) {
+      const shown = rgb(brands[id]!.light.colors.accent!), asked = rgb(brandConfig(id).accent);
+      for (let k = 0; k < 3; k++) expect(Math.abs(shown[k]! - asked[k]!), `${id} channel ${k}`).toBeLessThanOrEqual(24);
+    }
   });
 });

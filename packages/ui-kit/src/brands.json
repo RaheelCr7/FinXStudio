@@ -26,5 +26,19 @@
     "assets": "./assets/bankworkx",
     "background": "#F6F4FC",
     "splashDark": "#0D1022"
+  },
+  "cab": {
+    "name": "CAB",
+    "shortName": "CAB",
+    "slug": "cab",
+    "bundleId": "jo.com.cab.retail",
+    "scheme": "cab",
+    "preset": "meezan",
+    "accent": "#00853E",
+    "currency": "JOD",
+    "locale": "en-JO",
+    "assets": "./assets/cab",
+    "background": "#F6F7F9",
+    "splashDark": "#0A0D12"
   }
 }
