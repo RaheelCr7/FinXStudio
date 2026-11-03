@@ -1,0 +1,35 @@
+{
+  "name": "@finx/studio",
+  "version": "0.0.1",
+  "private": true,
+  "scripts": {
+    "dev": "next dev --port 3100 --hostname 127.0.0.1",
+    "build": "next build",
+    "typecheck": "tsc -p . --noEmit",
+    "test": "vitest run",
+    "dev:lan": "next dev --port 3100 --hostname 0.0.0.0"
+  },
+  "dependencies": {
+    "@finx/codegen": "workspace:*",
+    "@finx/journey-schema": "workspace:*",
+    "@finx/mock-bank-api": "workspace:*",
+    "@finx/renderer-core": "workspace:*",
+    "@finx/renderer-native": "workspace:*",
+    "@finx/ui-kit": "workspace:*",
+    "@fontsource-variable/inter": "5.3.0",
+    "@xyflow/react": "12.12.1",
+    "lucide-react": "1.66.0",
+    "next": "16.4.4",
+    "react": "19.3.0",
+    "react-dom": "19.3.0",
+    "react-native": "0.88.1",
+    "react-native-svg": "15.16.0",
+    "react-native-web": "^0.21.4"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.0",
+    "@types/react": "~19.3.0",
+    "@types/react-dom": "~19.3.0",
+    "vitest": "2.1.8"
+  }
+}

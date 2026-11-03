@@ -22,3 +22,6 @@
 - Conventional commits: `feat(scope): ...`, `fix(scope): ...`, `docs: ...`, `chore: ...`, `test: ...`.
 - A feature merges only with tests green. A phase merges to `develop` only when its definition of done holds.
 - Tags: `v0.1.0-mvp` at the end of L1; `v0.2.0` L2; and so on.
+
+## Checks
+GitHub Actions (`.github/workflows/ci.yml`) runs `pnpm typecheck` and `pnpm test` on every push to `main`, `develop` and `phase/**`, and on pull requests into them. A phase merges to `develop` only with this green.
