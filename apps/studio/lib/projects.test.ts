@@ -96,4 +96,31 @@ describe("projects", () => {
     await expect(projects.updateProjectComponents("meezan", null)).rejects.toThrow(/object/);
     await expect(projects.updateProjectComponents("nope", {})).rejects.toThrow(/No project/);
   });
+
+  it("reports an existing project's shape without changing the file", async () => {
+    const before = readFileSync(file, "utf8");
+    const shape = await projects.getProjectShape("cab");
+    expect(shape.entities.map((e) => e.country)).toEqual(["JO"]);
+    expect(shape.languages).toEqual(["en", "ar"]);
+    expect(readFileSync(file, "utf8")).toBe(before);
+  });
+
+  it("saves a two-entity group with a custom language, and returns the previous shape", async () => {
+    const r = await projects.updateProjectShape("cab", {
+      customLanguages: [{ code: "ku", name: "Kurdish", dir: "rtl" }], languages: ["en", "ar", "ku"], channels: ["web", "mobile", "tablet"],
+      entities: [{ id: "jo", name: "CAB Jordan", country: "JO", currency: "JOD", languages: ["en", "ar"] }, { id: "eg", name: "CAB Egypt", country: "EG", currency: "EGP", languages: ["ar", "ku"] }],
+    });
+    expect(r.previous.entities).toHaveLength(1);
+    const saved = JSON.parse(readFileSync(file, "utf8")).cab;
+    expect(saved.entities.map((e: { id: string }) => e.id)).toEqual(["jo", "eg"]);
+    expect(saved.customLanguages[0].code).toBe("ku");
+    expect(saved.channels).toContain("tablet");
+    expect(saved.accent).toBe("#00853E"); // the rest of the project is untouched
+  });
+
+  it("refuses bad shapes with every problem named, and an entity using a language the project does not offer", async () => {
+    await expect(projects.updateProjectShape("cab", { channels: ["tablet"], entities: [] })).rejects.toThrow(/Choose web or mobile.*at least one entity/);
+    await expect(projects.updateProjectShape("cab", { languages: ["en"], entities: [{ id: "jo", name: "CAB Jordan", country: "JO", currency: "JOD", languages: ["ar"] }] })).rejects.toThrow(/does not offer/);
+    await expect(projects.updateProjectShape("nope", {})).rejects.toThrow(/No project/);
+  });
 });

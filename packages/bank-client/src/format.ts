@@ -1,4 +1,4 @@
-import { formatMoney } from "@finx/ui-kit";
+import { formatMoney, isRtlLanguage } from "@finx/ui-kit";
 
 /** Money as the BankWorkx screens show it: whole dollars when there are no cents ($1,200), the way the design reads. */
 export const usd = (n: number) => formatMoney(n, "USD");
@@ -22,5 +22,5 @@ export function dayLabel(daysAgo: number, now: number = Date.now()): string {
 /** A date a number of days from now, such as "6 Nov". */
 export const inDays = (n: number, now: number = Date.now()) => new Date(now + n * DAY).toLocaleDateString("en-US", { day: "numeric", month: "short" });
 
-/** English and Urdu are the two languages the apps switch between; Urdu reads right to left. */
-export const isRtl = (lang: string) => lang === "ur";
+/** Does this language read right to left? Arabic, Urdu, Persian and Hebrew do (the language list is in @finx/ui-kit). */
+export const isRtl = (lang: string) => isRtlLanguage(lang);

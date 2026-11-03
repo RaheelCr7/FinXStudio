@@ -2,7 +2,7 @@ import React, { useEffect, useRef, useState } from "react";
 import { Image, KeyboardAvoidingView, Pressable, ScrollView, Text, View, useColorScheme } from "react-native";
 import { StatusBar } from "expo-status-bar";
 import { SafeAreaProvider, useSafeAreaInsets } from "react-native-safe-area-context";
-import { BankApp } from "@finx/bank-client";
+import { BankApp, isRtl } from "@finx/bank-client";
 import { localize } from "@finx/renderer-core";
 import { JourneyPlayer, ThemeProvider, useTheme } from "@finx/renderer-native";
 import { formatMoney } from "@finx/ui-kit";
@@ -27,7 +27,7 @@ function MeezanShell() {
   const studioUrl = s.studioUrl;
   const opening = s.opening;
   const open = (slug: string) => app.openJourney(slug);
-  const rtl = lang === "ur";
+  const rtl = isRtl(lang);
 
   // The Studio server editor sits at the bottom of the sign-in screen. While it is open, keep it in view as the keyboard appears.
   const loginScroller = useRef<React.ComponentRef<typeof ScrollView>>(null);

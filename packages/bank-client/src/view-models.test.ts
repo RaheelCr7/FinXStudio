@@ -22,7 +22,7 @@ describe("formatting", () => {
     expect([dayLabel(0, now), dayLabel(1, now)]).toEqual(["Today", "Yesterday"]);
     expect(dayLabel(3, now)).toMatch(/Fri/);
     expect(inDays(4, now)).toMatch(/6/);
-    expect([isRtl("ur"), isRtl("en")]).toEqual([true, false]);
+    expect([isRtl("ur"), isRtl("en"), isRtl("ar"), isRtl("ar-JO")]).toEqual([true, false, true, true]);
   });
 });
 

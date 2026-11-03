@@ -1,5 +1,6 @@
 import brandData from "./brands.json";
 import type { ComponentTokenOverrides } from "./components";
+import type { Channel, Entity, ProjectLanguage } from "./project";
 
 /** FinX Design System (FDS) tokens. Single source of truth for Studio and the bank apps. */
 
@@ -148,6 +149,11 @@ export type BrandDef = {
   look?: BrandLook;
   /** Sizes of the shared components (field, button, bar, row, keypad) when the bank's design differs from the defaults. */
   components?: ComponentTokenOverrides;
+  /** Where the project runs, the languages it offers and the legal entities it covers. Anything unset follows the bank's currency and locale (see projectShape). */
+  channels?: Channel[];
+  languages?: string[];
+  customLanguages?: ProjectLanguage[];
+  entities?: Entity[];
 };
 export type BrandId = string;
 export type Brand = { id: BrandId; name: string; preset: Preset; light: Theme; dark: Theme; radius: Record<keyof typeof radius, number>; currency: string; locale: string; look?: BrandLook; components?: ComponentTokenOverrides };
