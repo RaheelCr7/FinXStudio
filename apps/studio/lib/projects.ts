@@ -1,7 +1,7 @@
 import { promises as fs } from "node:fs";
 import path from "node:path";
 import { spawnSync } from "node:child_process";
-import { PRESETS, accentProblem, resolveBrand, resolveComponentTokens, type Brand, type BrandDef, type ComponentTokenOverrides } from "@finx/ui-kit";
+import { PRESETS, accentProblem, projectShape, resolveBrand, resolveComponentTokens, validateShape, type ProjectShape, type Brand, type BrandDef, type ComponentTokenOverrides } from "@finx/ui-kit";
 import { StoreError } from "./store";
 import { brandsFile } from "./brand-ids";
 
@@ -92,6 +92,35 @@ export async function updateProjectAccent(id: string, accentInput: unknown): Pro
   await fs.rename(tmp, file);
   const icons = makeIcons(id, accent);
   return { project: toProject(id, updated), iconsMade: icons.ok, iconWarning: icons.warning, previous: def.accent };
+}
+
+/** What a project covers: its channels, languages and legal entities, with today's single-bank settings filling anything unset. */
+export async function getProjectShape(id: string): Promise<ProjectShape> {
+  const def = (await read())[id];
+  if (!def) throw new StoreError(404, `No project called ${id}`);
+  return projectShape(def);
+}
+
+/** Changes a project's channels, languages (built in or added), and entities. Every problem found is reported at once. */
+export async function updateProjectShape(id: string, input: unknown): Promise<{ project: Project; shape: ProjectShape; previous: ProjectShape }> {
+  const all = await read();
+  const def = all[id];
+  if (!def) throw new StoreError(404, `No project called ${id}`);
+  const checked = validateShape(input, def.customLanguages ?? []);
+  if (!checked.ok) throw new StoreError(400, checked.errors.join(". "));
+  const previous = projectShape(def);
+  const updated: BrandDef = { ...def, ...checked.shape };
+  // an entity may only use languages the project offers
+  const next = projectShape(updated);
+  for (const e of next.entities) {
+    const missing = e.languages.filter((l) => !next.languages.includes(l));
+    if (missing.length) throw new StoreError(400, `Entity ${e.id} uses ${missing.join(", ")}, which the project does not offer. Add it to the project's languages first.`);
+  }
+  const file = brandsFile();
+  const tmp = `${file}.${process.pid}.tmp`;
+  await fs.writeFile(tmp, JSON.stringify({ ...all, [id]: updated }, null, 2) + "\n");
+  await fs.rename(tmp, file);
+  return { project: toProject(id, updated), shape: next, previous };
 }
 
 /** Sets the sizes of a project's shared components (field, button, bar, row, keypad). Only values that differ from the defaults are stored. */
