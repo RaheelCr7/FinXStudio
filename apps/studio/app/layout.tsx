@@ -2,6 +2,8 @@ import type { Metadata } from "next";
 import Script from "next/script";
 import { cookies } from "next/headers";
 import "@fontsource-variable/inter";
+import "@fontsource/noto-sans-arabic/400.css";
+import "@fontsource/noto-sans-arabic/600.css";
 import "./globals.css";
 import "./futuristic.css";
 import { Shell } from "@/components/Shell";
