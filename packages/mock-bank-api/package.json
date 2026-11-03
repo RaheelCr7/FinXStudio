@@ -4,5 +4,11 @@
   "private": true,
   "type": "module",
   "main": "src/index.ts",
-  "scripts": { "test": "vitest run", "typecheck": "tsc -p ." }
+  "scripts": {
+    "test": "vitest run",
+    "typecheck": "tsc -p ."
+  },
+  "dependencies": {
+    "@finx/ui-kit": "workspace:*"
+  }
 }

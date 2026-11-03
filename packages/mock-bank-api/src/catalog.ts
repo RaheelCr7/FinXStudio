@@ -27,6 +27,19 @@ export const ADAPTER_CATALOG: AdapterInfo[] = [
     input: {}, returns: "{ daily, usedToday } in PKR. Save as ctx.limits.",
   },
   {
+    adapter: "bank.fx.rate", suggestedId: "fxRate", description: "The exchange rate between two currencies: the mid-market rate and the rate the customer gets after the bank's spread.",
+    input: { from: "currency code, e.g. USD", to: "currency code, e.g. PKR" }, returns: "{ from, to, midRate, rate, spreadPercent }. Fails with CURRENCY_NOT_SUPPORTED for a pair the bank does not convert.",
+  },
+  {
+    adapter: "bank.fx.quote", suggestedId: "fxQuote", description: "Prices converting an amount between two of the customer's own accounts in different currencies. The quote is valid for 30 seconds.",
+    input: { fromAccountId: "account to debit", toAccountId: "account to credit", amount: "amount in the debit account's currency" },
+    returns: "{ quoteId, from: { currency, amount }, to: { currency, amount }, midRate, rate, fee, feeCurrency, total, expiresAt, ttlSeconds }. Save as ctx.quote. Errors: SAME_CURRENCY, INVALID_AMOUNT, INSUFFICIENT_FUNDS, CURRENCY_NOT_SUPPORTED, ACCOUNT_NOT_FOUND.",
+  },
+  {
+    adapter: "bank.fx.convert", suggestedId: "fxConvert", description: "Carries out a quote after the one-time code: debits the amount plus the fee and credits the converted amount.",
+    input: { quoteId: "from the quote" }, returns: "{ reference, from: { currency, newBalance }, to: { currency, newBalance }, quoteId }. Errors: OTP_REQUIRED, QUOTE_EXPIRED (get a new quote), QUOTE_USED, QUOTE_NOT_FOUND, INSUFFICIENT_FUNDS.",
+  },
+  {
     adapter: "bank.otp.send", suggestedId: "otpSend", description: "Sends a one-time code by SMS to the customer's phone.",
     input: { channel: "optional, 'sms'" }, returns: "{ sent, maskedPhone, channel }. Save as ctx.otp to show {{ctx.otp.maskedPhone}}.",
   },
