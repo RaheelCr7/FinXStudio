@@ -20,6 +20,8 @@ export const LOOKS: LookPreset[] = [
   { id: "islamic", name: "Islamic bank", description: "Deep green with a coloured bar and generous spacing.", preset: "meezan", accent: "#0B5D4B",
     look: { chrome: "bar", pageBg: "#F4F7F5" }, radius: { md: 14, lg: 14 } },
   { id: "neobank", name: "Neobank", description: "Violet, very round, airy. Made for phones first.", preset: "bankworkx", accent: "#6D4AFF", radius: { sm: 12, md: 18, lg: 24, xl: 30 } },
+  { id: "lifestyle", name: "Lifestyle", description: "Magenta with full-round buttons, white rounded cards and roomy rows. Measured from a UAE neo bank's app.", preset: "bankworkx", accent: "#B42871",
+    look: { pageBg: "#F4F5F4" }, radius: { sm: 14, md: 16, lg: 24, xl: 28 }, components: { button: { height: 48 }, field: { height: 50 }, row: { height: 64, radius: 16 }, bar: { height: 56 } } },
   { id: "corporate", name: "Corporate", description: "Navy with a bar, outlined fields and tighter corners for dense screens.", preset: "meezan", accent: "#1F3A5F",
     look: { chrome: "bar", fields: "outlined", pageBg: "#F2F4F7" }, radius: { sm: 4, md: 6, lg: 6 }, components: { button: { height: 46 }, field: { height: 46 }, row: { height: 50 } } },
   { id: "contrast", name: "High contrast", description: "Near-black on white, strong borders, large targets. Built for readability.", preset: "meezan", accent: "#003D8F",

@@ -21,6 +21,12 @@ describe("look library", () => {
     expect(b.look?.chrome).toBe("bar");
     expect(resolveBrand("y", defOf("classic")).radius.md).toBe(12);
   });
+  it("gives the lifestyle look full-round buttons and passes every check", () => {
+    const def = defOf("lifestyle"), b = resolveBrand("z", def);
+    const button = resolveComponentTokens(b.components, b.radius).button;
+    expect(button.radius * 2).toBe(button.height);
+    expect(lookReport(def).filter((c) => !c.ok)).toEqual([]);
+  });
   it("leaves a plain look plain", () => {
     expect(applyLook(lookById("classic")!)).toEqual({ preset: "meezan", accent: "#0F6E56" });
   });
