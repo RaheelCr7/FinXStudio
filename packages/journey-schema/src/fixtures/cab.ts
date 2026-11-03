@@ -591,18 +591,31 @@ export const cantSignIn: Journey = {
 /* =========================================================== 8. Locate us */
 export const locateUs: Journey = {
   ...base, id: "jrn_cab_locate_us", slug: "locate-us", name: L("Locate us", "مواقعنا"), entryScreen: "search",
-  dataModel: { "loc.kind": { type: "string" }, "loc.range": { type: "string" }, "loc.query": { type: "string" }, "loc.selected": { type: "string", required: true } },
+  dataModel: { "loc.kind": { type: "string" }, "loc.range": { type: "string" }, "loc.query": { type: "string" }, "loc.searched": { type: "boolean" } },
   integrations: [{ id: "locations", adapter: "cab.locations.search", mode: "sandbox" }, { id: "locationDetail", adapter: "cab.locations.details", mode: "sandbox" }],
   screens: [
     {
+      // the design opens on a map with a search bar, "List view" and "Filters"; there is no map block yet, so the list view is the way in
       id: "search", title: L("Locate us", "مواقعنا"),
-      onEnter: [{ type: "setData", path: "loc.kind", value: "branch" }, { type: "setData", path: "loc.range", value: "5" }],
+      onEnter: [{ type: "setData", path: "loc.kind", value: "branch" }, { type: "setData", path: "loc.range", value: "5" }, { type: "setData", path: "loc.searched", value: false }],
       blocks: [
-        text(L("Find a branch or ATM", "ابحث عن فرع أو صراف آلي"), "title"),
+        input("loc.query", L("Search", "بحث"), { placeholder: L("Search by zip code, city, street", "ابحث بالرمز البريدي أو المدينة أو الشارع") }),
+        button(L("List view", "عرض القائمة"), [
+          { type: "callApi", integration: "locations", input: { kind: "{{loc.kind}}", rangeMiles: "{{loc.range}}", query: "{{loc.query}}" }, saveAs: "loc.found", onError: { showToast: L("We couldn't search right now. Try again.", "تعذّر البحث الآن. حاول مرة أخرى.") } },
+          { type: "setData", path: "loc.searched", value: true },
+          { type: "navigate" },
+        ]),
+        // the rules below only apply once a search has run, so Filters is a plain step to the filter screen
+        button(L("Filters", "عوامل التصفية"), [{ type: "setData", path: "loc.searched", value: false }, go("filter")], "secondary"),
+      ],
+      navigation: route([{ when: "loc.searched && len(loc.found) == 0", to: "none" }, { when: "loc.searched && len(loc.found) > 0", to: "results" }]),
+    },
+    {
+      id: "filter", title: L("Advance Filter", "تصفية متقدمة"),
+      blocks: [
         { type: "select", bind: "loc.kind", label: L("Show", "عرض"), choices: [{ id: "branch", label: L("Branches", "الفروع") }, { id: "atm", label: L("ATM", "الصراف الآلي") }, { id: "all", label: L("All", "الكل") }] },
         { type: "select", bind: "loc.range", label: L("Select search range", "اختر نطاق البحث"), choices: ["5", "10", "25", "50", "100"].map((n) => ({ id: n, label: L(`${n} miles`, `${n} ميلاً`) })) },
-        input("loc.query", L("Search", "بحث"), { placeholder: L("Search by zip code, city, street", "ابحث بالرمز البريدي أو المدينة أو الشارع") }),
-        button(L("Search", "بحث"), [
+        button(L("Apply", "تطبيق"), [
           { type: "callApi", integration: "locations", input: { kind: "{{loc.kind}}", rangeMiles: "{{loc.range}}", query: "{{loc.query}}" }, saveAs: "loc.found", onError: { showToast: L("We couldn't search right now. Try again.", "تعذّر البحث الآن. حاول مرة أخرى.") } },
           { type: "navigate" },
         ]),
@@ -612,10 +625,12 @@ export const locateUs: Journey = {
     {
       id: "results", title: L("{{loc.kind == 'atm' ? 'ATM' : (loc.kind == 'branch' ? 'Branches' : 'All')}}", "{{loc.kind == 'atm' ? 'الصراف الآلي' : (loc.kind == 'branch' ? 'الفروع' : 'الكل')}}"),
       blocks: [
-        text(L("{{len(loc.found)}} location(s) found", "تم العثور على {{len(loc.found)}} موقع"), "title"),
-        { type: "select", bind: "loc.selected", label: L("Choose a location", "اختر موقعاً"), source: "loc.found", variant: "rows" },
-        button(L("View details", "عرض التفاصيل"), [{ type: "validate" }, { type: "callApi", integration: "locationDetail", input: { id: "{{loc.selected}}" }, saveAs: "loc.detail", onError: { showToast: L("We couldn't load that location.", "تعذّر تحميل هذا الموقع.") } }, go("details")]),
-        button(L("Change filters", "تغيير عوامل التصفية"), [go("search")], "secondary"),
+        // each location is a row; tapping it opens its details straight away
+        { type: "menu", source: "loc.found", item: {
+          label: L("{{item.name}}", "{{item.name}}"), text: L("{{item.address}}", "{{item.address}}"), icon: "mapPin",
+          actions: [{ type: "callApi", integration: "locationDetail", input: { id: "{{item.id}}" }, saveAs: "loc.detail", onError: { showToast: L("We couldn't load that location.", "تعذّر تحميل هذا الموقع.") } }, go("details")],
+        } },
+        button(L("Filters", "عوامل التصفية"), [go("filter")], "secondary"),
       ],
     },
     {
@@ -630,13 +645,10 @@ export const locateUs: Journey = {
       blocks: [
         text(L("{{loc.detail.name ? loc.detail.name : 'Location'}}", "{{loc.detail.name ? loc.detail.name : 'الموقع'}}"), "title"),
         { type: "reviewSummary", rows: [
-          { label: L("Status", "الحالة"), value: "{{loc.detail.status}}" }, { label: L("Distance", "المسافة"), value: "{{loc.detail.distanceKm}} km" },
+          { label: L("Status", "الحالة"), value: "{{loc.detail.status}}" }, { label: L("Country", "الدولة"), value: "{{loc.detail.country}}" }, { label: L("Distance", "المسافة"), value: "{{loc.detail.distanceKm}} KM" },
           { label: L("Address", "العنوان"), value: "{{loc.detail.address}}" }, { label: L("Hours", "ساعات العمل"), value: "{{loc.detail.hours}}" },
-          { label: L("Services", "الخدمات"), value: "{{loc.detail.services}}" },
         ] },
         button(L("Call us", "اتصل بنا"), [{ type: "showToast", text: L("Calling {{loc.detail.phone}}…", "جارٍ الاتصال بـ {{loc.detail.phone}}…") }]),
-        button(L("Back to results", "العودة إلى النتائج"), [go("results")], "secondary"),
-        done,
       ],
     },
   ],
