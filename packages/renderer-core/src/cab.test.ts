@@ -45,7 +45,7 @@ describe("Sign in", () => {
   const login = async (persona: string, username: string, password: string) => {
     const { r } = mk(cabSignIn, persona); await r.start();
     expect(r.view().blocks[0]!.type).toBe("hero");
-    expect(menuLabels(r)).toEqual(["Existing user login", "Explore products", "Resume application"]);
+    expect(menuLabels(r)).toEqual(["Explore products", "Resume Application", "Existing user login"]);
     await tap(r, "Existing user login");
     expect(r.current).toBe("login");
     fill(r, { "login.username": username, "login.password": password });
@@ -228,7 +228,7 @@ describe("Activate your profile", () => {
     const { r, bank } = await verified();
     expect(r.current).toBe("create-password");
     expect(r.get("policy")).toMatchObject({ minLength: 8, differentChars: 5, maxLength: 100 });
-    expect(r.view().blocks.some((b) => b.type === "text" && String(b.text).includes("At least 8 characters"))).toBe(true);
+    expect(r.view().blocks.some((b) => b.type === "text" && String(b.text).includes("Password must contain at least 8 characters"))).toBe(true);
     fill(r, { "activate.password": "short", "activate.confirm": "short" }); await press(r, "Create password");
     expect(r.current).toBe("create-password");
     expect(alerts(r)[0]).toContain("security requirements");
@@ -310,8 +310,8 @@ describe("Can't sign in", () => {
 describe("Locate us", () => {
   it("searches by kind and range and shows the details of one location", async () => {
     const { r } = mk(cabLocateUs); await r.start();
-    expect(r.get("loc.kind")).toBe("all");
-    r.set("loc.range", "100"); await press(r, "Search");
+    expect(r.get("loc.kind")).toBe("branch"); // the design opens on Branches
+    r.set("loc.kind", "all"); r.set("loc.range", "100"); await press(r, "Search");
     expect(r.current).toBe("results");
     expect(r.view().blocks.find((b) => b.type === "text")!.text).toBe("5 location(s) found");
     r.set("loc.selected", "loc_abdoun"); await press(r, "View details");

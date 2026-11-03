@@ -47,6 +47,26 @@ Known gaps against the Figma: the bank's own typeface is not loaded, the map on 
 - 29 end-to-end tests run every journey through the engine against the sandbox: happy paths, wrong password to locked, locked, expired and inactive profiles, PIN mismatch, wrong picture code, not found, already enrolled, activation block, wrong one-time code to lock, password rules, and Arabic right to left. 43 sandbox tests cover the rules.
 - Every journey is lint clean, complete in Arabic, and passes the automatic accessibility test of the web renderer.
 
+## Audit against the design frames (3 November 2026)
+
+Every CAB sheet was compared screen by screen with its journey (content and flow, not pixels). The design has about 100 phone frames; every design screen has a journey counterpart, and the journeys add edge states the platform needs.
+
+**Fixed (copy and small changes, English and Arabic):** password screens (labels, placeholders, "Security Requirements:" and the four rules in the design's order), the picture-code placeholder "Enter the above text here" (caption removed), sub-headers and titles as designed (Select the Legal Entity, Enter Recipient E-mail ID, Enter Phone Number, Enter Your Birth Date, Change Password, Activation Code, Enable Account Preview, Terms & Conditions, Privacy Policy), welcome menu order and wording, PIN and Biometric intro screens (the design's heading and text; two info alerts that made claims the design does not make were removed), enrolled screen button "Activate your profile", Locate us (opens on Branches, "ATM", "Select search range" with "N miles", the zip-code placeholder, result title follows the filter, details titled "Locate us"), Support hours as two rows.
+
+**Kept on purpose (not in the frames, from the platform):** locked, expired, inactive and not-found screens, the three-mistake locks, the wrong-code alerts, business banking and already-enrolled paths.
+
+**Open: needs a decision or a new block**
+- *Reset order.* The design goes found, Change Password, Security Code, success. The journey follows the platform: code first, then the new password, with a "where to send the code" step the design does not have. Confirm with the bank which is right.
+- *Enrol.* The design splits the entity into two screens (a dropdown with Continue, then "Selected Entity" read-only with Personal and Business rows that go straight on). The journey has one screen.
+- *Not modelled:* the login-time PIN modal and the biometric "Unlock" modal, the "Welcome Nour" remembered-user greeting, the Menu and My Accounts screens that lead to Default sign in and Account preview.
+- *Default sign in:* the list should tick the current default with the status words (Default sign in, Enabled, Generated), and the success screen should show the Default Sign In card with a Change link.
+- *Found screen:* username dropdown, avatar, an OR divider, and "Sign in as" returning to the login with the username filled in.
+- *Account preview:* the sign-in list shows an "As of" time, a type pill and "Available balance" per row and is not selectable; the setup screen has no Save button or warning.
+- *Language:* the confirmation should name the chosen language, the current one should be pre-selected, No sits left of Yes, and after Yes the flow returns to sign-in (no "Language updated" screen).
+- *Locate us:* map first, with a search bar, "List view" and "Filters" buttons, a separate filter sheet with a Services section, tappable result rows, details with the country and one primary button.
+- *Support:* FAQs as one accordion screen, the Call us dialer as a pop-up, and the FAQ, Terms and Privacy text taken from the design.
+- *Details:* the design's Account Activity answers and Privacy text are fuller than the samples here.
+
 ## Not covered, and what needs the bank
 
 - **Frames not exported or not built:** the Web (Retail), v1.1 and SME pages, Onboarding, Activate Dormant Account, Open Additional Account, Customer Complaints and Precious Metals. The other pages in the file are the next journeys.
