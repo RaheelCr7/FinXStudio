@@ -3,6 +3,7 @@ import { Modal, Platform, Pressable, ScrollView, Text, View, type ViewStyle } fr
 import { Icon, IconTile, useTheme, type IconName } from "@finx/renderer-native";
 import type { Colors } from "@finx/ui-kit";
 import type { Category, Txn } from "@finx/mock-bank-api";
+import { dayLabel } from "@finx/bank-client";
 
 export const tab = { fontVariant: ["tabular-nums" as const] };
 
@@ -50,13 +51,7 @@ export function categoryStyle(c: Colors, cat: Category): { icon: IconName; fg: s
   return { icon, fg, bg: `${fg}26` };
 }
 
-export function dayLabel(daysAgo: number): string {
-  if (daysAgo === 0) return "Today";
-  if (daysAgo === 1) return "Yesterday";
-  const d = new Date(Date.now() - daysAgo * 86400000);
-  return d.toLocaleDateString("en-US", { weekday: "short", day: "numeric", month: "short" });
-}
-export const inDays = (n: number) => new Date(Date.now() + n * 86400000).toLocaleDateString("en-US", { day: "numeric", month: "short" });
+export { dayLabel, inDays } from "@finx/bank-client";
 
 export function TxnRow({ t, money, open, onPress }: { t: Txn; money: (n: number) => string; open?: boolean; onPress?: () => void }) {
   const { c, r } = useTheme();

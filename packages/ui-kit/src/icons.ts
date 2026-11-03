@@ -1,0 +1,31 @@
+/** Icon drawings as data: stroked paths and rectangles on a 24 by 24 grid (Lucide style). Each platform draws the same shapes. */
+export type IconShape = { d: string } | { rect: { x: number; y: number; width: number; height: number; rx?: number } };
+export const ICON_SHAPES: Record<string, IconShape[]> = {
+  home: [{ d: "m3 9 9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z" }, { d: "M9 22V12h6v10" }],
+  accounts: [{ d: "M3 3v16a2 2 0 0 0 2 2h16M18 17V9M13 17V5M8 17v-3" }],
+  budgets: [{ d: "m12 14 4-4M3.34 19a10 10 0 1 1 17.32 0" }],
+  wallet: [{ d: "M19 7V4a1 1 0 0 0-1-1H5a2 2 0 0 0 0 4h15a1 1 0 0 1 1 1v4h-3a2 2 0 0 0 0 4h3a1 1 0 0 0 1-1v-2M3 5v14a2 2 0 0 0 2 2h15a1 1 0 0 0 1-1v-4" }],
+  bell: [{ d: "M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9M10.3 21a1.94 1.94 0 0 0 3.4 0" }],
+  menu: [{ d: "M5 8h14M9 16h10" }],
+  plus: [{ d: "M5 12h14M12 5v14" }],
+  x: [{ d: "M18 6 6 18M6 6l12 12" }],
+  check: [{ d: "M20 6 9 17l-5-5" }],
+  back: [{ d: "m12 19-7-7 7-7M19 12H5" }],
+  chevronRight: [{ d: "m9 18 6-6-6-6" }],
+  chevronDown: [{ d: "m6 9 6 6 6-6" }],
+  up: [{ d: "M7 7h10v10M7 17 17 7" }],
+  down: [{ d: "m7 7 10 10M17 7v10H7" }],
+  bag: [{ d: "M6 2 3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4zM3 6h18M16 10a4 4 0 0 1-8 0" }],
+  food: [{ d: "M3 2v7c0 1.1.9 2 2 2h4a2 2 0 0 0 2-2V2M7 2v20M21 15V2a5 5 0 0 0-5 5v6c0 1.1.9 2 2 2h3Zm0 0v7" }],
+  briefcase: [{ d: "M16 20V4a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16" }, { rect: { x: 2, y: 6, width: 20, height: 14, rx: 2 } }],
+  card: [{ d: "M2 10h20" }, { rect: { x: 2, y: 5, width: 20, height: 14, rx: 2 } }],
+  bank: [{ d: "M3 22h18M6 18v-7M10 18v-7M14 18v-7M18 18v-7M12 2l8 5H4z" }],
+  shield: [{ d: "M20 13c0 5-3.5 7.5-7.66 8.95a1 1 0 0 1-.67-.01C7.5 20.5 4 18 4 13V6a1 1 0 0 1 1-1c2 0 4.5-1.2 6.24-2.72a1.17 1.17 0 0 1 1.52 0C14.51 3.81 17 5 19 5a1 1 0 0 1 1 1zM9 12l2 2 4-4" }],
+  trend: [{ d: "m22 7-8.5 8.5-5-5L2 17M16 7h6v6" }],
+  repeat: [{ d: "m17 2 4 4-4 4M3 11v-1a4 4 0 0 1 4-4h14M7 22l-4-4 4-4M21 13v1a4 4 0 0 1-4 4H3" }],
+  dollar: [{ d: "M12 2v20M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6" }],
+  star: [{ d: "M11.525 2.295a.53.53 0 0 1 .95 0l2.31 4.679a2.12 2.12 0 0 0 1.595 1.16l5.166.756a.53.53 0 0 1 .294.904l-3.736 3.638a2.12 2.12 0 0 0-.611 1.878l.882 5.14a.53.53 0 0 1-.771.56l-4.618-2.428a2.12 2.12 0 0 0-1.973 0L6.396 21.01a.53.53 0 0 1-.77-.56l.881-5.139a2.12 2.12 0 0 0-.611-1.879L2.16 9.795a.53.53 0 0 1 .294-.906l5.165-.755a2.12 2.12 0 0 0 1.597-1.16z" }],
+  search: [{ d: "m21 21-4.34-4.34M11 19a8 8 0 1 0 0-16 8 8 0 0 0 0 16" }],
+  lock: [{ d: "M7 11V7a5 5 0 0 1 10 0v4" }, { rect: { x: 3, y: 11, width: 18, height: 11, rx: 2 } }],
+};
+export type IconKey = keyof typeof ICON_SHAPES;

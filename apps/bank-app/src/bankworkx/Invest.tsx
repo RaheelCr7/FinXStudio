@@ -1,13 +1,13 @@
 import React, { useMemo, useState } from "react";
 import { Pressable, ScrollView, Text, TextInput, View } from "react-native";
 import { Gradient, Icon, LineChart, Pill, Segmented, useTheme } from "@finx/renderer-native";
-import { INSTRUMENTS, RANGES, dayChange, instrumentOf, portfolioSeries, portfolioTotals, type Instrument, type Range } from "@finx/mock-bank-api";
-import { slugIs } from "../live";
+import { RANGES, dayChange, type Instrument, type Range } from "@finx/mock-bank-api";
+import { hasAction, instrumentView, investHome, pctText, rangePhrase, signedMoney, type InvestKind } from "@finx/bank-client";
 import type { Actions } from "./Dashboard";
 import { Card, SectionTitle, tab } from "./ui";
 
-const signed = (n: number, money: (n: number) => string) => `${n >= 0 ? "+" : "-"}${money(Math.abs(n))}`;
-const pct = (n: number) => `${n >= 0 ? "+" : "-"}${Math.abs(n * 100).toFixed(2)}%`;
+const signed = signedMoney;
+const pct = pctText;
 
 /** A coloured tile with the first letters of the symbol, the colour chosen from the sector so the same company always looks the same. */
 function Mark({ i, size = 42 }: { i: Instrument; size?: number }) {
@@ -59,17 +59,10 @@ export function InvestHome({ a, onBack, onOpen }: { a: Actions; onBack: () => vo
   const [section, setSection] = useState<Section>("portfolio");
   const [range, setRange] = useState<Range>("1M");
   const [q, setQ] = useState("");
-  const [kind, setKind] = useState<"all" | "stock" | "fund">("all");
-  const totals = portfolioTotals(inv.holdings);
-  const series = portfolioSeries(inv.holdings, range);
-  const canBuy = a.journeys.some((j) => slugIs(j.slug, "invest"));
-  const held = inv.holdings.map((h) => ({ h, i: instrumentOf(h.symbol)! }));
-  const watch = inv.watchlist.map((s) => instrumentOf(s)).filter((x): x is Instrument => !!x);
-  const explore = useMemo(() => {
-    const words = q.toLowerCase().split(/\s+/).filter(Boolean);
-    return INSTRUMENTS.filter((i) => (kind === "all" || i.kind === kind) && words.every((w) => `${i.name} ${i.symbol} ${i.sector}`.toLowerCase().includes(w)));
-  }, [q, kind]);
-  const movers = useMemo(() => [...INSTRUMENTS].sort((x, y) => Math.abs(dayChange(y).pct) - Math.abs(dayChange(x).pct)).slice(0, 3), []);
+  const [kind, setKind] = useState<InvestKind>("all");
+  const canBuy = hasAction(a.journeys, "invest");
+  const { totals, series, held: heldRows, watch, explore, movers } = useMemo(() => investHome(inv, range, q, kind), [inv, range, q, kind, a.bank.persona.finance!.invest.holdings.length]);
+  const held = heldRows.map((x) => ({ h: x.holding, i: x.instrument }));
 
   return (
     <ScrollView contentContainerStyle={{ padding: 20, paddingBottom: 60, gap: 16 }} keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>
@@ -164,18 +157,15 @@ export function InvestHome({ a, onBack, onOpen }: { a: Actions; onBack: () => vo
 /** One stock or fund: price and chart, key numbers, what the customer holds, and a way to buy. */
 export function InstrumentDetail({ symbol, a, onBack }: { symbol: string; a: Actions; onBack: () => void }) {
   const { c, r } = useTheme();
-  const i = instrumentOf(symbol)!;
   const fin = a.bank.persona.finance!;
   const [range, setRange] = useState<Range>("1M");
   const [, force] = useState(0);
-  const watching = fin.invest.watchlist.includes(symbol);
-  const held = fin.invest.holdings.find((h) => h.symbol === symbol);
-  const canBuy = a.journeys.some((j) => slugIs(j.slug, "invest"));
-  const canSell = !!held && a.journeys.some((j) => slugIs(j.slug, "sell-investment"));
-  const data = i.series[range];
-  const first = data[0]!.value, move = i.price - first;
-  const day = dayChange(i);
-  const up = move >= 0;
+  const v = instrumentView(symbol, fin.invest, range);
+  const { instrument: i, watching, held } = v;
+  const canBuy = hasAction(a.journeys, "invest");
+  const canSell = !!held && hasAction(a.journeys, "sell-investment");
+  const { data, move, movePct, day, up } = v;
+  const first = data[0]!.value;
   const col = up ? c.positive : c.negative;
   async function toggle() { await a.bank.call("bank.invest.watch", { symbol, on: !watching }); force((n) => n + 1); }
 
@@ -196,7 +186,7 @@ export function InstrumentDetail({ symbol, a, onBack }: { symbol: string; a: Act
       <Card style={{ gap: 10 }}>
         <LineChart key={range} data={data} color={col} height={160} format={(p) => a.money2(p.value)} />
         <Segmented value={range} onChange={setRange} options={RANGES.map((x) => ({ id: x, label: x }))} />
-        <Text style={[{ color: c.textMuted, fontSize: 13 }, tab]}>{signed(move, a.money2)} ({pct(first ? move / first : 0)}) over {range === "1D" ? "the day" : range === "1W" ? "the week" : range === "1M" ? "the month" : "the year"}</Text>
+        <Text style={[{ color: c.textMuted, fontSize: 13 }, tab]}>{signed(move, a.money2)} ({pct(movePct)}) over {rangePhrase(range)}</Text>
       </Card>
 
       {held ? (
