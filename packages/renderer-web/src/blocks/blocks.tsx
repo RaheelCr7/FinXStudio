@@ -4,7 +4,7 @@ import {
   accountRows, amountText, typedAmount, applyKey, beneficiaryRows, caretAfterFormat, cardFields, cardNetwork, cleanOtp, keyboardKind, otpCells, otpLabel, parseAmountText,
   quickAmounts, selectChoices, symbolOf, ui, type BlockProps, type BlockType, type PickerRow,
 } from "@finx/renderer-core";
-import { Alert as KitAlert, AmountField, Button as KitButton, Accordion as KitAccordion, BalanceList as KitBalanceList, Checkbox, ChoiceGroup, CodeInput, Divider as KitDivider, Hero as KitHero, Keypad, ListRow, PinDots, Result as KitResult, SectionHeader as KitSectionHeader, Shortcuts as KitShortcuts, SummaryList, Switch, TextField as KitTextField, type ChoiceOption } from "@finx/components";
+import { Alert as KitAlert, AmountField, Button as KitButton, Accordion as KitAccordion, Dialog as KitDialog, MapPins as KitMapPins, BalanceList as KitBalanceList, Checkbox, ChoiceGroup, CodeInput, Divider as KitDivider, Hero as KitHero, Keypad, ListRow, PinDots, Result as KitResult, SectionHeader as KitSectionHeader, Shortcuts as KitShortcuts, SummaryList, Switch, TextField as KitTextField, type ChoiceOption } from "@finx/components";
 import { CardVisual } from "../widgets/CardVisual";
 import { FieldError, FieldLabel, useFieldIds } from "./field";
 import { useLook } from "../look";
@@ -160,6 +160,18 @@ export const Divider = ({ b }: P) => <KitDivider label={b.label || undefined} />
 export const BalanceListBlock = ({ b }: P) => <KitBalanceList rows={b.rows} />;
 export const AccordionBlock = ({ b }: P) => <KitAccordion items={b.items} />;
 
+/** A pop-up: its buttons run their actions, a PIN field (when the block has one) saves into its bind path. */
+export function DialogBlock({ b, set, press, lang }: P) {
+  return (
+    <KitDialog title={b.title} text={b.text} icon={b.icon} onDismiss={b.dismiss ? () => press(b.dismiss) : undefined} actions={b.buttons.map((x: any, i: number) => ({ id: String(i), label: x.label, variant: x.variant ?? (i === b.buttons.length - 1 ? "primary" : "secondary"), onPress: () => press(x.actions) }))}>
+      {b.bind ? <CodeInput label={otpLabel(lang, b.length ?? 6)} length={b.length ?? 6} value={String(b.value ?? "")} onChange={(t) => set(b.bind, cleanOtp(t))} error={b.error} /> : null}
+    </KitDialog>
+  );
+}
+
+/** The places of a list as pins; pressing one saves it and runs the block's actions. */
+export const MapBlock = ({ b, press }: P) => <KitMapPins label={b.label} pins={b.pins} selected={b.selected} height={b.height} onSelect={(id) => press(b.pins.find((p: any) => p.id === id)?.actions ?? [])} />;
+
 /** Rows that each do something when tapped, with an icon, a title, a chevron and an optional line of help below. */
 export function Menu({ b, press }: P) {
   return (
@@ -172,5 +184,5 @@ export function Menu({ b, press }: P) {
 /** One component for every kind of block a journey can contain. Typed against the schema, so a new block kind must be added here. */
 export const registry: Record<BlockType, (p: P) => React.ReactElement | null> = {
   accountPicker: AccountPicker, beneficiaryPicker: BeneficiaryPicker, amountInput: AmountInput, select: SelectChips, textInput: TextField,
-  alert: Alert, toggle: Toggle, cardForm: CardForm, reviewSummary: ReviewSummary, consent: Consent, otp: Otp, result: Result, text: TextBlock, button: Button, stepper: () => null, hero: Hero, sectionHeader: SectionHeader, shortcuts: Shortcuts, menu: Menu, divider: Divider, accordion: AccordionBlock, balanceList: BalanceListBlock,
+  alert: Alert, toggle: Toggle, cardForm: CardForm, reviewSummary: ReviewSummary, consent: Consent, otp: Otp, result: Result, text: TextBlock, button: Button, stepper: () => null, hero: Hero, sectionHeader: SectionHeader, shortcuts: Shortcuts, menu: Menu, divider: Divider, accordion: AccordionBlock, dialog: DialogBlock, map: MapBlock, balanceList: BalanceListBlock,
 };

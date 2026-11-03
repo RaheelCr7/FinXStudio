@@ -71,13 +71,14 @@ const LANGUAGES = {
   fr_FR: { id: "fr_FR", name: "French", sub: "Français" }, ar_AE: { id: "ar_AE", name: "Arabic", sub: "عربي" },
 };
 
-type Place = { id: string; kind: "branch" | "atm"; name: string; address: string; km: number; open: boolean; hours: string; phone: string; services: string[] };
+type Place = {
+  lat: number; lng: number; id: string; kind: "branch" | "atm"; name: string; address: string; km: number; open: boolean; hours: string; phone: string; services: string[] };
 const PLACES: Place[] = [
-  { id: "loc_abdoun", kind: "branch", name: "Abdoun Branch – Signature", address: "Amman – Abdoun – Cairo Street – Next to Citi Bank", km: 2.2, open: true, hours: "Monday – Friday, 8 am to 10 pm", phone: "+962 6 5200 000", services: ["Make an Appointment", "Safe Deposit"] },
-  { id: "loc_abdoun_atm", kind: "atm", name: "Abdoun Branch ATM – Signature", address: "Amman – Abdoun – Cairo Street – Next to Citi Bank", km: 2.2, open: true, hours: "24 hours", phone: "+962 6 5200 000", services: ["ATM – Drive Up"] },
-  { id: "loc_alalbayt_atm", kind: "atm", name: "Al al-Bayt University Branch ATM – Blind", address: "Al al-Bayt University – Mafraq", km: 61, open: true, hours: "24 hours", phone: "+962 6 5200 000", services: ["ATM – Drive Up"] },
-  { id: "loc_sweifieh", kind: "branch", name: "Sweifieh Branch", address: "Amman – Sweifieh – Wasfi Al Tal Street", km: 6.8, open: false, hours: "Sunday – Thursday, 8:30 am to 3:30 pm", phone: "+962 6 5200 000", services: ["Make an Appointment"] },
-  { id: "loc_irbid", kind: "branch", name: "Irbid Main Branch", address: "Irbid – University Street", km: 74, open: true, hours: "Sunday – Thursday, 8:30 am to 3:30 pm", phone: "+962 2 7200 000", services: ["Make an Appointment", "Safe Deposit"] },
+  { id: "loc_abdoun", lat: 31.9515, lng: 35.8803, kind: "branch", name: "Abdoun Branch – Signature", address: "Amman – Abdoun – Cairo Street – Next to Citi Bank", km: 2.2, open: true, hours: "Monday – Friday, 8 am to 10 pm", phone: "+962 6 5200 000", services: ["Make an Appointment", "Safe Deposit"] },
+  { id: "loc_abdoun_atm", lat: 31.9517, lng: 35.8806, kind: "atm", name: "Abdoun Branch ATM – Signature", address: "Amman – Abdoun – Cairo Street – Next to Citi Bank", km: 2.2, open: true, hours: "24 hours", phone: "+962 6 5200 000", services: ["ATM – Drive Up"] },
+  { id: "loc_alalbayt_atm", lat: 32.334, lng: 36.214, kind: "atm", name: "Al al-Bayt University Branch ATM – Blind", address: "Al al-Bayt University – Mafraq", km: 61, open: true, hours: "24 hours", phone: "+962 6 5200 000", services: ["ATM – Drive Up"] },
+  { id: "loc_sweifieh", lat: 31.9563, lng: 35.859, kind: "branch", name: "Sweifieh Branch", address: "Amman – Sweifieh – Wasfi Al Tal Street", km: 6.8, open: false, hours: "Sunday – Thursday, 8:30 am to 3:30 pm", phone: "+962 6 5200 000", services: ["Make an Appointment"] },
+  { id: "loc_irbid", lat: 32.5556, lng: 35.8479, kind: "branch", name: "Irbid Main Branch", address: "Irbid – University Street", km: 74, open: true, hours: "Sunday – Thursday, 8:30 am to 3:30 pm", phone: "+962 2 7200 000", services: ["Make an Appointment", "Safe Deposit"] },
 ];
 
 /** The password rules, checked on the server as the platform does. */
@@ -150,7 +151,7 @@ export class CabSandbox {
         };
       }
 
-      case "cab.device.options": return { mode: this.device.default, default: this.device.default, pinSet: !!this.device.pin, biometricAvailable: this.device.biometric };
+      case "cab.device.options": return { mode: this.device.default, default: this.device.default, pinSet: !!this.device.pin, biometricAvailable: this.device.biometric, /** the remembered person, for the greeting; none when the profile is not active */ firstName: p && p.status === "ACTIVE" ? p.firstName : "" };
       case "cab.device.setDefault": {
         const mode = String(input.mode ?? "");
         if (!["password", "pin", "biometric"].includes(mode)) throw new BankError("INVALID_MODE", "Choose password, pin or biometric");
@@ -161,7 +162,11 @@ export class CabSandbox {
         this.device.default = mode as "password" | "pin" | "biometric";
         return { ok: true, default: mode };
       }
-      case "cab.device.verifyPin": return { ok: !!this.device.pin && String(input.pin) === this.device.pin };
+      case "cab.device.verifyPin": {
+        const ok = !!this.device.pin && String(input.pin) === this.device.pin;
+        // a right PIN signs the remembered person in, with the same answer as a right password
+        return ok && p && p.status === "ACTIVE" ? { ok: true, firstName: p.firstName, lastLogin: p.lastLogin, defaultSignIn: this.device.default, accountCount: p.accounts.length, netWorth: p.netWorth.assets - p.netWorth.debt, currency: CAB_CURRENCY } : { ok: false };
+      }
 
       case "cab.preview.get": return { enabled: this.preview, accounts: this.previewAccounts(), asOf: new Date().toISOString() };
       case "cab.preview.accounts": return this.previewAccounts();
@@ -231,7 +236,7 @@ export class CabSandbox {
         const miles = Number(input.rangeMiles) > 0 ? Number(input.rangeMiles) : 5;
         const q = norm(input.query);
         const items = PLACES.filter((x) => (kind === "all" || x.kind === kind) && x.km <= miles * 1.609 && (!q || `${x.name} ${x.address}`.toLowerCase().includes(q)));
-        return Object.fromEntries(items.map((x) => [x.id, { id: x.id, name: x.name, sub: `${x.address} · ${x.km} km` }]));
+        return Object.fromEntries(items.map((x) => [x.id, { id: x.id, name: x.name, lat: x.lat, lng: x.lng, address: x.address, sub: `${x.address} · ${x.km} km` }]));
       }
       case "cab.locations.details": {
         const x = PLACES.find((l) => l.id === input.id);

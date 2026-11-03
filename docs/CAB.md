@@ -40,7 +40,7 @@ A bank can carry a **look** in `packages/ui-kit/src/brands.json`: a coloured app
 
 New journey blocks that the design needed, available to every project and listed in the AI catalog and the Studio builder: `divider` (a line with a word such as OR), `menu` rows built from a saved list (`source` and `item`), `balanceList` (read-only account rows) and `accordion` (questions that open to show answers), `hero` (logo banner), `sectionHeader` (heading with a link), `shortcuts` (icon button row), `menu` (tappable rows). `select` gained a `rows` variant, `otp` a number pad and masked digits (`keypad`, `masked`), and `toggle` a link on the same row.
 
-Known gaps against the Figma: the bank's own typeface is not available, so the web uses open fonts picked for it (Inter for Latin, Noto Sans Arabic for Arabic, both loaded through `@fontsource`; the phone apps still use the system font), the map on Locate us, a date picker, the picture-code image, the OR divider between menu rows, and the language confirmation as a pop-up (it is a screen).
+Known gaps against the Figma: the bank's own typeface is not available, so the web uses open fonts picked for it (Inter for Latin, Noto Sans Arabic for Arabic, both loaded through `@fontsource`; the phone apps still use the system font), a date picker, the picture-code image, the OR divider between menu rows, and a real street map (Locate us has a schematic one).
 
 ## Checked
 
@@ -62,19 +62,24 @@ Every CAB sheet was compared screen by screen with its journey (content and flow
 **Kept on purpose (not in the frames, from the platform):** locked, expired, inactive and not-found screens, the three-mistake locks, the wrong-code alerts, business banking and already-enrolled paths.
 
 **Open: needs a decision or a new block**
-- *Not modelled:* the "Welcome Nour" remembered-user greeting, the Menu and My Accounts screens that lead to Default sign in and Account preview.
-- *Login-time modals:* the PIN modal ("Enter Sign in PIN") and the biometric "Unlock" modal on the login screen, shown when that way is the default. Needs a modal/sheet concept.
-- *Found screen:* username dropdown, avatar, and "Sign in as" returning to the login with the username filled in. (The OR divider is done.)
+- *Not modelled:* the Menu and My Accounts screens that lead to Default sign in and Account preview.
+- *Found screen:* username dropdown, avatar, and "Sign in as" returning to the login with the username filled in. (The OR divider is done.) Still open: needs a dropdown block.
 - *Account preview:* the setup screen still has a Save button and a warning the design does not show. (The preview list itself is done: heading with an "As of" time, rows with a type tag, balance and note, new `balanceList` block.)
-- *Locate us:* the map itself (no map block yet; the design opens on a map with the search bar). The rest is done: search bar with "List view" and "Filters", a separate Advance Filter screen, a result list of tappable rows (a menu built from the found locations), details with the country and a single "Call us" button. The filter's empty "Services" section is not modelled.
-- *Support:* the Call us dialer as a pop-up, and the FAQ, Terms and Privacy text taken from the design. (FAQs are now one accordion screen of six topics.)
+- *Locate us:* the results screen now has a **map** (new `map` block: pins on a grid by latitude and longitude, no streets or tiles, because real tiles need a map provider and its key; pressing a pin opens that place). The design opens on the map with the search bar; here the map sits above the result rows. The rest is done: search bar with "List view" and "Filters", a separate Advance Filter screen, a result list of tappable rows (a menu built from the found locations), details with the country and a single "Call us" button. The filter's empty "Services" section is not modelled.
+- *Support:* the Call us dialer is now a pop-up (done). Still open: the FAQ, Terms and Privacy text taken from the design. (FAQs are now one accordion screen of six topics.)
 - *Details:* the design's Account Activity answers and Privacy text are fuller than the samples here.
 
 ## Not covered, and what needs the bank
 
 - **Frames not exported or not built:** the Web (Retail), v1.1 and SME pages, Onboarding, Activate Dormant Account, Open Additional Account, Customer Complaints and Precious Metals. The other pages in the file are the next journeys.
-- **Locate us has no map.** The design shows a map; journeys have no map block yet, so the journey offers filters, a list and details.
+- **Locate us has a schematic map**, not a street map: a bank that has a map provider replaces the `MapPins` component and no journey changes.
 - **Date entry** is typed as DD / MM / YYYY; there is no date picker block yet.
 - **Second factor after sign-in** (secure access code or security questions) and the legal-entity choice after sign-in appear in the platform but not in these frames, so they are not modelled.
 - **Arabic copy and the support texts** (FAQ answers, terms, privacy) are drafts. The bank's content team should replace them with approved text.
 - Studio's **web app** serves published journeys only; these are drafts, so the CAB project does not appear there until someone publishes.
+
+## Pop-ups, the greeting and the map (4 November 2026)
+
+A new **`dialog`** block (component `Dialog`) is a pop-up over the screen, shown while its `visibleWhen` is true; its buttons run actions, and it can hold a PIN field (`bind`, `length`). It is used for: the **PIN prompt** ("Enter Sign in PIN") and the **fingerprint "Unlock"** prompt on the login screen when that is the customer's default way in (each has "Use password"; a right PIN signs the remembered person in, a wrong one says so; the sandbox's PIN check now returns who signed in, and nothing for a locked or inactive profile), the **Call us dialer** on Support, and the **language confirmation** (sign in and change language) instead of a separate screen. The welcome and login screens greet the remembered person ("Welcome Nour"; nobody is greeted before activation). The Locate us results screen has the **`map`** block.
+
+Honest limits: the fingerprint prompt is a sandbox stand-in (its Unlock button signs in with the stored PIN; a real device asks the operating system); the map has no streets. The CAB drafts in a project made before this change keep the old screens; use the catalog's *Add to project* (or the Studio copy of the journey) to get the new ones.

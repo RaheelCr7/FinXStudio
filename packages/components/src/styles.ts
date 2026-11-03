@@ -156,6 +156,16 @@ const raw = `
 
 .fxc-divider { display: flex; align-items: center; gap: 12px; color: var(--c-text-muted); font-size: 13px; font-weight: 500; }
 .fxc-divider::before, .fxc-divider::after { content: ""; flex: 1; border-block-start: 1px solid var(--c-border); }
+.fxc-dialog-scrim { position: fixed; inset: 0; z-index: 30; display: flex; align-items: center; justify-content: center; padding: 20px; background: rgba(0,0,0,.45); }
+.fxc-dialog { inline-size: 100%; max-inline-size: 340px; display: grid; gap: 12px; justify-items: center; text-align: center; padding: 24px 20px 20px; border-radius: var(--r-xl); background: var(--c-surface); color: var(--c-text); box-shadow: 0 12px 40px rgba(0,0,0,.3); outline: none; }
+.fxc-dialog-icon { display: grid; place-items: center; inline-size: 52px; block-size: 52px; border-radius: 50%; background: color-mix(in srgb, var(--c-accent) 14%, transparent); color: var(--c-accent); }
+.fxc-dialog-title { margin: 0; font-size: 18px; font-weight: 700; }
+.fxc-dialog-text { margin: 0; font-size: 14px; line-height: 20px; color: var(--c-text-muted); }
+.fxc-dialog-actions { inline-size: 100%; display: grid; grid-auto-flow: column; grid-auto-columns: 1fr; gap: 10px; margin-block-start: 4px; }
+.fxc-map { position: relative; inline-size: 100%; border-radius: var(--r-lg); border: 1px solid var(--c-border); overflow: hidden; background-color: color-mix(in srgb, var(--c-accent) 5%, var(--c-surface)); background-image: linear-gradient(var(--c-border) 1px, transparent 1px), linear-gradient(90deg, var(--c-border) 1px, transparent 1px); background-size: 44px 44px; }
+.fxc-pin { position: absolute; transform: translate(-50%, -100%); padding: 0; border: 0; background: transparent; color: var(--c-negative); cursor: pointer; line-height: 0; }
+.fxc-pin.is-selected { color: var(--c-accent); }
+.fxc-pin:focus-visible { outline: 3px solid color-mix(in srgb, var(--c-accent) 55%, transparent); outline-offset: 2px; border-radius: 6px; }
 .fxc-divider-line { margin: 0; border: 0; border-block-start: 1px solid var(--c-border); }
 .fxc-accordion { border: 1px solid var(--c-border); border-radius: var(--r-lg); background: var(--c-surface); overflow: hidden; }
 .fxc-acc-item + .fxc-acc-item { border-block-start: 1px solid var(--c-border); }

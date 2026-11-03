@@ -18,6 +18,8 @@ export type PlayerLayout = {
   view: View;
   /** Blocks drawn in the scrolling body (everything except buttons). */
   body: Array<Record<string, any>>;
+  /** Pop-ups, drawn above everything else on the screen. */
+  dialogs: Array<Record<string, any>>;
   /** Buttons, drawn in the footer. */
   buttons: Array<Record<string, any>>;
   terminal: boolean;
@@ -69,7 +71,7 @@ export class JourneyController {
     const terminal = view.kind === "terminal";
     return {
       view, terminal, hero: view.blocks[0]?.type === "hero", canGoBack: !terminal && this.runner.history.length > 0, rtl: this.runner.isRtl, lang: this.runner.lang,
-      body: view.blocks.filter((b) => b.type !== "button"), buttons: view.blocks.filter((b) => b.type === "button"),
+      body: view.blocks.filter((b) => b.type !== "button" && b.type !== "dialog"), dialogs: view.blocks.filter((b) => b.type === "dialog"), buttons: view.blocks.filter((b) => b.type === "button"),
       steps: view.stepCount > 0 && view.stepIndex >= 0 ? { count: view.stepCount, done: Array.from({ length: view.stepCount }, (_, i) => i <= view.stepIndex), label: view.stepLabel } : null,
     };
   }

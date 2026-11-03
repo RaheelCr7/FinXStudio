@@ -1,8 +1,10 @@
 import React, { useRef, useState } from "react";
 import { Image, Platform, Pressable, Text, TextInput, View } from "react-native";
 import { mix } from "@finx/ui-kit";
-import type { AccordionProps, BalanceListProps, DividerProps, AlertProps, AmountFieldProps, CheckboxProps, ChoiceGroupProps, CodeInputProps, HeroProps, ResultProps, SectionHeaderProps, ShortcutsProps, SummaryListProps, SwitchProps } from "../props";
+import type { DialogProps, MapPinsProps, AccordionProps, BalanceListProps, DividerProps, AlertProps, AmountFieldProps, CheckboxProps, ChoiceGroupProps, CodeInputProps, HeroProps, ResultProps, SectionHeaderProps, ShortcutsProps, SummaryListProps, SwitchProps } from "../props";
 import { Icon } from "./Icon";
+import { Button } from "./components";
+import { pinPositions } from "../web/MapPins";
 import { useKit } from "./kit";
 
 const tabular = { fontVariant: ["tabular-nums" as const] };
@@ -283,6 +285,43 @@ export function BalanceList({ rows }: BalanceListProps) {
           </View>
         </View>
       ))}
+    </View>
+  );
+}
+
+/** A pop-up over the screen. It covers the screen's own area, so it works inside a phone frame and on a real device alike. */
+export function Dialog({ title, text, icon, children, actions }: DialogProps) {
+  const { c, r } = useKit();
+  return (
+    <View accessibilityViewIsModal style={{ position: "absolute", top: 0, right: 0, bottom: 0, left: 0, zIndex: 30, alignItems: "center", justifyContent: "center", padding: 20, backgroundColor: "rgba(0,0,0,0.45)" }}>
+      <View accessibilityRole="alert" accessibilityLabel={title} style={{ width: "100%", maxWidth: 340, alignItems: "center", gap: 12, paddingTop: 24, paddingHorizontal: 20, paddingBottom: 20, borderRadius: r.xl, backgroundColor: c.surface }}>
+        {icon ? <View style={{ width: 52, height: 52, borderRadius: 26, alignItems: "center", justifyContent: "center", backgroundColor: mix(c.surface, c.accent, 0.14) }}><Icon name={icon} size={28} color={c.accent} /></View> : null}
+        <Text accessibilityRole="header" style={{ color: c.text, fontSize: 18, fontWeight: "700", textAlign: "center" }}>{title}</Text>
+        {text ? <Text style={{ color: c.textMuted, fontSize: 14, lineHeight: 20, textAlign: "center" }}>{text}</Text> : null}
+        {children}
+        <View style={{ width: "100%", flexDirection: "row", gap: 10, marginTop: 4 }}>{actions.map((a) => <View key={a.id} style={{ flex: 1 }}><Button label={a.label} variant={a.variant ?? "primary"} onPress={a.onPress} /></View>)}</View>
+      </View>
+    </View>
+  );
+}
+
+/** A schematic map: pins on a plain grid, placed by latitude and longitude. No streets or tiles: a map provider can replace it later. */
+export function MapPins({ pins, selected, label, onSelect, height = 220 }: MapPinsProps) {
+  const { c, r } = useKit();
+  const pos = pinPositions(pins);
+  return (
+    <View accessibilityLabel={label} style={{ height, borderRadius: r.lg, borderWidth: 1, borderColor: c.border, backgroundColor: mix(c.surface, c.accent, 0.05), overflow: "hidden" }}>
+      {[25, 50, 75].map((p) => <View key={`h${p}`} style={{ position: "absolute", left: 0, right: 0, top: `${p}%`, height: 1, backgroundColor: c.border }} />)}
+      {[25, 50, 75].map((p) => <View key={`v${p}`} style={{ position: "absolute", top: 0, bottom: 0, left: `${p}%`, width: 1, backgroundColor: c.border }} />)}
+      {pins.map((p) => {
+        const on = selected === p.id, size = on ? 34 : 26;
+        return (
+          <Pressable key={p.id} accessibilityRole="button" accessibilityLabel={p.label} accessibilityState={{ selected: on }} onPress={() => onSelect?.(p.id)}
+            style={{ position: "absolute", left: `${pos[p.id]!.x}%`, top: `${pos[p.id]!.y}%`, marginLeft: -size / 2, marginTop: -size }}>
+            <Icon name="mapPin" size={size} color={on ? c.accent : c.negative} />
+          </Pressable>
+        );
+      })}
     </View>
   );
 }

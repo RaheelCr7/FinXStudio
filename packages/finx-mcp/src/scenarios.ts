@@ -54,6 +54,8 @@ const eachAction = (j: any, fn: (list: any[], i: number, where: string) => void)
     for (const b of s.blocks) {
       if (b.type === "button") walk(b.actions, `${s.id} "${typeof b.label === "string" ? b.label : b.label?.en}"`);
       if (b.type === "otp") walk(b.onResend, `${s.id} resend`);
+      if (b.type === "dialog") { for (const x of b.buttons) walk(x.actions, `${s.id} dialog "${typeof x.label === "string" ? x.label : x.label?.en}"`); walk(b.dismiss, `${s.id} dialog dismiss`); }
+      if (b.type === "map") walk(b.onSelect, `${s.id} map`);
       for (const it of b.items ?? []) walk(it.actions, `${s.id} row ${it.id}`);
       if (b.item) walk(b.item.actions, `${s.id} list row`);
     }

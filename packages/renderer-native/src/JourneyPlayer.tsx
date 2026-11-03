@@ -41,7 +41,12 @@ export function JourneyPlayer({ journey, adapter, lang, onExit, onClose, initial
     return C ? <View key={`${v.screenId}-${i}`} testID={mark(b)}><C b={b} set={(p, val) => controller.set(p, val)} press={(a) => controller.press(a)} busy={v.busy} lang={layout.lang} strings={v.strings} /></View> : null;
   };
   const kit = useKit();
-  const wrap = (n: React.ReactElement) => <KitProvider kit={{ ...kit, rtl: layout.rtl }}>{n}</KitProvider>;
+  // pop-ups sit above the whole screen, so every layout draws them here
+  const dialogs = layout.dialogs.map((b, i) => {
+    const C = registry[b.type as BlockType];
+    return C ? <View key={`${v.screenId}-d${i}`} testID={mark(b)} style={{ position: "absolute", top: 0, right: 0, bottom: 0, left: 0, zIndex: 30 }}><C b={b} set={(p, val) => controller.set(p, val)} press={(a) => controller.press(a)} busy={v.busy} lang={layout.lang} strings={v.strings} /></View> : null;
+  });
+  const wrap = (n: React.ReactElement) => <KitProvider kit={{ ...kit, rtl: layout.rtl }}>{dialogs.length ? <View style={{ flex: 1 }}>{n}{dialogs}</View> : n}</KitProvider>;
   const drawButtons = () => buttons.map((b, i) => <View key={`${v.screenId}-b${i}`} testID={mark(b)}><Btn b={b} set={() => {}} press={(a: any[]) => controller.press(a)} busy={v.busy} lang={layout.lang} strings={v.strings} /></View>);
   const toast = v.toast ? <View accessibilityRole="alert" style={{ marginHorizontal: 20, marginTop: 8, padding: 12, borderRadius: 8, backgroundColor: c.negativeBg }}><Text style={{ color: c.negative, fontSize: 14, fontWeight: "500" }}>{v.toast}</Text></View> : null;
 

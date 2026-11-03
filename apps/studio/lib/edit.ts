@@ -4,10 +4,10 @@ export const BLOCK_LABELS: Record<string, string> = {
   text: "Text", alert: "Alert", button: "Button", result: "Result", reviewSummary: "Review summary", consent: "Consent",
   otp: "OTP", stepper: "Progress steps", amountInput: "Amount", select: "Select", textInput: "Text input", accountPicker: "Account picker", beneficiaryPicker: "Beneficiary picker",
   toggle: "Switch", cardForm: "Card form",
-  hero: "Bank banner", sectionHeader: "Section heading", shortcuts: "Shortcuts", menu: "Menu", divider: "Divider", accordion: "Accordion", balanceList: "Balance list",
+  hero: "Bank banner", sectionHeader: "Section heading", shortcuts: "Shortcuts", menu: "Menu", divider: "Divider", accordion: "Accordion", balanceList: "Balance list", dialog: "Pop-up", map: "Map",
 };
 export const BLOCK_GROUPS: Array<{ name: string; types: string[] }> = [
-  { name: "Content", types: ["text", "alert", "result", "hero", "sectionHeader", "divider", "accordion"] },
+  { name: "Content", types: ["text", "alert", "result", "hero", "sectionHeader", "divider", "accordion", "dialog", "map"] },
   { name: "Inputs", types: ["textInput", "amountInput", "select", "toggle", "consent"] },
   { name: "Banking", types: ["accountPicker", "beneficiaryPicker", "cardForm", "reviewSummary", "balanceList"] },
   { name: "Verification", types: ["otp"] },
@@ -26,6 +26,8 @@ export function newBlock(type: string, j: Journey): Block {
     case "sectionHeader": return { type: "sectionHeader", title: "Heading" };
     case "balanceList": return { type: "balanceList", source: "ctx.accounts" };
     case "divider": return { type: "divider", label: "OR" };
+    case "dialog": return { type: "dialog", visibleWhen: "ui.open", title: "A question", text: "Say what is being asked.", buttons: [{ label: "No", variant: "secondary", actions: [{ type: "setData", path: "ui.open", value: false }] }, { label: "Yes", actions: [{ type: "setData", path: "ui.open", value: false }] }] };
+    case "map": return { type: "map", source: "ctx.places", label: "Places on the map" };
     case "accordion": return { type: "accordion", items: [{ id: "one", title: "A question", text: "Its answer" }] };
     case "shortcuts": return { type: "shortcuts", items: [{ id: "one", label: "Shortcut", icon: "help", actions: [{ type: "navigate", to: firstTerminal(j) ?? j.entryScreen }] }] };
     case "menu": return { type: "menu", items: [{ id: "one", label: "Menu item", actions: [{ type: "navigate", to: firstTerminal(j) ?? j.entryScreen }] }] };
@@ -121,7 +123,7 @@ export function deleteScreen(j: Journey, id: string): Journey | null {
   };
   for (const s of out.screens) {
     s.onEnter?.forEach(fix);
-    s.blocks.forEach((b: any) => { if (b.type === "button") b.actions.forEach(fix); if (b.type === "otp") b.onResend?.forEach(fix); });
+    s.blocks.forEach((b: any) => { if (b.type === "button") b.actions.forEach(fix); if (b.type === "otp") b.onResend?.forEach(fix); if (b.type === "dialog") { b.buttons.forEach((x: any) => x.actions.forEach(fix)); b.dismiss?.forEach(fix); } if (b.type === "map") b.onSelect?.forEach(fix); });
     if (s.navigation) {
       s.navigation.rules = s.navigation.rules?.map((r) => (r.to === id ? { ...r, to: bypass ?? out.entryScreen } : r));
       if (s.navigation.default === id) s.navigation.default = bypass;

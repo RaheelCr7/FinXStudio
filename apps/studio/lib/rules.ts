@@ -113,7 +113,7 @@ export function knownPaths(j: Journey): string[] {
   };
   for (const s of j.screens) {
     collect(s.onEnter);
-    for (const b of s.blocks as any[]) { if (b.type === "button") collect(b.actions); if (b.type === "otp") collect(b.onResend); }
+    for (const b of s.blocks as any[]) { if (b.type === "button") collect(b.actions); if (b.type === "otp") collect(b.onResend); if (b.type === "dialog") { b.buttons.forEach((x: any) => collect(x.actions)); collect(b.dismiss); } if (b.type === "map") collect(b.onSelect); }
   }
   return [...out].sort();
 }

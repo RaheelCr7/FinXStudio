@@ -16,6 +16,8 @@ import { SectionHeader } from "./web/SectionHeader";
 import { Shortcuts } from "./web/Shortcuts";
 import { Hero } from "./web/Hero";
 import { Divider } from "./web/Divider";
+import { Dialog } from "./web/Dialog";
+import { MapPins } from "./web/MapPins";
 import { Accordion } from "./web/Accordion";
 import { BalanceList } from "./web/BalanceList";
 
@@ -284,6 +286,34 @@ catalog.push(
     props: [{ name: "label", type: "string", description: "A word in the middle of the line. Without it, a plain line." }],
     states: [{ name: "With a word", props: { label: "OR" } }, { name: "Plain line", props: {} }],
     a11y: ["With a label it is a separator named by that word; without one it is a plain horizontal rule."],
+  },
+  {
+    name: "Dialog", group: "Feedback", Component: Dialog, purpose: "A pop-up over the screen that asks one thing: a PIN prompt, a fingerprint unlock, a call, a confirmation.",
+    props: [
+      { name: "title", type: "string", description: "The heading." }, { name: "text", type: "string", description: "A line under the heading." },
+      { name: "icon", type: "string", description: "An icon name (lock, phone, shield) shown above the heading." },
+      { name: "children", type: "node", description: "What it asks for, such as a code field." },
+      { name: "actions", type: "{ id, label, variant, onPress }[]", description: "Its buttons, in order." },
+      { name: "onDismiss", type: "() => void", description: "Called on Escape." },
+    ],
+    states: [
+      { name: "Confirmation", props: { title: "Change language", text: "Do you want to change the language to Arabic?", actions: [{ id: "no", label: "No", variant: "secondary" }, { id: "yes", label: "Yes" }] } },
+      { name: "Call", props: { title: "Call us", text: "+962 6 580 0800", icon: "phone", actions: [{ id: "cancel", label: "Cancel", variant: "secondary" }, { id: "call", label: "Call" }] } },
+    ],
+    a11y: ["A dialog named by its heading; focus moves into it when it opens and Escape closes it.", "What is behind it is covered, and the native twin marks the view as modal."],
+  },
+  {
+    name: "MapPins", group: "Navigation", Component: MapPins, purpose: "A schematic map: places as pins on a plain grid by latitude and longitude. No streets or tiles; a map provider can replace it.",
+    props: [
+      { name: "pins", type: "{ id, label, lat, lng }[]", description: "The places." }, { name: "selected", type: "string", description: "The id of the selected pin." },
+      { name: "label", type: "string", description: "Names the map for a screen reader." }, { name: "onSelect", type: "(id) => void", description: "Called when a pin is pressed." },
+      { name: "height", type: "number", default: "220", description: "The map's height." },
+    ],
+    states: [
+      { name: "Three branches", props: { label: "Branches near you", pins: [{ id: "a", label: "Abdali Branch", lat: 31.96, lng: 35.91 }, { id: "b", label: "Sweifieh Branch", lat: 31.95, lng: 35.86 }, { id: "c", label: "Airport Road ATM", lat: 31.9, lng: 35.99 }], selected: "b" } },
+      { name: "One place", props: { label: "Head office", pins: [{ id: "h", label: "Head office", lat: 31.95, lng: 35.93 }] } },
+    ],
+    a11y: ["Every pin is a button named by the place, and the selected one says so.", "It is a group named by its label; the places are also listed as text by the journey, so the map is never the only way to reach them."],
   },
   {
     name: "Accordion", group: "Lists", Component: Accordion, purpose: "Questions that open to show their answers, one at a time (FAQs).",
