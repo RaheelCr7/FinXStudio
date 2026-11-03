@@ -1,4 +1,5 @@
 import React, { createContext, useContext, useMemo } from "react";
+import { KitProvider, kitFor } from "@finx/components/native";
 import { brands, completeColors, type Brand, type BrandId, type BrandLook, type Colors, type Preset, type } from "@finx/ui-kit";
 
 export type FdsTheme = {
@@ -26,6 +27,7 @@ const make = (mode: "light" | "dark", brand: BrandId | Brand): FdsTheme => {
 const Ctx = createContext<FdsTheme>(make("light", "meezan"));
 export const ThemeProvider = ({ mode, brand = "meezan", children }: { mode: "light" | "dark"; brand?: BrandId | Brand; children: React.ReactNode }) => {
   const v = useMemo(() => make(mode, brand), [mode, brand]);
-  return <Ctx.Provider value={v}>{children}</Ctx.Provider>;
+  const kit = useMemo(() => kitFor(typeof brand === "string" ? brands[brand] ?? brands.meezan! : brand, mode), [mode, brand]);
+  return <Ctx.Provider value={v}><KitProvider kit={kit}>{children}</KitProvider></Ctx.Provider>;
 };
 export const useTheme = () => useContext(Ctx);

@@ -345,6 +345,9 @@ importers:
 
   packages/renderer-native:
     dependencies:
+      '@finx/components':
+        specifier: workspace:*
+        version: link:../components
       '@finx/journey-schema':
         specifier: workspace:*
         version: link:../journey-schema
@@ -366,6 +369,9 @@ importers:
 
   packages/renderer-web:
     dependencies:
+      '@finx/components':
+        specifier: workspace:*
+        version: link:../components
       '@finx/journey-schema':
         specifier: workspace:*
         version: link:../journey-schema

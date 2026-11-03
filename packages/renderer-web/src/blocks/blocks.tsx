@@ -1,9 +1,10 @@
 "use client";
 import { useLayoutEffect, useRef, useState } from "react";
 import {
-  accountRows, amountText, applyKey, beneficiaryRows, KEYPAD_ROWS, caretAfterFormat, cardFields, cardNetwork, cleanOtp, keyboardKind, otpCells, otpLabel, parseAmountText,
+  accountRows, amountText, applyKey, beneficiaryRows, caretAfterFormat, cardFields, cardNetwork, cleanOtp, keyboardKind, otpCells, otpLabel, parseAmountText,
   quickAmounts, selectChoices, symbolOf, ui, type BlockProps, type BlockType, type PickerRow,
 } from "@finx/renderer-core";
+import { Button as KitButton, Keypad, ListRow, PinDots, TextField as KitTextField } from "@finx/components";
 import { CardVisual } from "../widgets/CardVisual";
 import { Icon, IconTile } from "../widgets/Icon";
 import { FieldError, FieldLabel, describedBy, useFieldIds } from "./field";
@@ -116,23 +117,11 @@ export function SelectChips({ b, set }: P) {
 }
 
 export function TextField({ b, set, lang }: P) {
-  const ids = useFieldIds();
-  const [shown, setShown] = useState(false);
   const kind = keyboardKind(b.keyboard);
-  const secure = !!b.secure;
   const outlined = useLook().look?.fields === "outlined";
-  const type = secure && !shown ? "password" : kind === "email" ? "email" : kind === "phone" ? "tel" : "text";
   return (
-    <div className={`fx-field ${outlined ? "is-outlined" : ""}`}>
-      {outlined ? <label className="fx-sr" htmlFor={ids.input}>{b.label}</label> : <FieldLabel htmlFor={ids.input}>{b.label}</FieldLabel>}
-      <div className="fx-input-wrap">
-        <input id={ids.input} className={`fx-input ${b.error ? "has-error" : ""} ${secure ? "has-action" : ""}`} type={type} inputMode={kind === "number" ? "numeric" : undefined}
-          autoComplete={secure ? "off" : kind === "email" ? "email" : kind === "phone" ? "tel" : "off"} autoCapitalize="none" autoCorrect="off" spellCheck={false}
-          placeholder={outlined ? b.placeholder ?? b.label : b.placeholder} value={String(b.value ?? "")} aria-invalid={b.error ? true : undefined} aria-describedby={describedBy(ids, !!b.error)} onChange={(e) => set(b.bind, e.target.value)} />
-        {secure ? <button type="button" className="fx-input-action" aria-pressed={shown} aria-label={shown ? ui(lang, "hide") : ui(lang, "show")} onClick={() => setShown(!shown)}>{outlined ? <Icon name={shown ? "eyeOff" : "eye"} size={20} /> : shown ? ui(lang, "hide") : ui(lang, "show")}</button> : null}
-      </div>
-      <FieldError id={ids.error} text={b.error} />
-    </div>
+    <KitTextField label={b.label} value={String(b.value ?? "")} onChange={(v) => set(b.bind, v)} look={outlined ? "outlined" : "standard"} placeholder={b.placeholder}
+      error={b.error} secure={!!b.secure} keyboard={kind === "number" ? "number" : kind === "phone" ? "phone" : kind === "email" ? "email" : "default"} strings={{ show: ui(lang, "show"), hide: ui(lang, "hide") }} />
   );
 }
 
@@ -237,14 +226,10 @@ function KeypadCode({ b, set, lang }: P) {
   return (
     <div className="fx-field fx-keypad-code">
       {b.hint ? <p id={ids.help} className="fx-help fx-center">{b.hint}</p> : null}
-      <div className="fx-dashes" dir="ltr" role="img" aria-label={`${otpLabel(lang, b.length)}. ${v.length}/${b.length}`}>
-        {otpCells(v, b.length, !!b.masked).map((cell, i) => <span key={i} className={`fx-dash ${cell.active ? "is-active" : ""}`}><span>{cell.char}</span></span>)}
-      </div>
+      <PinDots length={b.length} filled={v.length} masked={!!b.masked} digits={v} label={otpLabel(lang, b.length)} />
       <FieldError id={ids.error} text={b.error} />
-      <div className="fx-keypad" dir="ltr">
-        {KEYPAD_ROWS.flat().map((k, i) => k === "" ? <span key={i} /> : (
-          <button key={i} type="button" className="fx-key" aria-label={k === "back" ? ui(lang, "back") : k} onClick={() => set(b.bind, applyKey(v, k, b.length))}>{k === "back" ? <Icon name="backspace" size={20} /> : k}</button>
-        ))}
+      <div className="fx-keypad-wrap">
+        <Keypad labels={{ back: ui(lang, "back") }} onKey={(k) => set(b.bind, applyKey(v, k, b.length))} />
       </div>
     </div>
   );
@@ -289,11 +274,7 @@ export function TextBlock({ b }: P) {
 }
 
 export function Button({ b, press, busy, strings, submit }: P & { submit?: boolean }) {
-  const primary = (b.variant ?? "primary") === "primary";
-  const label = busy ? strings.wait : b.label;
-  return (
-    <button type={submit ? "submit" : "button"} className={`fx-btn ${primary ? "fx-btn-primary" : "fx-btn-ghost"}`} disabled={busy} aria-busy={busy || undefined} onClick={submit ? undefined : () => press(b.actions)}>{label}</button>
-  );
+  return <KitButton label={busy ? strings.wait : b.label} variant={(b.variant ?? "primary") === "primary" ? "primary" : "secondary"} busy={busy} type={submit ? "submit" : "button"} onPress={() => press(b.actions)} />;
 }
 
 /** The bank's banner: its logo (or its name) on the accent colour. The player draws the sheet that overlaps its bottom edge. */
@@ -330,16 +311,7 @@ export function Shortcuts({ b, press }: P) {
 export function Menu({ b, press }: P) {
   return (
     <ul className="fx-menu">
-      {b.items.map((it: any) => (
-        <li key={it.id}>
-          <button type="button" className="fx-menu-row" onClick={() => press(it.actions)}>
-            {it.icon ? <Icon name={it.icon} size={22} className="fx-menu-icon" /> : null}
-            <span className="fx-menu-title">{it.label}</span>
-            <Icon name="chevronRight" size={18} className="fx-flip" />
-          </button>
-          {it.text ? <p className="fx-menu-help">{it.text}</p> : null}
-        </li>
-      ))}
+      {b.items.map((it: any) => <li key={it.id}><ListRow label={it.label} text={it.text} icon={it.icon} onPress={() => press(it.actions)} /></li>)}
     </ul>
   );
 }

@@ -1,7 +1,7 @@
 import { promises as fs } from "node:fs";
 import path from "node:path";
 import { spawnSync } from "node:child_process";
-import { PRESETS, accentProblem, defaultComponentTokens, resolveBrand, type Brand, type BrandDef, type ComponentTokenOverrides } from "@finx/ui-kit";
+import { PRESETS, accentProblem, resolveBrand, resolveComponentTokens, type Brand, type BrandDef, type ComponentTokenOverrides } from "@finx/ui-kit";
 import { StoreError } from "./store";
 import { brandsFile } from "./brand-ids";
 
@@ -101,7 +101,8 @@ export async function updateProjectComponents(id: string, input: unknown): Promi
   if (!def) throw new StoreError(404, `No project called ${id}`);
   if (!input || typeof input !== "object") throw new StoreError(400, "Send the component sizes as an object");
   const overrides: Record<string, Record<string, number>> = {};
-  for (const [group, defaults] of Object.entries(defaultComponentTokens)) {
+  const defaultsFor = resolveComponentTokens(undefined, resolveBrand(id, def).radius);
+  for (const [group, defaults] of Object.entries(defaultsFor)) {
     const given = (input as Record<string, unknown>)[group];
     if (given === undefined) continue;
     if (!given || typeof given !== "object") throw new StoreError(400, `${group} must be an object`);

@@ -1,8 +1,10 @@
+import { componentCssVars, defaultComponentTokens } from "@finx/ui-kit";
+
 /**
  * The stylesheet of the shared components. It reads colours from --c-* and radii from --r-* (the bank's theme) and sizes
  * from --fxc-* (the component tokens). Logical properties only, so right-to-left mirrors without extra rules.
  */
-export const componentsCss = `
+const raw = `
 .fxc-sr { position: absolute; inline-size: 1px; block-size: 1px; margin: -1px; padding: 0; overflow: hidden; clip-path: inset(50%); white-space: nowrap; border: 0; }
 [dir="rtl"] .fxc-flip { transform: scaleX(-1); }
 .fxc-btn:focus-visible, .fxc-bar-btn:focus-visible, .fxc-row:focus-visible, .fxc-key:focus-visible, .fxc-input-action:focus-visible { outline: 3px solid color-mix(in srgb, var(--c-accent) 55%, transparent); outline-offset: 2px; }
@@ -26,14 +28,15 @@ export const componentsCss = `
 .fxc-input.has-action { padding-inline-end: 72px; }
 .fxc-input:disabled { opacity: .6; }
 .fxc-input-action { position: absolute; inset-block: 0; inset-inline-end: 8px; padding: 0 8px; border: 0; background: none; color: var(--c-accent); font: inherit; font-size: 13px; font-weight: 700; cursor: pointer; border-radius: 6px; display: grid; place-items: center; }
-.fxc-field.is-outlined .fxc-input { font-size: 14px; }
-.fxc-field.is-outlined .fxc-input-action { color: var(--c-text-muted); }
+.fxc-field.is-outlined .fxc-input { font-size: 14px; border-color: var(--c-border); }
+.fxc-field.is-outlined .fxc-input-action { color: var(--c-text-muted); inset-inline-end: 4px; }
 
 .fxc-bar { display: flex; align-items: center; gap: 8px; min-block-size: var(--fxc-bar-height); padding-inline: 12px; background: var(--c-bg); color: var(--c-text); }
 .fxc-bar.is-bar { background: var(--bar-bg, var(--c-accent)); color: #fff; }
 .fxc-bar .fxc-bar-title { flex: 1; min-inline-size: 0; margin: 0; font-size: 16px; line-height: 22px; font-weight: 600; letter-spacing: 0; text-align: center; }
 .fxc-bar-btn, .fxc-bar-gap { inline-size: 40px; block-size: 40px; flex: none; }
 .fxc-bar-btn { border: 0; border-radius: 50%; background: transparent; color: inherit; cursor: pointer; display: grid; place-items: center; }
+.fxc-bar-title:focus-visible { outline: 2px solid currentColor; outline-offset: 4px; border-radius: 4px; }
 .fxc-bar-btn:hover { background: color-mix(in srgb, currentColor 14%, transparent); }
 
 .fxc-row-wrap { list-style: none; }
@@ -51,4 +54,9 @@ export const componentsCss = `
 .fxc-dash { inline-size: 36px; display: flex; flex-direction: column; align-items: center; border-block-end: 2px solid var(--c-border-strong); }
 .fxc-dash.is-active { border-block-end-color: var(--c-accent); }
 .fxc-dash > span { block-size: 28px; font-size: 22px; font-weight: 600; font-variant-numeric: tabular-nums; }
+@media (prefers-reduced-motion: reduce) { .fxc-btn { transition: none; } }
 `;
+
+const defaults = componentCssVars(defaultComponentTokens);
+/** Every size variable falls back to its default, so the components still look right on a page that has not set the tokens. */
+export const componentsCss = raw.replace(/var\((--fxc-[a-z-]+)\)/g, (_, name: string) => `var(${name}, ${defaults[name]})`);

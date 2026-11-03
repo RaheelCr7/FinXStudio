@@ -22,6 +22,12 @@ describe("theme stylesheet", () => {
     const used = new Set([...readFileSync(path.resolve(__dirname, "styles/renderer.css"), "utf8").matchAll(/var\((--(?:c|r)-[a-z0-9-]+)/g)].map((m) => m[1]!));
     for (const v of used) expect(a, v).toContain(`${v}:`);
   });
+  it("carries each bank's component sizes, following its corner radii unless it overrides them", () => {
+    expect(themeCss(brands.cab!)).toContain("--fxc-button-height:48px;");
+    expect(themeCss(brands.cab!)).toContain("--fxc-button-radius:8px;");
+    expect(themeCss(brands.bankworkx!)).toContain("--fxc-field-radius:14px;");
+    expect(themeCss(brands.meezan!)).toContain("--fxc-field-height:52px;");
+  });
   it("refuses an unsafe brand id", () => {
     expect(() => themeCss({ ...brands.meezan!, id: 'x"]{}*{' })).toThrow(/Unsafe/);
   });

@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import { Pressable, Text, TextInput, View } from "react-native";
+import { Platform, Pressable, Text, TextInput, View } from "react-native";
 import type { AppBarProps, ButtonProps, KeypadProps, ListRowProps, PinDotsProps, TextFieldProps } from "../props";
 import { KEYPAD_ROWS } from "../web/Keypad";
 import { Icon } from "./Icon";
@@ -26,19 +26,22 @@ const KEYBOARD = { default: "default", number: "number-pad", phone: "phone-pad",
 export function TextField({ label, value, onChange, look = "standard", placeholder, helper, error, secure, keyboard = "default", disabled, strings = { show: "Show", hide: "Hide" } }: TextFieldProps) {
   const { c, t } = useKit();
   const [shown, setShown] = useState(false);
+  const [focus, setFocus] = useState(false);
   const outlined = look === "outlined";
   return (
     <View>
       {outlined ? null : <Text style={{ color: c.textMuted, fontSize: 13, fontWeight: "500", marginBottom: 8 }}>{label}</Text>}
       <View>
-        <TextInput accessibilityLabel={label} value={value} editable={!disabled} secureTextEntry={!!secure && !shown} keyboardType={KEYBOARD[keyboard]} placeholder={outlined ? label : placeholder}
-          placeholderTextColor={c.textFaint} onChangeText={onChange} accessibilityState={{ disabled: !!disabled }}
-          style={{ height: t.field.height, paddingHorizontal: 14, paddingEnd: secure ? 72 : 14, borderRadius: t.field.radius, borderWidth: t.field.border, borderColor: error ? c.negative : c.borderStrong,
-            backgroundColor: c.surface, color: c.text, fontSize: outlined ? 14 : 16, opacity: disabled ? 0.6 : 1 }} />
+        <TextInput accessibilityLabel={label} value={value} editable={!disabled} secureTextEntry={!!secure && !shown} keyboardType={KEYBOARD[keyboard]} placeholder={outlined ? placeholder ?? label : placeholder}
+          placeholderTextColor={c.textFaint} textContentType={secure ? "none" : undefined} autoComplete={secure ? "off" : undefined} importantForAutofill={secure ? "no" : undefined}
+          autoCapitalize="none" autoCorrect={false} onFocus={() => setFocus(true)} onBlur={() => setFocus(false)} onChangeText={onChange} accessibilityState={{ disabled: !!disabled }}
+          style={[{ height: t.field.height, paddingStart: 14, paddingEnd: secure ? (outlined ? 48 : 64) : 14, borderRadius: t.field.radius, borderWidth: focus || error ? Math.max(2, t.field.border) : t.field.border,
+            borderColor: error ? c.negative : focus ? c.accent : outlined ? c.border : c.borderStrong, backgroundColor: c.surface, color: c.text, fontSize: 16, opacity: disabled ? 0.6 : 1 }, tabular,
+            Platform.OS === "web" ? ({ outlineStyle: "none" } as any) : null]} />
         {secure ? (
-          <Pressable accessibilityRole="button" accessibilityLabel={shown ? strings.hide : strings.show} accessibilityState={{ selected: shown }} onPress={() => setShown(!shown)}
-            style={{ position: "absolute", top: 0, bottom: 0, end: 8, paddingHorizontal: 8, justifyContent: "center" }}>
-            {outlined ? <Icon name="eye" size={18} color={c.textMuted} /> : <Text style={{ color: c.accent, fontSize: 13, fontWeight: "700" }}>{shown ? strings.hide : strings.show}</Text>}
+          <Pressable accessibilityRole="button" accessibilityLabel={shown ? strings.hide : strings.show} accessibilityState={{ selected: shown }} onPress={() => setShown(!shown)} hitSlop={8}
+            style={{ position: "absolute", end: 14, top: 0, bottom: 0, justifyContent: "center" }}>
+            {outlined ? <Icon name={shown ? "eyeOff" : "eye"} size={20} color={c.textMuted} /> : <Text style={{ color: c.accent, fontSize: 13, fontWeight: "700" }}>{shown ? strings.hide : strings.show}</Text>}
           </Pressable>
         ) : null}
       </View>

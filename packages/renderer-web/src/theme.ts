@@ -1,4 +1,4 @@
-import { completeColors, type Brand } from "@finx/ui-kit";
+import { completeColors, componentCssVars, resolveComponentTokens, type Brand } from "@finx/ui-kit";
 
 const kebab = (k: string) => k.replace(/[A-Z]/g, (m) => "-" + m.toLowerCase());
 const SAFE_ID = /^[a-z0-9][a-z0-9-]{0,62}$/;
@@ -7,6 +7,7 @@ function declarations(brand: Brand, mode: "light" | "dark"): string {
   const colors = completeColors((mode === "dark" ? brand.dark : brand.light).colors) as Record<string, string>;
   const lines = Object.entries(colors).map(([k, v]) => `--c-${kebab(k)}:${v};`);
   for (const [k, v] of Object.entries(brand.radius)) lines.push(`--r-${k}:${v}px;`);
+  for (const [k, v] of Object.entries(componentCssVars(resolveComponentTokens(brand.components, brand.radius)))) lines.push(`${k}:${v};`);
   lines.push(`color-scheme:${mode};`);
   return lines.join("");
 }

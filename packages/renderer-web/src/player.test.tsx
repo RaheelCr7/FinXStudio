@@ -110,7 +110,7 @@ describe("a bank with its own look", () => {
     await userEvent.click(await screen.findByRole("button", { name: "Existing user login" }));
     const user = await screen.findByLabelText("Username");
     expect(user.getAttribute("placeholder")).toBe("Username");
-    expect(user.closest(".fx-field")!.classList.contains("is-outlined")).toBe(true);
+    expect(user.closest(".fxc-field")!.classList.contains("is-outlined")).toBe(true);
     await userEvent.click(screen.getByRole("button", { name: "Show" }));
     expect((screen.getByLabelText("Password") as HTMLInputElement).type).toBe("text");
     expect(await axeCheck(container)).toHaveNoViolations();
