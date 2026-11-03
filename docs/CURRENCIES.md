@@ -18,7 +18,13 @@ Step 1 of multi-currency (plan section 15). One place knows how each currency is
 - **Lint:** `amount_no_currency`, `amount_currency_invalid` (neither a code nor a path), `currency_mismatch` (differs from the dataModel entry), `mixed_currency` (more than one fixed currency in a journey; fine for a conversion). `{{ x | money:JOD }}` and a path argument are accepted by the formatter lint.
 - Limit: a currency a bank added itself is not known to the engine yet, so it is treated as 2 decimals inside a journey.
 
+## In the sandbox bank (step 4)
+- **A customer with accounts in four currencies:** Hina Qureshi (`hina`, Meezan app, test code 482100): PKR current, USD savings, AED and KWD (3 decimals) accounts.
+- **A limit per currency:** `limits` still applies to the currency of the first account; other currencies have their own entry (`limitsByCurrency`). `bank.limits.get` takes an optional `currency`, and answers `LIMIT_NOT_SET` for a currency with no limit. Transfers, bill payments and top-ups check the balance and limit of the account's own currency, and use that currency's rounding. A transfer's answer includes the `currency`.
+- **Totals per currency:** `bank.accounts.totals` adds balances up per currency, never across currencies, as a list a journey can show.
+- Account pickers already show each balance in its own currency.
+
 ## Not built yet (next steps, in order)
-1. Sandbox accounts in several currencies, pickers and statements grouped by currency.
+1. A journey that uses all of this: choose an account in any currency, the amount field takes that currency (`{{ account.currency }}`), the limit comes from `bank.limits.get` with that currency. The existing Send to beneficiary journey is PKR throughout and stays as it is.
 2. FX: rate table with spread and fee, quotes that expire, a convert journey and cross-currency transfer with the rate on the review screen.
 3. Pass a project's own currencies to the engine.
