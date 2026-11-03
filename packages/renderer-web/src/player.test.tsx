@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import * as matchers from "vitest-axe/matchers";
-import { localTransfer, payBill } from "@finx/journey-schema";
+import { cabJourneys, localTransfer, payBill } from "@finx/journey-schema";
 import { MockBank } from "@finx/mock-bank-api";
 import { JourneyPlayer } from "./JourneyPlayer";
 import { axeCheck } from "./test-utils";
@@ -86,5 +86,40 @@ describe("JourneyPlayer", () => {
     const radio = await screen.findByRole("radio", { name: /Current/ });
     await waitFor(() => expect((radio as HTMLInputElement).checked).toBe(true));
     expect(within(screen.getByRole("group", { name: "Account" })).getAllByRole("radio").length).toBe(2);
+  });
+});
+
+describe("a bank with its own look", () => {
+  const look = { chrome: "bar" as const, fields: "outlined" as const, pageBg: "#F1F5F8", bar: "#00853E", logo: "data:image/png;base64,iVBORw0KGgo=" };
+  const cab = (slug: string) => cabJourneys.find((j) => j.slug === slug)!;
+  const cabPlayer = (slug: string) => { const bank = new MockBank("nour"); return render(<JourneyPlayer journey={cab(slug)} adapter={(id, input) => bank.call(id, input)} look={look} brandName="CAB" />); };
+
+  it("opens on the bank's banner with its logo, shortcuts last, and no visible app bar", async () => {
+    const { container } = cabPlayer("sign-in");
+    expect(await screen.findByRole("img", { name: "CAB" })).toBeTruthy();
+    expect(container.querySelector(".fx-player")!.getAttribute("data-chrome")).toBe("bar");
+    expect(container.querySelector(".fx-player")!.hasAttribute("data-hero")).toBe(true);
+    expect(screen.getByRole("button", { name: "Existing user login" })).toBeTruthy();
+    expect(container.querySelector(".fx-player-body")!.lastElementChild!.querySelector(".fx-shortcuts")).toBeTruthy();
+    expect((container.querySelector(".fx-player") as HTMLElement).style.getPropertyValue("--bar-bg")).toBe("#00853E");
+    expect(await axeCheck(container)).toHaveNoViolations();
+  });
+
+  it("draws outlined fields with the label as the placeholder, and an eye on the password", async () => {
+    const { container } = cabPlayer("sign-in");
+    await userEvent.click(await screen.findByRole("button", { name: "Existing user login" }));
+    const user = await screen.findByLabelText("Username");
+    expect(user.getAttribute("placeholder")).toBe("Username");
+    expect(user.closest(".fx-field")!.classList.contains("is-outlined")).toBe(true);
+    await userEvent.click(screen.getByRole("button", { name: "Show" }));
+    expect((screen.getByLabelText("Password") as HTMLInputElement).type).toBe("text");
+    expect(await axeCheck(container)).toHaveNoViolations();
+  });
+
+  it("keeps the standard look when the bank has none", async () => {
+    const bank = new MockBank("nour");
+    const { container } = render(<JourneyPlayer journey={cab("sign-in")} adapter={(id, input) => bank.call(id, input)} />);
+    await screen.findByRole("button", { name: "Existing user login" });
+    expect(container.querySelector(".fx-player")!.hasAttribute("data-chrome")).toBe(false);
   });
 });

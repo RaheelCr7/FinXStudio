@@ -4,13 +4,14 @@ export const BLOCK_LABELS: Record<string, string> = {
   text: "Text", alert: "Alert", button: "Button", result: "Result", reviewSummary: "Review summary", consent: "Consent",
   otp: "OTP", stepper: "Progress steps", amountInput: "Amount", select: "Select", textInput: "Text input", accountPicker: "Account picker", beneficiaryPicker: "Beneficiary picker",
   toggle: "Switch", cardForm: "Card form",
+  hero: "Bank banner", sectionHeader: "Section heading", shortcuts: "Shortcuts", menu: "Menu",
 };
 export const BLOCK_GROUPS: Array<{ name: string; types: string[] }> = [
-  { name: "Content", types: ["text", "alert", "result"] },
+  { name: "Content", types: ["text", "alert", "result", "hero", "sectionHeader"] },
   { name: "Inputs", types: ["textInput", "amountInput", "select", "toggle", "consent"] },
   { name: "Banking", types: ["accountPicker", "beneficiaryPicker", "cardForm", "reviewSummary"] },
   { name: "Verification", types: ["otp"] },
-  { name: "Actions", types: ["button"] },
+  { name: "Actions", types: ["button", "shortcuts", "menu"] },
 ];
 
 export function newBlock(type: string, j: Journey): Block {
@@ -21,6 +22,10 @@ export function newBlock(type: string, j: Journey): Block {
     case "amountInput": return { type: "amountInput", bind: "amount", currency: j.apps?.includes("bankworkx") ? "USD" : "PKR", label: "Amount", validation: { min: 1 } };
     case "select": return { type: "select", bind: "choice", label: "Choose one", options: ["Option 1", "Option 2"] };
     case "textInput": return { type: "textInput", bind: "reference", label: "Reference number", placeholder: "Enter a value", keyboard: "default" };
+    case "hero": return { type: "hero" };
+    case "sectionHeader": return { type: "sectionHeader", title: "Heading" };
+    case "shortcuts": return { type: "shortcuts", items: [{ id: "one", label: "Shortcut", icon: "help", actions: [{ type: "navigate", to: firstTerminal(j) ?? j.entryScreen }] }] };
+    case "menu": return { type: "menu", items: [{ id: "one", label: "Menu item", actions: [{ type: "navigate", to: firstTerminal(j) ?? j.entryScreen }] }] };
     case "toggle": return { type: "toggle", bind: "option", label: "Turn this on" };
     case "cardForm": return { type: "cardForm", bind: "card" };
     case "consent": return { type: "consent", bind: "consent", termsVersion: "v1", text: "I agree to the terms", validation: { mustBeTrue: true } };

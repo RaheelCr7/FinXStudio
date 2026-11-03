@@ -1,4 +1,4 @@
-import { lintJourney, type Journey, type LintIssue } from "@finx/journey-schema";
+import { blockActions, lintJourney, type Journey, type LintIssue } from "@finx/journey-schema";
 import { checkExpression, pathsOf } from "./expr";
 import { FORMATTERS } from "./template";
 
@@ -31,7 +31,7 @@ export function lintExpressions(j: Journey): LintIssue[] {
   };
   for (const s of j.screens) {
     collect(s.onEnter);
-    for (const b of s.blocks as any[]) { if (b.type === "button") collect(b.actions); if (b.type === "otp") collect(b.onResend); }
+    for (const b of s.blocks as any[]) collect(blockActions(b));
   }
   const roots = new Set<string>(["ctx"]);
   for (const p of [...dataPaths, ...saved]) roots.add(p.split(".")[0]!);

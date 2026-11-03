@@ -2,6 +2,18 @@ import type { Journey } from "./schema";
 
 export type LintIssue = { code: string; message: string; screen?: string };
 
+/** Every action a block can run: a button's, a code's resend, and those of menu rows, shortcut icons and a heading's link. */
+export const blockActions = (b: any): any[] => {
+  switch (b?.type) {
+    case "button": return b.actions ?? [];
+    case "otp": return b.onResend ?? [];
+    case "menu": case "shortcuts": return (b.items ?? []).flatMap((i: any) => i.actions ?? []);
+    case "sectionHeader": return b.action?.actions ?? [];
+    case "toggle": return b.link?.actions ?? [];
+    default: return [];
+  }
+};
+
 const collectNav = (j: Journey, id: string): string[] => {
   const s = j.screens.find((x) => x.id === id);
   if (!s) return [];
@@ -16,10 +28,7 @@ const collectNav = (j: Journey, id: string): string[] => {
     }
   };
   s.onEnter?.forEach(walk);
-  s.blocks.forEach((b: any) => {
-    if (b.type === "button") b.actions.forEach(walk);
-    if (b.type === "otp") b.onResend?.forEach(walk);
-  });
+  s.blocks.forEach((b: any) => blockActions(b).forEach(walk));
   return out;
 };
 
@@ -50,7 +59,7 @@ export function lintJourney(j: Journey): LintIssue[] {
   const integ = new Set(j.integrations.map((i) => i.id));
   for (const s of j.screens) {
     const acts: any[] = [...(s.onEnter ?? [])];
-    s.blocks.forEach((b: any) => { if (b.type === "button") acts.push(...b.actions); });
+    s.blocks.forEach((b: any) => acts.push(...blockActions(b)));
     for (const a of acts) if (a.type === "callApi" && !integ.has(a.integration)) issues.push({ code: "unknown_integration", message: `Integration ${a.integration} not declared`, screen: s.id });
   }
 

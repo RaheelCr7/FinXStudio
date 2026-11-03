@@ -29,7 +29,7 @@ export function JourneyScreen() {
   return (
     <main className="wb-journey">
       <div className="wb-journey-card">
-        <JourneyPlayer journey={live.journey} adapter={app.adapter} lang={s.lang} initial={initial} onClose={leave} onExit={leave} />
+        <JourneyPlayer journey={live.journey} adapter={app.adapter} lang={s.lang} initial={initial} onClose={leave} onExit={leave} look={project.look} brandName={project.name} />
       </div>
     </main>
   );

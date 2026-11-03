@@ -7,3 +7,4 @@ export { Segmented } from "./widgets/Segmented";
 export { Pill, ProgressBar, type PillTone } from "./widgets/Pill";
 export { LineChart } from "./widgets/LineChart";
 export { Donut } from "./widgets/Donut";
+export { LookContext, useLook, type LookInfo } from "./look";

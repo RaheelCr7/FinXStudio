@@ -169,3 +169,62 @@ button.fx-chip.is-on { background: var(--c-accent2); border-color: var(--c-accen
 .fx-donut-track { stroke: var(--c-surface-muted); }
 .fx-donut-center { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; pointer-events: none; font-variant-numeric: tabular-nums; }
 .fx-donut-center small { font-size: 11px; color: var(--c-text-muted); margin-block-start: 2px; }
+
+/* ===== A bank with its own screens (brand look "bar"): app bar, banner, outlined fields, rows, number pad ============== */
+.fx-player[data-chrome="bar"] { --page: var(--page-bg, var(--c-surface-muted)); background: var(--c-surface); }
+.fx-player[data-chrome="bar"] .fx-player-head { padding: 0; background: var(--c-accent); color: var(--c-accent-on); }
+.fx-player[data-chrome="bar"] .fx-player-bar { padding: 14px 12px; min-block-size: 58px; }
+.fx-player[data-chrome="bar"] .fx-player-title { text-align: center; }
+.fx-player[data-chrome="bar"] .fx-player-title h1 { font-size: 16px; font-weight: 600; color: inherit; }
+.fx-player[data-chrome="bar"] .fx-player-title h1:focus-visible { outline-color: var(--c-accent-on); }
+.fx-player[data-chrome="bar"] .fx-icon-btn { background: transparent; border: 0; color: inherit; inline-size: 36px; block-size: 36px; }
+.fx-player[data-chrome="bar"] .fx-icon-btn:hover { background: color-mix(in srgb, var(--c-accent-on) 14%, transparent); }
+.fx-player[data-chrome="bar"] .fx-steps, .fx-player[data-chrome="bar"] .fx-player-step { display: none; }
+.fx-player[data-chrome="bar"] .fx-player-body > .fx-block:first-child > .fx-text-title { text-align: center; font-size: 13px; font-weight: 700; background: var(--page); margin: -20px -20px 0; padding: 12px 20px; }
+.fx-player[data-chrome="bar"] .fx-player-foot { border-block-start: 0; background: var(--c-surface); }
+.fx-player[data-chrome="bar"] .fx-btn { min-block-size: 48px; border-radius: 8px; }
+.fx-player[data-chrome="bar"] .fx-btn-ghost { border-color: var(--c-accent); color: var(--c-accent); }
+.fx-field.is-outlined .fx-input { block-size: 50px; border-radius: 10px; border-color: var(--c-border); }
+.fx-field.is-outlined .fx-input-action { color: var(--c-text-muted); inset-inline-end: 4px; }
+/* the bank's banner screen: no app bar, a banner, and a rounded sheet over its bottom edge */
+.fx-player[data-hero] { background: var(--c-accent); }
+.fx-player[data-hero] .fx-player-head { position: absolute; inline-size: 1px; block-size: 1px; overflow: hidden; clip-path: inset(50%); padding: 0; }
+.fx-player[data-hero] .fx-player-form { flex: 1; background: var(--page); border-start-start-radius: 28px; border-start-end-radius: 28px; margin-block-start: -26px; position: relative; }
+.fx-player[data-hero] .fx-player-body { flex: 1; gap: 18px; }
+.fx-player[data-hero] .fx-btn { inline-size: 100%; }
+.fx-hero { background: var(--c-accent); block-size: 200px; display: flex; align-items: center; justify-content: center; }
+.fx-hero-logo { inline-size: 230px; block-size: 70px; object-fit: contain; }
+.fx-hero-name { color: var(--c-accent-on); font-size: 26px; font-weight: 700; }
+.fx-sectionhead { display: flex; align-items: center; justify-content: space-between; }
+.fx-sectionhead h2 { margin: 0; font-size: 16px; font-weight: 700; }
+.fx-sectionhead-link { display: inline-flex; align-items: center; gap: 4px; border: 0; background: none; color: var(--c-text); font: inherit; font-size: 13px; cursor: pointer; }
+.fx-shortcuts { display: flex; justify-content: space-around; padding: 14px 8px 4px; margin-block-start: auto; background: var(--c-bg); border: 1px solid var(--c-border); border-radius: 24px 24px 0 0; margin-inline: -20px; margin-block-end: -20px; }
+.fx-shortcut { display: flex; flex-direction: column; align-items: center; gap: 8px; min-inline-size: 88px; border: 0; background: none; color: var(--c-text); font: inherit; font-size: 12px; font-weight: 500; cursor: pointer; padding-block-end: 14px; }
+.fx-shortcut-tile { inline-size: 50px; block-size: 50px; border-radius: 14px; display: grid; place-items: center; background: color-mix(in srgb, var(--c-accent) 65%, #000); color: #fff; }
+.fx-menu { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 14px; }
+.fx-menu-row { inline-size: 100%; display: flex; align-items: center; gap: 12px; padding: 0 14px; min-block-size: 54px; border: 1px solid var(--c-border); border-radius: 10px; background: var(--c-surface); color: var(--c-text); font: inherit; cursor: pointer; text-align: start; }
+.fx-menu-row:hover { background: var(--c-surface-muted); }
+.fx-menu-icon { color: var(--c-text-muted); }
+.fx-menu-title { flex: 1; font-size: 14px; font-weight: 600; }
+.fx-menu-help { margin: 6px 4px 0; font-size: 11px; color: var(--c-text-muted); }
+.fx-rows { border: 0; padding: 0; margin: 0; }
+.fx-listrow { position: relative; display: flex; align-items: center; gap: 12px; padding: 14px 0; border-block-end: 1px solid var(--c-border); cursor: pointer; }
+.fx-radio-dot { inline-size: 22px; block-size: 22px; border-radius: 50%; border: 2px solid var(--c-border-strong); box-sizing: border-box; display: grid; place-items: center; }
+.fx-listrow.is-on .fx-radio-dot { border-color: var(--c-accent); }
+.fx-listrow.is-on .fx-radio-dot::after { content: ""; inline-size: 10px; block-size: 10px; border-radius: 50%; background: var(--c-accent); }
+.fx-listrow .fx-radio-input:focus-visible ~ .fx-radio-dot { outline: 3px solid color-mix(in srgb, var(--c-accent) 55%, transparent); outline-offset: 2px; }
+.fx-center { text-align: center; }
+.fx-dashes { display: flex; justify-content: center; gap: 10px; margin-block-start: 28px; }
+.fx-dash { inline-size: 36px; display: flex; flex-direction: column; align-items: center; border-block-end: 2px solid var(--c-border-strong); }
+.fx-dash.is-active { border-block-end-color: var(--c-accent); }
+.fx-dash > span { block-size: 28px; font-size: 22px; font-weight: 600; font-variant-numeric: tabular-nums; }
+.fx-keypad { display: grid; grid-template-columns: repeat(3, 84px); gap: 10px 14px; justify-content: center; margin-block-start: 32px; }
+.fx-key { block-size: 40px; border: 0; border-radius: 20px; background: var(--c-surface-muted); color: var(--c-text); font: inherit; font-size: 18px; font-weight: 600; cursor: pointer; display: grid; place-items: center; }
+.fx-key:hover, .fx-key:active { background: color-mix(in srgb, var(--c-accent) 18%, var(--c-surface)); }
+.fx-toggle-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.fx-link { border: 0; background: none; padding: 0; color: var(--c-accent); font: inherit; font-size: 13px; font-weight: 600; cursor: pointer; }
+.fx-player[data-chrome="bar"] .fx-player-head { background: var(--bar-bg, var(--c-accent)); }
+.fx-player[data-hero] { background: var(--bar-bg, var(--c-accent)); }
+.fx-hero { background: var(--bar-bg, var(--c-accent)); }
+.fx-player[data-chrome="bar"] .fx-btn-primary { background: var(--bar-bg, var(--c-accent)); }
+.fx-player[data-chrome="bar"] .fx-btn-ghost { border-color: var(--bar-bg, var(--c-accent)); color: var(--bar-bg, var(--c-accent)); }

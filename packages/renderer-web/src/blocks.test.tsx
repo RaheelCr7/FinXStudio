@@ -215,3 +215,48 @@ describe("review, consent, one-time code, result, text, button", () => {
     expect([busy.disabled, busy.getAttribute("aria-busy")]).toEqual([true, "true"]);
   });
 });
+
+describe("a bank's own screens", () => {
+  it("draws a menu of rows that each run their actions, with help text below", async () => {
+    const press = vi.fn();
+    const { container } = renderBlock("menu", { items: [{ id: "a", label: "Enroll your account", text: "Create your profile", icon: "user", actions: [{ type: "exit" }] }, { id: "b", label: "Activate", actions: [] }] }, { press });
+    await userEvent.click(screen.getByRole("button", { name: "Enroll your account" }));
+    expect(press).toHaveBeenCalledWith([{ type: "exit" }]);
+    expect(screen.getByText("Create your profile")).toBeTruthy();
+    expect(await axeCheck(container)).toHaveNoViolations();
+  });
+
+  it("draws shortcut buttons and a heading with a link", async () => {
+    const press = vi.fn();
+    const { container } = renderBlock("shortcuts", { items: [{ id: "s", label: "Support", icon: "send", actions: [{ type: "exit" }] }] }, { press });
+    await userEvent.click(screen.getByRole("button", { name: "Support" }));
+    expect(press).toHaveBeenCalledTimes(1);
+    expect(await axeCheck(container)).toHaveNoViolations();
+    const press2 = vi.fn();
+    renderBlock("sectionHeader", { title: "Welcome", action: { label: "English", actions: [{ type: "exit" }] } }, { press: press2 });
+    expect(screen.getByRole("heading", { name: "Welcome" })).toBeTruthy();
+    await userEvent.click(screen.getByRole("button", { name: "English" }));
+    expect(press2).toHaveBeenCalled();
+  });
+
+  it("types a code on the number pad, with delete, and masks a PIN", async () => {
+    const set = vi.fn();
+    const { container } = renderBlock("otp", { bind: "pin", length: 4, keypad: true, masked: true, value: "12", hint: "Enter your PIN" }, { set });
+    await userEvent.click(screen.getByRole("button", { name: "3" }));
+    expect(set).toHaveBeenLastCalledWith("pin", "123");
+    await userEvent.click(screen.getByRole("button", { name: "Back" }));
+    expect(set).toHaveBeenLastCalledWith("pin", "1");
+    expect(screen.getByRole("img").getAttribute("aria-label")).toContain("2/4");
+    expect(container.querySelector(".fx-dash span")!.textContent).toBe("•");
+    expect(await axeCheck(container)).toHaveNoViolations();
+  });
+
+  it("lists options as rows with a radio dot", async () => {
+    const set = vi.fn();
+    const { container } = renderBlock("select", { bind: "l", label: "Language", variant: "rows", items: [{ id: "en", name: "US English", sub: "English" }, { id: "ar", name: "Arabic", sub: "عربي" }], value: "en" }, { set });
+    expect((screen.getByRole("radio", { name: "US English" }) as HTMLInputElement).checked).toBe(true);
+    await userEvent.click(screen.getByRole("radio", { name: "Arabic" }));
+    expect(set).toHaveBeenCalledWith("l", "ar");
+    expect(await axeCheck(container)).toHaveNoViolations();
+  });
+});

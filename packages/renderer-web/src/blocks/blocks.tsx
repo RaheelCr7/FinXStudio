@@ -1,12 +1,13 @@
 "use client";
 import { useLayoutEffect, useRef, useState } from "react";
 import {
-  accountRows, amountText, beneficiaryRows, caretAfterFormat, cardFields, cardNetwork, cleanOtp, keyboardKind, otpCells, otpLabel, parseAmountText,
+  accountRows, amountText, applyKey, beneficiaryRows, KEYPAD_ROWS, caretAfterFormat, cardFields, cardNetwork, cleanOtp, keyboardKind, otpCells, otpLabel, parseAmountText,
   quickAmounts, selectChoices, symbolOf, ui, type BlockProps, type BlockType, type PickerRow,
 } from "@finx/renderer-core";
 import { CardVisual } from "../widgets/CardVisual";
 import { Icon, IconTile } from "../widgets/Icon";
 import { FieldError, FieldLabel, describedBy, useFieldIds } from "./field";
+import { useLook } from "../look";
 
 type P = BlockProps;
 
@@ -84,7 +85,19 @@ export function AmountInput({ b, set, lang }: P) {
 }
 
 export function SelectChips({ b, set }: P) {
-  const { tiles, choices } = selectChoices(b as any);
+  const { tiles, rows, choices } = selectChoices(b as any);
+  if (rows) {
+    return (
+      <RadioGroup legend={b.label} name={b.bind} error={b.error} className="fx-rows">
+        {choices.map((o) => (
+          <Radio key={o.id} name={b.bind} checked={o.selected} onChange={() => set(b.bind, o.id)} label={o.name} className="fx-listrow" invalid={!!b.error}>
+            <span className="fx-row-text"><span className="fx-row-title">{o.name}</span>{o.sub ? <span className="fx-row-sub">{o.sub}</span> : null}</span>
+            <span className="fx-radio-dot" aria-hidden />
+          </Radio>
+        ))}
+      </RadioGroup>
+    );
+  }
   return (
     <RadioGroup legend={b.label} name={b.bind} error={b.error} className={tiles ? "fx-tiles" : "fx-chips"}>
       {choices.map((o) => (
@@ -107,15 +120,16 @@ export function TextField({ b, set, lang }: P) {
   const [shown, setShown] = useState(false);
   const kind = keyboardKind(b.keyboard);
   const secure = !!b.secure;
+  const outlined = useLook().look?.fields === "outlined";
   const type = secure && !shown ? "password" : kind === "email" ? "email" : kind === "phone" ? "tel" : "text";
   return (
-    <div className="fx-field">
-      <FieldLabel htmlFor={ids.input}>{b.label}</FieldLabel>
+    <div className={`fx-field ${outlined ? "is-outlined" : ""}`}>
+      {outlined ? <label className="fx-sr" htmlFor={ids.input}>{b.label}</label> : <FieldLabel htmlFor={ids.input}>{b.label}</FieldLabel>}
       <div className="fx-input-wrap">
         <input id={ids.input} className={`fx-input ${b.error ? "has-error" : ""} ${secure ? "has-action" : ""}`} type={type} inputMode={kind === "number" ? "numeric" : undefined}
           autoComplete={secure ? "off" : kind === "email" ? "email" : kind === "phone" ? "tel" : "off"} autoCapitalize="none" autoCorrect="off" spellCheck={false}
-          placeholder={b.placeholder} value={String(b.value ?? "")} aria-invalid={b.error ? true : undefined} aria-describedby={describedBy(ids, !!b.error)} onChange={(e) => set(b.bind, e.target.value)} />
-        {secure ? <button type="button" className="fx-input-action" aria-pressed={shown} onClick={() => setShown(!shown)}>{shown ? ui(lang, "hide") : ui(lang, "show")}</button> : null}
+          placeholder={outlined ? b.placeholder ?? b.label : b.placeholder} value={String(b.value ?? "")} aria-invalid={b.error ? true : undefined} aria-describedby={describedBy(ids, !!b.error)} onChange={(e) => set(b.bind, e.target.value)} />
+        {secure ? <button type="button" className="fx-input-action" aria-pressed={shown} aria-label={shown ? ui(lang, "hide") : ui(lang, "show")} onClick={() => setShown(!shown)}>{outlined ? <Icon name={shown ? "eyeOff" : "eye"} size={20} /> : shown ? ui(lang, "hide") : ui(lang, "show")}</button> : null}
       </div>
       <FieldError id={ids.error} text={b.error} />
     </div>
@@ -128,14 +142,21 @@ export function Alert({ b }: P) {
   return <div className={`fx-alert fx-alert-${b.tone}`} role={urgent ? "alert" : "status"}>{b.text}</div>;
 }
 
-export function Toggle({ b, set }: P) {
+export function Toggle({ b, set, press }: P) {
   const ids = useFieldIds();
-  return (
+  const toggle = (
     <label className="fx-toggle" htmlFor={ids.input}>
       <span className="fx-row-text"><span className="fx-row-title">{b.label}</span>{b.helper ? <span className="fx-row-sub" id={ids.help}>{b.helper}</span> : null}</span>
       <input id={ids.input} className="fx-switch-input" type="checkbox" role="switch" checked={b.value === true} aria-describedby={b.helper ? ids.help : undefined} onChange={(e) => set(b.bind, e.target.checked)} />
       <span className="fx-switch" aria-hidden />
     </label>
+  );
+  if (!b.link) return toggle;
+  return (
+    <div className="fx-toggle-row">
+      <button type="button" className="fx-link" onClick={() => press(b.link.actions)}>{b.link.label}</button>
+      {toggle}
+    </div>
   );
 }
 
@@ -209,7 +230,29 @@ export function Consent({ b, set }: P) {
   );
 }
 
-export function Otp({ b, set, lang }: P) {
+/** A code typed on the bank's own number pad: dashes that fill in, then three keys across. */
+function KeypadCode({ b, set, lang }: P) {
+  const ids = useFieldIds();
+  const v = String(b.value ?? "");
+  return (
+    <div className="fx-field fx-keypad-code">
+      {b.hint ? <p id={ids.help} className="fx-help fx-center">{b.hint}</p> : null}
+      <div className="fx-dashes" dir="ltr" role="img" aria-label={`${otpLabel(lang, b.length)}. ${v.length}/${b.length}`}>
+        {otpCells(v, b.length, !!b.masked).map((cell, i) => <span key={i} className={`fx-dash ${cell.active ? "is-active" : ""}`}><span>{cell.char}</span></span>)}
+      </div>
+      <FieldError id={ids.error} text={b.error} />
+      <div className="fx-keypad" dir="ltr">
+        {KEYPAD_ROWS.flat().map((k, i) => k === "" ? <span key={i} /> : (
+          <button key={i} type="button" className="fx-key" aria-label={k === "back" ? ui(lang, "back") : k} onClick={() => set(b.bind, applyKey(v, k, b.length))}>{k === "back" ? <Icon name="backspace" size={20} /> : k}</button>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+export const Otp = (p: P) => (p.b.keypad ? <KeypadCode {...p} /> : <CodeCells {...p} />);
+
+function CodeCells({ b, set, lang }: P) {
   const ids = useFieldIds();
   const ref = useRef<HTMLInputElement>(null);
   const v = String(b.value ?? "");
@@ -253,8 +296,56 @@ export function Button({ b, press, busy, strings, submit }: P & { submit?: boole
   );
 }
 
+/** The bank's banner: its logo (or its name) on the accent colour. The player draws the sheet that overlaps its bottom edge. */
+export function Hero(_: P) {
+  const { look, name } = useLook();
+  return <div className="fx-hero">{look?.logo ? <img className="fx-hero-logo" src={look.logo} alt={name ?? ""} /> : <span className="fx-hero-name">{name}</span>}</div>;
+}
+
+/** A heading with a link on the same row ("Welcome" … "English ⌄"). */
+export function SectionHeader({ b, press }: P) {
+  return (
+    <div className="fx-sectionhead">
+      <h2>{b.title}</h2>
+      {b.action ? <button type="button" className="fx-sectionhead-link" onClick={() => press(b.action.actions)}>{b.action.label}<Icon name="chevronDown" size={14} /></button> : null}
+    </div>
+  );
+}
+
+/** Icon buttons in a row, for the shortcuts at the foot of a sign-in screen. */
+export function Shortcuts({ b, press }: P) {
+  return (
+    <div className="fx-shortcuts" role="group">
+      {b.items.map((it: any) => (
+        <button key={it.id} type="button" className="fx-shortcut" onClick={() => press(it.actions)}>
+          <span className="fx-shortcut-tile" aria-hidden>{it.icon ? <Icon name={it.icon} size={22} /> : null}</span>
+          <span>{it.label}</span>
+        </button>
+      ))}
+    </div>
+  );
+}
+
+/** Rows that each do something when tapped, with an icon, a title, a chevron and an optional line of help below. */
+export function Menu({ b, press }: P) {
+  return (
+    <ul className="fx-menu">
+      {b.items.map((it: any) => (
+        <li key={it.id}>
+          <button type="button" className="fx-menu-row" onClick={() => press(it.actions)}>
+            {it.icon ? <Icon name={it.icon} size={22} className="fx-menu-icon" /> : null}
+            <span className="fx-menu-title">{it.label}</span>
+            <Icon name="chevronRight" size={18} className="fx-flip" />
+          </button>
+          {it.text ? <p className="fx-menu-help">{it.text}</p> : null}
+        </li>
+      ))}
+    </ul>
+  );
+}
+
 /** One component for every kind of block a journey can contain. Typed against the schema, so a new block kind must be added here. */
 export const registry: Record<BlockType, (p: P) => React.ReactElement | null> = {
   accountPicker: AccountPicker, beneficiaryPicker: BeneficiaryPicker, amountInput: AmountInput, select: SelectChips, textInput: TextField,
-  alert: Alert, toggle: Toggle, cardForm: CardForm, reviewSummary: ReviewSummary, consent: Consent, otp: Otp, result: Result, text: TextBlock, button: Button, stepper: () => null,
+  alert: Alert, toggle: Toggle, cardForm: CardForm, reviewSummary: ReviewSummary, consent: Consent, otp: Otp, result: Result, text: TextBlock, button: Button, stepper: () => null, hero: Hero, sectionHeader: SectionHeader, shortcuts: Shortcuts, menu: Menu,
 };

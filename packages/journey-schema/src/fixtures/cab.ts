@@ -16,6 +16,16 @@ const text = (t: ReturnType<typeof L>, variant?: "title" | "body" | "caption"): 
 const alert = (tone: "info" | "warning" | "error" | "success", t: ReturnType<typeof L>, visibleWhen?: string): Block => ({ type: "alert", tone, text: t, ...(visibleWhen ? { visibleWhen } : {}) });
 const button = (label: ReturnType<typeof L>, actions: any[], variant: "primary" | "secondary" | "ghost" = "primary", visibleWhen?: string): Block => ({ type: "button", label, variant, actions, ...(visibleWhen ? { visibleWhen } : {}) });
 const input = (bind: string, label: ReturnType<typeof L>, extra: Record<string, unknown> = {}): Block => ({ type: "textInput", bind, label, ...extra } as Block);
+const hero: Block = { type: "hero" };
+const header = (title: ReturnType<typeof L>, toScreen?: string): Block => ({ type: "sectionHeader", title, ...(toScreen ? { action: { label: L("English", "العربية"), actions: [{ type: "navigate", to: toScreen }] } } : {}) });
+const shortcuts = (): Block => ({
+  type: "shortcuts",
+  items: [
+    { id: "enroll", label: L("Enroll/Activate", "التسجيل/التفعيل"), icon: "userPlus", actions: [{ type: "exit" }] },
+    { id: "locate", label: L("Locate us", "مواقعنا"), icon: "mapPin", actions: [{ type: "exit" }] },
+    { id: "support", label: L("Support", "الدعم"), icon: "send", actions: [{ type: "exit" }] },
+  ],
+});
 const done = button(L("Close", "إغلاق"), [{ type: "exit" }]);
 const result = (tone: "success" | "error", title: ReturnType<typeof L>, t?: ReturnType<typeof L>, meta?: ReturnType<typeof L>): Block => ({ type: "result", tone, title, ...(t ? { text: t } : {}), ...(meta ? { meta } : {}) });
 const end = (id: string, title: ReturnType<typeof L>, blocks: Block[]): Screen => ({ id, title, kind: "terminal", blocks });
@@ -37,50 +47,71 @@ const passwordFields = (bind: string, confirm: string): Block[] => [
 export const signIn: Journey = {
   ...base, id: "jrn_cab_sign_in", slug: "sign-in", name: L("Sign in", "تسجيل الدخول"), entryScreen: "welcome",
   dataModel: {
-    "welcome.choice": { type: "string", required: true },
+    "language.code": { type: "string", required: true },
     "login.username": { type: "string", required: true },
     "login.password": { type: "string", required: true },
     "login.remember": { type: "boolean" },
   },
-  integrations: [{ id: "signIn", adapter: "cab.auth.signIn", mode: "sandbox" }],
+  integrations: [{ id: "signIn", adapter: "cab.auth.signIn", mode: "sandbox" }, { id: "languages", adapter: "cab.language.list", mode: "sandbox" }, { id: "setLanguage", adapter: "cab.language.set", mode: "sandbox" }],
   screens: [
     {
       id: "welcome", title: L("Welcome", "مرحباً"),
-      onEnter: [{ type: "setData", path: "welcome.choice", value: "login" }],
       blocks: [
-        text(L("Welcome", "مرحباً"), "title"),
-        {
-          type: "select", bind: "welcome.choice", label: L("How would you like to continue?", "كيف ترغب في المتابعة؟"), variant: "tiles",
-          choices: [
-            { id: "login", label: L("Existing user login", "تسجيل دخول مستخدم حالي"), text: L("Log in to access your Cairo Amman digital account", "سجّل الدخول للوصول إلى حسابك الرقمي في بنك القاهرة عمّان") },
-            { id: "explore", label: L("Explore products", "استكشف المنتجات"), text: L("Choose from our diverse selection of products to meet your financial needs", "اختر من مجموعتنا المتنوعة من المنتجات التي تلبي احتياجاتك المالية") },
-            { id: "resume", label: L("Resume application", "استئناف الطلب"), text: L("Pick up where you left off with your existing application", "تابع من حيث توقفت في طلبك الحالي") },
-          ],
-        },
-        button(L("Continue", "متابعة"), [{ type: "validate" }, { type: "navigate" }]),
+        hero,
+        header(L("Welcome", "مرحباً"), "language"),
+        { type: "menu", items: [
+          { id: "login", label: L("Existing user login", "تسجيل دخول مستخدم حالي"), text: L("Log in to access your Cairo Amman digital account", "سجّل الدخول للوصول إلى حسابك الرقمي في بنك القاهرة عمّان"), icon: "user", actions: [go("login")] },
+          { id: "explore", label: L("Explore products", "استكشف المنتجات"), text: L("Choose from our diverse selection of products to meet your financial needs", "اختر من مجموعتنا المتنوعة من المنتجات التي تلبي احتياجاتك المالية"), icon: "search", actions: [go("fullapp")] },
+          { id: "resume", label: L("Resume application", "استئناف الطلب"), text: L("Pick up where you left off with your existing application", "تابع من حيث توقفت في طلبك الحالي"), icon: "refresh", actions: [go("fullapp")] },
+        ] },
+        shortcuts(),
       ],
-      navigation: route([{ when: "welcome.choice == 'login'", to: "login" }, { when: "welcome.choice == 'explore'", to: "fullapp" }, { when: "welcome.choice == 'resume'", to: "fullapp" }]),
     },
     {
       id: "login", title: L("Sign in", "تسجيل الدخول"),
       onEnter: [{ type: "setData", path: "login.remember", value: true }],
       blocks: [
+        hero,
+        header(L("Welcome", "مرحباً"), "language"),
         input("login.username", L("Username", "اسم المستخدم")),
         input("login.password", L("Password", "كلمة المرور"), { secure: true }),
         alert("error", L("Incorrect username or password. {{auth.result.attemptsLeft}} attempt(s) left before your profile is locked.", "اسم المستخدم أو كلمة المرور غير صحيحة. تبقّت {{auth.result.attemptsLeft}} محاولة قبل قفل ملفك الشخصي."), "auth.result.code == 'INVALID_CREDENTIALS'"),
-        { type: "toggle", bind: "login.remember", label: L("Remember me", "تذكرني") },
-        text(L("Can't sign in? Choose Can't Sign In to reset your password.", "لا يمكنك تسجيل الدخول؟ اختر \"لا يمكنني تسجيل الدخول\" لإعادة تعيين كلمة المرور."), "caption"),
-        button(L("Sign in", "تسجيل الدخول"), [
+        { type: "toggle", bind: "login.remember", label: L("Remember me", "تذكرني"), link: { label: L("Can't Sign In?", "لا يمكنني تسجيل الدخول؟"), actions: [go("cant")] } },
+        button(L("Sign In", "تسجيل الدخول"), [
           { type: "validate" },
           { type: "callApi", integration: "signIn", input: { username: "{{login.username}}", password: "{{login.password}}" }, saveAs: "auth.result", onError: { showToast: L("We couldn't reach the bank. Try again.", "تعذّر الاتصال بالبنك. حاول مرة أخرى.") } },
           { type: "navigate" },
         ]),
+        shortcuts(),
       ],
       navigation: route([
         { when: "auth.result.ok", to: "signed-in" }, { when: "auth.result.code == 'LOCKED'", to: "locked" },
         { when: "auth.result.code == 'PASSWORD_EXPIRED'", to: "expired" }, { when: "auth.result.code == 'INACTIVE'", to: "inactive" },
       ]),
     },
+    {
+      id: "language", title: L("Welcome", "مرحباً"),
+      onEnter: [{ type: "callApi", integration: "languages", saveAs: "ctx.languages" }],
+      blocks: [
+        text(L("Choose your language", "اختر لغتك"), "title"),
+        { type: "select", bind: "language.code", label: L("Language", "اللغة"), source: "ctx.languages", variant: "rows" },
+        button(L("Update Language", "تحديث اللغة"), [{ type: "validate" }, go("language-confirm")]),
+        button(L("Cancel", "إلغاء"), [go("login")], "ghost"),
+      ],
+    },
+    {
+      id: "language-confirm", title: L("Language change", "تغيير اللغة"),
+      blocks: [
+        text(L("Language change", "تغيير اللغة"), "title"),
+        text(L("Are you sure you want to change your language setting?", "هل أنت متأكد من رغبتك في تغيير إعداد اللغة؟")),
+        button(L("Yes", "نعم"), [{ type: "callApi", integration: "setLanguage", input: { code: "{{language.code}}" }, saveAs: "changed", onError: { showToast: L("That language isn't available.", "هذه اللغة غير متاحة.") } }, { type: "showToast", text: L("Language updated to {{changed.name}}", "تم تحديث اللغة إلى {{changed.name}}") }, go("login")]),
+        button(L("No", "لا"), [go("language")], "ghost"),
+      ],
+    },
+    end("cant", L("Can't Sign In?", "لا يمكنني تسجيل الدخول؟"), [
+      result("success", L("Use Can't Sign In", "استخدم \"لا يمكنني تسجيل الدخول\""), L("Open the Can't Sign In journey to find your profile, verify with a one-time code and choose a new password.", "افتح رحلة \"لا يمكنني تسجيل الدخول\" للعثور على ملفك الشخصي والتحقق برمز لمرة واحدة واختيار كلمة مرور جديدة.")),
+      button(L("Back to sign in", "العودة إلى تسجيل الدخول"), [go("login")], "secondary"),
+    ]),
     end("signed-in", L("Signed in", "تم تسجيل الدخول"), [
       result("success", L("Welcome back, {{auth.result.firstName}}", "أهلاً بعودتك، {{auth.result.firstName}}"),
         L("You're signed in. Net worth {{auth.result.netWorth | money}} {{auth.result.currency}} across {{auth.result.accountCount}} accounts.", "تم تسجيل دخولك. صافي الثروة {{auth.result.netWorth | money}} {{auth.result.currency}} عبر {{auth.result.accountCount}} حسابات."),
@@ -111,8 +142,8 @@ export const defaultSignIn: Journey = {
   ...base, id: "jrn_cab_default_sign_in", slug: "default-sign-in", name: L("Default sign in", "طريقة تسجيل الدخول الافتراضية"), entryScreen: "choose",
   dataModel: {
     "signin.mode": { type: "string", required: true },
-    "pin.value": { type: "string", required: true, pattern: "^[0-9]{6}$" },
-    "pin.confirm": { type: "string", required: true, pattern: "^[0-9]{6}$" },
+    "pin.value": { type: "string", required: true },
+    "pin.confirm": { type: "string", required: true },
     "pin.checked": { type: "boolean" },
   },
   integrations: [{ id: "deviceOptions", adapter: "cab.device.options", mode: "sandbox" }, { id: "setDefault", adapter: "cab.device.setDefault", mode: "sandbox" }],
@@ -124,7 +155,7 @@ export const defaultSignIn: Journey = {
         text(L("Please select your default sign in option", "يرجى اختيار طريقة تسجيل الدخول الافتراضية"), "title"),
         text(L("Current default: {{device.default}}", "الطريقة الحالية: {{device.default}}"), "caption"),
         {
-          type: "select", bind: "signin.mode", label: L("Sign in with", "تسجيل الدخول باستخدام"), variant: "tiles",
+          type: "select", bind: "signin.mode", label: L("Sign in with", "تسجيل الدخول باستخدام"), variant: "rows",
           choices: [
             { id: "password", label: L("Username & password", "اسم المستخدم وكلمة المرور"), text: L("Default sign in", "الافتراضي") },
             { id: "biometric", label: L("Biometric", "البصمة"), text: L("Use your fingerprint or face", "استخدم بصمتك أو وجهك") },
@@ -138,16 +169,16 @@ export const defaultSignIn: Journey = {
     {
       id: "pin-new", title: L("Default sign in", "تسجيل الدخول الافتراضي"),
       blocks: [
-        text(L("Step 1 of 2", "الخطوة 1 من 2"), "caption"),
-        input("pin.value", L("Enter new sign in PIN", "أدخل الرقم السري الجديد"), { secure: true, keyboard: "number", pattern: "^[0-9]{6}$", patternMessage: L("Use exactly 6 digits", "استخدم 6 أرقام بالضبط") }),
+        text(L("Enter New Sign in PIN", "أدخل الرقم السري الجديد"), "title"),
+        { type: "otp", bind: "pin.value", length: 6, keypad: true, masked: true, hint: L("Step 1 of 2", "الخطوة 1 من 2") },
         button(L("Continue", "متابعة"), [{ type: "validate" }, go("pin-confirm")]),
       ],
     },
     {
       id: "pin-confirm", title: L("Default sign in", "تسجيل الدخول الافتراضي"),
       blocks: [
-        text(L("Step 2 of 2", "الخطوة 2 من 2"), "caption"),
-        input("pin.confirm", L("Re-enter new sign in PIN", "أعد إدخال الرقم السري الجديد"), { secure: true, keyboard: "number", pattern: "^[0-9]{6}$", patternMessage: L("Use exactly 6 digits", "استخدم 6 أرقام بالضبط") }),
+        text(L("Re-Enter New Sign in PIN", "أعد إدخال الرقم السري الجديد"), "title"),
+        { type: "otp", bind: "pin.confirm", length: 6, keypad: true, masked: true, hint: L("Step 2 of 2", "الخطوة 2 من 2") },
         alert("error", L("The PINs do not match. Enter the same PIN twice.", "الرقمان السريان غير متطابقين. أدخل الرقم نفسه مرتين."), "pin.checked && pin.confirm != pin.value"),
         button(L("Continue", "متابعة"), [{ type: "validate" }, { type: "setData", path: "pin.checked", value: true }, { type: "navigate" }]),
       ],
@@ -232,9 +263,9 @@ export const changeLanguage: Journey = {
       onEnter: [{ type: "callApi", integration: "languages", saveAs: "ctx.languages" }],
       blocks: [
         text(L("Choose your language", "اختر لغتك"), "title"),
-        { type: "select", bind: "language.code", label: L("Language", "اللغة"), source: "ctx.languages", variant: "tiles" },
-        button(L("Update language", "تحديث اللغة"), [{ type: "validate" }, go("confirm")]),
-        button(L("Cancel", "إلغاء"), [{ type: "exit" }], "secondary"),
+        { type: "select", bind: "language.code", label: L("Language", "اللغة"), source: "ctx.languages", variant: "rows" },
+        button(L("Update Language", "تحديث اللغة"), [{ type: "validate" }, go("confirm")]),
+        button(L("Cancel", "إلغاء"), [{ type: "exit" }], "ghost"),
       ],
     },
     {
@@ -253,7 +284,6 @@ export const changeLanguage: Journey = {
 export const enroll: Journey = {
   ...base, id: "jrn_cab_enroll", slug: "enroll", name: L("Enroll your account", "تسجيل حسابك"), entryScreen: "hub",
   dataModel: {
-    "enroll.choice": { type: "string", required: true },
     "enroll.entity": { type: "string", required: true },
     "enroll.kind": { type: "string", required: true },
     "enroll.lastName": { type: "string", required: true },
@@ -268,18 +298,12 @@ export const enroll: Journey = {
   screens: [
     {
       id: "hub", title: L("Enroll / Activate your profile", "التسجيل / تفعيل ملفك الشخصي"),
-      onEnter: [{ type: "setData", path: "enroll.choice", value: "enroll" }],
       blocks: [
-        {
-          type: "select", bind: "enroll.choice", label: L("What would you like to do?", "ماذا تريد أن تفعل؟"), variant: "tiles",
-          choices: [
-            { id: "enroll", label: L("Enroll your account", "سجّل حسابك"), text: L("Select enroll now to create your digital banking profile", "اختر التسجيل الآن لإنشاء ملفك المصرفي الرقمي") },
-            { id: "activate", label: L("Activate your account", "فعّل حسابك"), text: L("Select this option if you have received your username and activation code from the bank", "اختر هذا الخيار إذا استلمت اسم المستخدم ورمز التفعيل من البنك") },
-          ],
-        },
-        button(L("Continue", "متابعة"), [{ type: "validate" }, { type: "navigate" }]),
+        { type: "menu", items: [
+          { id: "enroll", label: L("Enroll your account", "سجّل حسابك"), text: L("Select enroll now to create your digital banking profile", "اختر التسجيل الآن لإنشاء ملفك المصرفي الرقمي"), icon: "user", actions: [go("entity")] },
+          { id: "activate", label: L("Activate your account", "فعّل حسابك"), text: L("Select this option if you have received your username and activation code from the bank", "اختر هذا الخيار إذا استلمت اسم المستخدم ورمز التفعيل من البنك"), icon: "rocket", actions: [go("to-activate")] },
+        ] },
       ],
-      navigation: route([{ when: "enroll.choice == 'enroll'", to: "entity" }, { when: "enroll.choice == 'activate'", to: "to-activate" }]),
     },
     end("to-activate", L("Activate your account", "فعّل حسابك"), [
       result("success", L("Use Activate profile", "استخدم تفعيل الملف الشخصي"), L("Open the Activate profile journey and enter the username and activation code the bank sent you.", "افتح رحلة تفعيل الملف الشخصي وأدخل اسم المستخدم ورمز التفعيل اللذين أرسلهما البنك.")),
@@ -290,8 +314,8 @@ export const enroll: Journey = {
       onEnter: [{ type: "callApi", integration: "legalEntities", saveAs: "legal.list" }],
       blocks: [
         text(L("Select the legal entity", "اختر الكيان القانوني"), "title"),
-        { type: "select", bind: "enroll.entity", label: L("Legal entity", "الكيان القانوني"), source: "legal.list" },
-        { type: "select", bind: "enroll.kind", label: L("Select an enrollment option", "اختر خيار التسجيل"), choices: [{ id: "personal", label: L("Personal Banking", "الخدمات المصرفية الشخصية") }, { id: "business", label: L("Business Banking", "خدمات الأعمال المصرفية") }] },
+        { type: "select", bind: "enroll.entity", label: L("Legal entity", "الكيان القانوني"), source: "legal.list", variant: "rows" },
+        { type: "select", bind: "enroll.kind", label: L("Select an enrollment option", "اختر خيار التسجيل"), variant: "rows", choices: [{ id: "personal", label: L("Personal Banking", "الخدمات المصرفية الشخصية") }, { id: "business", label: L("Business Banking", "خدمات الأعمال المصرفية") }] },
         button(L("Continue", "متابعة"), [{ type: "validate" }, { type: "navigate" }]),
       ],
       navigation: route([{ when: "enroll.kind == 'business'", to: "business" }, { when: "enroll.kind == 'personal'", to: "last-name" }]),
@@ -490,9 +514,13 @@ export const cantSignIn: Journey = {
       blocks: [
         text(L("Welcome back, {{recover.result.firstName}}!", "أهلاً بعودتك، {{recover.result.firstName}}!"), "title"),
         text(L("We found you with username: {{recover.result.username}}", "وجدنا ملفك الشخصي باسم المستخدم: {{recover.result.username}}")),
-        button(L("Reset your password", "إعادة تعيين كلمة المرور"), [go("channel")], "primary", "recover.result.status == 'ACTIVE'"),
-        button(L("Send me a new activation code", "أرسل لي رمز تفعيل جديد"), [{ type: "callApi", integration: "regenerate", saveAs: "regen", onError: { showToast: L("We couldn't send a code. Try again.", "تعذّر إرسال الرمز. حاول مرة أخرى.") } }, go("regenerated")], "primary", "recover.result.status == 'NEW'"),
-        button(L("Sign in", "تسجيل الدخول"), [{ type: "exit" }], "secondary"),
+        { type: "menu", visibleWhen: "recover.result.status == 'ACTIVE'", items: [
+          { id: "signin", label: L("Sign in as {{recover.result.username}}", "تسجيل الدخول باسم {{recover.result.username}}"), icon: "user", actions: [{ type: "exit" }] },
+          { id: "reset", label: L("Reset your password", "إعادة تعيين كلمة المرور"), icon: "refresh", actions: [go("channel")] },
+        ] },
+        { type: "menu", visibleWhen: "recover.result.status == 'NEW'", items: [
+          { id: "regen", label: L("Send me a new activation code", "أرسل لي رمز تفعيل جديد"), icon: "rocket", actions: [{ type: "callApi", integration: "regenerate", saveAs: "regen", onError: { showToast: L("We couldn't send a code. Try again.", "تعذّر إرسال الرمز. حاول مرة أخرى.") } }, go("regenerated")] },
+        ] },
       ],
     },
     {
@@ -573,7 +601,7 @@ export const locateUs: Journey = {
       id: "results", title: L("Locations", "المواقع"),
       blocks: [
         text(L("{{len(loc.found)}} location(s) found", "تم العثور على {{len(loc.found)}} موقع"), "title"),
-        { type: "select", bind: "loc.selected", label: L("Choose a location", "اختر موقعاً"), source: "loc.found", variant: "tiles" },
+        { type: "select", bind: "loc.selected", label: L("Choose a location", "اختر موقعاً"), source: "loc.found", variant: "rows" },
         button(L("View details", "عرض التفاصيل"), [{ type: "validate" }, { type: "callApi", integration: "locationDetail", input: { id: "{{loc.selected}}" }, saveAs: "loc.detail", onError: { showToast: L("We couldn't load that location.", "تعذّر تحميل هذا الموقع.") } }, go("details")]),
         button(L("Change filters", "تغيير عوامل التصفية"), [go("search")], "secondary"),
       ],
@@ -609,25 +637,26 @@ const faq = (category: string, q: ReturnType<typeof L>, a: ReturnType<typeof L>)
 ];
 export const support: Journey = {
   ...base, id: "jrn_cab_support", slug: "support", name: L("Support", "الدعم"), entryScreen: "home",
-  dataModel: { "support.choice": { type: "string", required: true }, "faq.category": { type: "string", required: true } },
+  dataModel: { "faq.category": { type: "string", required: true } },
   integrations: [],
   screens: [
     {
       id: "home", title: L("Support", "الدعم"),
       blocks: [
-        { type: "select", bind: "support.choice", label: L("How can we help?", "كيف يمكننا مساعدتك؟"), variant: "tiles", choices: [
-          { id: "faqs", label: L("FAQs", "الأسئلة الشائعة") }, { id: "terms", label: L("Terms & conditions", "الشروط والأحكام") },
-          { id: "privacy", label: L("Privacy policy", "سياسة الخصوصية") }, { id: "call", label: L("Call us", "اتصل بنا") },
+        { type: "menu", items: [
+          { id: "faqs", label: L("FAQs", "الأسئلة الشائعة"), actions: [go("faq-categories")] },
+          { id: "terms", label: L("Terms & Conditions", "الشروط والأحكام"), actions: [go("terms")] },
+          { id: "privacy", label: L("Privacy Policy", "سياسة الخصوصية"), actions: [go("privacy")] },
         ] },
-        text(L("Hours: Monday to Friday 8 am to 10 pm, Saturday 8 am to 6:30 pm", "ساعات العمل: من الاثنين إلى الجمعة 8 صباحاً حتى 10 مساءً، والسبت 8 صباحاً حتى 6:30 مساءً"), "caption"),
-        button(L("Continue", "متابعة"), [{ type: "validate" }, { type: "navigate" }]),
+        text(L("Hours", "ساعات العمل"), "title"),
+        text(L("Monday - Friday: 8 am to 10 pm. Saturday: 8 am to 6:30 pm.", "الاثنين - الجمعة: 8 صباحاً حتى 10 مساءً. السبت: 8 صباحاً حتى 6:30 مساءً.")),
+        button(L("Call Us", "اتصل بنا"), [go("call")]),
       ],
-      navigation: route([{ when: "support.choice == 'faqs'", to: "faq-categories" }, { when: "support.choice == 'terms'", to: "terms" }, { when: "support.choice == 'privacy'", to: "privacy" }, { when: "support.choice == 'call'", to: "call" }]),
     },
     {
       id: "faq-categories", title: L("FAQs", "الأسئلة الشائعة"),
       blocks: [
-        { type: "select", bind: "faq.category", label: L("Choose a topic", "اختر موضوعاً"), choices: [
+        { type: "select", bind: "faq.category", label: L("Choose a topic", "اختر موضوعاً"), variant: "rows", choices: [
           { id: "account", label: L("Account activity", "نشاط الحساب") }, { id: "alerts", label: L("Alerts & communication", "التنبيهات والتواصل") },
           { id: "bills", label: L("Bill payments", "دفع الفواتير") }, { id: "cards", label: L("Cards", "البطاقات") },
           { id: "p2p", label: L("Person-to-person", "من شخص إلى شخص") }, { id: "profile", label: L("Profile management", "إدارة الملف الشخصي") },

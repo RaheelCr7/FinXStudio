@@ -14,6 +14,13 @@ const press = async (r: JourneyRunner, label: string) => {
   if (!btn) throw new Error(`No button "${label}" on ${r.current}. Buttons: ${buttonLabels(r).join(", ")}`);
   await r.press(btn.actions);
 };
+/** Taps a row of a menu block, as the customer would. */
+const menuLabels = (r: JourneyRunner) => r.view().blocks.filter((b) => b.type === "menu").flatMap((b) => b.items.map((i: any) => i.label));
+const tap = async (r: JourneyRunner, label: string) => {
+  const item = r.view().blocks.filter((b) => b.type === "menu").flatMap((b) => b.items).find((i: any) => i.label === label);
+  if (!item) throw new Error(`No row "${label}" on ${r.current}. Rows: ${menuLabels(r).join(", ")}`);
+  await r.press(item.actions);
+};
 const fill = (r: JourneyRunner, values: Record<string, any>) => { for (const [k, v] of Object.entries(values)) r.set(k, v); };
 const alerts = (r: JourneyRunner) => r.view().blocks.filter((b) => b.type === "alert").map((b) => b.text);
 const resultOf = (r: JourneyRunner) => r.view().blocks.find((b) => b.type === "result");
@@ -37,11 +44,12 @@ describe("the Cairo Amman Bank journeys", () => {
 describe("Sign in", () => {
   const login = async (persona: string, username: string, password: string) => {
     const { r } = mk(cabSignIn, persona); await r.start();
-    expect(r.view().blocks.find((b) => b.type === "select")!.value).toBe("login");
-    await press(r, "Continue");
+    expect(r.view().blocks[0]!.type).toBe("hero");
+    expect(menuLabels(r)).toEqual(["Existing user login", "Explore products", "Resume application"]);
+    await tap(r, "Existing user login");
     expect(r.current).toBe("login");
     fill(r, { "login.username": username, "login.password": password });
-    await press(r, "Sign in");
+    await press(r, "Sign In");
     return r;
   };
   it("signs in and greets the customer", async () => {
@@ -51,8 +59,8 @@ describe("Sign in", () => {
     expect(resultOf(r)!.text).toContain("3 accounts");
   });
   it("needs both fields before it asks the bank", async () => {
-    const { r } = mk(cabSignIn); await r.start(); await press(r, "Continue");
-    await press(r, "Sign in");
+    const { r } = mk(cabSignIn); await r.start(); await tap(r, "Existing user login");
+    await press(r, "Sign In");
     expect(r.current).toBe("login");
     expect(r.errors["login.username"]).toBeTruthy();
   });
@@ -60,9 +68,9 @@ describe("Sign in", () => {
     const r = await login("nour", "nour", "wrong");
     expect(r.current).toBe("login");
     expect(alerts(r)[0]).toContain("2 attempt(s) left");
-    await press(r, "Sign in");
+    await press(r, "Sign In");
     expect(alerts(r)[0]).toContain("1 attempt(s) left");
-    await press(r, "Sign in");
+    await press(r, "Sign In");
     expect(r.current).toBe("locked");
     expect(resultOf(r)).toMatchObject({ tone: "error", title: "Your profile is locked" });
     expect(resultOf(r)!.text).toContain("30 minutes");
@@ -74,8 +82,22 @@ describe("Sign in", () => {
   });
   it("keeps Explore products and Resume application out of sign in", async () => {
     const { r } = mk(cabSignIn); await r.start();
-    r.set("welcome.choice", "explore"); await press(r, "Continue");
+    await tap(r, "Explore products");
     expect(r.current).toBe("fullapp");
+  });
+  it("offers the language list from the welcome row, and Can't Sign In from the sign-in screen, and shortcuts at the foot", async () => {
+    const { r, bank } = mk(cabSignIn); await r.start();
+    expect(r.view().blocks.at(-1)).toMatchObject({ type: "shortcuts" });
+    expect(r.view().blocks.find((b) => b.type === "shortcuts")!.items.map((i: any) => [i.label, i.icon])).toEqual([["Enroll/Activate", "userPlus"], ["Locate us", "mapPin"], ["Support", "send"]]);
+    await r.press(r.view().blocks.find((b) => b.type === "sectionHeader")!.action.actions);
+    expect(r.current).toBe("language");
+    r.set("language.code", "ar_AE"); await press(r, "Update Language"); await press(r, "Yes");
+    expect(r.current).toBe("login");
+    expect((await bank.call("cab.language.current")).current).toBe("ar_AE");
+    const link = r.view().blocks.find((b) => b.type === "toggle")!.link;
+    expect(link.label).toBe("Can't Sign In?");
+    await r.press(link.actions);
+    expect(r.current).toBe("cant");
   });
 });
 
@@ -84,8 +106,10 @@ describe("Default sign in", () => {
   it("sets a PIN: six digits, entered twice, then saved on the device", async () => {
     const { r, bank } = await start();
     expect((r.view().blocks.find((b) => b.type === "select")!.items).map((i: any) => i.id)).toEqual(["password", "biometric", "pin"]);
+    expect(r.view().blocks.find((b) => b.type === "select")).toMatchObject({ variant: "rows" });
     r.set("signin.mode", "pin"); await press(r, "Continue");
     expect(r.current).toBe("pin-new");
+    expect(r.view().blocks.find((b) => b.type === "otp")).toMatchObject({ keypad: true, masked: true, length: 6 });
     r.set("pin.value", "12"); await press(r, "Continue");
     expect(r.current).toBe("pin-new"); // too short
     r.set("pin.value", "482910"); await press(r, "Continue");
@@ -133,12 +157,12 @@ describe("Change language", () => {
   it("asks to confirm, then changes it", async () => {
     const { r, bank } = mk(cabChangeLanguage); await r.start();
     expect(r.view().blocks.find((b) => b.type === "select")!.items.map((i: any) => i.name)).toEqual(["US English", "UK English", "French", "Arabic"]);
-    await press(r, "Update language"); expect(r.current).toBe("choose"); // a language must be chosen first
-    r.set("language.code", "ar_AE"); await press(r, "Update language");
+    await press(r, "Update Language"); expect(r.current).toBe("choose"); // a language must be chosen first
+    r.set("language.code", "ar_AE"); await press(r, "Update Language");
     expect(r.current).toBe("confirm");
     await press(r, "No"); expect(r.current).toBe("choose");
     expect(r.get("language.code")).toBe("ar_AE"); // the choice is kept
-    await press(r, "Update language"); await press(r, "Yes");
+    await press(r, "Update Language"); await press(r, "Yes");
     expect(r.current).toBe("done");
     expect(resultOf(r)!.text).toBe("Your language is now Arabic.");
     expect((await bank.call("cab.language.current")).current).toBe("ar_AE");
@@ -148,7 +172,8 @@ describe("Change language", () => {
 describe("Enroll", () => {
   const upTo = async (persona: string, over: Record<string, string> = {}) => {
     const { r, bank } = mk(cabEnroll, persona); await r.start();
-    await press(r, "Continue"); // Enroll your account is preselected
+    expect(menuLabels(r)).toEqual(["Enroll your account", "Activate your account"]);
+    await tap(r, "Enroll your account");
     fill(r, { "enroll.entity": "mb", "enroll.kind": "personal" }); await press(r, "Continue");
     fill(r, { "enroll.lastName": over.lastName ?? "Hegazy" }); await press(r, "Continue");
     fill(r, { "enroll.nationalId": over.nationalId ?? "194324" }); await press(r, "Continue");
@@ -178,13 +203,13 @@ describe("Enroll", () => {
   });
   it("sends business banking and activation to their own screens", async () => {
     const { r } = mk(cabEnroll, "sara"); await r.start();
-    r.set("enroll.choice", "activate"); await press(r, "Continue"); expect(r.current).toBe("to-activate");
-    const b = mk(cabEnroll, "sara"); await b.r.start(); await press(b.r, "Continue");
+    await tap(r, "Activate your account"); expect(r.current).toBe("to-activate");
+    const b = mk(cabEnroll, "sara"); await b.r.start(); await tap(b.r, "Enroll your account");
     fill(b.r, { "enroll.entity": "mb", "enroll.kind": "business" }); await press(b.r, "Continue");
     expect(b.r.current).toBe("business");
   });
   it("checks the date format before going on", async () => {
-    const { r } = mk(cabEnroll, "sara"); await r.start(); await press(r, "Continue");
+    const { r } = mk(cabEnroll, "sara"); await r.start(); await tap(r, "Enroll your account");
     fill(r, { "enroll.entity": "mb", "enroll.kind": "personal", "enroll.lastName": "Hegazy", "enroll.nationalId": "194324" });
     await press(r, "Continue"); await press(r, "Continue"); await press(r, "Continue");
     expect(r.current).toBe("dob");
@@ -242,8 +267,8 @@ describe("Can't sign in", () => {
     expect(x.r.current).toBe("found");
     expect(x.r.view().blocks.find((b) => b.type === "text" && String(b.text).startsWith("Welcome back"))!.text).toBe("Welcome back, Nour!");
     expect(x.r.view().blocks.some((b) => b.type === "text" && String(b.text).includes("username: nour"))).toBe(true);
-    expect(buttonLabels(x.r)).toEqual(["Reset your password", "Sign in"]);
-    await press(x.r, "Reset your password");
+    expect(menuLabels(x.r)).toEqual(["Sign in as nour", "Reset your password"]);
+    await tap(x.r, "Reset your password");
     x.r.set("recover.channel", "sms"); await press(x.r, "Send code");
     expect(x.r.current).toBe("otp");
     x.r.set("otp.code", "482100"); await press(x.r, "Verify");
@@ -263,7 +288,7 @@ describe("Can't sign in", () => {
     expect(x.r.current).toBe("not-found");
   });
   it("locks after three wrong security codes", async () => {
-    const x = await found(); await toDob(x); await press(x.r, "Reset your password");
+    const x = await found(); await toDob(x); await tap(x.r, "Reset your password");
     x.r.set("recover.channel", "email"); await press(x.r, "Send code");
     x.r.set("otp.code", "000111");
     await press(x.r, "Verify"); expect(x.r.current).toBe("otp");
@@ -276,8 +301,8 @@ describe("Can't sign in", () => {
     fill(r, { "recover.email": "yasmin.khoury@cab.com", "recover.captcha": r.get("captcha.text") }); await press(r, "Continue");
     await toDob(x, "79 333 0172", "09 / 08 / 1997");
     expect(r.current).toBe("found");
-    expect(buttonLabels(r)).toEqual(["Send me a new activation code", "Sign in"]);
-    await press(r, "Send me a new activation code");
+    expect(menuLabels(r)).toEqual(["Send me a new activation code"]);
+    await tap(r, "Send me a new activation code");
     expect(r.current).toBe("regenerated");
   });
 });
@@ -310,7 +335,7 @@ describe("Locate us", () => {
 describe("Support", () => {
   it("shows the FAQ answers for the chosen topic only", async () => {
     const { r } = mk(cabSupport); await r.start();
-    r.set("support.choice", "faqs"); await press(r, "Continue");
+    await tap(r, "FAQs");
     r.set("faq.category", "account"); await press(r, "Show answers");
     const texts = r.view().blocks.filter((b) => b.type === "text").map((b) => String(b.text));
     expect(texts.some((t) => t.includes("Which account types"))).toBe(true);
@@ -319,12 +344,12 @@ describe("Support", () => {
     expect(r.view().blocks.some((b) => b.type === "text" && String(b.text).includes("How do I freeze my card"))).toBe(true);
   });
   it("reaches terms, privacy and the phone number", async () => {
-    for (const [choice, screen] of [["terms", "terms"], ["privacy", "privacy"], ["call", "call"]] as const) {
+    for (const [label, screen] of [["Terms & Conditions", "terms"], ["Privacy Policy", "privacy"]] as const) {
       const { r } = mk(cabSupport); await r.start();
-      r.set("support.choice", choice); await press(r, "Continue");
+      await tap(r, label);
       expect(r.current).toBe(screen);
     }
-    const { r } = mk(cabSupport); await r.start(); r.set("support.choice", "call"); await press(r, "Continue");
+    const { r } = mk(cabSupport); await r.start(); await press(r, "Call Us");
     expect(resultOf(r)!.title).toBe("+96112025050");
   });
 });
