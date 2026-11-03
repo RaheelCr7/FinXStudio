@@ -147,6 +147,15 @@ export function personasFor(brand: Persona["brand"], project?: string) {
   return mine.length ? mine : Object.values(personas).filter((p) => p.brand === brand && !p.project);
 }
 
+/**
+ * The sandbox customer a journey should preview with: one that has what it calls (a company for corp.* adapters, a Cairo Amman
+ * Bank profile for cab.* ones), else the first. A journey for a company cannot run as a retail customer.
+ */
+export function defaultPersonaFor<T extends Persona>(people: T[], integrations: { adapter: string }[] = []): T {
+  const uses = (prefix: string) => integrations.some((i) => i.adapter.startsWith(prefix));
+  return (uses("corp.") ? people.find((p) => p.corp) : uses("cab.") ? people.find((p) => p.cab) : undefined) ?? people[0]!;
+}
+
 export class MockBank {
   private p: Persona;
   private otpAttempts = 0;
@@ -186,7 +195,7 @@ export class MockBank {
       case "corp.company.get": {
         const c = corp.getCompany();
         const me = c.users.find((u) => u.id === userId);
-        return { id: c.id, name: c.name, currency: c.currency, accounts: Object.fromEntries(c.accounts.map((a) => [a.id, { ...a, name: `${a.name} ${a.maskedNumber}` }])), beneficiaries: Object.fromEntries(c.whitelist.map((b) => [b.id, { ...b, displayName: b.name }])), users: c.users.map((u) => ({ id: u.id, name: u.name, roles: u.roles })), me: me ? { id: me.id, name: me.name, roles: me.roles, dailyLimit: me.dailyLimit, usedToday: me.usedToday, remainingToday: me.dailyLimit - me.usedToday } : undefined, companyDailyLimit: c.companyDailyLimit, companyUsedToday: c.companyUsedToday, dualApprovalAbove: c.dualApprovalAbove, cutoff: c.cutoff };
+        return { id: c.id, name: c.name, currency: c.currency, accounts: Object.fromEntries(c.accounts.map((a) => [a.id, a])), beneficiaries: Object.fromEntries(c.whitelist.map((b) => [b.id, { ...b, displayName: b.name }])), users: c.users.map((u) => ({ id: u.id, name: u.name, roles: u.roles })), me: me ? { id: me.id, name: me.name, roles: me.roles, dailyLimit: me.dailyLimit, usedToday: me.usedToday, remainingToday: me.dailyLimit - me.usedToday } : undefined, companyDailyLimit: c.companyDailyLimit, companyUsedToday: c.companyUsedToday, dualApprovalAbove: c.dualApprovalAbove, cutoff: c.cutoff };
       }
       case "corp.payments.initiate": {
         if (!this.otpVerified) throw new BankError("OTP_REQUIRED", "OTP not verified");

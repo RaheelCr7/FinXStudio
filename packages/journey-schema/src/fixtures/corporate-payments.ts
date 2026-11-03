@@ -12,7 +12,7 @@ const money = (path: string, cur: string) => `{{${path} | money:${cur}}}`;
 const COMPANY = [{ type: "callApi" as const, integration: "company", input: { userId: "{{session.userId}}" }, saveAs: "ctx.company", onError: { showToast: "We couldn't load your company. Try again.", stay: true } }];
 const WHO = (title: string) => ({
   id: "who", title: "Sign in",
-  onEnter: [{ type: "callApi" as const, integration: "people", saveAs: "ctx.people" }],
+  onEnter: [{ type: "callApi" as const, integration: "people", saveAs: "ctx.people", onError: { navigate: "unavailable" } }],
   blocks: [
     { type: "text" as const, variant: "title" as const, text: title },
     { type: "alert" as const, tone: "info" as const, text: "Sandbox: choose who you are. A real bank app already knows who signed in." },
@@ -28,6 +28,13 @@ const failed = (title: string, again: string) => ({
     btn("Try again", [go(again)]), btn("Close", [{ type: "exit" }], "secondary"),
   ],
 });
+const unavailable = {
+  id: "unavailable", title: "Not available", kind: "terminal" as const,
+  blocks: [
+    { type: "result" as const, tone: "error" as const, title: "We can't open this right now", text: "{{ctx.error.message}}" },
+    btn("Try again", [go("who")]), btn("Close", [{ type: "exit" }], "secondary"),
+  ],
+};
 const denied = (what: string) => ({
   id: "denied", title: "Not allowed", kind: "terminal" as const,
   blocks: [
@@ -38,7 +45,7 @@ const denied = (what: string) => ({
 const OTP = (verifyLabel: string, doIt: any[]) => ({
   id: "otp", title: "Verify",
   blocks: [
-    { type: "otp" as const, bind: "otp.code", length: 6, maxAttempts: 3, resendAfterSeconds: 60, hint: "Enter the code sent to {{ctx.otp.maskedPhone}}", onResend: [{ type: "callApi" as const, integration: "otpSend", input: { channel: "sms" }, saveAs: "ctx.otp" }] },
+    { type: "otp" as const, bind: "otp.code", length: 6, maxAttempts: 3, resendAfterSeconds: 60, hint: "Enter the code sent to {{ctx.otp.maskedPhone}}", onResend: [{ type: "callApi" as const, integration: "otpSend", input: { channel: "sms" }, saveAs: "ctx.otp", onError: { showToast: "We couldn't send a new code. Try again.", stay: true } }] },
     btn(verifyLabel, [
       { type: "validate" },
       { type: "callApi", integration: "otpVerify", input: { code: "{{otp.code}}" }, onError: { showToast: "Incorrect code", stay: true, lockAfter: 3, lockTo: "failed" } },
@@ -85,7 +92,7 @@ export const corporatePayment: Journey = {
       blocks: [
         {
           type: "reviewSummary", rows: [
-            { label: "From", value: "{{ctx.company.accounts[pay.fromAccountId].name}}" },
+            { label: "From", value: "{{ctx.company.accounts[pay.fromAccountId].name}} {{ctx.company.accounts[pay.fromAccountId].maskedNumber}}" },
             { label: "To", value: "{{ctx.company.beneficiaries[pay.beneficiaryId].name}}" },
             { label: "Amount", value: money("pay.amount", "ctx.company.accounts[pay.fromAccountId].currency") },
             { label: "Reference", value: "{{pay.reference}}" },
@@ -94,7 +101,7 @@ export const corporatePayment: Journey = {
         },
         { type: "alert", tone: "info", text: "Payments made after {{ctx.company.cutoff}} UTC, or on a day the bank is closed, go out on the next working day." },
         { type: "consent", bind: "pay.consent", termsVersion: "corporate-v1", text: "I confirm the payment details are correct", validation: { mustBeTrue: true, messages: { mustBeTrue: "Tick the confirmation first" } } },
-        btn("Confirm and send OTP", [{ type: "validate" }, { type: "callApi", integration: "otpSend", input: { channel: "sms" }, saveAs: "ctx.otp" }, go("otp")]),
+        btn("Confirm and send OTP", [{ type: "validate" }, { type: "callApi", integration: "otpSend", input: { channel: "sms" }, saveAs: "ctx.otp", onError: { showToast: "We couldn't send the code. Try again.", stay: true } }, go("otp")]),
       ],
     },
     OTP("Verify and send for approval", [
@@ -110,6 +117,7 @@ export const corporatePayment: Journey = {
       ],
     },
     failed("Payment not sent", "start"),
+    unavailable,
     denied("an initiator"),
   ],
 };
@@ -131,7 +139,7 @@ export const corporateApproval: Journey = {
     WHO("Approve company payments"),
     {
       id: "start", title: "Waiting for you",
-      onEnter: [{ type: "callApi", integration: "pending", input: { userId: "{{session.userId}}" }, saveAs: "ctx.pending" }],
+      onEnter: [{ type: "callApi", integration: "pending", input: { userId: "{{session.userId}}" }, saveAs: "ctx.pending", onError: { navigate: "unavailable" } }],
       blocks: [
         { type: "text", text: "Nothing is waiting for your approval.", visibleWhen: "len(ctx.pending) == 0" },
         {
@@ -139,7 +147,7 @@ export const corporateApproval: Journey = {
           type: "menu", source: "ctx.pending", item: {
             label: "{{item.amount | money:item.currency}} to {{ctx.company.beneficiaries[item.beneficiaryId].name}}",
             text: "{{item.reference}} · started by {{item.initiatedBy}} · {{len(item.approvals)}} of {{item.required}} approved", icon: "send",
-            actions: [{ type: "setData", path: "appr.paymentId", value: "{{item.id}}" }, { type: "callApi", integration: "payment", input: { paymentId: "{{item.id}}" }, saveAs: "appr.payment" }, go("review")],
+            actions: [{ type: "setData", path: "appr.paymentId", value: "{{item.id}}" }, { type: "callApi", integration: "payment", input: { paymentId: "{{item.id}}" }, saveAs: "appr.payment", onError: { navigate: "unavailable" } }, go("review")],
           },
         },
         btn("Close", [{ type: "exit" }], "secondary"),
@@ -150,7 +158,7 @@ export const corporateApproval: Journey = {
       blocks: [
         {
           type: "reviewSummary", rows: [
-            { label: "From", value: "{{ctx.company.accounts[appr.payment.fromAccountId].name}}" },
+            { label: "From", value: "{{ctx.company.accounts[appr.payment.fromAccountId].name}} {{ctx.company.accounts[appr.payment.fromAccountId].maskedNumber}}" },
             { label: "To", value: "{{ctx.company.beneficiaries[appr.payment.beneficiaryId].name}}" },
             { label: "Amount", value: money("appr.payment.amount", "appr.payment.currency") },
             { label: "Reference", value: "{{appr.payment.reference}}" },
@@ -160,7 +168,7 @@ export const corporateApproval: Journey = {
           ],
         },
         { type: "consent", bind: "appr.consent", termsVersion: "corporate-v1", text: "I have checked this payment and approve it", validation: { mustBeTrue: true, messages: { mustBeTrue: "Tick the confirmation first" } } },
-        btn("Approve and send OTP", [{ type: "validate" }, { type: "callApi", integration: "otpSend", input: { channel: "sms" }, saveAs: "ctx.otp" }, go("otp")]),
+        btn("Approve and send OTP", [{ type: "validate" }, { type: "callApi", integration: "otpSend", input: { channel: "sms" }, saveAs: "ctx.otp", onError: { showToast: "We couldn't send the code. Try again.", stay: true } }, go("otp")]),
         btn("Reject", [go("reject")], "secondary"),
       ],
     },
@@ -193,6 +201,7 @@ export const corporateApproval: Journey = {
       ],
     },
     failed("Not completed", "start"),
+    unavailable,
     denied("an approver"),
   ],
 };

@@ -1,7 +1,7 @@
 "use client";
 import { useMemo } from "react";
 import type { Journey } from "@finx/journey-schema";
-import { MockBank, personasFor } from "@finx/mock-bank-api";
+import { MockBank, defaultPersonaFor, personasFor } from "@finx/mock-bank-api";
 import { brands, type Brand } from "@finx/ui-kit";
 import { JourneyPlayer, ThemeProvider } from "@finx/renderer-native";
 import { sampleAnswers } from "@/lib/slides";
@@ -15,7 +15,7 @@ export function usePreviewKit(journey: Journey): { brand: Brand; adapter: (id: s
   const { byId } = useProjects();
   const brand: Brand = byId(journey.apps?.[0] ?? "meezan")?.brand ?? brands.meezan!;
   const adapter = useMemo(() => {
-    const bank = new MockBank(personasFor(brand.preset, brand.id)[0]!.id);
+    const bank = new MockBank(defaultPersonaFor(personasFor(brand.preset, brand.id), journey.integrations).id);
     return (id: string, input: Record<string, any>) => bank.call(id, input);
   }, [brand.preset]);
   return { brand, adapter };
