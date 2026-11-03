@@ -55,7 +55,7 @@ export const BLOCKS: BlockDoc[] = [
     example: { type: "amountInput", bind: "topup.amount", currency: "PKR", label: { en: "Amount", ur: "رقم" }, validation: { min: 50, max: 5000, messages: { min: { en: "The least you can top up is PKR 50", ur: "کم از کم ٹاپ اپ PKR 50 ہے" }, max: { en: "The most you can top up is PKR 5,000", ur: "زیادہ سے زیادہ ٹاپ اپ PKR 5,000 ہے" } } } },
   },
   {
-    type: "select", purpose: "Pick one option, shown as chips.", fields: { bind: "data path", label: "Loc", options: "fixed list of strings (the value is the text)", choices: "OR a fixed list of { id, label: Loc, icon?, text?: Loc } for tiles with an icon and a line of help. Icons: bank, card, food, bag, trend, shield, wallet, repeat, dollar, home, briefcase", source: "OR a ctx path of an object map whose values have { id, name, color?, sub? } (the value is the id)", variant: "chips (default), tiles (larger cards, good for banks or account types) or rows (a plain list with a tick on the chosen row, good for languages)" },
+    type: "select", purpose: "Pick one option, shown as chips.", fields: { bind: "data path", label: "Loc", options: "fixed list of strings (the value is the text)", choices: "OR a fixed list of { id, label: Loc, icon?, text?: Loc } for tiles with an icon and a line of help. Icons: bank, card, food, bag, trend, shield, wallet, repeat, dollar, home, briefcase", source: "OR a ctx path of an object map whose values have { id, name, color?, sub? } (the value is the id)", variant: "chips (default), tiles (larger cards, good for banks or account types) rows (a plain list with a tick on the chosen row, good for languages) or dropdown (one line that opens a list, good for a long list or a few names)" },
     notes: ["Use source for data from the bank (billers, carriers). Use options only for short fixed lists. Use variant tiles with choices for a short list of big options."],
     example: { type: "select", bind: "topup.carrier", label: { en: "Carrier", ur: "کیریئر" }, source: "ctx.carriers" },
   },
@@ -107,13 +107,22 @@ export const BLOCKS: BlockDoc[] = [
     example: { type: "divider", label: { en: "OR", ar: "أو" } },
   },
   {
-    type: "dialog", purpose: "A pop-up over the screen that asks one thing: a PIN prompt, a fingerprint unlock, a call, a confirmation. It is shown while its visibleWhen is true: open it with a setData on a flag (for example ui.confirm) and close it the same way from its buttons.",
-    fields: { title: "Loc", text: "Loc, optional", icon: "an icon name (lock, phone, shield), optional", bind: "optional: a PIN field saved here", length: "PIN length 4 to 8 (default 6)", buttons: "1 to 3 of { label: Loc, variant?: primary|secondary|ghost, actions }", dismiss: "optional actions for Escape", visibleWhen: "the expression that opens it" },
+    type: "dateInput", purpose: "A date with a calendar under the field. Saved as YYYY-MM-DD, shown as DD / MM / YYYY. Use it instead of a typed date; show it with {{x | date}}.",
+    fields: { bind: "path", label: "Loc", placeholder: "Loc?", helper: "Loc?", min: "date or \"today\"?", max: "date or \"today\"? (birth date: today)", messages: "{ min, max } Loc?" },
+    example: { type: "dateInput", bind: "enroll.dob", label: { en: "Date of birth" }, max: "today" },
+  },
+  {
+    type: "avatar", purpose: "A circle with a person's initials, their name and a line under it (the profile found while signing in, for example).",
+    fields: { name: "Loc", text: "Loc, optional (such as a username)" }, example: { type: "avatar", name: { en: "{{recover.result.firstName}} {{recover.result.lastName}}" }, text: { en: "{{recover.result.username}}" } },
+  },
+  {
+    type: "dialog", purpose: "A pop-up asking one thing (PIN, unlock, call, confirmation). Shown while its visibleWhen is true: open and close it with setData on a flag such as ui.confirm.",
+    fields: { title: "Loc", text: "Loc?", icon: "lock, phone or shield?", bind: "PIN field path?", length: "PIN length 4-8 (6)", buttons: "1-3 of { label: Loc, variant?, actions }", dismiss: "actions for Escape?", visibleWhen: "opens it" },
     example: { type: "dialog", visibleWhen: "ui.confirm", title: { en: "Language change" }, text: { en: "Change the language?" }, buttons: [{ label: { en: "No" }, variant: "secondary", actions: [{ type: "setData", path: "ui.confirm", value: false }] }, { label: { en: "Yes" }, actions: [{ type: "exit" }] }] },
   },
   {
-    type: "map", purpose: "A schematic map of the places in a list: pins on a grid by latitude and longitude (no streets or tiles). Pressing a pin saves its id and runs onSelect, where {{item.x}} reads that place.",
-    fields: { source: "path to a list of { id, name, lat, lng }", label: "Loc, names the map for a screen reader", bind: "optional: where the chosen id is saved", onSelect: "optional actions", height: "optional, 120 to 400" },
+    type: "map", purpose: "Places of a list as pins on a grid by lat/lng (no streets). A pin saves its id and runs onSelect; {{item.x}} reads that place.",
+    fields: { source: "list of { id, name, lat, lng }", label: "Loc", bind: "chosen id path?", onSelect: "actions?", height: "120-400?" },
     example: { type: "map", source: "loc.found", label: { en: "Locations on the map" }, onSelect: [{ type: "navigate", to: "details" }] },
   },
   {

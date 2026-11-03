@@ -54,6 +54,25 @@ describe("native twins", () => {
     await userEvent.click(getByLabelText("5"));
     expect(keys).toEqual(["5"]);
   });
+  it("a native date field opens a calendar, steps the month and reports the day as ISO text", async () => {
+    const picked: string[] = [];
+    const { getByLabelText, getByText, queryByText } = render(<KitProvider kit={kitFor(brands.cab!)}><nativeComponents.DateField label="Date of birth" value="2001-01-01" max="2026-11-03" onChange={(d: string) => picked.push(d)} /></KitProvider>);
+    expect(queryByText("January 2001")).toBeNull();
+    await userEvent.click(getByLabelText(/Date of birth/));
+    expect(getByText("January 2001")).toBeTruthy();
+    await userEvent.click(getByLabelText("Next month"));
+    expect(getByText("February 2001")).toBeTruthy();
+    await userEvent.click(getByLabelText("February 14, 2001"));
+    expect(picked).toEqual(["2001-02-14"]);
+    expect(queryByText("February 2001")).toBeNull(); // closes after a pick
+  });
+  it("a native dropdown lists the choices when pressed and reports the id", async () => {
+    const picked: string[] = [];
+    const { getByLabelText, getByText } = render(<KitProvider kit={kitFor(brands.cab!)}><nativeComponents.Dropdown label="Username" value="a" options={[{ id: "a", name: "nour" }, { id: "b", name: "nour.haddad" }]} onChange={(i: string) => picked.push(i)} /></KitProvider>);
+    await userEvent.click(getByLabelText(/Username/));
+    await userEvent.click(getByText("nour.haddad"));
+    expect(picked).toEqual(["b"]);
+  });
   it("a native component outside a provider says what is missing", () => {
     expect(() => render(<nativeComponents.Button label="x" />)).toThrow(/KitProvider/);
   });

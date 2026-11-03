@@ -212,7 +212,7 @@ describe("Enroll", () => {
     expect(r.current).toBe("last-name");
     fill(r, { "enroll.lastName": over.lastName ?? "Hegazy" }); await press(r, "Continue");
     fill(r, { "enroll.nationalId": over.nationalId ?? "194324" }); await press(r, "Continue");
-    fill(r, { "enroll.dob": over.dob ?? "01 / 01 / 2001" }); await press(r, "Continue");
+    fill(r, { "enroll.dob": over.dob ?? "2001-01-01" }); await press(r, "Continue");
     expect(r.current).toBe("verify");
     return { r, bank };
   };
@@ -250,8 +250,14 @@ describe("Enroll", () => {
     fill(r, { "enroll.lastName": "Hegazy", "enroll.nationalId": "194324" });
     await press(r, "Continue"); await press(r, "Continue");
     expect(r.current).toBe("dob");
+    await press(r, "Continue"); expect(r.current).toBe("dob"); // nothing chosen yet
+    expect(r.errors["enroll.dob"]).toBe("Required");
     r.set("enroll.dob", "1/1/01"); await press(r, "Continue");
-    expect(r.current).toBe("dob");
+    expect(r.current).toBe("dob"); expect(r.errors["enroll.dob"]).toBe("Choose a real date");
+    r.set("enroll.dob", "2999-01-01"); await press(r, "Continue");
+    expect(r.current).toBe("dob"); expect(r.errors["enroll.dob"]).toBe("The birth date can't be in the future"); // the block's own wording
+    r.set("enroll.dob", "2026-02-31"); await press(r, "Continue");
+    expect(r.errors["enroll.dob"]).toBe("Choose a real date"); // a day that does not exist
   });
 });
 
@@ -294,7 +300,7 @@ describe("Can't sign in", () => {
     fill(r, { "recover.email": over.email ?? "jeyose8168@cab.com", "recover.captcha": over.captcha ?? r.get("captcha.text") }); await press(r, "Continue");
     return x;
   };
-  const toDob = async (x: Awaited<ReturnType<typeof found>>, phone = "34 56 78 90", dob = "01 / 01 / 2001") => {
+  const toDob = async (x: Awaited<ReturnType<typeof found>>, phone = "34 56 78 90", dob = "2001-01-01") => {
     fill(x.r, { "recover.phone": phone }); await press(x.r, "Continue");
     fill(x.r, { "recover.dob": dob }); await press(x.r, "Continue");
   };
@@ -337,7 +343,7 @@ describe("Can't sign in", () => {
     const x = mk(cabCantSignIn, "yasmin"); const { r } = x; await r.start();
     fill(r, { "recover.entity": "mb" }); await press(r, "Continue");
     fill(r, { "recover.email": "yasmin.khoury@cab.com", "recover.captcha": r.get("captcha.text") }); await press(r, "Continue");
-    await toDob(x, "79 333 0172", "09 / 08 / 1997");
+    await toDob(x, "79 333 0172", "1997-08-09");
     expect(r.current).toBe("found");
     expect(menuLabels(r)).toEqual(["Send me a new activation code"]);
     await tap(r, "Send me a new activation code");
@@ -458,5 +464,43 @@ describe("Sign in with a default PIN or fingerprint, the greeting, and the map",
     await r.press(abdoun.actions);
     expect(r.current).toBe("details");
     expect(r.view().blocks.find((b) => b.type === "text")!.text).toBe("Abdoun Branch – Signature");
+  });
+});
+
+describe("Found screen: avatar, username dropdown, date shown as a person writes it", () => {
+  const toFound = async (persona: string) => {
+    const x = mk(cabCantSignIn, persona); await x.r.start();
+    fill(x.r, { "recover.entity": "cab", "recover.email": persona === "nour" ? "jeyose8168@cab.com" : "x@y.com" }); await press(x.r, "Continue");
+    return x;
+  };
+  it("shows who was found, and lets a person with two usernames choose", async () => {
+    const { r, bank } = mk(cabCantSignIn, "nour");
+    const found = await bank.call("cab.recover.verifyUser", { captchaKey: "", captchaValue: "", email: "jeyose8168@cab.com", phone: "34 56 78 90", dob: "2001-01-01" }).catch(() => null);
+    void r; void found; // the full path to this screen is covered by the can't-sign-in tests; here the screen itself is checked
+    const x = mk(cabCantSignIn, "nour"); await x.r.start();
+    (x.r as any).state.recover = { result: { ok: true, username: "nour", firstName: "Nour", lastName: "Haddad", status: "ACTIVE", usernames: { nour: { id: "nour", name: "nour" }, "nour.haddad": { id: "nour.haddad", name: "nour.haddad" } } } };
+    await (x.r as any).enter("found");
+    const blocks = x.r.view().blocks;
+    expect(blocks.find((b) => b.type === "avatar")).toMatchObject({ name: "Nour Haddad", text: "nour" });
+    const dd = blocks.find((b) => b.type === "select");
+    expect(dd).toMatchObject({ variant: "dropdown", value: "nour" });
+    expect(dd!.items.map((i: any) => i.id)).toEqual(["nour", "nour.haddad"]);
+    x.r.set("recover.pick", "nour.haddad");
+    expect(x.r.view().blocks.find((b) => b.type === "avatar")!.text).toBe("nour.haddad");
+    expect(x.r.view().blocks.filter((b) => b.type === "menu").flatMap((b) => b.items.map((i: any) => i.label))).toContain("Sign in as nour.haddad");
+  });
+  it("shows no dropdown when there is only one username", async () => {
+    const x = mk(cabCantSignIn, "yasmin"); await x.r.start();
+    (x.r as any).state.recover = { result: { ok: true, username: "yasmin", firstName: "Yasmin", lastName: "Khoury", status: "NEW", usernames: { yasmin: { id: "yasmin", name: "yasmin" } } } };
+    await (x.r as any).enter("found");
+    expect(x.r.view().blocks.some((b) => b.type === "select")).toBe(false);
+    expect(x.r.get("recover.pick")).toBe("yasmin");
+  });
+  it("reads a saved date back the way a person writes it", async () => {
+    const { r } = mk(cabEnroll, "sara"); await r.start();
+    const { interpolate } = await import("./template");
+    expect(interpolate("{{d | date}}", { d: "2001-01-09" })).toBe("09 / 01 / 2001");
+    expect(interpolate("{{d | date}}", { d: "" })).toBe("");
+    void r;
   });
 });

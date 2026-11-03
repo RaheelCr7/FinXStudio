@@ -12,6 +12,7 @@ export const ICON_SHAPES: Record<string, IconShape[]> = {
   check: [{ d: "M20 6 9 17l-5-5" }],
   back: [{ d: "m12 19-7-7 7-7M19 12H5" }],
   chevronRight: [{ d: "m9 18 6-6-6-6" }],
+  calendar: [{ rect: { x: 3, y: 4, width: 18, height: 18, rx: 2 } }, { d: "M16 2v4M8 2v4M3 10h18" }],
   chevronDown: [{ d: "m6 9 6 6 6-6" }],
   up: [{ d: "M7 7h10v10M7 17 17 7" }],
   down: [{ d: "m7 7 10 10M17 7v10H7" }],

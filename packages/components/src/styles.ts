@@ -23,6 +23,29 @@ const raw = `
 .fxc-error { margin: 6px 0 0; font-size: 13px; color: var(--c-negative); }
 .fxc-input-wrap { position: relative; }
 .fxc-input { inline-size: 100%; block-size: var(--fxc-field-height); box-sizing: border-box; padding-inline: 14px; border-radius: var(--fxc-field-radius); border: var(--fxc-field-border) solid var(--c-border-strong); background: var(--c-surface); color: var(--c-text); font: inherit; font-size: 16px; }
+.fxc-date-btn { display: flex; align-items: center; justify-content: space-between; gap: 8px; text-align: start; cursor: pointer; }
+.fxc-date-empty { color: var(--c-text-muted); }
+.fxc-field.is-outlined .fxc-date-btn { font-size: 14px; }
+.fxc-cal { margin-block-start: 8px; padding: 12px; border: 1px solid var(--c-border); border-radius: var(--r-lg); background: var(--c-surface); }
+.fxc-cal-head { display: flex; align-items: center; justify-content: space-between; gap: 4px; margin-block-end: 8px; }
+.fxc-cal-title { flex: 1; text-align: center; font-weight: 700; font-size: 15px; }
+.fxc-cal-nav { min-inline-size: 36px; min-block-size: 36px; border: 0; border-radius: 50%; background: transparent; color: var(--c-text); font: inherit; font-size: 18px; cursor: pointer; }
+.fxc-cal-nav:hover { background: var(--c-surface-muted, rgba(128,128,128,.12)); }
+.fxc-cal-week, .fxc-cal-grid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 2px; text-align: center; }
+.fxc-cal-week { font-size: 12px; color: var(--c-text-muted); margin-block-end: 4px; }
+.fxc-cal-day { min-block-size: 38px; border: 0; border-radius: 50%; background: transparent; color: var(--c-text); font: inherit; font-size: 14px; cursor: pointer; }
+.fxc-cal-day.is-out { color: var(--c-text-muted); opacity: .55; }
+.fxc-cal-day.is-today { box-shadow: inset 0 0 0 1px var(--c-accent); }
+.fxc-cal-day[aria-pressed=true] { background: var(--c-accent); color: var(--c-accent-on, #fff); opacity: 1; }
+.fxc-cal-day:disabled { opacity: .3; cursor: not-allowed; }
+.fxc-cal-nav:focus-visible, .fxc-cal-day:focus-visible, .fxc-date-btn:focus-visible { outline: 3px solid color-mix(in srgb, var(--c-accent) 55%, transparent); outline-offset: 1px; }
+.fxc-select { appearance: none; padding-inline-end: 40px; cursor: pointer; }
+.fxc-input-wrap { position: relative; }
+.fxc-select-chevron { position: absolute; inset-block: 0; inset-inline-end: 12px; display: grid; place-items: center; pointer-events: none; color: var(--c-text-muted); }
+.fxc-avatar { display: grid; justify-items: center; gap: 4px; text-align: center; }
+.fxc-avatar-disc { display: grid; place-items: center; inline-size: 72px; block-size: 72px; border-radius: 50%; background: color-mix(in srgb, var(--c-accent) 14%, transparent); color: var(--c-accent); font-size: 26px; font-weight: 700; }
+.fxc-avatar-name { font-size: 16px; font-weight: 700; }
+.fxc-avatar-text { font-size: 13px; color: var(--c-text-muted); }
 .fxc-textarea { block-size: auto; padding-block: 12px; resize: vertical; line-height: 1.45; }
 .fxc-input:focus { outline: none; border-color: var(--c-accent); box-shadow: 0 0 0 1px var(--c-accent); }
 .fxc-input.has-error { border-color: var(--c-negative); box-shadow: 0 0 0 1px var(--c-negative); }

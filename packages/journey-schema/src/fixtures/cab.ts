@@ -305,7 +305,7 @@ export const enroll: Journey = {
     "enroll.kind": { type: "string", required: true },
     "enroll.lastName": { type: "string", required: true },
     "enroll.nationalId": { type: "string", required: true, pattern: "^[0-9A-Za-z-]{4,20}$" },
-    "enroll.dob": { type: "string", required: true, pattern: "^[0-9]{2} ?/ ?[0-9]{2} ?/ ?[0-9]{4}$" },
+    "enroll.dob": { type: "string", required: true },
     "enroll.captcha": { type: "string", required: true },
   },
   integrations: [
@@ -372,7 +372,7 @@ export const enroll: Journey = {
       id: "dob", title: L("Date of birth", "تاريخ الميلاد"),
       blocks: [
         text(L("Enter Your Birth Date", "أدخل تاريخ ميلادك"), "title"),
-        input("enroll.dob", L("Date of birth", "تاريخ الميلاد"), { placeholder: L("DD / MM / YYYY", "يوم / شهر / سنة"), keyboard: "number", patternMessage: L("Use the format DD / MM / YYYY", "استخدم الصيغة يوم / شهر / سنة") }),
+        { type: "dateInput", bind: "enroll.dob", label: L("Date of birth", "تاريخ الميلاد"), placeholder: L("DD / MM / YYYY", "يوم / شهر / سنة"), max: "today", messages: { max: L("The birth date can't be in the future", "لا يمكن أن يكون تاريخ الميلاد في المستقبل") } },
         button(L("Continue", "متابعة"), [{ type: "validate" }, go("verify")]),
       ],
     },
@@ -382,7 +382,7 @@ export const enroll: Journey = {
       blocks: [
         { type: "reviewSummary", rows: [
           { label: L("Last name", "اسم العائلة"), value: "{{enroll.lastName}}" }, { label: L("National ID", "الرقم الوطني"), value: "{{enroll.nationalId}}" },
-          { label: L("Date of birth", "تاريخ الميلاد"), value: "{{enroll.dob}}" },
+          { label: L("Date of birth", "تاريخ الميلاد"), value: "{{enroll.dob | date}}" },
         ] },
         text(L("{{captcha.text ? captcha.text : '-----'}}", "{{captcha.text ? captcha.text : '-----'}}"), "title"),
         input("enroll.captcha", L("Code", "الرمز"), { placeholder: L("Enter the above text here", "أدخل النص أعلاه هنا") }),
@@ -473,8 +473,9 @@ export const cantSignIn: Journey = {
     "recover.email": { type: "string", required: true, pattern: "^[^@\\s]+@[^@\\s]+\\.[^@\\s]+$" },
     "recover.captcha": { type: "string", required: true },
     "recover.phone": { type: "string", required: true, pattern: "^[0-9 +()-]{7,20}$" },
-    "recover.dob": { type: "string", required: true, pattern: "^[0-9]{2} ?/ ?[0-9]{2} ?/ ?[0-9]{4}$" },
+    "recover.dob": { type: "string", required: true },
     "recover.channel": { type: "string", required: true },
+    "recover.pick": { type: "string" },
     "recover.password": { type: "string", required: true }, "recover.confirm": { type: "string", required: true },
     "otp.code": { type: "string", required: true },
   },
@@ -525,7 +526,7 @@ export const cantSignIn: Journey = {
       id: "dob", title: L("Let's verify it's you", "لنتحقق من هويتك"),
       blocks: [
         text(L("Enter Your Birth Date", "أدخل تاريخ ميلادك"), "title"),
-        input("recover.dob", L("Date of birth", "تاريخ الميلاد"), { placeholder: L("DD / MM / YYYY", "يوم / شهر / سنة"), keyboard: "number", patternMessage: L("Use the format DD / MM / YYYY", "استخدم الصيغة يوم / شهر / سنة") }),
+        { type: "dateInput", bind: "recover.dob", label: L("Date of birth", "تاريخ الميلاد"), placeholder: L("DD / MM / YYYY", "يوم / شهر / سنة"), max: "today", messages: { max: L("The birth date can't be in the future", "لا يمكن أن يكون تاريخ الميلاد في المستقبل") } },
         button(L("Continue", "متابعة"), [
           { type: "validate" },
           { type: "callApi", integration: "verifyUser", input: { captchaKey: "{{captcha.serviceKey}}", captchaValue: "{{recover.captcha}}", email: "{{recover.email}}", phone: "{{recover.phone}}", dob: "{{recover.dob}}" }, saveAs: "recover.result", onError: { showToast: L("We couldn't reach the bank. Try again.", "تعذّر الاتصال بالبنك. حاول مرة أخرى.") } },
@@ -536,11 +537,15 @@ export const cantSignIn: Journey = {
     },
     {
       id: "found", title: L("Forgot sign in credentials", "نسيت بيانات الدخول"),
+      onEnter: [{ type: "setData", path: "recover.pick", value: "{{recover.result.username}}" }],
       blocks: [
+        { type: "avatar", name: L("{{recover.result.firstName}} {{recover.result.lastName}}", "{{recover.result.firstName}} {{recover.result.lastName}}"), text: L("{{recover.pick}}", "{{recover.pick}}") },
         text(L("Welcome back, {{recover.result.firstName}}!", "أهلاً بعودتك، {{recover.result.firstName}}!"), "title"),
-        text(L("We found you with username: {{recover.result.username}}", "وجدنا ملفك الشخصي باسم المستخدم: {{recover.result.username}}")),
+        text(L("We found you with username: {{recover.pick}}", "وجدنا ملفك الشخصي باسم المستخدم: {{recover.pick}}")),
+        // a person with more than one username chooses which one to sign in as
+        { type: "select", variant: "dropdown", bind: "recover.pick", source: "recover.result.usernames", label: L("Username", "اسم المستخدم"), visibleWhen: "len(recover.result.usernames) > 1" },
         { type: "menu", visibleWhen: "recover.result.status == 'ACTIVE'", items: [
-          { id: "signin", label: L("Sign in as {{recover.result.username}}", "تسجيل الدخول باسم {{recover.result.username}}"), icon: "user", actions: [{ type: "exit" }] },
+          { id: "signin", label: L("Sign in as {{recover.pick}}", "تسجيل الدخول باسم {{recover.pick}}"), icon: "user", actions: [{ type: "exit" }] },
         ] },
         { type: "divider", label: L("OR", "أو"), visibleWhen: "recover.result.status == 'ACTIVE'" },
         { type: "menu", visibleWhen: "recover.result.status == 'ACTIVE'", items: [

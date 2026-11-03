@@ -4,7 +4,7 @@ import {
   accountRows, amountText, typedAmount, applyKey, beneficiaryRows, caretAfterFormat, cardFields, cardNetwork, cleanOtp, keyboardKind, otpCells, otpLabel, parseAmountText,
   quickAmounts, selectChoices, symbolOf, ui, type BlockProps, type BlockType, type PickerRow,
 } from "@finx/renderer-core";
-import { Alert as KitAlert, AmountField, Button as KitButton, Accordion as KitAccordion, Dialog as KitDialog, MapPins as KitMapPins, BalanceList as KitBalanceList, Checkbox, ChoiceGroup, CodeInput, Divider as KitDivider, Hero as KitHero, Keypad, ListRow, PinDots, Result as KitResult, SectionHeader as KitSectionHeader, Shortcuts as KitShortcuts, SummaryList, Switch, TextField as KitTextField, type ChoiceOption } from "@finx/components";
+import { Alert as KitAlert, AmountField, Button as KitButton, Accordion as KitAccordion, Dialog as KitDialog, DateField as KitDateField, Dropdown as KitDropdown, Avatar as KitAvatar, MapPins as KitMapPins, BalanceList as KitBalanceList, Checkbox, ChoiceGroup, CodeInput, Divider as KitDivider, Hero as KitHero, Keypad, ListRow, PinDots, Result as KitResult, SectionHeader as KitSectionHeader, Shortcuts as KitShortcuts, SummaryList, Switch, TextField as KitTextField, type ChoiceOption } from "@finx/components";
 import { CardVisual } from "../widgets/CardVisual";
 import { FieldError, FieldLabel, useFieldIds } from "./field";
 import { useLook } from "../look";
@@ -31,10 +31,24 @@ export function AmountInput({ b, set, lang }: P) {
 }
 
 export function SelectChips({ b, set }: P) {
+  if (b.variant === "dropdown") return <SelectDropdown b={b} set={set} />;
   const { tiles, rows, choices } = selectChoices(b as any);
   const options: ChoiceOption[] = choices.map((o) => ({ id: o.id, title: o.name, sub: o.sub, selected: o.selected, icon: o.icon, color: o.color }));
   return <ChoiceGroup label={b.label} name={b.bind} look={rows ? "rows" : tiles ? "tiles" : "chips"} options={options} onChange={(id) => set(b.bind, id)} error={b.error} />;
 }
+
+function SelectDropdown({ b, set }: Pick<P, "b" | "set">) {
+  const outlined = useLook().look?.fields === "outlined";
+  return <KitDropdown label={b.label} options={b.items.map((o: any) => ({ id: o.id, name: o.name, sub: o.sub }))} value={String(b.value ?? "")} onChange={(id) => set(b.bind, id)} look={outlined ? "outlined" : "standard"} error={b.error} />;
+}
+
+/** A date with a calendar under the field. The answer is YYYY-MM-DD. */
+export function DateInputBlock({ b, set, lang }: P) {
+  const outlined = useLook().look?.fields === "outlined";
+  return <KitDateField label={b.label} value={String(b.value ?? "")} onChange={(iso) => set(b.bind, iso)} min={b.min} max={b.max} placeholder={b.placeholder} helper={b.helper} error={b.error} look={outlined ? "outlined" : "standard"} lang={lang}
+    strings={{ open: ui(lang, "pickDate"), prevMonth: ui(lang, "prevMonth"), nextMonth: ui(lang, "nextMonth"), prevYear: ui(lang, "prevYear"), nextYear: ui(lang, "nextYear") }} />;
+}
+export const AvatarBlock = ({ b }: P) => <KitAvatar name={b.name} text={b.text || undefined} />;
 
 export function TextField({ b, set, lang }: P) {
   const kind = keyboardKind(b.keyboard);
@@ -184,5 +198,5 @@ export function Menu({ b, press }: P) {
 /** One component for every kind of block a journey can contain. Typed against the schema, so a new block kind must be added here. */
 export const registry: Record<BlockType, (p: P) => React.ReactElement | null> = {
   accountPicker: AccountPicker, beneficiaryPicker: BeneficiaryPicker, amountInput: AmountInput, select: SelectChips, textInput: TextField,
-  alert: Alert, toggle: Toggle, cardForm: CardForm, reviewSummary: ReviewSummary, consent: Consent, otp: Otp, result: Result, text: TextBlock, button: Button, stepper: () => null, hero: Hero, sectionHeader: SectionHeader, shortcuts: Shortcuts, menu: Menu, divider: Divider, accordion: AccordionBlock, dialog: DialogBlock, map: MapBlock, balanceList: BalanceListBlock,
+  alert: Alert, toggle: Toggle, cardForm: CardForm, reviewSummary: ReviewSummary, consent: Consent, otp: Otp, result: Result, text: TextBlock, button: Button, stepper: () => null, hero: Hero, sectionHeader: SectionHeader, shortcuts: Shortcuts, menu: Menu, divider: Divider, accordion: AccordionBlock, dialog: DialogBlock, dateInput: DateInputBlock, avatar: AvatarBlock, map: MapBlock, balanceList: BalanceListBlock,
 };
