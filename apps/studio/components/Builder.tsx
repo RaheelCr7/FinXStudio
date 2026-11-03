@@ -9,7 +9,6 @@ import { lintAll } from "@finx/renderer-core";
 import { appsOfJourney, useProjects } from "./Projects";
 import { useWho } from "./Who";
 import { Copilot } from "./Copilot";
-import { ROLE_INFO } from "@/lib/roles";
 import { addBlock, addScreen, BLOCK_GROUPS, BLOCK_LABELS, KNOWN_ADAPTERS, sameContent, textOf } from "@/lib/edit";
 import { BLOCK_ICONS } from "@/lib/blocks-ui";
 import { FlowCanvas } from "./FlowCanvas";
@@ -53,8 +52,10 @@ export function Builder({ initial, aiRun }: { initial: Rec; aiRun?: { id: string
   const wide = useMedia("(min-width: 1600px)");
   const router = useRouter();
   const { projects } = useProjects();
-  const { you, can } = useWho();
-  const canEdit = can("edit"), canPublish = can("publish");
+  const { you, can, roleName } = useWho();
+  const scope = appsOfJourney(initial.draft);
+  const myRole = roleName(you, scope.length === 1 ? scope[0] : undefined);
+  const canEdit = can("edit", scope), canPublish = can("publish", scope);
   const lastSaved = useRef(JSON.stringify(initial.draft));
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const problemsRef = useRef<HTMLDivElement>(null);
@@ -63,7 +64,7 @@ export function Builder({ initial, aiRun }: { initial: Rec; aiRun?: { id: string
   const flash = useCallback((text: string, ok = true) => { setToast({ text, ok }); setTimeout(() => setToast(null), 4200); }, []);
 
   const commit = useCallback((next: Journey) => {
-    if (!canEdit) { flash(`${you.name} is a ${ROLE_INFO[you.role].label} and cannot edit journeys. Ask a Designer, Developer or Admin.`, false); return; }
+    if (!canEdit) { flash(`${you.name} is a ${myRole} here and cannot edit journeys. Ask someone who can edit.`, false); return; }
     setPast((p) => [...p.slice(-49), journey]); setFuture([]); setJourney(next);
   }, [journey, canEdit, you, flash]);
   const undo = useCallback(() => { const p = past[past.length - 1]; if (!p) return; setPast(past.slice(0, -1)); setFuture([journey, ...future]); setJourney(p); }, [past, future, journey]);
@@ -182,10 +183,10 @@ export function Builder({ initial, aiRun }: { initial: Rec; aiRun?: { id: string
         </div>
         <Copilot slug={journey.slug} name={textOf(journey.name)} run={aiRun} />
         <button className="btn" onClick={togglePreview} aria-pressed={previewOn} title="Phone preview">{previewOn ? <EyeOff size={15} aria-hidden /> : <Eye size={15} aria-hidden />}Preview</button>
-        <button className="btn primary" onClick={doPublish} disabled={publishing || !canPublish} title={canPublish ? undefined : `${ROLE_INFO[you.role].label}s cannot publish. Ask a Reviewer or Admin.`}>{publishing ? <><LoaderCircle size={15} className="spin" aria-hidden />Publishing…</> : <><Rocket size={15} aria-hidden />Publish to UAT</>}</button>
+        <button className="btn primary" onClick={doPublish} disabled={publishing || !canPublish} title={canPublish ? undefined : `${myRole}s cannot publish here. Ask someone who can publish.`}>{publishing ? <><LoaderCircle size={15} className="spin" aria-hidden />Publishing…</> : <><Rocket size={15} aria-hidden />Publish to UAT</>}</button>
       </div>
 
-      {!canEdit ? <div className="readonly-bar" role="status">View only: {ROLE_INFO[you.role].label}s cannot edit journeys. You can look around, try the preview and publish when it is ready.</div> : null}
+      {!canEdit ? <div className="readonly-bar" role="status">View only: {myRole}s cannot edit journeys here. You can look around, try the preview and publish when it is ready.</div> : null}
       <div className={gridClass}>
         <aside className="pane left" aria-label="Screens and settings">
           <div className="pane-head">

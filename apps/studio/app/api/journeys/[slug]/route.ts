@@ -1,4 +1,6 @@
 import { getRecord, saveDraft } from "@/lib/store";
+import { nameOf, record } from "@/lib/activity";
+import { appsOfJourney } from "@/lib/project-utils";
 import { fail, guardWrite, json, preflight } from "@/lib/http";
 import { lintAll } from "@finx/renderer-core";
 import { requireCan } from "@/lib/people";
@@ -21,9 +23,10 @@ export async function GET(req: Request, { params }: Ctx) {
 export async function PUT(req: Request, { params }: Ctx) {
   const blocked = guardWrite(req); if (blocked) return blocked;
   try {
-    await requireCan(req, "edit");
     const { slug } = await params;
-    const { record, issues, warnings } = await saveDraft(slug, await req.json());
-    return json(req, { ...record, issues, warnings });
+    const who = await requireCan(req, "edit", appsOfJourney((await getRecord(slug)).draft));
+    const { record: rec, issues, warnings } = await saveDraft(slug, await req.json(), { id: who.id, name: who.name });
+    await record({ actor: { id: who.id, name: who.name }, action: "journey.edit", target: nameOf(rec.draft.name), projectIds: appsOfJourney(rec.draft) });
+    return json(req, { ...rec, issues, warnings });
   } catch (e) { return fail(e, req); }
 }

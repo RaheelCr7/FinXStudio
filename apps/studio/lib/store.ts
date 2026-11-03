@@ -10,7 +10,7 @@ import { appIds } from "./brand-ids";
 export type HistoryEntry = { version: number; publishedAt: string; by: string };
 /** Published copies kept for rolling back. Older versions than this are dropped. */
 export const KEEP_VERSIONS = 20;
-export type JourneyRecord = { slug: string; draft: Journey; published?: Journey; history: HistoryEntry[]; updatedAt: string; /** the published journey as it was at each version number */ versions?: Record<string, Journey> };
+export type JourneyRecord = { slug: string; draft: Journey; published?: Journey; history: HistoryEntry[]; updatedAt: string; /** who last changed the draft, for the approval rule */ editedBy?: { id: string; name: string }; /** the published journey as it was at each version number */ versions?: Record<string, Journey> };
 export type RunStatus = "running" | "needs_review" | "done" | "failed";
 export type RunStep = { at: string; text: string };
 /** One piece of work an AI agent (a Claude Code skill) did, reported back through the FinX MCP server. */
@@ -77,7 +77,7 @@ export async function getRecord(slug: string): Promise<JourneyRecord> {
   return r;
 }
 
-export async function saveDraft(slug: string, body: unknown) {
+export async function saveDraft(slug: string, body: unknown, by?: { id: string; name: string }) {
   assertSlug(slug);
   const v = validateJourney(body);
   if (!v.ok) throw new StoreError(422, "Journey does not match the schema: " + v.errors.slice(0, 5).join("; "));
@@ -86,6 +86,7 @@ export async function saveDraft(slug: string, body: unknown) {
   const rec = db.journeys[slug];
   if (!rec) throw new StoreError(404, "Journey not found");
   rec.draft = { ...v.journey, status: "draft" };
+  if (by) rec.editedBy = by;
   rec.updatedAt = new Date().toISOString();
   await write(db);
   return { record: rec, issues: lintAll(rec.draft), warnings: v.warnings };
@@ -144,7 +145,7 @@ export async function listVersions(slug: string) {
 }
 
 /** Puts an earlier published version back as the draft. Nothing changes for customers until a person publishes it again. */
-export async function restoreVersion(slug: string, version: number) {
+export async function restoreVersion(slug: string, version: number, by?: { id: string; name: string }) {
   assertSlug(slug);
   const db = await read();
   const rec = db.journeys[slug];
@@ -153,12 +154,13 @@ export async function restoreVersion(slug: string, version: number) {
   const snap = snapshotOf(rec, version);
   if (!snap) throw new StoreError(409, `There is no saved copy of v${version}. Copies are kept for the last ${KEEP_VERSIONS} publishes.`);
   rec.draft = { ...structuredClone(snap), status: "draft" };
+  if (by) rec.editedBy = by;
   rec.updatedAt = new Date().toISOString();
   await write(db);
   return rec;
 }
 
-export async function createJourney(name: string, appsInput?: unknown) {
+export async function createJourney(name: string, appsInput?: unknown, by?: { id: string; name: string }) {
   const apps = await cleanApps(appsInput);
   // Meezan journeys start in English and Urdu. Another app's journeys start in English only, so nothing is flagged as untranslated.
   const english = !!apps && !apps.includes("meezan");
@@ -183,7 +185,7 @@ export async function createJourney(name: string, appsInput?: unknown) {
     ],
   };
   const now = new Date().toISOString();
-  db.journeys[slug] = { slug, draft: j, history: [], updatedAt: now };
+  db.journeys[slug] = { slug, draft: j, history: [], updatedAt: now, ...(by ? { editedBy: by } : {}) };
   await write(db);
   return db.journeys[slug]!;
 }

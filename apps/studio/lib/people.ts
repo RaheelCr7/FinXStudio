@@ -1,9 +1,11 @@
 import { promises as fs } from "node:fs";
 import path from "node:path";
 import { StoreError } from "./store";
-import { can, COOKIE_USER, isRole, ROLE_INFO, type Action, type Role } from "./roles";
+import { listRoles } from "./access";
+import { listProjects } from "./projects";
+import { canDo, COOKIE_USER, roleLabel, type Access, type Action, type Role, type RoleDef } from "./roles";
 
-export type Person = { id: string; name: string; role: Role };
+export type Person = { id: string; name: string; /** the main role: applies everywhere unless a project below says otherwise */ role: Role; /** a different role in some projects, by project id */ access?: Access };
 
 const file = () => path.join(process.env.FINX_DATA_DIR ?? path.join(process.cwd(), ".data"), "people.json");
 const SEED: Person[] = [
@@ -32,27 +34,52 @@ const cleanName = (v: unknown) => {
   if (typeof v !== "string" || v.trim().length < 2 || v.trim().length > 60) throw new StoreError(400, "Name must be 2 to 60 characters");
   return v.trim();
 };
-const cleanRole = (v: unknown): Role => { if (!isRole(v)) throw new StoreError(400, "Role must be admin, designer, developer or reviewer"); return v; };
+const cleanRole = (v: unknown, defs: RoleDef[]): Role => {
+  if (typeof v !== "string" || !defs.some((r) => r.id === v)) throw new StoreError(400, `Role must be one of: ${defs.map((r) => r.id).join(", ")}`);
+  return v;
+};
+/** Project access: { projectId: roleId } to set, a null or empty value to clear it. Only known projects and roles are accepted. */
+async function cleanAccess(v: unknown, defs: RoleDef[], current: Access = {}): Promise<Access | undefined> {
+  if (v === undefined) return current;
+  if (v === null || typeof v !== "object" || Array.isArray(v)) throw new StoreError(400, "access must be an object of project ids to role ids");
+  const known = (await listProjects()).map((p) => p.id);
+  const next: Access = { ...current };
+  for (const [project, role] of Object.entries(v as Record<string, unknown>)) {
+    if (!known.includes(project)) throw new StoreError(400, `Unknown project ${project}`);
+    if (role === null || role === "") delete next[project]; else next[project] = cleanRole(role, defs);
+  }
+  return Object.keys(next).length ? next : undefined;
+}
+/** Studio always needs someone who can manage people. */
+export const managers = (people: Person[], defs: RoleDef[]) => people.filter((p) => canDo(p, "people", undefined, defs));
 
-export async function addPerson(input: { name: unknown; role: unknown }): Promise<Person> {
-  const name = cleanName(input.name), role = cleanRole(input.role);
+export async function addPerson(input: { name: unknown; role: unknown; access?: unknown }): Promise<Person> {
+  const defs = await listRoles();
+  const name = cleanName(input.name), role = cleanRole(input.role, defs);
+  const access = await cleanAccess(input.access, defs);
   const people = await listPeople();
   let id = slugOf(name) || "person"; const base = id; let n = 2;
   while (people.some((p) => p.id === id)) id = `${base}-${n++}`;
-  const person = { id, name, role };
+  const person: Person = { id, name, role, ...(access ? { access } : {}) };
   await write([...people, person]);
   return person;
 }
 
-export async function updatePerson(id: string, patch: { name?: unknown; role?: unknown }): Promise<Person> {
+export async function updatePerson(id: string, patch: { name?: unknown; role?: unknown; access?: unknown }): Promise<Person> {
+  const defs = await listRoles();
   const people = await listPeople();
   const p = people.find((x) => x.id === id);
   if (!p) throw new StoreError(404, "Person not found");
   if (patch.name !== undefined) p.name = cleanName(patch.name);
   if (patch.role !== undefined) {
-    const role = cleanRole(patch.role);
-    if (p.role === "admin" && role !== "admin" && people.filter((x) => x.role === "admin").length === 1) throw new StoreError(409, "Studio needs at least one Admin. Make someone else an Admin first.");
+    const role = cleanRole(patch.role, defs);
+    const after = people.map((x) => (x.id === id ? { ...x, role } : x));
+    if (!managers(after, defs).length) throw new StoreError(409, "Studio needs at least one Admin. Make someone else an Admin first.");
     p.role = role;
+  }
+  if (patch.access !== undefined) {
+    const access = await cleanAccess(patch.access, defs, p.access);
+    if (access) p.access = access; else delete p.access;
   }
   await write(people);
   return p;
@@ -62,8 +89,9 @@ export async function removePerson(id: string) {
   const people = await listPeople();
   const p = people.find((x) => x.id === id);
   if (!p) throw new StoreError(404, "Person not found");
-  if (p.role === "admin" && people.filter((x) => x.role === "admin").length === 1) throw new StoreError(409, "Studio needs at least one Admin. Make someone else an Admin first.");
-  await write(people.filter((x) => x.id !== id));
+  const rest = people.filter((x) => x.id !== id);
+  if (!managers(rest, await listRoles()).length) throw new StoreError(409, "Studio needs at least one Admin. Make someone else an Admin first.");
+  await write(rest);
 }
 
 /**
@@ -81,13 +109,20 @@ export async function actorOf(req: Request): Promise<Person> {
   return actorFromId(id ? decodeURIComponent(id) : undefined);
 }
 
-/** Returns who is acting, or refuses with a message that says what to do. */
-export async function requireCan(req: Request, action: Action): Promise<Person> {
+/**
+ * Returns who is acting, or refuses with a message that says what to do. `projects` names the projects the work belongs to
+ * (a journey's apps); the person's role in those decides, and their main role when none are named.
+ */
+export async function requireCan(req: Request, action: Action, projects?: string[]): Promise<Person> {
   const who = await actorOf(req);
-  if (!can(who.role, action)) {
-    const need = action === "publish" ? "a Reviewer or Admin" : action === "edit" ? "a Designer, Developer or Admin" : action === "agents" ? "a Developer or Admin" : action === "projects" ? "a Designer or Admin" : "an Admin";
+  const defs = await listRoles();
+  if (!canDo(who, action, projects, defs)) {
+    const names = projects?.length && !["people", "projects"].includes(action) ? ` in ${projects.join(" and ")}` : "";
+    const have = roleLabel(projects?.length && who.access?.[projects[0]!] ? who.access[projects[0]!]! : who.role, defs);
     const verb: Record<Action, string> = { edit: "edit journeys", publish: "publish", projects: "create or restyle projects", agents: "update agent runs", people: "manage people" };
-    throw new StoreError(403, `${who.name} is a ${ROLE_INFO[who.role].label} and cannot ${verb[action]}. Ask ${need}.`);
+    const holders = defs.filter((r) => r.actions.includes(action)).map((r) => r.label);
+    const need = holders.length > 1 ? `${holders.slice(0, -1).join(", ")} or ${holders.at(-1)}` : holders[0] ?? "someone with that role";
+    throw new StoreError(403, `${who.name} is a ${have}${names} and cannot ${verb[action]}. Ask ${/^[AEIOU]/i.test(need) ? "an" : "a"} ${need}.`);
   }
   return who;
 }

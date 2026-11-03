@@ -2,7 +2,9 @@ import { cloneJourney, listJourneys } from "@/lib/store";
 import { createProject, listProjects } from "@/lib/projects";
 import { fail, guardWrite, json, preflight } from "@/lib/http";
 import { actorOf, requireCan } from "@/lib/people";
-import { can } from "@/lib/roles";
+import { listRoles } from "@/lib/access";
+import { record } from "@/lib/activity";
+import { canDo } from "@/lib/roles";
 import { PRESETS } from "@finx/ui-kit";
 
 export const dynamic = "force-dynamic";
@@ -32,13 +34,14 @@ export async function POST(req: Request) {
     const who = await actorOf(req);
     // starters go live only when the person is allowed to publish; otherwise they arrive as drafts to be reviewed
     const body = await req.json();
-    const goLive = can(who.role, "publish") && body.publishStarters !== false;
+    const goLive = canDo(who, "publish", undefined, await listRoles()) && body.publishStarters !== false;
     const created = await createProject({ name: body.name, bundleId: body.bundleId, preset: body.preset, accent: body.accent, currency: body.currency });
     const started: string[] = [], failed: { slug: string; error: string }[] = [];
     for (const slug of Array.isArray(body.starters) ? body.starters.slice(0, 20) : []) {
       try { await cloneJourney(String(slug), created.project.id, { publishNow: goLive }); started.push(`${slug}-${created.project.id}`); }
       catch (e: any) { failed.push({ slug: String(slug), error: e?.message ?? "Could not copy" }); }
     }
+    await record({ actor: { id: who.id, name: who.name }, action: "project.create", target: created.project.name, detail: started.length ? `Started with ${started.length} journey${started.length === 1 ? "" : "s"}` : undefined, projectIds: [created.project.id] });
     return json(req, { ...created, started, failed, startersPublished: goLive }, 201);
   } catch (e) { return fail(e, req); }
 }
