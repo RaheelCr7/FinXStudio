@@ -40,6 +40,8 @@ export class MappedCorporateProvider implements CorporateProvider {
   withdrawPayment(input: { userId: string; paymentId: string }) { return this.run("withdrawPayment", input) as CorpPayment; }
   checkBatch(input: { userId: string; fromAccountId: string; lines: BulkLineInput[] }) { return this.run("checkBatch", input) as BatchCheck; }
   initiateBulk(input: { userId: string; fromAccountId: string; lines: BulkLineInput[]; reference?: string }) { return this.run("initiateBulk", input) as CorpPayment; }
+  checkPayroll(input: { userId: string; fromAccountId: string; period: string; lines: BulkLineInput[] }) { return this.run("checkPayroll", input) as BatchCheck; }
+  initiatePayroll(input: { userId: string; fromAccountId: string; period: string; lines: BulkLineInput[] }) { return this.run("initiatePayroll", input) as CorpPayment; }
   listPending(input: { userId: string; as?: "approver" | "initiator" }) { return this.run("listPending", input) as CorpPayment[]; }
 }
 

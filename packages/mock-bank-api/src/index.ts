@@ -13,7 +13,7 @@ export * from "./invest";
 export { createCorporateProvider, MappedCorporateProvider, PROVIDERS, type CorporateProvider, type ProviderId } from "./corporate-provider";
 export { BankBApi, ApiError } from "./corporate-b";
 export { applyRule, build, mapError, type MappingSpec } from "./mapping";
-export { MAX_BULK_LINES, type BatchCheck, type BulkLineInput, type BulkLineResult, ACME, CorporateSandbox, type CorporateBankAdapter, type CorpCompany, type Flaws, type CorpPayment, type CorpUser, type CorpRole, type InitiateInput } from "./corporate";
+export { MAX_BULK_LINES, SALARY_CAP_FACTOR, type CorpEmployee, type BatchCheck, type BulkLineInput, type BulkLineResult, ACME, CorporateSandbox, type CorporateBankAdapter, type CorpCompany, type Flaws, type CorpPayment, type CorpUser, type CorpRole, type InitiateInput } from "./corporate";
 export { PER_USD, FX_SPREAD, FX_FEE_RATE, QUOTE_TTL_SECONDS, midRate, customerRate, type Quote } from "./fx";
 
 export type Account = { id: string; name: string; maskedNumber: string; iban: string; balance: number; currency: string; status: "active" | "frozen"; canDebit: boolean };
@@ -195,7 +195,7 @@ export class MockBank {
       case "corp.company.get": {
         const c = corp.getCompany();
         const me = c.users.find((u) => u.id === userId);
-        return { id: c.id, name: c.name, currency: c.currency, accounts: Object.fromEntries(c.accounts.map((a) => [a.id, a])), beneficiaries: Object.fromEntries(c.whitelist.map((b) => [b.id, { ...b, displayName: b.name }])), users: c.users.map((u) => ({ id: u.id, name: u.name, roles: u.roles })), me: me ? { id: me.id, name: me.name, roles: me.roles, dailyLimit: me.dailyLimit, usedToday: me.usedToday, remainingToday: me.dailyLimit - me.usedToday } : undefined, companyDailyLimit: c.companyDailyLimit, companyUsedToday: c.companyUsedToday, dualApprovalAbove: c.dualApprovalAbove, cutoff: c.cutoff };
+        return { id: c.id, name: c.name, currency: c.currency, accounts: Object.fromEntries(c.accounts.map((a) => [a.id, a])), beneficiaries: Object.fromEntries(c.whitelist.map((b) => [b.id, { ...b, displayName: b.name }])), employees: Object.fromEntries((c.employees ?? []).map((e) => [e.id, { id: e.id, name: e.name, bank: e.bank, maskedNumber: e.maskedNumber }])), users: c.users.map((u) => ({ id: u.id, name: u.name, roles: u.roles })), me: me ? { id: me.id, name: me.name, roles: me.roles, dailyLimit: me.dailyLimit, usedToday: me.usedToday, remainingToday: me.dailyLimit - me.usedToday } : undefined, companyDailyLimit: c.companyDailyLimit, companyUsedToday: c.companyUsedToday, dualApprovalAbove: c.dualApprovalAbove, cutoff: c.cutoff };
       }
       case "corp.bulk.check": {
         const check = corp.checkBatch({ userId, fromAccountId: String(input.fromAccountId ?? ""), lines: parseBulkFile(String(input.file ?? "")) });
@@ -208,6 +208,20 @@ export class MockBank {
         if (!this.otpVerified) throw new BankError("OTP_REQUIRED", "OTP not verified");
         if (this.p.behaviour.transferFails) throw new BankError("CORE_UNAVAILABLE", "Core banking unavailable");
         const p = corp.initiateBulk({ userId, fromAccountId: String(input.fromAccountId ?? ""), lines: parseBulkFile(String(input.file ?? "")), reference: input.reference });
+        this.otpVerified = false;
+        return shown(p, corp.getCompany());
+      }
+      case "corp.payroll.check": {
+        const check = corp.checkPayroll({ userId, fromAccountId: String(input.fromAccountId ?? ""), period: String(input.period ?? ""), lines: parseBulkFile(String(input.file ?? "")) });
+        const c = corp.getCompany();
+        const name = (id: string) => c.employees?.find((e) => e.id === id)?.name;
+        const lines = check.lines.map((l) => ({ ...l, payee: name(l.beneficiaryId) ?? l.beneficiaryId, ...(l.code ? { message: ({ ...BULK_LINE_MESSAGE, DUPLICATE_LINE: "This employee is already on the file" } as Record<string, string>)[l.code] } : {}) }));
+        return { ...check, lines: Object.fromEntries(lines.map((l) => [String(l.n), l])), problems: Object.fromEntries(lines.filter((l) => !l.ok).map((l) => [String(l.n), l])), requiredApprovers: 2, period: String(input.period), currency: c.accounts.find((a) => a.id === input.fromAccountId)?.currency ?? c.currency };
+      }
+      case "corp.payroll.submit": {
+        if (!this.otpVerified) throw new BankError("OTP_REQUIRED", "OTP not verified");
+        if (this.p.behaviour.transferFails) throw new BankError("CORE_UNAVAILABLE", "Core banking unavailable");
+        const p = corp.initiatePayroll({ userId, fromAccountId: String(input.fromAccountId ?? ""), period: String(input.period ?? ""), lines: parseBulkFile(String(input.file ?? "")) });
         this.otpVerified = false;
         return shown(p, corp.getCompany());
       }
@@ -486,13 +500,15 @@ export * from "./catalog";
 
 /** What the person sees for who a payment goes to: the beneficiary's name, or how many payees a bulk payment has. */
 function shown(p: CorpPayment, company: CorpCompany): CorpPayment & { payee: string } {
-  return { ...p, payee: p.lines ? `${p.lines.length} payment${p.lines.length === 1 ? "" : "s"}` : company.whitelist.find((b) => b.id === p.beneficiaryId)?.name ?? p.beneficiaryId };
+  return { ...p, payee: p.period ? `Payroll ${p.period} · ${p.lines?.length ?? 0} employee${p.lines?.length === 1 ? "" : "s"}` : p.lines ? `${p.lines.length} payment${p.lines.length === 1 ? "" : "s"}` : company.whitelist.find((b) => b.id === p.beneficiaryId)?.name ?? p.beneficiaryId };
 }
 
 const BULK_LINE_MESSAGE: Record<string, string> = {
   BENEFICIARY_NOT_WHITELISTED: "Not on the company's approved list",
   INVALID_AMOUNT: "The amount is not valid for this account's currency",
   DUPLICATE_LINE: "Same payee, amount and reference as an earlier line",
+  NOT_AN_EMPLOYEE: "Not on the company's payroll register",
+  ABOVE_SALARY_CAP: "More than 1.5 times this employee's monthly salary",
 };
 
 /**
@@ -501,6 +517,6 @@ const BULK_LINE_MESSAGE: Record<string, string> = {
  */
 export function parseBulkFile(text: string): { beneficiaryId: string; amount: number; reference: string }[] {
   const rows = text.split(/\r?\n/).map((r) => r.trim()).filter(Boolean);
-  if (rows.length && /^beneficiar|^payee/i.test(rows[0]!)) rows.shift();
+  if (rows.length && /^beneficiar|^payee|^employee/i.test(rows[0]!)) rows.shift();
   return rows.map((r) => { const parts = r.split(","); const amount = (parts[1] ?? "").trim(); return { beneficiaryId: (parts[0] ?? "").trim(), amount: amount === "" ? NaN : Number(amount.replace(/_/g, "")), reference: parts.slice(2).join(",").trim() }; });
 }

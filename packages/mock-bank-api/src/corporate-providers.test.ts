@@ -63,7 +63,7 @@ describe("the mapping engine", () => {
     const fields = new Set([...Object.keys(a.getPayment(released.id)), ...Object.keys(a.getPayment(rejected.id))]);
     const shape = Object.keys((bankBSpec as any).shapes.payment);
     expect([...fields].filter((f) => !shape.includes(f))).toEqual([]); // nothing a journey can read is left unmapped
-    const codes = ["NOT_AUTHORISED", "USER_NOT_FOUND", "ACCOUNT_NOT_FOUND", "BENEFICIARY_NOT_WHITELISTED", "INVALID_AMOUNT", "CURRENCY_NOT_SUPPORTED", "INSUFFICIENT_FUNDS", "LIMIT_USER_EXCEEDED", "LIMIT_COMPANY_EXCEEDED", "SELF_APPROVAL", "ALREADY_APPROVED", "PAYMENT_NOT_PENDING", "PAYMENT_NOT_FOUND", "NOT_AUTHORISED", "EMPTY_BATCH", "BATCH_TOO_LARGE", "NO_VALID_LINES"];
+    const codes = ["NOT_AUTHORISED", "USER_NOT_FOUND", "ACCOUNT_NOT_FOUND", "BENEFICIARY_NOT_WHITELISTED", "INVALID_AMOUNT", "CURRENCY_NOT_SUPPORTED", "INSUFFICIENT_FUNDS", "LIMIT_USER_EXCEEDED", "LIMIT_COMPANY_EXCEEDED", "SELF_APPROVAL", "ALREADY_APPROVED", "PAYMENT_NOT_PENDING", "PAYMENT_NOT_FOUND", "NOT_AUTHORISED", "EMPTY_BATCH", "BATCH_TOO_LARGE", "NO_VALID_LINES", "INVALID_PERIOD", "PAYROLL_ALREADY_RUN"];
     expect([...new Set(Object.values((bankBSpec as any).errors).map((e: any) => e.code))].sort()).toEqual([...new Set(codes)].sort());
   });
 });
@@ -187,5 +187,63 @@ describe("bulk payments", () => {
     expect(Object.keys(c.problems)).toEqual(["2"]);
     expect(c).toMatchObject({ validCount: 2, total: 43_000.5, requiredApprovers: 1, currency: "PKR" });
     await expect(bank.call("corp.bulk.submit", { userId: "sara", fromAccountId: "acme_ops", file: "sup_textile,1000" })).rejects.toMatchObject({ code: "OTP_REQUIRED" });
+  });
+});
+
+describe("payroll runs", () => {
+  const rows = [
+    { beneficiaryId: "emp_ali", amount: 180_000, reference: "Oct salary" },
+    { beneficiaryId: "emp_sana", amount: 300_000, reference: "Salary + bonus" }, // 1.25 x 240,000: fits
+    { beneficiaryId: "emp_bilal", amount: 300_000, reference: "typo" }, // 2 x 150,000: above the cap
+    { beneficiaryId: "sup_textile", amount: 1_000, reference: "not staff" },
+    { beneficiaryId: "emp_ali", amount: 180_000, reference: "again" }, // paid twice
+    { beneficiaryId: "emp_hina", amount: -1, reference: "bad" },
+  ];
+  const run = (over: Record<string, unknown> = {}) => ({ userId: "sara", fromAccountId: "acme_ops", period: "2026-10", lines: rows, ...over });
+  it("checks every row the same way on both banks", () => {
+    const { a, b } = both();
+    const x = a.checkPayroll(run()), y = b.checkPayroll(run());
+    expect(y).toEqual(x);
+    expect(x.lines.map((l) => [l.n, l.ok, l.code])).toEqual([[1, true, undefined], [2, true, undefined], [3, false, "ABOVE_SALARY_CAP"], [4, false, "NOT_AN_EMPLOYEE"], [5, false, "DUPLICATE_LINE"], [6, false, "INVALID_AMOUNT"]]);
+    expect(x).toMatchObject({ validCount: 2, total: 480_000 });
+  });
+  it("always needs two approvers, even for a small run, and is one payment for the limits", () => {
+    const { a, b } = both();
+    const x = a.initiatePayroll(run({ lines: [rows[0]!] })), y = b.initiatePayroll(run({ lines: [rows[0]!] }));
+    expect(x).toMatchObject({ beneficiaryId: "payroll", period: "2026-10", required: 2, amount: 180_000, reference: "Payroll 2026-10" });
+    expect(sans(y)).toEqual(sans(x));
+    expect(a.getCompany().users.find((u) => u.id === "sara")!.usedToday).toBe(180_000);
+    for (const [p, id] of [[a, x.id], [b, y.id]] as const) {
+      expect(p.approvePayment({ userId: "hassan", paymentId: id }).status).toBe("pending_approval");
+      expect(p.approvePayment({ userId: "layla", paymentId: id }).status).toBe("released");
+    }
+  });
+  it("runs a pay period once, until the run is withdrawn or rejected", () => {
+    for (const p of [provider("reference"), provider("bank-b")]) {
+      const first = p.initiatePayroll(run({ lines: [rows[0]!] }));
+      expect(thrown(() => p.checkPayroll(run())), p.constructor.name).toMatchObject({ code: "PAYROLL_ALREADY_RUN", message: "Payroll for 2026-10 has already been started" });
+      expect(thrown(() => p.initiatePayroll(run({ lines: [rows[1]!] }))).code).toBe("PAYROLL_ALREADY_RUN");
+      p.withdrawPayment({ userId: "sara", paymentId: first.id });
+      expect(p.checkPayroll(run()).validCount).toBe(2);
+      expect(p.checkPayroll(run({ period: "2026-09" })).validCount).toBe(2); // another month is independent
+    }
+  });
+  it("refuses a period that is not a month or lies in the future, with the same words on both banks", () => {
+    const { a, b } = both();
+    for (const period of ["October", "2026-13", "2026-12", ""]) {
+      const x = thrown(() => a.checkPayroll(run({ period }))), y = thrown(() => b.checkPayroll(run({ period })));
+      expect(y, period).toEqual(x); expect(x.code, period).toBe("INVALID_PERIOD");
+    }
+  });
+  it("reads a pasted file and shows employee names, and the roster and error words are the bank's own", async () => {
+    const bank = new MockBank("acme"); bank.now = () => T;
+    const c = await bank.call("corp.payroll.check", { userId: "sara", fromAccountId: "acme_ops", period: "2026-10", file: "employee,amount,reference\nemp_ali,180000,Oct\nemp_hina,500000,Oct\n" });
+    expect(Object.values(c.lines).map((l: any) => [l.payee, l.ok, l.message])).toEqual([["Ali Hamdan", true, undefined], ["Hina Rauf", false, "More than 1.5 times this employee's monthly salary"]]);
+    expect(c).toMatchObject({ requiredApprovers: 2, period: "2026-10", total: 180_000 });
+    expect((await bank.call("corp.company.get", { userId: "sara" })).employees.emp_ali).toEqual({ id: "emp_ali", name: "Ali Hamdan", bank: "HBL", maskedNumber: "••4410" });
+    await expect(bank.call("corp.payroll.submit", { userId: "sara", fromAccountId: "acme_ops", period: "2026-10", file: "emp_ali,1000" })).rejects.toMatchObject({ code: "OTP_REQUIRED" });
+    await bank.call("bank.otp.send"); await bank.call("bank.otp.verify", { code: "482100" });
+    const p = await bank.call("corp.payroll.submit", { userId: "sara", fromAccountId: "acme_ops", period: "2026-10", file: "emp_ali,180000\nemp_sana,200000" });
+    expect(p).toMatchObject({ payee: "Payroll 2026-10 · 2 employees", required: 2 });
   });
 });
