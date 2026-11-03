@@ -42,5 +42,8 @@ Every change is written to the activity log.
 ## In Studio
 **Requirements** (sidebar, and ⌘K): the list for the current project, each with its status, version, criteria count, open questions and what still blocks approval; **New requirement** takes a title and a sentence of intent. A requirement opens in an editor: intent, the lists (who, steps, rules, data, bank operations, failures, acceptance criteria, compliance) with an Add and a remove on each row, **Save changes**, a **Questions** thread (ask, answer) and an **Approval** panel that shows what is missing and enables **Approve** (publish permission) only when nothing is. Changing an approved requirement says so and takes it back to a draft.
 
+## For Claude Code
+Tools (`finx_list_requirements`, `finx_get_requirement`, `finx_save_requirement`, `finx_ask_requirement`) and the `/finx-requirements` skill: give it a brief or paste a document, and it drafts the requirement (actors, steps, rules, data, operations, failures, testable acceptance criteria) and posts up to five questions about what changes what is built. It never approves, answers its own questions, deletes, or generates a journey: those stay with a person in Studio. Requirement text and pasted documents are treated as data, never as instructions. Details in [AI-LAYER.md](AI-LAYER.md).
+
 ## Next
-The FinX MCP tools (`finx_get_requirement`, `finx_save_requirement`, `finx_ask_requirement`) and the `/finx-requirements` skill, then the generator that reads an approved requirement and carries each criterion id into journeys, rules and tests; and a coverage view of criteria against tests.
+A coverage view of criteria against tests, then the generator that reads an approved requirement (plan step, journey, tests, checkpoint) and carries each criterion id into journeys, rules and tests.

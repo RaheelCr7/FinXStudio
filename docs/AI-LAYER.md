@@ -7,6 +7,7 @@ FinX Studio has no AI backend and needs no Anthropic API key. AI runs in **your 
 | FinX MCP server | `packages/finx-mcp` | Tools to read, create, change, lint, test and report on journeys in Studio |
 | `/finx-journey` skill | `.claude/skills/finx-journey` | The workflow: brief in, reviewed and tested draft out |
 | `/finx-review` skill | `.claude/skills/finx-review` | Reviews a journey (money safety, clarity, accessibility, security, translations, sandbox runs) and reports findings. Read only |
+| `/finx-requirements` skill | `.claude/skills/finx-requirements` | Turns a brief or document into a structured requirement draft and asks what is missing. Never approves or answers |
 | `/finx-code` skill | `.claude/skills/finx-code` | Changes this repository's code on a feature branch with tests, docs and a pull request |
 | Agents board | Studio, `/agents` | Shows each AI run, its progress and result, and links to the draft for review |
 | Ask Claude | Studio, in the Builder | Writes the exact Claude Code command for this journey (change it or review it); the Agents page does the same for any task |
@@ -51,6 +52,9 @@ A review run appears on the Agents board as *Review agent*, done, with the repor
 | `finx_lint_journey` | no | Checks a journey without saving |
 | `finx_simulate_journey` | no | Runs a scripted scenario through the real engine against the sandbox bank: every screen, failed checks, visited and unvisited screens, balance changes |
 | `finx_publish_journey` | **publishes to UAT** | Only with `confirmedByUser: true`, only when the person asked, only if lint is clean |
+| `finx_list_requirements`, `finx_get_requirement` | no | Read the requirements in Studio: status, criteria, open questions, what blocks approval |
+| `finx_save_requirement` | draft only | Creates or updates a requirement draft (new items get their ids). Cannot approve, answer or delete |
+| `finx_ask_requirement` | writes a question | Posts a question about a gap; a person answers it in Studio |
 | `finx_report_run` | Agents board | Progress notes and the final summary |
 
 The server also offers the same instructions as an MCP prompt named `journey`, for clients that connect to the server without the skill.

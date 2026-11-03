@@ -48,7 +48,7 @@ describe("the /finx-journey skill", () => {
 
 describe("every FinX skill", () => {
   const names = readdirSync(new URL("../skills", import.meta.url));
-  it("includes the journey, review and code skills", () => { expect(names.sort()).toEqual(["finx-code", "finx-journey", "finx-review"]); });
+  it("includes the journey, review, code and requirements skills", () => { expect(names.sort()).toEqual(["finx-code", "finx-journey", "finx-requirements", "finx-review"]); });
   for (const name of names) {
     const source = `../skills/${name}/SKILL.md`, installed = `../../../.claude/skills/${name}/SKILL.md`;
     it(`${name}: has front matter, is installed identically, takes the request once, and pre-approves nothing`, () => {
