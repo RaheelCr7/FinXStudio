@@ -6,6 +6,6 @@ export const STATUS: Record<RunStatus, { label: string; chip: string }> = {
   done: { label: "Done", chip: "chip pos" },
   failed: { label: "Failed", chip: "chip neg" },
 };
-export const AGENT_LABEL: Record<string, string> = { journey: "Journey agent", review: "Review agent", code: "Code agent", requirements: "Requirements agent" };
+export const AGENT_LABEL: Record<string, string> = { journey: "Journey agent", review: "Review agent", code: "Code agent" };
 /** Deterministic UTC timestamp, so server and browser render the same text. */
 export const fmtTime = (iso: string) => iso.slice(0, 16).replace("T", " ") + " UTC";

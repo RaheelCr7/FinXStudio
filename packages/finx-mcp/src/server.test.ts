@@ -18,7 +18,7 @@ async function connect(studio: FakeStudio, readOnly = false) {
   return { client, call, studio };
 }
 
-const TOOLS = ["finx_get_catalog", "finx_get_example", "finx_list_journeys", "finx_list_projects", "finx_list_catalog", "finx_add_from_catalog", "finx_get_journey", "finx_create_journey", "finx_save_draft", "finx_patch_journey", "finx_lint_journey", "finx_simulate_journey", "finx_publish_journey", "finx_report_run", "finx_list_requirements", "finx_get_requirement", "finx_save_requirement", "finx_ask_requirement"];
+const TOOLS = ["finx_get_catalog", "finx_get_example", "finx_list_journeys", "finx_list_projects", "finx_list_catalog", "finx_add_from_catalog", "finx_get_journey", "finx_create_journey", "finx_save_draft", "finx_patch_journey", "finx_lint_journey", "finx_simulate_journey", "finx_publish_journey", "finx_report_run"];
 
 describe("FinX MCP server", () => {
   let studio: FakeStudio;
@@ -233,59 +233,5 @@ describe("FinX MCP server", () => {
     const r: any = await client.callTool({ name: "finx_list_journeys", arguments: {} });
     expect(r.isError).toBe(true);
     expect(r.content[0].text).toContain("Cannot reach FinX Studio");
-  });
-});
-
-describe("FinX MCP requirements tools", () => {
-  const draft = { title: "Corporate payment", intent: "A company initiator sends a payment that an approver must release before it leaves the bank.", projectId: "meezan" };
-  let studio: FakeStudio;
-  beforeEach(() => { studio = new FakeStudio(["fund-transfer-local"]); });
-
-  it("creates a draft, says what blocks approval, and gives the new items their ids", async () => {
-    const { call } = await connect(studio);
-    expect((await call("finx_save_requirement", { title: "Only a title" })).isError).toBe(true); // an intent is needed
-    const made = await call("finx_save_requirement", { ...draft, actors: [{ name: "Initiator" }, { name: "Approver" }], steps: [{ text: "Enter the payment" }] });
-    expect(made.json).toMatchObject({ id: "corporate-payment", status: "draft", version: 1, studioUrl: "http://studio.test/requirements/corporate-payment" });
-    expect(made.json.blockers).toEqual(["Write at least one acceptance criterion (AC-1 …)."]);
-    const got = await call("finx_get_requirement", { id: "corporate-payment" });
-    expect(got.json.actors.map((a: any) => a.id)).toEqual(["A-1", "A-2"]);
-    const upd = await call("finx_save_requirement", { id: "corporate-payment", criteria: [{ text: "A payment above the limit is refused" }] });
-    expect(upd.json).toMatchObject({ status: "draft", blockers: [], resetApproval: false });
-    expect((await call("finx_get_requirement", { id: "corporate-payment" })).json.criteria[0].id).toBe("AC-1");
-  });
-
-  it("lists requirements with their status and open questions", async () => {
-    const { call } = await connect(studio);
-    await call("finx_save_requirement", draft);
-    await call("finx_ask_requirement", { id: "corporate-payment", text: "Who approves above 1,000,000?" });
-    const list = await call("finx_list_requirements", { project: "meezan" });
-    expect(list.json.requirements[0]).toMatchObject({ id: "corporate-payment", status: "questions", openQuestions: 1 });
-    expect((await call("finx_list_requirements", { project: "bankworkx" })).json.requirements).toEqual([]);
-  });
-
-  it("asks a question the requirement waits on, and can never answer or approve", async () => {
-    const { client, call } = await connect(studio);
-    await call("finx_save_requirement", draft);
-    const q = await call("finx_ask_requirement", { id: "corporate-payment", text: "What happens after the cut-off?" });
-    expect(q.json).toMatchObject({ status: "questions", openQuestions: 1, question: { id: "Q-1", by: "Claude Code" } });
-    expect((await call("finx_ask_requirement", { id: "nope", text: "Anything missing here?" })).isError).toBe(true);
-    const names = (await client.listTools()).tools.map((t) => t.name);
-    expect(names.filter((n) => /approve|answer|delete/.test(n))).toEqual([]); // a person approves and answers, in Studio
-  });
-
-  it("says when a change takes an approved requirement back to a draft", async () => {
-    const { call } = await connect(studio);
-    await call("finx_save_requirement", { ...draft, actors: [{ name: "Initiator" }], steps: [{ text: "Enter" }], criteria: [{ text: "Refused above the limit" }] });
-    studio.requirements.set("corporate-payment", { ...studio.requirements.get("corporate-payment")!, status: "approved", approvedBy: "Sam", approvedAt: "x" });
-    const changed = await call("finx_save_requirement", { id: "corporate-payment", rules: [{ kind: "limit", text: "Daily limit 2,000,000" }] });
-    expect(changed.json).toMatchObject({ status: "draft", version: 2, resetApproval: true });
-    expect(changed.json.next).toContain("needs approving again");
-  });
-
-  it("refuses to change anything in read-only mode, but still reads", async () => {
-    const { call } = await connect(studio, true);
-    expect((await call("finx_save_requirement", draft)).isError).toBe(true);
-    expect((await call("finx_ask_requirement", { id: "x", text: "A question here?" })).isError).toBe(true);
-    expect((await call("finx_list_requirements")).isError).toBe(false);
   });
 });

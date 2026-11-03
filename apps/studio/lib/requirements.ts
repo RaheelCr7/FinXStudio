@@ -43,8 +43,7 @@ function withIds(input: Record<string, unknown>): Record<string, unknown> {
 const sameContent = (a: RequirementContent, b: RequirementContent) => JSON.stringify(EDITABLE.map((k) => a[k])) === JSON.stringify(EDITABLE.map((k) => b[k]));
 
 export async function listRequirements(projectId?: string): Promise<Requirement[]> {
-  // newest change first; two changes in the same millisecond keep the later-created one first
-  const all = Object.values((await read()).requirements).map((r, i) => ({ r, i })).sort((a, b) => b.r.updatedAt.localeCompare(a.r.updatedAt) || b.i - a.i).map((x) => x.r);
+  const all = Object.values((await read()).requirements).sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
   return projectId ? all.filter((r) => r.projectId === projectId) : all;
 }
 
