@@ -49,12 +49,16 @@
     },
     "components": {
       "button": {
-        "height": 48,
-        "radius": 8
+        "height": 56,
+        "radius": 12
       },
       "field": {
-        "height": 50,
-        "radius": 10
+        "height": 54,
+        "radius": 8
+      },
+      "row": {
+        "height": 68,
+        "radius": 16
       },
       "bar": {
         "height": 58

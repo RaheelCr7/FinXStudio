@@ -23,8 +23,8 @@ describe("theme stylesheet", () => {
     for (const v of used) expect(a, v).toContain(`${v}:`);
   });
   it("carries each bank's component sizes, following its corner radii unless it overrides them", () => {
-    expect(themeCss(brands.cab!)).toContain("--fxc-button-height:48px;");
-    expect(themeCss(brands.cab!)).toContain("--fxc-button-radius:8px;");
+    expect(themeCss(brands.cab!)).toContain("--fxc-button-height:56px;");
+    expect(themeCss(brands.cab!)).toContain("--fxc-button-radius:12px;");
     expect(themeCss(brands.bankworkx!)).toContain("--fxc-field-radius:14px;");
     expect(themeCss(brands.meezan!)).toContain("--fxc-field-height:52px;");
   });

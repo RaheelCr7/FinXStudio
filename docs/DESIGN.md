@@ -21,3 +21,26 @@ For changes the picture suggests beyond the accent, such as new journeys or a di
 ## API
 
 `PATCH /api/projects/<id>` with `{ "accent": "#0E7490" }` returns `{ id, accent, previous, iconsMade }`, or `400` for an unreadable colour.
+
+## Reading a bank's design frames
+
+`scripts/extract-look.py` measures PNG exports of a bank's Figma frames and writes the look they show. It needs only Python with Pillow, and the exports must stay on this computer (`design/` is ignored by git).
+
+```bash
+python3 scripts/extract-look.py design/artea --name Artea --out design/artea/look.json
+python3 scripts/extract-look.py design/cab --name CAB --scale 2     # exports made at 2x
+python3 -m unittest scripts/test_figma_measure.py                    # checks the measuring against shapes of known size
+```
+
+It finds the solid areas (buttons, fields, bars, cards), measures their height, width and corner radius, and reports the brand colour, the field fill and outline, and how many frames agree. Sizes are exact to about 1 px at the export scale (the radius to about 1 to 2 px). It reads solid fills only: gradients, shadows, fonts and text sizes are not captured.
+
+What it measured (in dp, at 1x):
+
+| | Brand colour | Button | Text field | Other |
+|---|---|---|---|---|
+| CAB (Retail Banking) | #00853E | 56 high, radius about 12 | 54 high, radius about 8, outlined | List row 68 high, radius about 16; 100 dp top bar including the status bar |
+| CB (Business Banking) | #254EA2 | 56 high, full-round (pill); gradient #1E4098 to #2A7CFA | 48 high, radius about 8, 1 px outline #E2E8F0, label above | Secondary button #E9EDF6; header gradient from #1C398E; status colours #55AD76, #DDB536, #F0565E; keypad keys 56 high, radius 8; code boxes 72 and 50, radius 6 |
+| Artea | #EBFF3E (lime, dark text) | 46 high, radius about 3 | 56 high, radius about 4, no outline, fill #F5F6FA | Error banner #FFE5E8, info banner #DDE8FF, navy #071844 |
+| Rabbit (DIB neo bank), from demo video frames | #FA1C4A to #8725C3 gradient; text and icons #B42871 | About 39 high, full-round, gradient | About 50 high, underline only | Page #F4F5F4; list rows 64 high, radius about 16; raised round button in the centre of the tab bar |
+
+CAB's sizes and the *Coloured bar* and *Pill buttons* looks in the new project wizard come from these measurements. So does the *Lifestyle* look. It uses #B42871 because white text on the pink #FA1C4A reads at only 3.9:1, and it raises the button to 48 so the button is a large enough tap target. Frames taken from a video are low resolution, so its sizes are approximate. Not yet supported: a gradient primary button (CB), and a light brand colour with dark text (Artea's lime fails the "white text on the brand colour" rule, and would also need a separate link colour).
