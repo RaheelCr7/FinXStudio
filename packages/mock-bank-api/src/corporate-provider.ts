@@ -1,5 +1,5 @@
 import { ApiError, BankBApi } from "./corporate-b";
-import { CorporateSandbox, type CorporateBankAdapter, type CorpCompany, type CorpPayment, type Flaws, type InitiateInput } from "./corporate";
+import { CorporateSandbox, type BatchCheck, type BulkLineInput, type CorporateBankAdapter, type CorpCompany, type CorpPayment, type Flaws, type InitiateInput } from "./corporate";
 import { build, mapError, responseRules, type MappingSpec } from "./mapping";
 import bankBSpec from "./mappings/bank-b.corporate.json";
 
@@ -38,6 +38,8 @@ export class MappedCorporateProvider implements CorporateProvider {
   approvePayment(input: { userId: string; paymentId: string }) { return this.run("approvePayment", input) as CorpPayment; }
   rejectPayment(input: { userId: string; paymentId: string; reason?: string }) { return this.run("rejectPayment", input) as CorpPayment; }
   withdrawPayment(input: { userId: string; paymentId: string }) { return this.run("withdrawPayment", input) as CorpPayment; }
+  checkBatch(input: { userId: string; fromAccountId: string; lines: BulkLineInput[] }) { return this.run("checkBatch", input) as BatchCheck; }
+  initiateBulk(input: { userId: string; fromAccountId: string; lines: BulkLineInput[]; reference?: string }) { return this.run("initiateBulk", input) as CorpPayment; }
   listPending(input: { userId: string; as?: "approver" | "initiator" }) { return this.run("listPending", input) as CorpPayment[]; }
 }
 

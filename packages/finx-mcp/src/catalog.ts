@@ -60,7 +60,7 @@ export const BLOCKS: BlockDoc[] = [
     example: { type: "select", bind: "topup.carrier", label: { en: "Carrier", ur: "کیریئر" }, source: "ctx.carriers" },
   },
   {
-    type: "textInput", purpose: "Free text such as a mobile number or reference.", fields: { bind: "data path", label: "Loc", placeholder: "Loc", keyboard: "default | number | phone | email", secure: "true hides what is typed, with a Show button (passwords)", pattern: "JavaScript regular expression, matched against the whole value. Use ^ and $.", patternMessage: "Loc shown when the value does not match" },
+    type: "textInput", purpose: "Free text such as a mobile number or reference.", fields: { bind: "data path", label: "Loc", placeholder: "Loc", keyboard: "default | number | phone | email", lines: "2 to 12: a taller box for several lines of text, such as rows pasted from a file", secure: "true hides what is typed, with a Show button (passwords)", pattern: "JavaScript regular expression, matched against the whole value. Use ^ and $.", patternMessage: "Loc shown when the value does not match" },
     notes: ["Mark the field required: true in dataModel, otherwise an empty value is accepted."],
     example: { type: "textInput", bind: "bill.reference", label: { en: "Consumer number", ur: "کنزیومر نمبر" }, placeholder: { en: "10 to 14 digits", ur: "10 سے 14 ہندسے" }, keyboard: "number", pattern: "^[0-9]{10,14}$", patternMessage: { en: "Enter 10 to 14 digits", ur: "10 سے 14 ہندسے درج کریں" } },
   },

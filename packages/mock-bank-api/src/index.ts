@@ -3,7 +3,7 @@ import { alexFinance, BANKS, cardNetwork, luhnValid, type Finance } from "./fina
 import { customerRate, midRate, priceQuote, fxSupports, FX_SPREAD, QUOTE_TTL_SECONDS, type Quote } from "./fx";
 import { currencyInfo, roundMoney } from "@finx/ui-kit";
 import { BankError } from "./errors";
-import { ACME, type CorpCompany, type Flaws } from "./corporate";
+import { ACME, type CorpCompany, type CorpPayment, type Flaws } from "./corporate";
 import { createCorporateProvider, type CorporateProvider, type ProviderId } from "./corporate-provider";
 import { CabSandbox, CAB_PROFILES, type CabProfile } from "./cab";
 export * from "./finance";
@@ -13,7 +13,7 @@ export * from "./invest";
 export { createCorporateProvider, MappedCorporateProvider, PROVIDERS, type CorporateProvider, type ProviderId } from "./corporate-provider";
 export { BankBApi, ApiError } from "./corporate-b";
 export { applyRule, build, mapError, type MappingSpec } from "./mapping";
-export { ACME, CorporateSandbox, type CorporateBankAdapter, type CorpCompany, type Flaws, type CorpPayment, type CorpUser, type CorpRole, type InitiateInput } from "./corporate";
+export { MAX_BULK_LINES, type BatchCheck, type BulkLineInput, type BulkLineResult, ACME, CorporateSandbox, type CorporateBankAdapter, type CorpCompany, type Flaws, type CorpPayment, type CorpUser, type CorpRole, type InitiateInput } from "./corporate";
 export { PER_USD, FX_SPREAD, FX_FEE_RATE, QUOTE_TTL_SECONDS, midRate, customerRate, type Quote } from "./fx";
 
 export type Account = { id: string; name: string; maskedNumber: string; iban: string; balance: number; currency: string; status: "active" | "frozen"; canDebit: boolean };
@@ -197,24 +197,38 @@ export class MockBank {
         const me = c.users.find((u) => u.id === userId);
         return { id: c.id, name: c.name, currency: c.currency, accounts: Object.fromEntries(c.accounts.map((a) => [a.id, a])), beneficiaries: Object.fromEntries(c.whitelist.map((b) => [b.id, { ...b, displayName: b.name }])), users: c.users.map((u) => ({ id: u.id, name: u.name, roles: u.roles })), me: me ? { id: me.id, name: me.name, roles: me.roles, dailyLimit: me.dailyLimit, usedToday: me.usedToday, remainingToday: me.dailyLimit - me.usedToday } : undefined, companyDailyLimit: c.companyDailyLimit, companyUsedToday: c.companyUsedToday, dualApprovalAbove: c.dualApprovalAbove, cutoff: c.cutoff };
       }
+      case "corp.bulk.check": {
+        const check = corp.checkBatch({ userId, fromAccountId: String(input.fromAccountId ?? ""), lines: parseBulkFile(String(input.file ?? "")) });
+        const c = corp.getCompany();
+        const name = (id: string) => c.whitelist.find((b) => b.id === id)?.name;
+        const lines = check.lines.map((l) => ({ ...l, payee: name(l.beneficiaryId) ?? l.beneficiaryId, ...(l.code ? { message: BULK_LINE_MESSAGE[l.code] } : {}) }));
+        return { ...check, lines: Object.fromEntries(lines.map((l) => [String(l.n), l])), problems: Object.fromEntries(lines.filter((l) => !l.ok).map((l) => [String(l.n), l])), requiredApprovers: check.total > c.dualApprovalAbove ? 2 : 1, currency: c.accounts.find((a) => a.id === input.fromAccountId)?.currency ?? c.currency };
+      }
+      case "corp.bulk.submit": {
+        if (!this.otpVerified) throw new BankError("OTP_REQUIRED", "OTP not verified");
+        if (this.p.behaviour.transferFails) throw new BankError("CORE_UNAVAILABLE", "Core banking unavailable");
+        const p = corp.initiateBulk({ userId, fromAccountId: String(input.fromAccountId ?? ""), lines: parseBulkFile(String(input.file ?? "")), reference: input.reference });
+        this.otpVerified = false;
+        return shown(p, corp.getCompany());
+      }
       case "corp.payments.initiate": {
         if (!this.otpVerified) throw new BankError("OTP_REQUIRED", "OTP not verified");
         if (this.p.behaviour.transferFails) throw new BankError("CORE_UNAVAILABLE", "Core banking unavailable");
         const p = corp.initiatePayment({ userId, fromAccountId: String(input.fromAccountId ?? ""), beneficiaryId: String(input.beneficiaryId ?? ""), amount: Number(input.amount), reference: input.reference });
         this.otpVerified = false;
-        return p;
+        return shown(p, corp.getCompany());
       }
       case "corp.payments.approve": {
         if (!this.otpVerified) throw new BankError("OTP_REQUIRED", "OTP not verified");
         if (this.p.behaviour.transferFails) throw new BankError("CORE_UNAVAILABLE", "Core banking unavailable");
         const p = corp.approvePayment({ userId, paymentId: String(input.paymentId ?? "") });
         this.otpVerified = false;
-        return p;
+        return shown(p, corp.getCompany());
       }
-      case "corp.payments.withdraw": return corp.withdrawPayment({ userId, paymentId: String(input.paymentId ?? "") });
-      case "corp.payments.reject": return corp.rejectPayment({ userId, paymentId: String(input.paymentId ?? ""), reason: input.reason });
-      case "corp.payments.pending": return Object.fromEntries(corp.listPending({ userId, as: input.as === "initiator" ? "initiator" : input.as === "approver" ? "approver" : undefined }).map((p) => [p.id, p]));
-      case "corp.payments.get": return corp.getPayment(String(input.paymentId ?? ""));
+      case "corp.payments.withdraw": return shown(corp.withdrawPayment({ userId, paymentId: String(input.paymentId ?? "") }), corp.getCompany());
+      case "corp.payments.reject": return shown(corp.rejectPayment({ userId, paymentId: String(input.paymentId ?? ""), reason: input.reason }), corp.getCompany());
+      case "corp.payments.pending": return Object.fromEntries(corp.listPending({ userId, as: input.as === "initiator" ? "initiator" : input.as === "approver" ? "approver" : undefined }).map((p) => [p.id, shown(p, corp.getCompany())]));
+      case "corp.payments.get": return shown(corp.getPayment(String(input.paymentId ?? "")), corp.getCompany());
       default: return undefined;
     }
   }
@@ -468,3 +482,25 @@ export class MockBank {
 }
 
 export * from "./catalog";
+
+
+/** What the person sees for who a payment goes to: the beneficiary's name, or how many payees a bulk payment has. */
+function shown(p: CorpPayment, company: CorpCompany): CorpPayment & { payee: string } {
+  return { ...p, payee: p.lines ? `${p.lines.length} payment${p.lines.length === 1 ? "" : "s"}` : company.whitelist.find((b) => b.id === p.beneficiaryId)?.name ?? p.beneficiaryId };
+}
+
+const BULK_LINE_MESSAGE: Record<string, string> = {
+  BENEFICIARY_NOT_WHITELISTED: "Not on the company's approved list",
+  INVALID_AMOUNT: "The amount is not valid for this account's currency",
+  DUPLICATE_LINE: "Same payee, amount and reference as an earlier line",
+};
+
+/**
+ * Rows of a bulk file as pasted or uploaded: `beneficiary,amount,reference` per line. An optional header row, blank rows and
+ * spaces are ignored. A row that cannot be read keeps what it has and fails the bank's own checks (a missing amount is an invalid amount).
+ */
+export function parseBulkFile(text: string): { beneficiaryId: string; amount: number; reference: string }[] {
+  const rows = text.split(/\r?\n/).map((r) => r.trim()).filter(Boolean);
+  if (rows.length && /^beneficiar|^payee/i.test(rows[0]!)) rows.shift();
+  return rows.map((r) => { const parts = r.split(","); const amount = (parts[1] ?? "").trim(); return { beneficiaryId: (parts[0] ?? "").trim(), amount: amount === "" ? NaN : Number(amount.replace(/_/g, "")), reference: parts.slice(2).join(",").trim() }; });
+}

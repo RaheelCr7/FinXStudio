@@ -41,7 +41,7 @@ export function TextField({ b, set, lang }: P) {
   const outlined = useLook().look?.fields === "outlined";
   return (
     <KitTextField label={b.label} value={String(b.value ?? "")} onChange={(v) => set(b.bind, v)} look={outlined ? "outlined" : "standard"} placeholder={b.placeholder}
-      error={b.error} secure={!!b.secure} keyboard={kind === "number" ? "number" : kind === "phone" ? "phone" : kind === "email" ? "email" : "default"} strings={{ show: ui(lang, "show"), hide: ui(lang, "hide") }} />
+      error={b.error} secure={!!b.secure} lines={b.lines} keyboard={kind === "number" ? "number" : kind === "phone" ? "phone" : kind === "email" ? "email" : "default"} strings={{ show: ui(lang, "show"), hide: ui(lang, "hide") }} />
   );
 }
 

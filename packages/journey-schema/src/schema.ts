@@ -53,7 +53,9 @@ export const Block = z.discriminatedUnion("type", [
   }),
   z.object({
     ...base, type: z.literal("textInput"), bind: z.string(), label: LocalizedText, placeholder: LocalizedText.optional(),
-    keyboard: z.enum(["default", "number", "phone", "email"]).optional(), secure: z.boolean().optional(), pattern: z.string().optional(), patternMessage: LocalizedText.optional(),
+    keyboard: z.enum(["default", "number", "phone", "email"]).optional(), secure: z.boolean().optional(),
+    /** Several lines of text (rows pasted from a file, a note): the height of the box in lines. */
+    lines: z.number().int().min(2).max(12).optional(), pattern: z.string().optional(), patternMessage: LocalizedText.optional(),
   }),
   z.object({
     ...base, type: z.literal("toggle"), bind: z.string(), label: LocalizedText, helper: LocalizedText.optional(),

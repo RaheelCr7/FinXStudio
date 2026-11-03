@@ -23,8 +23,9 @@ export function Button({ label, variant = "primary", busy, disabled, onPress }: 
 
 const KEYBOARD = { default: "default", number: "number-pad", phone: "phone-pad", email: "email-address" } as const;
 
-export function TextField({ label, value, onChange, look = "standard", placeholder, helper, error, secure, keyboard = "default", disabled, strings = { show: "Show", hide: "Hide" } }: TextFieldProps) {
+export function TextField({ label, value, onChange, look = "standard", placeholder, helper, error, secure, keyboard = "default", lines, disabled, strings = { show: "Show", hide: "Hide" } }: TextFieldProps) {
   const { c, t } = useKit();
+  const multi = !!lines && lines > 1;
   const [shown, setShown] = useState(false);
   const [focus, setFocus] = useState(false);
   const outlined = look === "outlined";
@@ -32,10 +33,10 @@ export function TextField({ label, value, onChange, look = "standard", placehold
     <View>
       {outlined ? null : <Text style={{ color: c.textMuted, fontSize: 13, fontWeight: "500", marginBottom: 8 }}>{label}</Text>}
       <View>
-        <TextInput accessibilityLabel={label} value={value} editable={!disabled} secureTextEntry={!!secure && !shown} keyboardType={KEYBOARD[keyboard]} placeholder={outlined ? placeholder ?? label : placeholder}
+        <TextInput accessibilityLabel={label} multiline={multi} numberOfLines={multi ? lines : undefined} textAlignVertical={multi ? "top" : undefined} value={value} editable={!disabled} secureTextEntry={!!secure && !shown} keyboardType={KEYBOARD[keyboard]} placeholder={outlined ? placeholder ?? label : placeholder}
           placeholderTextColor={c.textFaint} textContentType={secure ? "none" : undefined} autoComplete={secure ? "off" : undefined} importantForAutofill={secure ? "no" : undefined}
           autoCapitalize="none" autoCorrect={false} onFocus={() => setFocus(true)} onBlur={() => setFocus(false)} onChangeText={onChange} accessibilityState={{ disabled: !!disabled }}
-          style={[{ height: t.field.height, paddingStart: 14, paddingEnd: secure ? (outlined ? 48 : 64) : 14, borderRadius: t.field.radius, borderWidth: focus || error ? Math.max(2, t.field.border) : t.field.border,
+          style={[{ ...(multi ? { minHeight: 22 * lines! + 24, paddingTop: 12 } : { height: t.field.height }), paddingStart: 14, paddingEnd: secure ? (outlined ? 48 : 64) : 14, borderRadius: t.field.radius, borderWidth: focus || error ? Math.max(2, t.field.border) : t.field.border,
             borderColor: error ? c.negative : focus ? c.accent : outlined ? c.border : c.borderStrong, backgroundColor: c.surface, color: c.text, fontSize: 16, opacity: disabled ? 0.6 : 1 }, tabular,
             Platform.OS === "web" ? ({ outlineStyle: "none" } as any) : null]} />
         {secure ? (

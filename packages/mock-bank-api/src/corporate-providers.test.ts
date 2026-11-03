@@ -63,7 +63,7 @@ describe("the mapping engine", () => {
     const fields = new Set([...Object.keys(a.getPayment(released.id)), ...Object.keys(a.getPayment(rejected.id))]);
     const shape = Object.keys((bankBSpec as any).shapes.payment);
     expect([...fields].filter((f) => !shape.includes(f))).toEqual([]); // nothing a journey can read is left unmapped
-    const codes = ["NOT_AUTHORISED", "USER_NOT_FOUND", "ACCOUNT_NOT_FOUND", "BENEFICIARY_NOT_WHITELISTED", "INVALID_AMOUNT", "CURRENCY_NOT_SUPPORTED", "INSUFFICIENT_FUNDS", "LIMIT_USER_EXCEEDED", "LIMIT_COMPANY_EXCEEDED", "SELF_APPROVAL", "ALREADY_APPROVED", "PAYMENT_NOT_PENDING", "PAYMENT_NOT_FOUND", "NOT_AUTHORISED"];
+    const codes = ["NOT_AUTHORISED", "USER_NOT_FOUND", "ACCOUNT_NOT_FOUND", "BENEFICIARY_NOT_WHITELISTED", "INVALID_AMOUNT", "CURRENCY_NOT_SUPPORTED", "INSUFFICIENT_FUNDS", "LIMIT_USER_EXCEEDED", "LIMIT_COMPANY_EXCEEDED", "SELF_APPROVAL", "ALREADY_APPROVED", "PAYMENT_NOT_PENDING", "PAYMENT_NOT_FOUND", "NOT_AUTHORISED", "EMPTY_BATCH", "BATCH_TOO_LARGE", "NO_VALID_LINES"];
     expect([...new Set(Object.values((bankBSpec as any).errors).map((e: any) => e.code))].sort()).toEqual([...new Set(codes)].sort());
   });
 });
@@ -141,5 +141,51 @@ describe("through the bank, on either API", () => {
       return { p: sans(p), pending: Object.values(pending).map(sans), company };
     };
     expect(await run("bank-b")).toEqual(await run("reference"));
+  });
+});
+
+describe("bulk payments", () => {
+  const rows = [
+    { beneficiaryId: "sup_textile", amount: 100_000, reference: "A" },
+    { beneficiaryId: "sup_logistics", amount: 50_000, reference: "B" },
+    { beneficiaryId: "someone_new", amount: 10_000, reference: "C" },
+    { beneficiaryId: "sup_textile", amount: 100_000, reference: "A" },
+    { beneficiaryId: "sup_packaging", amount: -5, reference: "D" },
+  ];
+  it("checks every row the same way on both banks", () => {
+    const { a, b } = both();
+    const x = a.checkBatch({ userId: "sara", fromAccountId: "acme_ops", lines: rows }), y = b.checkBatch({ userId: "sara", fromAccountId: "acme_ops", lines: rows });
+    expect(y).toEqual(x);
+    expect(x.lines.map((l) => [l.n, l.ok, l.code])).toEqual([[1, true, undefined], [2, true, undefined], [3, false, "BENEFICIARY_NOT_WHITELISTED"], [4, false, "DUPLICATE_LINE"], [5, false, "INVALID_AMOUNT"]]);
+    expect(x).toMatchObject({ validCount: 2, invalidCount: 3, total: 150_000 });
+  });
+  it("starts one payment of the valid rows, counted once against the limits, approved as one", () => {
+    const { a, b } = both();
+    const x = a.initiateBulk({ userId: "sara", fromAccountId: "acme_ops", lines: rows, reference: "Nov run" }), y = b.initiateBulk({ userId: "sara", fromAccountId: "acme_ops", lines: rows, reference: "Nov run" });
+    expect(x).toMatchObject({ amount: 150_000, beneficiaryId: "bulk", required: 1, reference: "Nov run", status: "pending_approval" });
+    expect(x.lines!.map((l) => l.n)).toEqual([1, 2]);
+    expect(sans(y)).toEqual(sans(x));
+    expect(a.getCompany().users.find((u) => u.id === "sara")!.usedToday).toBe(150_000);
+    expect(sans(b.approvePayment({ userId: "hassan", paymentId: y.id }))).toEqual(sans(a.approvePayment({ userId: "hassan", paymentId: x.id })));
+    expect(a.getCompany().accounts[0]!.balance).toBe(24_850_000);
+  });
+  it("refuses the same whole-file problems with the same codes and words", () => {
+    const { a, b } = both();
+    const cases: [string, () => unknown, () => unknown][] = [
+      ["no rows", () => a.checkBatch({ userId: "sara", fromAccountId: "acme_ops", lines: [] }), () => b.checkBatch({ userId: "sara", fromAccountId: "acme_ops", lines: [] })],
+      ["too many rows", () => a.checkBatch({ userId: "sara", fromAccountId: "acme_ops", lines: Array.from({ length: 51 }, () => rows[0]!) }), () => b.checkBatch({ userId: "sara", fromAccountId: "acme_ops", lines: Array.from({ length: 51 }, () => rows[0]!) })],
+      ["no valid row", () => a.initiateBulk({ userId: "sara", fromAccountId: "acme_ops", lines: [rows[2]!] }), () => b.initiateBulk({ userId: "sara", fromAccountId: "acme_ops", lines: [rows[2]!] })],
+      ["an approver", () => a.checkBatch({ userId: "hassan", fromAccountId: "acme_ops", lines: rows }), () => b.checkBatch({ userId: "hassan", fromAccountId: "acme_ops", lines: rows })],
+      ["above the person's limit", () => a.initiateBulk({ userId: "omar", fromAccountId: "acme_ops", lines: [{ ...rows[0]!, amount: 600_000 }] }), () => b.initiateBulk({ userId: "omar", fromAccountId: "acme_ops", lines: [{ ...rows[0]!, amount: 600_000 }] })],
+    ];
+    for (const [name, fa, fb] of cases) { expect(thrown(fb), name).toEqual(thrown(fa)); expect(thrown(fa).code, name).not.toBe("none"); }
+  });
+  it("reads a pasted file: header, blanks, spaces and a reference with a comma", async () => {
+    const bank = new MockBank("acme"); bank.now = () => T;
+    const c = await bank.call("corp.bulk.check", { userId: "sara", fromAccountId: "acme_ops", file: "beneficiary,amount,reference\n\n sup_textile , 25000 , INV-1, part 2\nsup_logistics,\nsup_packaging,18_000.50,INV-3\n" });
+    expect(Object.values(c.lines).map((l: any) => [l.n, l.payee, l.amount, l.reference, l.ok])).toEqual([[1, "Crescent Textiles", 25000, "INV-1, part 2", true], [2, "Indus Logistics", NaN, "", false], [3, "Karachi Packaging", 18000.5, "INV-3", true]]);
+    expect(Object.keys(c.problems)).toEqual(["2"]);
+    expect(c).toMatchObject({ validCount: 2, total: 43_000.5, requiredApprovers: 1, currency: "PKR" });
+    await expect(bank.call("corp.bulk.submit", { userId: "sara", fromAccountId: "acme_ops", file: "sup_textile,1000" })).rejects.toMatchObject({ code: "OTP_REQUIRED" });
   });
 });

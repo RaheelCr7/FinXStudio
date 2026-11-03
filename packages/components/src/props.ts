@@ -24,6 +24,8 @@ export type TextFieldProps = {
   /** Hides what is typed, with a show/hide control (passwords). */
   secure?: boolean;
   keyboard?: "default" | "number" | "phone" | "email";
+  /** Several lines of text (pasted rows, a note): how many lines tall the box is. Omitted: one line. */
+  lines?: number;
   disabled?: boolean;
   /** The browser's autofill hint. By default: off for passwords and plain text, email or tel for those fields. */
   autoComplete?: string;

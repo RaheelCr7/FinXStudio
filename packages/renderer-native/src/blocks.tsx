@@ -45,7 +45,7 @@ export function SelectChips({ b, set }: P) {
 export function TextField({ b, set, lang }: P) {
   const outlined = useTheme().look?.fields === "outlined";
   return (
-    <KitTextField label={b.label} value={String(b.value ?? "")} onChange={(t) => set(b.bind, t)} look={outlined ? "outlined" : "standard"} placeholder={b.placeholder} error={b.error} secure={!!b.secure}
+    <KitTextField label={b.label} value={String(b.value ?? "")} onChange={(t) => set(b.bind, t)} look={outlined ? "outlined" : "standard"} placeholder={b.placeholder} error={b.error} secure={!!b.secure} lines={b.lines}
       keyboard={keyboardKind(b.keyboard)} strings={{ show: ui(lang, "show"), hide: ui(lang, "hide") }} />
   );
 }

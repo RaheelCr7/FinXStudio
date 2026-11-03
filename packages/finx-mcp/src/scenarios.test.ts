@@ -1,9 +1,9 @@
 import { describe, expect, it } from "vitest";
-import { catalog, corporateApproval, corporatePayment, Journey } from "@finx/journey-schema";
+import { bulkPayment, catalog, corporateApproval, corporatePayment, Journey, withdrawPayment } from "@finx/journey-schema";
 import { lintAll } from "@finx/renderer-core";
 import { mutationCheck, runScenarios } from "./scenarios";
 
-const journeys = [corporatePayment, corporateApproval].map((j) => Journey.parse(j));
+const journeys = [corporatePayment, corporateApproval, withdrawPayment, bulkPayment].map((j) => Journey.parse(j));
 
 /**
  * Mutants the scenarios do not catch, each with the reason. These are not gaps in the tests: another layer already stops the
@@ -17,6 +17,18 @@ const ACCEPTED: Record<string, Record<string, string>> = {
     "bank-roles": OTHER_LAYER("The journey's own role check already sends a person without the role to the denied screen"),
     "bank-userLimit": OTHER_LAYER("The journey stops an amount above the person's remaining limit before it is sent"),
     "bank-companyLimit": OTHER_LAYER("The demo company's limit (8,000,000) is above the sum of every initiator's daily limit (4,000,000), so no screen can reach it"),
+  },
+  "withdraw-a-payment": {
+    "no-error-path-3": "The company lookup never fails for the company customer: someone unknown is sent to 'not allowed', and a customer that is not a company is stopped one step earlier",
+    "no-error-path-5": "The waiting list only loads for someone already confirmed as an initiator, and it never fails for them",
+    "no-error-path-10": NEVER_FAILS, "no-error-path-12": NEVER_FAILS,
+    "no-error-path-17": "The company lookup after withdrawing cannot fail: the same call has just succeeded for the same person",
+  },
+  "bulk-payment": {
+    "no-error-path-3": "The company lookup never fails for the company customer: someone unknown is sent to 'not allowed', and a customer that is not a company is stopped one step earlier",
+    "no-error-path-20": NEVER_FAILS, "no-error-path-24": NEVER_FAILS,
+    "bank-roles": OTHER_LAYER("The journey's own role check already sends a person without the role to the denied screen"),
+    "bank-companyLimit": OTHER_LAYER("The demo company's limit (8,000,000) is above everything the initiators can send (4,000,000)"),
   },
   "corporate-approval": {
     "no-error-path-3": NEVER_FAILS, "no-error-path-5": NEVER_FAILS, "no-error-path-7": NEVER_FAILS, "no-error-path-11": NEVER_FAILS, "no-error-path-14": NEVER_FAILS,

@@ -2,6 +2,8 @@ import type { Journey } from "./schema";
 import { localTransfer } from "./fixtures/local-transfer";
 import { payBill } from "./fixtures/pay-bill";
 import { corporatePayment, corporateApproval } from "./fixtures/corporate-payments";
+import { bulkPayment } from "./fixtures/bulk-payment";
+import { withdrawPayment } from "./fixtures/withdraw-payment";
 import { convertCurrency } from "./fixtures/convert-currency";
 import { addMoney, addCard, connectAccount, createBudget, invest, sellInvestment } from "./fixtures/bankworkx";
 import { cabJourneys } from "./fixtures/cab";
@@ -51,6 +53,16 @@ export const catalog: CatalogEntry[] = [
     id: corporateApproval.slug, category: "Payments", madeFor: "meezan", journey: corporateApproval,
     summary: "A company approver reviews what waits for them, approves or rejects. Nobody approves their own; above a threshold a second approver is needed.",
     highlights: ["Only for approvers", "Pending list", "Four eyes", "Second approver above a threshold", "One-time code"],
+  },
+  {
+    id: bulkPayment.slug, category: "Payments", madeFor: "meezan", journey: bulkPayment,
+    summary: "A company initiator pays many approved suppliers from a pasted file: every row checked and the failures explained, then sent for approval as one payment.",
+    highlights: ["Row by row checks with reasons", "Up to 50 rows", "One payment against the limits", "Approvers needed shown", "One-time code"],
+  },
+  {
+    id: withdrawPayment.slug, category: "Payments", madeFor: "meezan", journey: withdrawPayment,
+    summary: "The person who started a company payment takes it back while it waits for approval, with a one-time code. Their daily limit is given back.",
+    highlights: ["Only your own waiting payments", "Even if one approver has approved", "One-time code", "Limit given back"],
   },
   {
     id: addMoney.slug, category: "Accounts", madeFor: "bankworkx", journey: addMoney,
