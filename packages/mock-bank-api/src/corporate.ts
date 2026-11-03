@@ -55,6 +55,12 @@ export interface CorporateBankAdapter {
 const pad = (n: number) => String(n).padStart(2, "0");
 const dayOf = (ms: number) => new Date(ms).toISOString().slice(0, 10);
 
+/**
+ * Rules that can be switched off, to check that a test suite notices: a mutation check runs the scenarios against a sandbox with
+ * one rule missing and expects at least one to fail. Every rule is on by default; nothing in the apps ever turns one off.
+ */
+export type Flaws = { roles?: false; whitelist?: false; userLimit?: false; companyLimit?: false; dualApproval?: false; fourEyes?: false; cutoff?: false };
+
 export class CorporateSandbox implements CorporateBankAdapter {
   private payments = new Map<string, CorpPayment>();
   private seq = 0;
@@ -62,7 +68,7 @@ export class CorporateSandbox implements CorporateBankAdapter {
   now: () => number = () => Date.now();
   private company: CorpCompany;
 
-  constructor(company: CorpCompany) { this.company = structuredClone(company); }
+  constructor(company: CorpCompany, private flaws: Flaws = {}) { this.company = structuredClone(company); }
 
   get summary() { return structuredClone(this.company); }
   all() { return structuredClone([...this.payments.values()]); }
@@ -94,7 +100,7 @@ export class CorporateSandbox implements CorporateBankAdapter {
     const d = new Date(t);
     const hhmm = `${pad(d.getUTCHours())}:${pad(d.getUTCMinutes())}`;
     const open = this.isWorkingDay(today);
-    if (open && hhmm <= this.company.cutoff) return { valueDate: today, afterCutoff: false };
+    if (this.flaws.cutoff === false || (open && hhmm <= this.company.cutoff)) return { valueDate: today, afterCutoff: false };
     let next = t;
     do { next += 24 * 3600 * 1000; } while (!this.isWorkingDay(dayOf(next)));
     return { valueDate: dayOf(next), afterCutoff: true };
@@ -103,24 +109,24 @@ export class CorporateSandbox implements CorporateBankAdapter {
   initiatePayment(input: InitiateInput): CorpPayment {
     const c = this.company;
     const user = this.user(input.userId);
-    if (!user.roles.includes("initiator")) throw new BankError("NOT_AUTHORISED", `${user.name} is not allowed to initiate payments`);
+    if (this.flaws.roles !== false && !user.roles.includes("initiator")) throw new BankError("NOT_AUTHORISED", `${user.name} is not allowed to initiate payments`);
     const from = this.account(input.fromAccountId);
     const to = c.whitelist.find((b) => b.id === input.beneficiaryId);
-    if (!to) throw new BankError("BENEFICIARY_NOT_WHITELISTED", "This beneficiary is not on the company's approved list");
+    if (!to && this.flaws.whitelist !== false) throw new BankError("BENEFICIARY_NOT_WHITELISTED", "This beneficiary is not on the company's approved list");
     const amount = Number(input.amount);
     const digits = currencyInfo(from.currency).decimals;
     if (!(amount > 0) || Math.abs(amount * 10 ** digits - Math.round(amount * 10 ** digits)) > 1e-6) throw new BankError("INVALID_AMOUNT", `Enter an amount in ${from.currency} with at most ${digits} decimal places`);
     if (from.currency !== c.currency) throw new BankError("CURRENCY_NOT_SUPPORTED", `Payments are limited in ${c.currency}: choose a ${c.currency} account`);
     if (amount > from.balance) throw new BankError("INSUFFICIENT_FUNDS", "Insufficient funds");
-    if (user.usedToday + amount > user.dailyLimit) throw new BankError("LIMIT_USER_EXCEEDED", `This is above ${user.name}'s daily limit`);
-    if (c.companyUsedToday + amount > c.companyDailyLimit) throw new BankError("LIMIT_COMPANY_EXCEEDED", "This is above the company's daily limit");
+    if (this.flaws.userLimit !== false && user.usedToday + amount > user.dailyLimit) throw new BankError("LIMIT_USER_EXCEEDED", `This is above ${user.name}'s daily limit`);
+    if (this.flaws.companyLimit !== false && c.companyUsedToday + amount > c.companyDailyLimit) throw new BankError("LIMIT_COMPANY_EXCEEDED", "This is above the company's daily limit");
     user.usedToday = roundMoney(user.usedToday + amount, c.currency);
     this.seq += 1;
     const { valueDate, afterCutoff } = this.valueDate();
     const p: CorpPayment = {
-      id: `pay_${this.seq}`, companyId: c.id, fromAccountId: from.id, beneficiaryId: to.id, amount, currency: from.currency, reference: input.reference ?? "",
+      id: `pay_${this.seq}`, companyId: c.id, fromAccountId: from.id, beneficiaryId: input.beneficiaryId, amount, currency: from.currency, reference: input.reference ?? "",
       status: "pending_approval", initiatedBy: user.id, initiatedAt: new Date(this.now()).toISOString(), valueDate, afterCutoff,
-      required: amount > c.dualApprovalAbove ? 2 : 1, approvals: [],
+      required: this.flaws.dualApproval !== false && amount > c.dualApprovalAbove ? 2 : 1, approvals: [],
     };
     this.payments.set(p.id, p);
     return structuredClone(p);
@@ -129,10 +135,10 @@ export class CorporateSandbox implements CorporateBankAdapter {
   approvePayment(input: { userId: string; paymentId: string }): CorpPayment {
     const c = this.company;
     const user = this.user(input.userId);
-    if (!user.roles.includes("approver")) throw new BankError("NOT_AUTHORISED", `${user.name} is not allowed to approve payments`);
+    if (this.flaws.roles !== false && !user.roles.includes("approver")) throw new BankError("NOT_AUTHORISED", `${user.name} is not allowed to approve payments`);
     const p = this.payment(input.paymentId);
     if (p.status !== "pending_approval") throw new BankError("PAYMENT_NOT_PENDING", `This payment is already ${p.status.replace("_", " ")}`);
-    if (p.initiatedBy === user.id) throw new BankError("SELF_APPROVAL", "You cannot approve a payment you started");
+    if (this.flaws.fourEyes !== false && p.initiatedBy === user.id) throw new BankError("SELF_APPROVAL", "You cannot approve a payment you started");
     if (p.approvals.some((a) => a.userId === user.id)) throw new BankError("ALREADY_APPROVED", "You have already approved this payment");
     p.approvals.push({ userId: user.id, at: new Date(this.now()).toISOString() });
     if (p.approvals.length >= p.required) this.release(p);

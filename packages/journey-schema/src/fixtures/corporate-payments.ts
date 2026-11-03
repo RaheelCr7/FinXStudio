@@ -60,9 +60,51 @@ const COMMON_INTEG = [
   { id: "otpVerify", adapter: "bank.otp.verify", mode: "sandbox" as const },
 ];
 
+
+/* ------------------------------------------------------------------------- scenarios (the tests that travel with the journeys) */
+const NOW = "2026-11-03T10:00:00Z"; // Tuesday morning, before the 16:00 cut-off
+const SEED = (userId: string, amount: number, reference: string) => [
+  { adapter: "bank.otp.send" }, { adapter: "bank.otp.verify", input: { code: "482100" } },
+  { adapter: "corp.payments.initiate", input: { userId, fromAccountId: "acme_ops", beneficiaryId: "sup_logistics", amount, reference } },
+];
+const signIn = (who: string) => [{ set: { "session.userId": who } }, { press: "Continue" }];
+const fillPayment = (p: { from?: string; to?: string; amount: number }) => [
+  { set: { "pay.fromAccountId": p.from ?? "acme_ops", "pay.beneficiaryId": p.to ?? "sup_textile", "pay.amount": p.amount, "pay.reference": "INV-1" } }, { press: "Continue" },
+];
+const sendWithCode = (code = "482100") => [{ set: { "pay.consent": true } }, { press: "Confirm and send OTP" }, { set: { "otp.code": code } }, { press: "Verify and send for approval" }];
+const balance = (equals: number) => ({ expectBank: { adapter: "corp.company.get", input: { userId: "sara" }, path: "accounts.acme_ops.balance", equals } });
+const approveWithCode = (code = "482100") => [{ set: { "appr.consent": true } }, { press: "Approve and send OTP" }, { set: { "otp.code": code } }, { press: "Verify and approve" }];
+
 /* ------------------------------------------------------------ start a payment (initiator) */
 export const corporatePayment: Journey = {
   ...base, id: "jrn_corporate_payment", slug: "corporate-payment", name: "Start a payment", entryScreen: "who",
+  acceptance: [
+    { id: "AC-1", text: "Only an initiator can start a payment" },
+    { id: "AC-2", text: "A person cannot send more than their own daily limit" },
+    { id: "AC-3", text: "Only beneficiaries on the company's approved list can be paid" },
+    { id: "AC-4", text: "A payment above the threshold needs two approvers" },
+    { id: "AC-5", text: "Starting a payment moves no money: it waits for approval" },
+    { id: "AC-6", text: "A payment started after the cut-off goes out the next working day" },
+    { id: "AC-7", text: "When the bank refuses, the reason is shown and no money has left" },
+    { id: "AC-8", text: "Three wrong one-time codes stop the payment" },
+    { id: "AC-9", text: "A payment cannot be sent without the confirmation" },
+    { id: "AC-10", text: "A person must say who they are, and a customer who is not a company is told it is not available" },
+    { id: "AC-11", text: "A one-time code must be six digits" },
+  ],
+  scenarios: [
+    { id: "T-1", name: "An approver cannot start a payment", covers: ["AC-1"], persona: "acme", now: NOW, steps: [...signIn("hassan"), { expectScreen: "denied" }, { expectText: "Only an initiator" }] },
+    { id: "T-2", name: "Omar cannot send above his 500,000 limit", covers: ["AC-2"], persona: "acme", now: NOW, steps: [...signIn("omar"), ...fillPayment({ amount: 600_000 }), { expectScreen: "start" }, { expectError: "daily limit" }] },
+    { id: "T-3", name: "A supplier that is not approved is refused, with the reason", covers: ["AC-3", "AC-7"], persona: "acme", now: NOW, steps: [...signIn("sara"), ...fillPayment({ to: "someone-new", amount: 1000 }), ...sendWithCode(), { expectScreen: "failed" }, { expectText: "approved list" }, { expectText: "No money has left the account" }] },
+    { id: "T-4", name: "A large payment needs two approvers", covers: ["AC-4"], persona: "acme", now: NOW, steps: [...signIn("sara"), ...fillPayment({ amount: 2_000_000 }), ...sendWithCode(), { expectScreen: "success" }, { expectText: "waits for 2 approver" }] },
+    { id: "T-5", name: "A small payment needs one approver and moves no money yet", covers: ["AC-4", "AC-5"], persona: "acme", now: NOW, steps: [...signIn("sara"), ...fillPayment({ amount: 250_000 }), ...sendWithCode(), { expectScreen: "success" }, { expectText: "waits for 1 approver" }, balance(25_000_000)] },
+    { id: "T-6", name: "After the cut-off it goes out the next working day", covers: ["AC-6"], persona: "acme", now: "2026-11-03T17:00:00Z", steps: [...signIn("sara"), ...fillPayment({ amount: 1000 }), ...sendWithCode(), { expectScreen: "success" }, { expectText: "value date 2026-11-04" }] },
+    { id: "T-7", name: "A payment from a dollar account is refused with the reason", covers: ["AC-7"], persona: "acme", now: NOW, steps: [...signIn("sara"), ...fillPayment({ from: "acme_usd", amount: 100 }), ...sendWithCode(), { expectScreen: "failed" }, { expectText: "choose a PKR account" }, { expectText: "No money has left the account" }, balance(25_000_000)] },
+    { id: "T-8", name: "Three wrong codes stop the payment", covers: ["AC-8"], persona: "acme", now: NOW, steps: [...signIn("sara"), ...fillPayment({ amount: 1000 }), { set: { "pay.consent": true } }, { press: "Confirm and send OTP" }, { set: { "otp.code": "999999" } }, { press: "Verify and send for approval" }, { press: "Verify and send for approval" }, { press: "Verify and send for approval" }, { expectScreen: "failed" }, balance(25_000_000)] },
+    { id: "T-9", name: "It cannot be sent without the confirmation", covers: ["AC-9"], persona: "acme", now: NOW, steps: [...signIn("sara"), ...fillPayment({ amount: 1000 }), { press: "Confirm and send OTP" }, { expectScreen: "review" }, { expectError: "confirmation" }] },
+    { id: "T-10", name: "Continuing without saying who you are is refused", covers: ["AC-10"], persona: "acme", now: NOW, steps: [{ press: "Continue" }, { expectScreen: "who" }, { expectError: "session.userId" }] },
+    { id: "T-11", name: "A customer who is not a company is told it is not available", covers: ["AC-10"], persona: "ayesha", steps: [{ expectScreen: "unavailable" }, { expectText: "Not available for this customer" }] },
+    { id: "T-12", name: "A code that is not six digits is refused", covers: ["AC-11"], persona: "acme", now: NOW, steps: [...signIn("sara"), ...fillPayment({ amount: 1000 }), { set: { "pay.consent": true } }, { press: "Confirm and send OTP" }, { set: { "otp.code": "123" } }, { press: "Verify and send for approval" }, { expectScreen: "otp" }, { expectError: "otp.code" }] },
+  ],
   authorisation: { role: "initiator", rolesFrom: "ctx.company.me.roles", deniedScreen: "denied" },
   dataModel: {
     "session.userId": { type: "string", required: true },
@@ -125,6 +167,28 @@ export const corporatePayment: Journey = {
 /* ------------------------------------------------------- approve or reject a payment (approver) */
 export const corporateApproval: Journey = {
   ...base, id: "jrn_corporate_approval", slug: "corporate-approval", name: "Approve payments", entryScreen: "who",
+  acceptance: [
+    { id: "AC-1", text: "Only an approver can approve or reject payments" },
+    { id: "AC-2", text: "An approver is never offered a payment they started" },
+    { id: "AC-3", text: "Approving a payment that needs one approver releases it and moves the money" },
+    { id: "AC-4", text: "A payment that needs two approvers is not released by the first" },
+    { id: "AC-5", text: "Rejecting a payment records the reason and moves no money" },
+    { id: "AC-6", text: "Approving needs the confirmation and a right one-time code" },
+    { id: "AC-7", text: "A person must say who they are, and a customer who is not a company is told it is not available" },
+    { id: "AC-8", text: "A one-time code must be six digits" },
+  ],
+  scenarios: [
+    { id: "T-1", name: "An initiator cannot approve", covers: ["AC-1"], persona: "acme", now: NOW, setup: SEED("sara", 250_000, "INV-9"), steps: [...signIn("omar"), { expectScreen: "denied" }, { expectText: "Only an approver" }] },
+    { id: "T-2", name: "A person with both roles is not offered their own payment", covers: ["AC-2"], persona: "acme", now: NOW, setup: SEED("nadia", 100_000, "MINE"), steps: [...signIn("nadia"), { expectScreen: "start" }, { expectText: "Nothing is waiting for your approval" }] },
+    { id: "T-3", name: "One approver releases a small payment and the money moves", covers: ["AC-3"], persona: "acme", now: NOW, setup: SEED("sara", 250_000, "INV-9"), steps: [...signIn("hassan"), { press: "PKR 250,000 to Indus Logistics" }, ...approveWithCode(), { expectScreen: "approved" }, { expectText: "Payment released" }, balance(24_750_000)] },
+    { id: "T-4", name: "The first of two approvers does not release it", covers: ["AC-4"], persona: "acme", now: NOW, setup: SEED("sara", 2_000_000, "BIG"), steps: [...signIn("hassan"), { press: "PKR 2,000,000 to Indus Logistics" }, ...approveWithCode(), { expectScreen: "approved" }, { expectText: "It needs 2 approvers" }, balance(25_000_000)] },
+    { id: "T-5", name: "Rejecting records the reason and keeps the money", covers: ["AC-5"], persona: "acme", now: NOW, setup: SEED("sara", 100_000, "WRONG"), steps: [...signIn("layla"), { press: "PKR 100,000 to Indus Logistics" }, { press: "Reject" }, { set: { "appr.reason": "Wrong supplier" } }, { press: "Reject payment" }, { expectScreen: "rejected" }, { expectBank: { adapter: "corp.payments.get", input: { paymentId: "{{appr.paymentId}}" }, path: "rejectReason", equals: "Wrong supplier" } }, balance(25_000_000)] },
+    { id: "T-6", name: "It cannot be approved without the confirmation", covers: ["AC-6"], persona: "acme", now: NOW, setup: SEED("sara", 250_000, "INV-9"), steps: [...signIn("hassan"), { press: "PKR 250,000 to Indus Logistics" }, { press: "Approve and send OTP" }, { expectScreen: "review" }, { expectError: "confirmation" }] },
+    { id: "T-7", name: "A wrong code does not approve it", covers: ["AC-6"], persona: "acme", now: NOW, setup: SEED("sara", 250_000, "INV-9"), steps: [...signIn("hassan"), { press: "PKR 250,000 to Indus Logistics" }, ...approveWithCode("999999"), { expectToast: "Incorrect code" }, balance(25_000_000)] },
+    { id: "T-8", name: "Continuing without saying who you are is refused", covers: ["AC-7"], persona: "acme", now: NOW, steps: [{ press: "Continue" }, { expectScreen: "who" }, { expectError: "session.userId" }] },
+    { id: "T-9", name: "A customer who is not a company is told it is not available", covers: ["AC-7"], persona: "ayesha", steps: [{ expectScreen: "unavailable" }, { expectText: "Not available for this customer" }] },
+    { id: "T-10", name: "A code that is not six digits is refused", covers: ["AC-8"], persona: "acme", now: NOW, setup: SEED("sara", 250_000, "INV-9"), steps: [...signIn("hassan"), { press: "PKR 250,000 to Indus Logistics" }, { set: { "appr.consent": true } }, { press: "Approve and send OTP" }, { set: { "otp.code": "12" } }, { press: "Verify and approve" }, { expectScreen: "otp" }, { expectError: "otp.code" }] },
+  ],
   authorisation: { role: "approver", rolesFrom: "ctx.company.me.roles", deniedScreen: "denied" },
   dataModel: {
     "session.userId": { type: "string", required: true }, "appr.paymentId": { type: "string", required: true },

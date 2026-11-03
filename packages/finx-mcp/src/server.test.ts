@@ -18,7 +18,7 @@ async function connect(studio: FakeStudio, readOnly = false) {
   return { client, call, studio };
 }
 
-const TOOLS = ["finx_get_catalog", "finx_get_example", "finx_list_journeys", "finx_list_projects", "finx_list_catalog", "finx_add_from_catalog", "finx_get_journey", "finx_create_journey", "finx_save_draft", "finx_patch_journey", "finx_lint_journey", "finx_simulate_journey", "finx_publish_journey", "finx_report_run"];
+const TOOLS = ["finx_get_catalog", "finx_get_example", "finx_list_journeys", "finx_list_projects", "finx_list_catalog", "finx_add_from_catalog", "finx_get_journey", "finx_create_journey", "finx_save_draft", "finx_patch_journey", "finx_lint_journey", "finx_simulate_journey", "finx_publish_journey", "finx_report_run", "finx_run_scenarios", "finx_mutation_check"];
 
 describe("FinX MCP server", () => {
   let studio: FakeStudio;
@@ -233,5 +233,38 @@ describe("FinX MCP server", () => {
     const r: any = await client.callTool({ name: "finx_list_journeys", arguments: {} });
     expect(r.isError).toBe(true);
     expect(r.content[0].text).toContain("Cannot reach FinX Studio");
+  });
+});
+
+describe("FinX MCP scenario tools", () => {
+  it("runs the tests saved in a journey and reports which criteria are proved", async () => {
+    const studio = new FakeStudio(["corporate-payment"]);
+    const { call } = await connect(studio);
+    const r = await call("finx_run_scenarios", { slug: "corporate-payment" });
+    expect(r.json).toMatchObject({ ok: true, total: 12, passed: 12, uncovered: [] });
+    expect(r.json.coverage.every((c: any) => c.status === "proved")).toBe(true);
+    expect((await call("finx_run_scenarios", { slug: "corporate-payment", provider: "bank-b" })).json.ok).toBe(true);
+  });
+  it("says so when a journey has no scenarios, and refuses both a slug and a journey", async () => {
+    const { call } = await connect(new FakeStudio(["fund-transfer-local"]));
+    const none = await call("finx_run_scenarios", { slug: "fund-transfer-local" });
+    expect(none.isError).toBe(true); expect(none.text).toContain("no scenarios");
+    expect((await call("finx_mutation_check", { slug: "fund-transfer-local" })).isError).toBe(true);
+    expect((await call("finx_run_scenarios", {})).isError).toBe(true);
+  });
+  it("names the mistakes the tests would let through", async () => {
+    const { call } = await connect(new FakeStudio(["corporate-payment"]));
+    const j: any = structuredClone((await new FakeStudio(["corporate-payment"]).getRecord("corporate-payment")).draft);
+    j.scenarios = [j.scenarios[4]]; j.acceptance = [{ id: "AC-5", text: "Starting a payment moves no money" }]; // one happy path only
+    const r = await call("finx_mutation_check", { journey: j });
+    expect(r.json.ok).toBe(false);
+    expect(r.json.survivors.map((s: any) => s.id)).toContain("bank-whitelist");
+    expect(r.json.next).toContain("Write a scenario");
+  }, 120_000);
+  it("is read only", async () => {
+    const { client } = await connect(new FakeStudio(["corporate-payment"]));
+    const byName = Object.fromEntries((await client.listTools()).tools.map((t) => [t.name, t]));
+    expect(byName.finx_run_scenarios!.annotations?.readOnlyHint).toBe(true);
+    expect(byName.finx_mutation_check!.annotations?.readOnlyHint).toBe(true);
   });
 });

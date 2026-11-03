@@ -6,6 +6,7 @@ import { adviceFor, lintForAgent, sameContent } from "./advice";
 import { getCatalog, SECTIONS } from "./catalog";
 import { applyPatch, PatchError } from "./patch";
 import { simulate } from "./simulate";
+import { mutationCheck, runScenarios } from "./scenarios";
 import { StudioError, type StudioClient } from "./studio-client";
 
 export type ToolDeps = {
@@ -205,6 +206,35 @@ export function registerTools(server: McpServer, deps: ToolDeps) {
       const result = await simulate({ journey: v.journey, persona, lang, steps: steps as any });
       return ok({ ...result, lint: lintForAgent(v.journey).length ? "The journey still has lint issues: run finx_lint_journey." : "no lint issues" }, false);
     } catch (e) { return fail((e as Error).message); }
+  }));
+
+  server.registerTool("finx_run_scenarios", {
+    title: "Run the tests that travel with a journey",
+    description: "Runs every scenario saved in the journey (journey.scenarios) through the real engine against the sandbox bank, and reports which pass, which fail and why, and for each acceptance criterion (journey.acceptance, AC-1 …) whether a passing scenario proves it, it is failing, or it is uncovered. Use it after writing or changing scenarios, and before saying a journey is done. A scenario is { id: T-1, name, covers: [AC-1], persona, now?, setup?, steps } with the same steps as finx_simulate_journey, plus expectBank { adapter, input?, path, equals } to read the bank (for example that no money moved).",
+    inputSchema: z.object({ slug: slugSchema.optional(), journey: journeyJson.optional(), provider: z.enum(["reference", "bank-b"]).optional().describe("Run the corporate adapters against the second bank API instead") }),
+    annotations: { readOnlyHint: true, openWorldHint: false },
+  }, ({ slug, journey, provider }) => guarded(async () => {
+    if (!slug === !journey) return fail("Pass exactly one of slug or journey.");
+    const input = journey ?? (await deps.studio.getRecord(slug!)).draft;
+    const v = validateJourney(input);
+    if (!v.ok) return fail("The journey does not match the FinX schema, so its scenarios cannot run:", v.errors);
+    if (!v.journey.scenarios?.length) return fail("This journey has no scenarios yet. Add journey.scenarios (and journey.acceptance), then run this again.");
+    return ok(await runScenarios(v.journey, { provider }), false);
+  }));
+
+  server.registerTool("finx_mutation_check", {
+    title: "Check that a journey's tests would notice a mistake",
+    description: "Breaks the journey on purpose, one thing at a time (a validation step removed, the one-time code check skipped, a navigation rule dropped, a limit removed, an error path deleted, the role check removed) and, for company payment journeys, switches off one bank rule at a time (roles, approved list, daily limits, second approver, four eyes, cut-off), then re-runs the scenarios each time. A mutant is killed when at least one scenario fails. Returns the survivors: each is a mistake the tests would let through, so write a scenario that catches it (or explain why it cannot happen). Reads only: nothing is saved.",
+    inputSchema: z.object({ slug: slugSchema.optional(), journey: journeyJson.optional() }),
+    annotations: { readOnlyHint: true, openWorldHint: false },
+  }, ({ slug, journey }) => guarded(async () => {
+    if (!slug === !journey) return fail("Pass exactly one of slug or journey.");
+    const input = journey ?? (await deps.studio.getRecord(slug!)).draft;
+    const v = validateJourney(input);
+    if (!v.ok) return fail("The journey does not match the FinX schema:", v.errors);
+    if (!v.journey.scenarios?.length) return fail("This journey has no scenarios, so there is nothing to check. Write scenarios first.");
+    const m = await mutationCheck(v.journey);
+    return ok({ ok: m.ok, mutantsTried: m.total, killed: m.killed, survivors: m.survived.map((s) => ({ id: s.id, kind: s.kind, mistake: s.what })), next: m.ok ? "Every mistake was caught." : "Write a scenario that fails for each survivor, then run this again. A survivor that no screen can reach is fine, but say why." }, false);
   }));
 
   server.registerTool("finx_publish_journey", {

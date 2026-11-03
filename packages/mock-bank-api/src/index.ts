@@ -3,7 +3,7 @@ import { alexFinance, BANKS, cardNetwork, luhnValid, type Finance } from "./fina
 import { customerRate, midRate, priceQuote, fxSupports, FX_SPREAD, QUOTE_TTL_SECONDS, type Quote } from "./fx";
 import { currencyInfo, roundMoney } from "@finx/ui-kit";
 import { BankError } from "./errors";
-import { ACME, type CorpCompany } from "./corporate";
+import { ACME, type CorpCompany, type Flaws } from "./corporate";
 import { createCorporateProvider, type CorporateProvider, type ProviderId } from "./corporate-provider";
 import { CabSandbox, CAB_PROFILES, type CabProfile } from "./cab";
 export * from "./finance";
@@ -13,7 +13,7 @@ export * from "./invest";
 export { createCorporateProvider, MappedCorporateProvider, PROVIDERS, type CorporateProvider, type ProviderId } from "./corporate-provider";
 export { BankBApi, ApiError } from "./corporate-b";
 export { applyRule, build, mapError, type MappingSpec } from "./mapping";
-export { ACME, CorporateSandbox, type CorporateBankAdapter, type CorpCompany, type CorpPayment, type CorpUser, type CorpRole, type InitiateInput } from "./corporate";
+export { ACME, CorporateSandbox, type CorporateBankAdapter, type CorpCompany, type Flaws, type CorpPayment, type CorpUser, type CorpRole, type InitiateInput } from "./corporate";
 export { PER_USD, FX_SPREAD, FX_FEE_RATE, QUOTE_TTL_SECONDS, midRate, customerRate, type Quote } from "./fx";
 
 export type Account = { id: string; name: string; maskedNumber: string; iban: string; balance: number; currency: string; status: "active" | "frozen"; canDebit: boolean };
@@ -167,11 +167,11 @@ export class MockBank {
   private cab: CabSandbox;
   private corp?: CorporateProvider;
   /** `corpProvider` picks which corporate bank API stands behind the corp.* adapters; journeys do not change. */
-  constructor(personaId = "ayesha", options: { corpProvider?: ProviderId } = {}) {
+  constructor(personaId = "ayesha", options: { corpProvider?: ProviderId; /** rules switched off, for mutation checks only */ corpFlaws?: Flaws } = {}) {
     const base = personas[personaId];
     if (!base) throw new Error(`Unknown persona ${personaId}`);
     this.p = structuredClone(base);
-    if (this.p.corp) { this.corp = createCorporateProvider(options.corpProvider ?? "reference", this.p.corp); this.corp.now = () => this.now(); }
+    if (this.p.corp) { this.corp = createCorporateProvider(options.corpProvider ?? "reference", this.p.corp, options.corpFlaws); this.corp.now = () => this.now(); }
     this.cab = new CabSandbox(this.p, { otpVerified: () => this.otpVerified, clearOtp: () => { this.otpVerified = false; } });
   }
   get persona() { return this.p; }

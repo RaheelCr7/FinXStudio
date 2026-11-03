@@ -126,6 +126,23 @@ export const Journey = z.object({
   apps: z.array(z.string()).optional(),
   locale: z.object({ default: z.string(), supported: z.array(z.string()), rtl: z.array(z.string()).optional() }),
   entryScreen: z.string(),
+  /** What must be true for the journey to be right: each criterion has an id (AC-1 …) that scenarios say they cover. */
+  acceptance: z.array(z.object({ id: z.string().regex(/^AC-[0-9]{1,3}$/, "must look like AC-1"), text: z.string().min(1) })).optional(),
+  /**
+   * Executable tests that travel with the journey. Each is a scripted walk through it (the steps of finx_simulate_journey) against
+   * the sandbox bank, says which criteria it covers, and may prepare the bank first (setup) and fix its clock (now).
+   */
+  scenarios: z.array(z.object({
+    id: z.string().regex(/^T-[0-9]{1,3}$/, "must look like T-1"), name: z.string().min(1), covers: z.array(z.string()).default([]),
+    persona: z.string().min(1), lang: z.string().optional(),
+    /** Which bank API stands behind the corporate adapters: reference (default) or bank-b. */
+    provider: z.string().optional(),
+    /** The sandbox clock, as an ISO time, for rules that depend on it (a cut-off). */
+    now: z.string().optional(),
+    /** Calls made on the bank before the walk starts, for example a payment waiting for approval. */
+    setup: z.array(z.object({ adapter: z.string(), input: z.record(z.string(), z.unknown()).optional() })).optional(),
+    steps: z.array(z.record(z.string(), z.unknown())).min(1),
+  })).optional(),
   /**
    * Who may use the journey: a role, read from the data once the person is known (rolesFrom is a path to a list of role names).
    * When the list is loaded and does not include the role, the person is sent to deniedScreen. Needed by journeys that move

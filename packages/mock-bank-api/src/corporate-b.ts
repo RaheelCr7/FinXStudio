@@ -1,5 +1,5 @@
 import { currencyInfo } from "@finx/ui-kit";
-import { CorporateSandbox, type CorpCompany, type CorpPayment } from "./corporate";
+import { CorporateSandbox, type CorpCompany, type CorpPayment, type Flaws } from "./corporate";
 import { BankError } from "./errors";
 
 /**
@@ -34,7 +34,7 @@ const BACK = { AWAITING_AUTH: "pending_approval", EXECUTED: "released", CANCELLE
 
 export class BankBApi {
   private inner: CorporateSandbox;
-  constructor(company: CorpCompany) { this.inner = new CorporateSandbox(company); }
+  constructor(company: CorpCompany, flaws: Flaws = {}) { this.inner = new CorporateSandbox(company, flaws); }
   set now(fn: () => number) { this.inner.now = fn; }
 
   private txnId(id: string) { return `TXN-${String(id.split("_")[1]).padStart(6, "0")}`; }
