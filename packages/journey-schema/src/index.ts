@@ -6,6 +6,7 @@ export { convertCurrency } from "./fixtures/convert-currency";
 export { payBill } from "./fixtures/pay-bill";
 export { corporatePayment, corporateApproval } from "./fixtures/corporate-payments";
 export { bulkPayment } from "./fixtures/bulk-payment";
+export { payrollRun } from "./fixtures/payroll-run";
 export { withdrawPayment } from "./fixtures/withdraw-payment";
 export { addMoney, addCard, connectAccount, createBudget, invest, sellInvestment, bankworkxJourneys } from "./fixtures/bankworkx";
 export { signIn as cabSignIn, defaultSignIn as cabDefaultSignIn, accountPreview as cabAccountPreview, changeLanguage as cabChangeLanguage, enroll as cabEnroll, activateProfile as cabActivateProfile, cantSignIn as cabCantSignIn, locateUs as cabLocateUs, support as cabSupport, cabJourneys } from "./fixtures/cab";

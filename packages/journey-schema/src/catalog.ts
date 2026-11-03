@@ -3,6 +3,7 @@ import { localTransfer } from "./fixtures/local-transfer";
 import { payBill } from "./fixtures/pay-bill";
 import { corporatePayment, corporateApproval } from "./fixtures/corporate-payments";
 import { bulkPayment } from "./fixtures/bulk-payment";
+import { payrollRun } from "./fixtures/payroll-run";
 import { withdrawPayment } from "./fixtures/withdraw-payment";
 import { convertCurrency } from "./fixtures/convert-currency";
 import { addMoney, addCard, connectAccount, createBudget, invest, sellInvestment } from "./fixtures/bankworkx";
@@ -58,6 +59,11 @@ export const catalog: CatalogEntry[] = [
     id: bulkPayment.slug, category: "Payments", madeFor: "meezan", journey: bulkPayment,
     summary: "A company initiator pays many approved suppliers from a pasted file: every row checked and the failures explained, then sent for approval as one payment.",
     highlights: ["Row by row checks with reasons", "Up to 50 rows", "One payment against the limits", "Approvers needed shown", "One-time code"],
+  },
+  {
+    id: payrollRun.slug, category: "Payments", madeFor: "meezan", journey: payrollRun,
+    summary: "A company initiator pays the month's salaries from a pasted file: every row checked against the payroll register and salary cap, one run per pay period, always two approvers.",
+    highlights: ["Payroll register and salary cap", "One run per pay period", "Always two approvers", "One payment against the limits", "One-time code"],
   },
   {
     id: withdrawPayment.slug, category: "Payments", madeFor: "meezan", journey: withdrawPayment,
