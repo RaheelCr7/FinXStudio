@@ -44,6 +44,28 @@ export const ADAPTER_CATALOG: AdapterInfo[] = [
     input: { quoteId: "from the quote" }, returns: "{ reference, from: { currency, newBalance }, to: { currency, newBalance }, quoteId }. Errors: OTP_REQUIRED, QUOTE_EXPIRED (get a new quote), QUOTE_USED, QUOTE_NOT_FOUND, INSUFFICIENT_FUNDS.",
   },
   {
+    adapter: "corp.company.get", suggestedId: "company", description: "The company the signed-in user works for: accounts, approved beneficiaries, users and roles, the user's own remaining daily limit, the company's limit, the approval rule and the cut-off time.",
+    input: { userId: "who is acting: sara, omar (initiators), hassan, layla (approvers), nadia (both)" }, returns: "{ id, name, currency, accounts, beneficiaries, users, me: { roles, dailyLimit, usedToday, remainingToday }, companyDailyLimit, companyUsedToday, dualApprovalAbove, cutoff }. Save as ctx.company.",
+  },
+  {
+    adapter: "corp.payments.initiate", suggestedId: "initiatePayment", description: "Starts a payment that must be approved before it is released. Needs the one-time code first.",
+    input: { userId: "an initiator", fromAccountId: "company account", beneficiaryId: "an approved beneficiary", amount: "in the account's currency", reference: "optional text" },
+    returns: "The payment: { id, status 'pending_approval', required (1 or 2 approvers), valueDate, afterCutoff, … }. Errors: OTP_REQUIRED, NOT_AUTHORISED, BENEFICIARY_NOT_WHITELISTED, INVALID_AMOUNT, CURRENCY_NOT_SUPPORTED, INSUFFICIENT_FUNDS, LIMIT_USER_EXCEEDED, LIMIT_COMPANY_EXCEEDED.",
+  },
+  {
+    adapter: "corp.payments.approve", suggestedId: "approvePayment", description: "Approves a pending payment. The last approval releases it: the money moves. Needs the one-time code first.",
+    input: { userId: "an approver other than the one who started it", paymentId: "from corp.payments.pending" },
+    returns: "The payment, 'released' (with releaseReference) or still 'pending_approval' when a second approver is needed. Errors: OTP_REQUIRED, NOT_AUTHORISED, SELF_APPROVAL, ALREADY_APPROVED, PAYMENT_NOT_PENDING, PAYMENT_NOT_FOUND, INSUFFICIENT_FUNDS, LIMIT_COMPANY_EXCEEDED.",
+  },
+  {
+    adapter: "corp.payments.reject", suggestedId: "rejectPayment", description: "Rejects a pending payment (an approver), or withdraws it (the person who started it). The initiator's daily limit is given back.",
+    input: { userId: "an approver, or the initiator", paymentId: "from corp.payments.pending", reason: "optional text" }, returns: "The payment, 'rejected'. Errors: NOT_AUTHORISED, PAYMENT_NOT_PENDING, PAYMENT_NOT_FOUND.",
+  },
+  {
+    adapter: "corp.payments.pending", suggestedId: "pendingPayments", description: "The pending payments a person can act on: an approver sees what waits for them (not their own, not ones they approved); anyone sees what they started.",
+    input: { userId: "who is asking" }, returns: "Object keyed by payment id. Save as ctx.pending and use it as a list source.",
+  },
+  {
     adapter: "bank.otp.send", suggestedId: "otpSend", description: "Sends a one-time code by SMS to the customer's phone.",
     input: { channel: "optional, 'sms'" }, returns: "{ sent, maskedPhone, channel }. Save as ctx.otp to show {{ctx.otp.maskedPhone}}.",
   },
