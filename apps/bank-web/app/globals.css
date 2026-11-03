@@ -1,6 +1,7 @@
 *, *::before, *::after { box-sizing: border-box; }
 html { -webkit-text-size-adjust: 100%; }
 body { margin: 0; min-block-size: 100dvh; background: var(--c-bg); color: var(--c-text); font-family: "Inter Variable", Inter, system-ui, sans-serif; font-size: 16px; line-height: 1.5; -webkit-font-smoothing: antialiased; }
+[lang="ar"], :lang(ar) { font-family: "Noto Sans Arabic", "Inter Variable", system-ui, sans-serif; }
 [lang="ur"], :lang(ur) { font-family: "Noto Nastaliq Urdu", "Inter Variable", serif; line-height: 1.9; }
 h1, h2, h3 { margin: 0; letter-spacing: -0.015em; line-height: 1.25; }
 h1 { font-size: 26px; } h2 { font-size: 17px; }
