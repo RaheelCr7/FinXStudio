@@ -1,6 +1,7 @@
 import { projectFiles } from "@/lib/code";
 import { fail, guardWrite, json, preflight } from "@/lib/http";
 import { requireCan } from "@/lib/people";
+import { record } from "@/lib/activity";
 import { assertLocal, commitWorkspace, exportToFolder, pushCommand, setRemote, workspaceStatus } from "@/lib/workspace";
 
 export const dynamic = "force-dynamic";
@@ -27,8 +28,8 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
   try {
     const blocked = guardWrite(req); if (blocked) return blocked;
     assertLocal(req);
-    const who = await requireCan(req, "edit");
     const { id } = await params;
+    const who = await requireCan(req, "edit", [id]);
     const body = (await req.json().catch(() => ({}))) as { action?: string; message?: unknown; url?: unknown };
     let result: unknown;
     if (body.action === "export") {
@@ -39,6 +40,8 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
       await setRemote(id, typeof body.url === "string" ? body.url : "");
       result = { ok: true };
     } else return json(req, { error: "action must be export, commit or remote" }, 400);
+    const verb: Record<string, string> = { export: "Saved to the project folder", commit: "Committed to Git", remote: "Connected a Git remote" };
+    if (!(result as { nothingToCommit?: boolean } | null)?.nothingToCommit) await record({ actor: { id: who.id, name: who.name }, action: `workspace.${body.action}`, target: id, detail: verb[body.action!], projectIds: [id] });
     return json(req, { result, ...(await status(id)) });
   } catch (e) { return fail(e, req); }
 }
