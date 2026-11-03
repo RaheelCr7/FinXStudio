@@ -101,7 +101,7 @@ export const personas: Record<string, Persona> = {
     behaviour: { otpCode: "482100", kyc: "verified" },
   },
   acme: {
-    id: "acme", brand: "meezan", project: "corp-demo", name: "Acme Trading Co. (corporate payments)", phone: "+92 300 5550166", corp: ACME,
+    id: "acme", brand: "meezan", name: "Acme Trading Co. (corporate payments)", phone: "+92 300 5550166", corp: ACME,
     accounts: [], beneficiaries: [], limits: { daily: 0, usedToday: 0 },
     behaviour: { otpCode: "482100", kyc: "verified" },
   },
@@ -175,6 +175,7 @@ export class MockBank {
     if (!corp) throw new BankError("NOT_SUPPORTED", "Not available for this customer");
     const userId = String(input.userId ?? "");
     switch (adapter) {
+      case "corp.users.list": return Object.fromEntries(corp.summary.users.map((u) => [u.id, { id: u.id, name: u.name, sub: u.roles.join(" and ") }]));
       case "corp.company.get": {
         const c = corp.summary;
         const me = c.users.find((u) => u.id === userId);
@@ -195,7 +196,7 @@ export class MockBank {
         return p;
       }
       case "corp.payments.reject": return corp.rejectPayment({ userId, paymentId: String(input.paymentId ?? ""), reason: input.reason });
-      case "corp.payments.pending": return Object.fromEntries(corp.listPending({ userId }).map((p) => [p.id, p]));
+      case "corp.payments.pending": return Object.fromEntries(corp.listPending({ userId, as: input.as === "initiator" ? "initiator" : input.as === "approver" ? "approver" : undefined }).map((p) => [p.id, p]));
       case "corp.payments.get": return corp.getPayment(String(input.paymentId ?? ""));
       default: return undefined;
     }

@@ -43,7 +43,8 @@ export function lintJourney(j: Journey): LintIssue[] {
 
   // reachability
   const seen = new Set<string>();
-  const stack = [j.entryScreen];
+  // the denied screen of a journey for one role is reached by the engine, not by a button
+  const stack = [j.entryScreen, ...(j.authorisation ? [j.authorisation.deniedScreen] : [])];
   while (stack.length) {
     const id = stack.pop()!;
     if (seen.has(id)) continue;
@@ -104,6 +105,15 @@ export function lintJourney(j: Journey): LintIssue[] {
     if (declared && !declared.includes("{{") && declared !== c) issues.push({ code: "currency_mismatch", message: `Amount ${b.bind} is in ${c} but dataModel says ${declared}`, screen: s.id });
   }
   if (literal.size > 1) issues.push({ code: "mixed_currency", message: `Amounts in ${[...literal].join(" and ")} in one journey. Fine for a conversion; otherwise use one currency.` });
+
+  // a journey for one role must be able to send everyone else somewhere
+  if (j.authorisation) {
+    const denied = j.screens.find((s) => s.id === j.authorisation!.deniedScreen);
+    if (!denied) issues.push({ code: "authorisation_denied_missing", message: `authorisation.deniedScreen "${j.authorisation.deniedScreen}" is not a screen` });
+    else if (denied.kind !== "terminal") issues.push({ code: "authorisation_denied_missing", message: `The denied screen "${denied.id}" must be a terminal screen`, screen: denied.id });
+  } else if (j.integrations.some((i) => /^corp\.payments\.(initiate|approve)$/.test(i.adapter))) {
+    issues.push({ code: "authorisation_missing", message: "A journey that starts or approves a company payment must say which role may use it (authorisation)" });
+  }
 
   // translations complete
   const langs = j.locale.supported.filter((l) => l !== j.locale.default);

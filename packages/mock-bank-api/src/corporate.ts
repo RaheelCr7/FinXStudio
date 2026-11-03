@@ -48,8 +48,8 @@ export interface CorporateBankAdapter {
   initiatePayment(input: InitiateInput): CorpPayment;
   approvePayment(input: { userId: string; paymentId: string }): CorpPayment;
   rejectPayment(input: { userId: string; paymentId: string; reason?: string }): CorpPayment;
-  /** What a person can act on: an approver sees what waits for them, an initiator sees their own pending payments. */
-  listPending(input: { userId: string }): CorpPayment[];
+  /** What a person can act on: as an approver, what waits for them; as an initiator, what they started. `as` defaults to approver for anyone who holds that role. */
+  listPending(input: { userId: string; as?: "approver" | "initiator" }): CorpPayment[];
 }
 
 const pad = (n: number) => String(n).padStart(2, "0");
@@ -164,13 +164,12 @@ export class CorporateSandbox implements CorporateBankAdapter {
     return structuredClone(p);
   }
 
-  listPending(input: { userId: string }): CorpPayment[] {
+  listPending(input: { userId: string; as?: "approver" | "initiator" }): CorpPayment[] {
     const user = this.user(input.userId);
     const pending = [...this.payments.values()].filter((p) => p.status === "pending_approval");
-    // an approver sees what waits for them; anyone also sees what they started themselves
-    const canAct = user.roles.includes("approver") ? pending.filter((p) => p.initiatedBy !== user.id && !p.approvals.some((a) => a.userId === user.id)) : [];
-    const own = pending.filter((p) => p.initiatedBy === user.id);
-    const mine = [...new Map([...canAct, ...own].map((p) => [p.id, p])).values()];
+    const as = input.as ?? (user.roles.includes("approver") ? "approver" : "initiator");
+    // as an approver: what waits for them, never their own and never what they already approved; as an initiator: what they started
+    const mine = as === "approver" ? (user.roles.includes("approver") ? pending.filter((p) => p.initiatedBy !== user.id && !p.approvals.some((a) => a.userId === user.id)) : []) : pending.filter((p) => p.initiatedBy === user.id);
     return structuredClone(mine.sort((a, b) => a.initiatedAt.localeCompare(b.initiatedAt) || a.id.localeCompare(b.id)));
   }
 

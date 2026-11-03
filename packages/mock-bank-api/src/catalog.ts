@@ -44,6 +44,10 @@ export const ADAPTER_CATALOG: AdapterInfo[] = [
     input: { quoteId: "from the quote" }, returns: "{ reference, from: { currency, newBalance }, to: { currency, newBalance }, quoteId }. Errors: OTP_REQUIRED, QUOTE_EXPIRED (get a new quote), QUOTE_USED, QUOTE_NOT_FOUND, INSUFFICIENT_FUNDS.",
   },
   {
+    adapter: "corp.users.list", suggestedId: "companyUsers", description: "The people of the company, to choose who is acting in the sandbox (a real app knows who signed in).",
+    input: {}, returns: "Object keyed by user id: { id, name, sub: roles }. Save as ctx.people and use it as a select source.",
+  },
+  {
     adapter: "corp.company.get", suggestedId: "company", description: "The company the signed-in user works for: accounts, approved beneficiaries, users and roles, the user's own remaining daily limit, the company's limit, the approval rule and the cut-off time.",
     input: { userId: "who is acting: sara, omar (initiators), hassan, layla (approvers), nadia (both)" }, returns: "{ id, name, currency, accounts, beneficiaries, users, me: { roles, dailyLimit, usedToday, remainingToday }, companyDailyLimit, companyUsedToday, dualApprovalAbove, cutoff }. Save as ctx.company.",
   },
@@ -63,7 +67,7 @@ export const ADAPTER_CATALOG: AdapterInfo[] = [
   },
   {
     adapter: "corp.payments.pending", suggestedId: "pendingPayments", description: "The pending payments a person can act on: an approver sees what waits for them (not their own, not ones they approved); anyone sees what they started.",
-    input: { userId: "who is asking" }, returns: "Object keyed by payment id. Save as ctx.pending and use it as a list source.",
+    input: { userId: "who is asking", as: "optional: 'approver' (default for approvers) or 'initiator'" }, returns: "Object keyed by payment id. Save as ctx.pending and use it as a list source.",
   },
   {
     adapter: "bank.otp.send", suggestedId: "otpSend", description: "Sends a one-time code by SMS to the customer's phone.",

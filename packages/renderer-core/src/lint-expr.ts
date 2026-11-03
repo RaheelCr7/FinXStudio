@@ -36,7 +36,8 @@ export function lintExpressions(j: Journey): LintIssue[] {
   const roots = new Set<string>(["ctx"]);
   for (const p of [...dataPaths, ...saved]) roots.add(p.split(".")[0]!);
   const savedRoots = new Set([...saved].map((p) => p.split(".")[0]!));
-  const ctxNames = new Set([...saved].filter((p) => p.startsWith("ctx.")).map((p) => p.split(".")[1]!));
+  // "error" is always there: the engine saves what went wrong after a failed call
+  const ctxNames = new Set([...[...saved].filter((p) => p.startsWith("ctx.")).map((p) => p.split(".")[1]!), "error"]);
 
   const checkPath = (path: string, expr: string, where: string, screen: string, extraRoots: string[]) => {
     const [root, second] = path.split(".");
@@ -77,7 +78,8 @@ export function lintExpressions(j: Journey): LintIssue[] {
       if (b.visibleWhen) checkExpr(b.visibleWhen, `${bw}.visibleWhen`, s.id);
       for (const k of ["min", "max"] as const) if (typeof b.validation?.[k] === "string") checkExpr(b.validation[k], `${bw}.validation.${k}`, s.id);
       if (b.type === "accountPicker" && b.filter) checkExpr(b.filter, `${bw}.filter`, s.id, ["account"]);
-      if (typeof b.source === "string" && !saved.has(b.source)) {
+      // a source is a saved path, or something inside one (ctx.company.accounts inside ctx.company)
+      if (typeof b.source === "string" && !saved.has(b.source) && ![...saved].some((p) => b.source.startsWith(`${p}.`))) {
         issues.push({ code: "unknown_source", screen: s.id, message: `${bw}.source: "${b.source}" is never saved by a callApi (saveAs).${didYouMean(b.source, saved)}` });
       }
     });

@@ -69,6 +69,12 @@ export class JourneyRunner {
     this.emit();
     const s = this.screen;
     if (s.onEnter?.length) await this.runActions(s.onEnter, s);
+    // a journey for one role: once the person's roles are known, anyone without the role is sent to the denied screen
+    const au = this.journey.authorisation;
+    if (au && id !== au.deniedScreen && this.current === id) {
+      const roles = this.get(au.rolesFrom);
+      if (Array.isArray(roles) && !roles.includes(au.role)) { this.history.push(id); await this.enter(au.deniedScreen); return; }
+    }
     this.emit();
   }
 
@@ -156,6 +162,8 @@ export class JourneyRunner {
             if (a.saveAs) setPath(this.state, a.saveAs, res);
             if (a.integration === "otpVerify") this.otpFailures = 0;
           } catch (err: any) {
+            // what went wrong, for the screen that follows: {{ctx.error.message}} and routes on {{ctx.error.code}}
+            setPath(this.state, "ctx.error", { code: err?.code ?? "ERROR", message: err?.message ?? "Something went wrong", integration: a.integration });
             const oe = a.onError;
             if (!oe) throw err;
             if (a.integration === "otpVerify") this.otpFailures += 1;
