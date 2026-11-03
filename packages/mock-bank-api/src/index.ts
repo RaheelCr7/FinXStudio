@@ -2,10 +2,12 @@ import { instrumentOf, INSTRUMENTS, dayChange } from "./invest";
 import { alexFinance, BANKS, cardNetwork, luhnValid, type Finance } from "./finance";
 import { customerRate, midRate, priceQuote, fxSupports, FX_SPREAD, QUOTE_TTL_SECONDS, type Quote } from "./fx";
 import { currencyInfo, roundMoney } from "@finx/ui-kit";
+import { CorporateSandbox, ACME, type CorpCompany } from "./corporate";
 import { CabSandbox, CAB_PROFILES, type CabProfile } from "./cab";
 export * from "./finance";
 export { CAB_PROFILES, CAB_CURRENCY, PASSWORD_RULES, passwordProblems, type CabProfile } from "./cab";
 export * from "./invest";
+export { ACME, CorporateSandbox, type CorporateBankAdapter, type CorpCompany, type CorpPayment, type CorpUser, type CorpRole, type InitiateInput } from "./corporate";
 export { PER_USD, FX_SPREAD, FX_FEE_RATE, QUOTE_TTL_SECONDS, midRate, customerRate, type Quote } from "./fx";
 
 export type Account = { id: string; name: string; maskedNumber: string; iban: string; balance: number; currency: string; status: "active" | "frozen"; canDebit: boolean };
@@ -18,6 +20,8 @@ export type Persona = {
   project?: string;
   /** Sign-in, enrolment and recovery details, for the Cairo Amman Bank access journeys. */
   cab?: CabProfile;
+  /** A company with users, a whitelist, limits and approval rules, for the corporate payment journeys. */
+  corp?: CorpCompany;
   name: string;
   phone: string;
   accounts: Account[];
@@ -96,6 +100,11 @@ export const personas: Record<string, Persona> = {
     limitsByCurrency: { USD: { daily: 2000, usedToday: 0 }, AED: { daily: 7000, usedToday: 0 }, KWD: { daily: 300, usedToday: 0 } },
     behaviour: { otpCode: "482100", kyc: "verified" },
   },
+  acme: {
+    id: "acme", brand: "meezan", project: "corp-demo", name: "Acme Trading Co. (corporate payments)", phone: "+92 300 5550166", corp: ACME,
+    accounts: [], beneficiaries: [], limits: { daily: 0, usedToday: 0 },
+    behaviour: { otpCode: "482100", kyc: "verified" },
+  },
   nour: {
     id: "nour", brand: "meezan", project: "cab", name: "Nour Haddad (active customer)", phone: "+962 34 56 78 90", cab: CAB_PROFILES.nour!,
     accounts: [], beneficiaries: [], limits: { daily: 5000, usedToday: 0 },
@@ -141,10 +150,12 @@ export class MockBank {
   /** The clock quotes expire by; tests replace it. */
   now: () => number = () => Date.now();
   private cab: CabSandbox;
+  private corp?: CorporateSandbox;
   constructor(personaId = "ayesha") {
     const base = personas[personaId];
     if (!base) throw new Error(`Unknown persona ${personaId}`);
     this.p = structuredClone(base);
+    if (this.p.corp) { this.corp = new CorporateSandbox(this.p.corp); this.corp.now = () => this.now(); }
     this.cab = new CabSandbox(this.p, { otpVerified: () => this.otpVerified, clearOtp: () => { this.otpVerified = false; } });
   }
   get persona() { return this.p; }
@@ -158,12 +169,45 @@ export class MockBank {
     return own;
   }
 
+  /** The corporate payment adapters. Starting and approving a payment move money, so they need the one-time code first, like a transfer. */
+  private corporate(adapter: string, input: Record<string, any>) {
+    const corp = this.corp;
+    if (!corp) throw new BankError("NOT_SUPPORTED", "Not available for this customer");
+    const userId = String(input.userId ?? "");
+    switch (adapter) {
+      case "corp.company.get": {
+        const c = corp.summary;
+        const me = c.users.find((u) => u.id === userId);
+        return { id: c.id, name: c.name, currency: c.currency, accounts: Object.fromEntries(c.accounts.map((a) => [a.id, { ...a, name: `${a.name} ${a.maskedNumber}` }])), beneficiaries: Object.fromEntries(c.whitelist.map((b) => [b.id, { ...b, displayName: b.name }])), users: c.users.map((u) => ({ id: u.id, name: u.name, roles: u.roles })), me: me ? { id: me.id, name: me.name, roles: me.roles, dailyLimit: me.dailyLimit, usedToday: me.usedToday, remainingToday: me.dailyLimit - me.usedToday } : undefined, companyDailyLimit: c.companyDailyLimit, companyUsedToday: c.companyUsedToday, dualApprovalAbove: c.dualApprovalAbove, cutoff: c.cutoff };
+      }
+      case "corp.payments.initiate": {
+        if (!this.otpVerified) throw new BankError("OTP_REQUIRED", "OTP not verified");
+        if (this.p.behaviour.transferFails) throw new BankError("CORE_UNAVAILABLE", "Core banking unavailable");
+        const p = corp.initiatePayment({ userId, fromAccountId: String(input.fromAccountId ?? ""), beneficiaryId: String(input.beneficiaryId ?? ""), amount: Number(input.amount), reference: input.reference });
+        this.otpVerified = false;
+        return p;
+      }
+      case "corp.payments.approve": {
+        if (!this.otpVerified) throw new BankError("OTP_REQUIRED", "OTP not verified");
+        if (this.p.behaviour.transferFails) throw new BankError("CORE_UNAVAILABLE", "Core banking unavailable");
+        const p = corp.approvePayment({ userId, paymentId: String(input.paymentId ?? "") });
+        this.otpVerified = false;
+        return p;
+      }
+      case "corp.payments.reject": return corp.rejectPayment({ userId, paymentId: String(input.paymentId ?? ""), reason: input.reason });
+      case "corp.payments.pending": return Object.fromEntries(corp.listPending({ userId }).map((p) => [p.id, p]));
+      case "corp.payments.get": return corp.getPayment(String(input.paymentId ?? ""));
+      default: return undefined;
+    }
+  }
+
   /** Single entry point used by journeys: adapter id + input -> result. */
   async call(adapter: string, input: Record<string, any> = {}): Promise<any> {
     if (this.cab.handles(adapter)) {
       const out = this.cab.call(adapter, input);
       if (out !== undefined) return out;
     }
+    if (adapter.startsWith("corp.")) return this.corporate(adapter, input);
     switch (adapter) {
       case "bank.accounts.list":
         return Object.fromEntries(this.p.accounts.map((a) => [a.id, a]));

@@ -66,7 +66,7 @@ describe("mock bank sandbox", () => {
     expect(ADAPTER_CATALOG.find((a) => a.adapter === "bank.otp.verify")!.suggestedId).toBe("otpVerify");
   });
   it("describes the sandbox customers with their test OTPs, per bank app", () => {
-    expect(describePersonas().map((p) => [p.id, p.otpCode])).toEqual([["ayesha", "482100"], ["bilal", "111111"], ["alex", "482100"], ["sam", "123456"], ["zara", "123456"], ["hina", "482100"], ["nour", "482100"], ["sara", "482100"], ["yasmin", "482100"], ["lina", "482100"], ["omar", "482100"]]);
+    expect(describePersonas().map((p) => [p.id, p.otpCode])).toEqual([["ayesha", "482100"], ["bilal", "111111"], ["alex", "482100"], ["sam", "123456"], ["zara", "123456"], ["hina", "482100"], ["acme", "482100"], ["nour", "482100"], ["sara", "482100"], ["yasmin", "482100"], ["lina", "482100"], ["omar", "482100"]]);
     expect(personasFor("meezan").map((p) => p.id)).toEqual(["ayesha", "bilal", "zara", "hina"]);
     expect(personasFor("bankworkx").map((p) => p.id)).toEqual(["alex", "sam"]);
   });
@@ -191,5 +191,37 @@ describe("accounts in several currencies", () => {
     await expect(b.call("bank.transfers.create", { fromAccountId: "acc_usd", amount: 2500 })).rejects.toMatchObject({ code: "LIMIT_EXCEEDED" }); // balance is enough, USD limit is 2,000
     b = await verified();
     await expect(b.call("bank.transfers.create", { fromAccountId: "acc_kwd", amount: 250 })).rejects.toMatchObject({ code: "INSUFFICIENT_FUNDS" });
+  });
+});
+
+describe("corporate payments through the bank", () => {
+  const acting = async (id = "acme") => { const b = new MockBank(id); await b.call("bank.otp.send"); await b.call("bank.otp.verify", { code: "482100" }); return b; };
+  it("shows the company to the signed-in user, with their own remaining limit", async () => {
+    const c = await new MockBank("acme").call("corp.company.get", { userId: "omar" });
+    expect(c).toMatchObject({ name: "Acme Trading Co.", currency: "PKR", dualApprovalAbove: 1_000_000, cutoff: "16:00", me: { id: "omar", roles: ["initiator"], remainingToday: 500_000 } });
+    expect(Object.keys(c.accounts)).toEqual(["acme_ops", "acme_usd"]);
+    expect(c.beneficiaries.sup_textile.displayName).toBe("Crescent Textiles");
+  });
+  it("needs the one-time code to start and to approve, but not to reject", async () => {
+    const b = new MockBank("acme");
+    await expect(b.call("corp.payments.initiate", { userId: "sara", fromAccountId: "acme_ops", beneficiaryId: "sup_textile", amount: 1000 })).rejects.toMatchObject({ code: "OTP_REQUIRED" });
+    await b.call("bank.otp.send"); await b.call("bank.otp.verify", { code: "482100" });
+    const p = await b.call("corp.payments.initiate", { userId: "sara", fromAccountId: "acme_ops", beneficiaryId: "sup_textile", amount: 1000 });
+    expect(p.status).toBe("pending_approval");
+    await expect(b.call("corp.payments.approve", { userId: "hassan", paymentId: p.id })).rejects.toMatchObject({ code: "OTP_REQUIRED" }); // the code was used up by the first step
+    expect((await b.call("corp.payments.reject", { userId: "hassan", paymentId: p.id, reason: "Not today" })).status).toBe("rejected");
+  });
+  it("runs a payment from start to release across two people", async () => {
+    const b = await acting();
+    const p = await b.call("corp.payments.initiate", { userId: "sara", fromAccountId: "acme_ops", beneficiaryId: "sup_logistics", amount: 250_000, reference: "INV-77" });
+    expect(Object.keys(await b.call("corp.payments.pending", { userId: "hassan" }))).toEqual([p.id]);
+    await b.call("bank.otp.send"); await b.call("bank.otp.verify", { code: "482100" });
+    const done = await b.call("corp.payments.approve", { userId: "hassan", paymentId: p.id });
+    expect(done).toMatchObject({ status: "released", reference: "INV-77" });
+    expect((await b.call("corp.company.get", { userId: "sara" })).accounts.acme_ops.balance).toBe(24_750_000);
+    expect(await b.call("corp.payments.pending", { userId: "hassan" })).toEqual({});
+  });
+  it("is only for a company customer", async () => {
+    await expect(new MockBank("ayesha").call("corp.company.get", { userId: "x" })).rejects.toMatchObject({ code: "NOT_SUPPORTED" });
   });
 });
