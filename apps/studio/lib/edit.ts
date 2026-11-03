@@ -4,10 +4,10 @@ export const BLOCK_LABELS: Record<string, string> = {
   text: "Text", alert: "Alert", button: "Button", result: "Result", reviewSummary: "Review summary", consent: "Consent",
   otp: "OTP", stepper: "Progress steps", amountInput: "Amount", select: "Select", textInput: "Text input", accountPicker: "Account picker", beneficiaryPicker: "Beneficiary picker",
   toggle: "Switch", cardForm: "Card form",
-  hero: "Bank banner", sectionHeader: "Section heading", shortcuts: "Shortcuts", menu: "Menu",
+  hero: "Bank banner", sectionHeader: "Section heading", shortcuts: "Shortcuts", menu: "Menu", divider: "Divider", accordion: "Accordion",
 };
 export const BLOCK_GROUPS: Array<{ name: string; types: string[] }> = [
-  { name: "Content", types: ["text", "alert", "result", "hero", "sectionHeader"] },
+  { name: "Content", types: ["text", "alert", "result", "hero", "sectionHeader", "divider", "accordion"] },
   { name: "Inputs", types: ["textInput", "amountInput", "select", "toggle", "consent"] },
   { name: "Banking", types: ["accountPicker", "beneficiaryPicker", "cardForm", "reviewSummary"] },
   { name: "Verification", types: ["otp"] },
@@ -24,6 +24,8 @@ export function newBlock(type: string, j: Journey): Block {
     case "textInput": return { type: "textInput", bind: "reference", label: "Reference number", placeholder: "Enter a value", keyboard: "default" };
     case "hero": return { type: "hero" };
     case "sectionHeader": return { type: "sectionHeader", title: "Heading" };
+    case "divider": return { type: "divider", label: "OR" };
+    case "accordion": return { type: "accordion", items: [{ id: "one", title: "A question", text: "Its answer" }] };
     case "shortcuts": return { type: "shortcuts", items: [{ id: "one", label: "Shortcut", icon: "help", actions: [{ type: "navigate", to: firstTerminal(j) ?? j.entryScreen }] }] };
     case "menu": return { type: "menu", items: [{ id: "one", label: "Menu item", actions: [{ type: "navigate", to: firstTerminal(j) ?? j.entryScreen }] }] };
     case "toggle": return { type: "toggle", bind: "option", label: "Turn this on" };

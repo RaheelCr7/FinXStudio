@@ -138,3 +138,11 @@ export type SectionHeaderProps = { title: string; action?: { label: string; onPr
 export type ShortcutsProps = { items: { id: string; label: string; icon?: string; onPress?: () => void }[] };
 
 export type HeroProps = { name: string; logo?: string };
+
+export type DividerProps = { /** A word in the middle of the line, such as "OR". */ label?: string };
+
+export type AccordionProps = {
+  items: { id: string; title: string; text: string }[];
+  /** The item open to start with. */
+  defaultOpen?: string;
+};

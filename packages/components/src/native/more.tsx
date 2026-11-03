@@ -1,7 +1,7 @@
 import React, { useRef, useState } from "react";
 import { Image, Platform, Pressable, Text, TextInput, View } from "react-native";
 import { mix } from "@finx/ui-kit";
-import type { AlertProps, AmountFieldProps, CheckboxProps, ChoiceGroupProps, CodeInputProps, HeroProps, ResultProps, SectionHeaderProps, ShortcutsProps, SummaryListProps, SwitchProps } from "../props";
+import type { AccordionProps, DividerProps, AlertProps, AmountFieldProps, CheckboxProps, ChoiceGroupProps, CodeInputProps, HeroProps, ResultProps, SectionHeaderProps, ShortcutsProps, SummaryListProps, SwitchProps } from "../props";
 import { Icon } from "./Icon";
 import { useKit } from "./kit";
 
@@ -232,6 +232,34 @@ export function Hero({ name, logo }: HeroProps) {
   return (
     <View accessibilityRole="header" style={{ backgroundColor: bar ?? c.accent, height: 200, alignItems: "center", justifyContent: "center" }}>
       {logo ? <Image accessibilityLabel={name} source={{ uri: logo }} resizeMode="contain" style={{ width: 230, height: 70 }} /> : <Text style={{ color: c.accentOn, fontSize: 26, fontWeight: "700" }}>{name}</Text>}
+    </View>
+  );
+}
+
+export function Divider({ label }: DividerProps) {
+  const { c } = useKit();
+  const line = <View style={{ flex: 1, height: 1, backgroundColor: c.border }} />;
+  return label ? <View accessibilityRole="none" accessibilityLabel={label} style={{ flexDirection: "row", alignItems: "center", gap: 12 }}>{line}<Text style={{ color: c.textMuted, fontSize: 13, fontWeight: "500" }}>{label}</Text>{line}</View> : <View accessibilityRole="none" style={{ height: 1, backgroundColor: c.border }} />;
+}
+
+export function Accordion({ items, defaultOpen }: AccordionProps) {
+  const { c, r } = useKit();
+  const [open, setOpen] = useState<string | undefined>(defaultOpen);
+  return (
+    <View style={{ borderWidth: 1, borderColor: c.border, borderRadius: r.lg, backgroundColor: c.surface, overflow: "hidden" }}>
+      {items.map((it, i) => {
+        const on = open === it.id;
+        return (
+          <View key={it.id} style={{ borderTopWidth: i ? 1 : 0, borderTopColor: c.border }}>
+            <Pressable accessibilityRole="button" accessibilityState={{ expanded: on }} accessibilityLabel={it.title} onPress={() => setOpen(on ? undefined : it.id)}
+              style={{ minHeight: 52, paddingHorizontal: 16, paddingVertical: 12, flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 12 }}>
+              <Text style={{ flex: 1, color: on ? c.accent : c.text, fontSize: 15, fontWeight: "600" }}>{it.title}</Text>
+              <Icon name={on ? "up" : "down"} size={16} color={on ? c.accent : c.text} />
+            </Pressable>
+            {on ? <Text style={{ color: c.textMuted, fontSize: 14, lineHeight: 21, paddingHorizontal: 16, paddingBottom: 16 }}>{it.text}</Text> : null}
+          </View>
+        );
+      })}
     </View>
   );
 }

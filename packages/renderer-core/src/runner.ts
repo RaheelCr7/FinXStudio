@@ -216,6 +216,7 @@ export class JourneyRunner {
     if (b.type === "button") out.label = this.tx(b.label);
     if (b.type === "menu" || b.type === "shortcuts") out.items = b.items.map((i: any) => ({ ...i, label: this.tx(i.label), ...(i.text ? { text: this.tx(i.text) } : {}) }));
     if (b.type === "toggle" && b.link) out.link = { ...b.link, label: this.tx(b.link.label) };
+    if (b.type === "accordion") out.items = b.items.map((i: any) => ({ id: i.id, title: this.tx(i.title), text: this.tx(i.text) }));
     if (b.type === "sectionHeader" && b.action) out.action = { ...b.action, label: this.tx(b.action.label) };
     return out;
   }

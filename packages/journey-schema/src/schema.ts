@@ -80,6 +80,10 @@ export const Block = z.discriminatedUnion("type", [
   /** A banner with the bank's logo at the top of a screen. The bank decides how it looks. */
   z.object({ ...base, type: z.literal("hero") }),
   /** A bold heading with an optional link on the same row, for example "Welcome" and the language. */
+  /** A thin line between groups, with an optional word in the middle ("OR"). */
+  z.object({ ...base, type: z.literal("divider"), label: LocalizedText.optional() }),
+  /** Questions that open to show their answer, one at a time. */
+  z.object({ ...base, type: z.literal("accordion"), items: z.array(z.object({ id: z.string(), title: LocalizedText, text: LocalizedText })).min(1) }),
   z.object({ ...base, type: z.literal("sectionHeader"), title: LocalizedText, action: z.object({ label: LocalizedText, actions: z.array(Action) }).optional() }),
   /** A row of icon buttons, for example Enroll, Locate us and Support at the bottom of a sign-in screen. */
   z.object({ ...base, type: z.literal("shortcuts"), items: z.array(z.object({ id: z.string(), label: LocalizedText, icon: z.string().optional(), actions: z.array(Action) })) }),

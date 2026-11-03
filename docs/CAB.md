@@ -38,7 +38,7 @@ Adapters are named `cab.*` (22 of them, listed with inputs and outputs in the ad
 
 A bank can carry a **look** in `packages/ui-kit/src/brands.json`: a coloured app bar with a back arrow and a close button, a rounded sheet on a light page, outlined fields, the bank's logo and font. CAB's look is taken from the Figma export (bar colour #00853E, logo cropped from the exported frames for this project only). Both renderers, the phone app and the web app, draw it from the same definition, so a screen is built once.
 
-New journey blocks that the design needed, available to every project and listed in the AI catalog and the Studio builder: `hero` (logo banner), `sectionHeader` (heading with a link), `shortcuts` (icon button row), `menu` (tappable rows). `select` gained a `rows` variant, `otp` a number pad and masked digits (`keypad`, `masked`), and `toggle` a link on the same row.
+New journey blocks that the design needed, available to every project and listed in the AI catalog and the Studio builder: `divider` (a line with a word such as OR) and `accordion` (questions that open to show answers), `hero` (logo banner), `sectionHeader` (heading with a link), `shortcuts` (icon button row), `menu` (tappable rows). `select` gained a `rows` variant, `otp` a number pad and masked digits (`keypad`, `masked`), and `toggle` a link on the same row.
 
 Known gaps against the Figma: the bank's own typeface is not loaded, the map on Locate us, a date picker, the picture-code image, the OR divider between menu rows, and the language confirmation as a pop-up (it is a screen).
 
@@ -60,11 +60,11 @@ Every CAB sheet was compared screen by screen with its journey (content and flow
 - *Enrol.* The design splits the entity into two screens (a dropdown with Continue, then "Selected Entity" read-only with Personal and Business rows that go straight on). The journey has one screen.
 - *Not modelled:* the login-time PIN modal and the biometric "Unlock" modal, the "Welcome Nour" remembered-user greeting, the Menu and My Accounts screens that lead to Default sign in and Account preview.
 - *Default sign in:* the list should tick the current default with the status words (Default sign in, Enabled, Generated), and the success screen should show the Default Sign In card with a Change link.
-- *Found screen:* username dropdown, avatar, an OR divider, and "Sign in as" returning to the login with the username filled in.
+- *Found screen:* username dropdown, avatar, and "Sign in as" returning to the login with the username filled in. (The OR divider is done.)
 - *Account preview:* the sign-in list shows an "As of" time, a type pill and "Available balance" per row and is not selectable; the setup screen has no Save button or warning.
 - *Language:* the confirmation should name the chosen language, the current one should be pre-selected, No sits left of Yes, and after Yes the flow returns to sign-in (no "Language updated" screen).
 - *Locate us:* map first, with a search bar, "List view" and "Filters" buttons, a separate filter sheet with a Services section, tappable result rows, details with the country and one primary button.
-- *Support:* FAQs as one accordion screen, the Call us dialer as a pop-up, and the FAQ, Terms and Privacy text taken from the design.
+- *Support:* the Call us dialer as a pop-up, and the FAQ, Terms and Privacy text taken from the design. (FAQs are now one accordion screen of six topics.)
 - *Details:* the design's Account Activity answers and Privacy text are fuller than the samples here.
 
 ## Not covered, and what needs the bank

@@ -99,6 +99,14 @@ export const BLOCKS: BlockDoc[] = [
     example: { type: "sectionHeader", title: { en: "Welcome" }, action: { label: { en: "English" }, actions: [{ type: "navigate", to: "language" }] } },
   },
   {
+    type: "divider", purpose: "A thin line between groups, with an optional word in the middle such as OR.", fields: { label: "optional Loc" },
+    example: { type: "divider", label: { en: "OR", ar: "أو" } },
+  },
+  {
+    type: "accordion", purpose: "Questions that open to show their answers, one open at a time (FAQs).", fields: { items: "[{ id, title: Loc, text: Loc }], at least one" },
+    example: { type: "accordion", items: [{ id: "q1", title: { en: "How do I reset my password?" }, text: { en: "Choose Can't Sign In." } }] },
+  },
+  {
     type: "shortcuts", purpose: "A row of icon buttons, e.g. Enroll, Locate us and Support at the bottom of a sign-in screen.", fields: { items: "[{ id, label: Loc, icon?, actions }]. Icons are the names the select tiles use plus pin, user, help, globe, key, lock" },
     example: { type: "shortcuts", items: [{ id: "enroll", label: { en: "Enroll" }, icon: "user", actions: [{ type: "navigate", to: "enroll" }] }] },
   },
