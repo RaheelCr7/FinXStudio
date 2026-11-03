@@ -124,6 +124,37 @@ describe("projects", () => {
     await expect(projects.updateProjectShape("nope", {})).rejects.toThrow(/No project/);
   });
 
+  it("offers a project's currencies: base first, a custom one added, the base changed, undo with the previous shape", async () => {
+    const before = await projects.getProjectShape("cab");
+    expect(before.baseCurrency).toBe("JOD");
+    expect(before.currencies).toEqual(["JOD"]);
+    const r = await projects.updateProjectShape("cab", { currencies: ["USD", "JOD", "EUR"], customCurrencies: [{ code: "GLD", name: "Gold coin", symbol: "◎", decimals: 3 }] });
+    expect(r.shape.currencies).toEqual(["JOD", "USD", "EUR"]); // base first
+    expect(r.shape.customCurrencies).toEqual([{ code: "GLD", name: "Gold coin", symbol: "◎", decimals: 3, custom: true }]);
+    const saved = JSON.parse(readFileSync(file, "utf8")).cab;
+    expect(saved.currency).toBe("JOD");
+    expect(saved.currencies).toEqual(["JOD", "USD", "EUR"]);
+    await projects.updateProjectShape("cab", { currencies: ["JOD", "USD", "EUR", "GLD"], baseCurrency: "USD" });
+    const moved = await projects.getProjectShape("cab");
+    expect(moved.baseCurrency).toBe("USD");
+    expect(moved.currencies[0]).toBe("USD");
+    expect((await projects.getProject("cab"))!.currency).toBe("USD");
+    await projects.updateProjectShape("cab", r.previous); // undo
+    const undone = await projects.getProjectShape("cab");
+    expect(undone.currencies).toEqual(["JOD"]);
+    expect(undone.customCurrencies).toEqual([]);
+  });
+
+  it("refuses currency changes that would break the project", async () => {
+    expect((await projects.updateProjectShape("cab", { currencies: ["USD"] })).shape.currencies).toEqual(["JOD", "USD"]); // the base currency is always offered
+    await expect(projects.updateProjectShape("cab", { currencies: ["JOD"], entities: [{ id: "eu", name: "CAB Europe", country: "JO", currency: "EUR", languages: ["en"] }] })).rejects.toThrow(/EUR is the base currency or used by an entity/);
+    await expect(projects.updateProjectShape("cab", { currencies: ["JOD", "ZZZ"] })).rejects.toThrow(/Unknown currency: ZZZ/);
+    await expect(projects.updateProjectShape("cab", { baseCurrency: "EUR" })).rejects.toThrow(/Add it to the currencies first|base currency/);
+    await expect(projects.updateProjectShape("cab", { customCurrencies: [{ code: "USD", name: "Dollar", symbol: "$", decimals: 2 }] })).rejects.toThrow(/already built in/);
+    await projects.updateProjectShape("cab", { currencies: ["JOD", "GLD"], customCurrencies: [{ code: "GLD", name: "Gold coin", symbol: "◎", decimals: 3 }] });
+    await expect(projects.updateProjectShape("cab", { customCurrencies: [] })).rejects.toThrow(/GLD.*no longer defined/);
+  });
+
   it("creates a project from a country, a library look and the sliders, with the shape filled in", async () => {
     const { project } = await projects.createProject({ name: "Levant Bank", preset: "meezan", accent: "#0B5D4B", currency: "", country: "JO", look: "corporate", radius: { md: 9 }, components: { field: { height: 48 } } });
     const saved = JSON.parse(readFileSync(file, "utf8"))["levant-bank"];

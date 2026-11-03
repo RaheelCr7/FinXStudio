@@ -86,3 +86,23 @@ describe("validateShape", () => {
     expect(validateShape({ entities: [] }).ok).toBe(false);
   });
 });
+
+describe("currencies of a project", () => {
+  it("default to the base currency and every entity's, with nothing stored", () => {
+    for (const [id, def] of Object.entries(brandDefs)) {
+      const s = projectShape(def);
+      expect(s.baseCurrency, id).toBe(def.currency);
+      expect(s.currencies[0], id).toBe(def.currency);
+      expect(s.customCurrencies, id).toEqual([]);
+    }
+  });
+  it("validates the offered list, the base and a bank's own currencies", () => {
+    const r = validateShape({ currencies: ["JOD", "GLD"], customCurrencies: [{ code: "GLD", name: "Gold coin", symbol: "◎", decimals: 3 }], baseCurrency: "GLD" });
+    expect(r.ok).toBe(true);
+    if (r.ok) { expect(r.shape.currencies).toEqual(["JOD", "GLD"]); expect(r.shape.baseCurrency).toBe("GLD"); }
+    expect(validateShape({ currencies: ["JOD", "GLD"] })).toEqual({ ok: false, errors: ["Unknown currency: GLD. Add it first with a name, symbol and decimals."] });
+    expect(validateShape({ currencies: [] })).toEqual({ ok: false, errors: ["Offer at least one currency"] });
+    expect(validateShape({ baseCurrency: "NOPE" })).toEqual({ ok: false, errors: ["Unknown base currency: NOPE"] });
+    expect(validateShape({ entities: [{ id: "a", name: "Ab", country: "JO", currency: "ZZZ", languages: ["en"] }] })).toEqual({ ok: false, errors: ["Entity a: choose a currency the project knows, like JOD"] });
+  });
+});

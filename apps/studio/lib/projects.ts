@@ -1,7 +1,7 @@
 import { promises as fs } from "node:fs";
 import path from "node:path";
 import { spawnSync } from "node:child_process";
-import { PRESETS, accentProblem, applyLook, countryByCode, lookById, projectShape, resolveBrand, resolveComponentTokens, validateShape, type ProjectShape, type Brand, type BrandDef, type ComponentTokenOverrides } from "@finx/ui-kit";
+import { PRESETS, accentProblem, applyLook, countryByCode, knownCurrency, lookById, projectShape, resolveBrand, resolveComponentTokens, validateShape, type ProjectShape, type Brand, type BrandDef, type ComponentTokenOverrides } from "@finx/ui-kit";
 import { StoreError } from "./store";
 import { brandsFile } from "./brand-ids";
 
@@ -54,6 +54,15 @@ function checkEntityLanguages(shape: ProjectShape) {
     const missing = e.languages.filter((l) => !shape.languages.includes(l));
     if (missing.length) throw new StoreError(400, `Entity ${e.id} uses ${missing.join(", ")}, which the project does not offer. Add it to the project's languages first.`);
   }
+}
+
+/** The currencies a project offers must include its base currency and every entity's, and a currency it added cannot be dropped while something uses it. */
+function checkCurrencies(shape: ProjectShape) {
+  const used = new Set([shape.baseCurrency, ...shape.entities.flatMap((e) => [e.currency, ...(e.currencies ?? [])])]);
+  const missing = [...used].filter((c) => !shape.currencies.includes(c));
+  const unknown = [...used, ...shape.currencies].filter((c) => !knownCurrency(c, shape.customCurrencies));
+  if (unknown.length) throw new StoreError(400, `${[...new Set(unknown)].join(", ")} is still in use but no longer defined. Keep the custom currency, or stop using it first.`);
+  if (missing.length) throw new StoreError(400, `${missing.join(", ")} is the base currency or used by an entity, so the project must offer it. Add it to the currencies first.`);
 }
 
 /** Corner radii from the sliders: sm, md, lg and xl, each 0 to 40 px. */
@@ -180,12 +189,17 @@ export async function updateProjectShape(id: string, input: unknown): Promise<{ 
   const all = await read();
   const def = all[id];
   if (!def) throw new StoreError(404, `No project called ${id}`);
-  const checked = validateShape(input, def.customLanguages ?? []);
+  const checked = validateShape(input, def.customLanguages ?? [], def.customCurrencies ?? []);
   if (!checked.ok) throw new StoreError(400, checked.errors.join(". "));
   const previous = projectShape(def);
-  const updated: BrandDef = { ...def, ...checked.shape };
-  // an entity may only use languages the project offers
+  const { baseCurrency, ...rest } = checked.shape;
+  if (baseCurrency && !(checked.shape.currencies ?? previous.currencies).includes(baseCurrency)) throw new StoreError(400, `${baseCurrency} is not one of the project's currencies. Add it to the currencies first.`);
+  const updated: BrandDef = { ...def, ...rest, ...(baseCurrency ? { currency: baseCurrency } : {}) };
+  // the base currency leads the offered list, so "offers" reads naturally
+  if (updated.currencies) updated.currencies = [updated.currency, ...updated.currencies.filter((c) => c !== updated.currency)];
   const next = projectShape(updated);
+  checkCurrencies(next);
+  // an entity may only use languages the project offers
   for (const e of next.entities) {
     const missing = e.languages.filter((l) => !next.languages.includes(l));
     if (missing.length) throw new StoreError(400, `Entity ${e.id} uses ${missing.join(", ")}, which the project does not offer. Add it to the project's languages first.`);
