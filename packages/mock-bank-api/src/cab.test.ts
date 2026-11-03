@@ -132,7 +132,7 @@ describe("settings, language, locations", () => {
     await expect(b.call("cab.device.setDefault", { mode: "pin", pin: "12" })).rejects.toMatchObject({ code: "PIN_INVALID" });
     expect(await b.call("cab.device.setDefault", { mode: "pin", pin: "123456" })).toEqual({ ok: true, default: "pin" });
     expect(await b.call("cab.device.options")).toMatchObject({ default: "pin", pinSet: true });
-    expect(await b.call("cab.device.verifyPin", { pin: "123456" })).toEqual({ ok: true });
+    expect(await b.call("cab.device.verifyPin", { pin: "123456" })).toMatchObject({ ok: true, firstName: "Nour", accountCount: expect.any(Number), currency: "JOD" }); // a right PIN signs the remembered person in
     expect(await b.call("cab.device.verifyPin", { pin: "000000" })).toEqual({ ok: false });
   });
   it("switches account preview and shows the balances", async () => {
@@ -159,5 +159,22 @@ describe("settings, language, locations", () => {
     expect(Object.keys(await b.call("cab.locations.search", { kind: "all", rangeMiles: 100, query: "irbid" })).length).toBe(1);
     expect(await b.call("cab.locations.details", { id: "loc_abdoun" })).toMatchObject({ type: "Branch", status: "Open", distanceKm: 2.2 });
     await expect(b.call("cab.locations.details", { id: "nope" })).rejects.toMatchObject({ code: "LOCATION_NOT_FOUND" });
+  });
+});
+
+describe("remembered person and map pins", () => {
+  it("greets an active profile by name, and nobody else", async () => {
+    expect((await new MockBank("nour").call("cab.device.options", {})).firstName).toBe("Nour");
+    expect((await new MockBank("yasmin").call("cab.device.options", {})).firstName).toBe(""); // not activated yet
+  });
+  it("a PIN does not sign in a profile that is locked", async () => {
+    const b = new MockBank("lina"); await b.call("cab.device.setDefault", { mode: "pin", pin: "123456" });
+    expect(await b.call("cab.device.verifyPin", { pin: "123456" })).toEqual({ ok: false });
+  });
+  it("every location in a search has a position for the map", async () => {
+    const found = await new MockBank("nour").call("cab.locations.search", { kind: "all", rangeMiles: 100 });
+    const places = Object.values(found) as any[];
+    expect(places.length).toBeGreaterThan(3);
+    for (const p of places) { expect(p.lat).toBeGreaterThan(31); expect(p.lat).toBeLessThan(33); expect(p.lng).toBeGreaterThan(35); expect(p.lng).toBeLessThan(37); }
   });
 });

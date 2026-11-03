@@ -94,6 +94,7 @@ export function JourneyPlayer({ journey, adapter, lang, initial, onEvent, onClos
       <p className="fx-sr" role="status" aria-live="polite">{layout.steps ? `${v.title}. ${layout.steps.label}` : ""}</p>
       {v.toast ? <div className="fx-toast-error" role="alert">{v.toast}</div> : null}
 
+      {layout.dialogs.map((b, i) => block(b, 800 + i))}
       {hero ? block(body[0], 0) : null}
       <form className="fx-player-form" noValidate onSubmit={(e) => { e.preventDefault(); if (primary && !v.busy) void controller.press(primary.actions); }}>
         <div className="fx-player-body" ref={bodyRef}>

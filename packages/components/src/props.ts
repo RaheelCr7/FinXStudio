@@ -1,3 +1,4 @@
+import type React from "react";
 import type { Ref } from "react";
 
 /** The props of every shared component. The web and the native versions take exactly these, so a screen can swap one for the other. */
@@ -152,4 +153,29 @@ export type AccordionProps = {
 export type BalanceListProps = {
   /** Read-only rows: the account's name and number, a type tag, the balance and a note under it. */
   rows: { id: string; title: string; tag?: string; amount: string; caption?: string }[];
+};
+
+export type DialogProps = {
+  /** The pop-up's heading. */
+  title: string;
+  text?: string;
+  /** An icon from the shared drawings, shown above the heading (lock, phone, shield). */
+  icon?: string;
+  /** What the pop-up asks for, for example the code field of a PIN prompt. */
+  children?: React.ReactNode;
+  /** Its buttons, in the order shown. Cancel-like ones are secondary. */
+  actions: { id: string; label: string; variant?: "primary" | "secondary" | "ghost"; onPress?: () => void }[];
+  /** Escape (and the back key) close it with this. */
+  onDismiss?: () => void;
+};
+
+export type MapPinsProps = {
+  /** The places, with a position as latitude and longitude. */
+  pins: { id: string; label: string; lat: number; lng: number; kind?: string }[];
+  selected?: string;
+  /** Names the map for a screen reader. */
+  label: string;
+  onSelect?: (id: string) => void;
+  /** The map's height in points. */
+  height?: number;
 };

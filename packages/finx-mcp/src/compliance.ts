@@ -33,6 +33,8 @@ const eachAction = (j: Journey, fn: (a: any, screen: string) => void) => {
     for (const b of s.blocks) {
       for (const a of b.actions ?? []) fn(a, s.id);
       for (const a of b.onResend ?? []) fn(a, s.id);
+      for (const x of b.buttons ?? []) for (const a of x.actions ?? []) fn(a, s.id);
+      for (const a of [...(b.dismiss ?? []), ...(b.onSelect ?? [])]) fn(a, s.id);
       for (const it of b.items ?? []) for (const a of it.actions ?? []) fn(a, s.id);
       for (const a of b.item?.actions ?? []) fn(a, s.id);
     }

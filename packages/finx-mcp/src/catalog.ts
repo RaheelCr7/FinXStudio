@@ -107,6 +107,16 @@ export const BLOCKS: BlockDoc[] = [
     example: { type: "divider", label: { en: "OR", ar: "أو" } },
   },
   {
+    type: "dialog", purpose: "A pop-up over the screen that asks one thing: a PIN prompt, a fingerprint unlock, a call, a confirmation. It is shown while its visibleWhen is true: open it with a setData on a flag (for example ui.confirm) and close it the same way from its buttons.",
+    fields: { title: "Loc", text: "Loc, optional", icon: "an icon name (lock, phone, shield), optional", bind: "optional: a PIN field saved here", length: "PIN length 4 to 8 (default 6)", buttons: "1 to 3 of { label: Loc, variant?: primary|secondary|ghost, actions }", dismiss: "optional actions for Escape", visibleWhen: "the expression that opens it" },
+    example: { type: "dialog", visibleWhen: "ui.confirm", title: { en: "Language change" }, text: { en: "Change the language?" }, buttons: [{ label: { en: "No" }, variant: "secondary", actions: [{ type: "setData", path: "ui.confirm", value: false }] }, { label: { en: "Yes" }, actions: [{ type: "exit" }] }] },
+  },
+  {
+    type: "map", purpose: "A schematic map of the places in a list: pins on a grid by latitude and longitude (no streets or tiles). Pressing a pin saves its id and runs onSelect, where {{item.x}} reads that place.",
+    fields: { source: "path to a list of { id, name, lat, lng }", label: "Loc, names the map for a screen reader", bind: "optional: where the chosen id is saved", onSelect: "optional actions", height: "optional, 120 to 400" },
+    example: { type: "map", source: "loc.found", label: { en: "Locations on the map" }, onSelect: [{ type: "navigate", to: "details" }] },
+  },
+  {
     type: "accordion", purpose: "Questions that open to show their answers, one open at a time (FAQs).", fields: { items: "[{ id, title: Loc, text: Loc }], at least one" },
     example: { type: "accordion", items: [{ id: "q1", title: { en: "How do I reset my password?" }, text: { en: "Choose Can't Sign In." } }] },
   },

@@ -51,14 +51,16 @@ export const signIn: Journey = {
     "login.username": { type: "string", required: true },
     "login.password": { type: "string", required: true },
     "login.remember": { type: "boolean" },
+    "login.pin": { type: "string" },
   },
-  integrations: [{ id: "signIn", adapter: "cab.auth.signIn", mode: "sandbox" }, { id: "languages", adapter: "cab.language.list", mode: "sandbox" }, { id: "selection", adapter: "cab.language.selection", mode: "sandbox" }, { id: "setLanguage", adapter: "cab.language.set", mode: "sandbox" }],
+  integrations: [{ id: "signIn", adapter: "cab.auth.signIn", mode: "sandbox" }, { id: "deviceOptions", adapter: "cab.device.options", mode: "sandbox" }, { id: "verifyPin", adapter: "cab.device.verifyPin", mode: "sandbox" }, { id: "languages", adapter: "cab.language.list", mode: "sandbox" }, { id: "selection", adapter: "cab.language.selection", mode: "sandbox" }, { id: "setLanguage", adapter: "cab.language.set", mode: "sandbox" }],
   screens: [
     {
       id: "welcome", title: L("Welcome", "مرحباً"),
+      onEnter: [{ type: "callApi", integration: "deviceOptions", saveAs: "device" }],
       blocks: [
         hero,
-        header(L("Welcome", "مرحباً"), "language"),
+        header(L("Welcome{{device.firstName ? ' ' + device.firstName : ''}}", "مرحباً{{device.firstName ? ' ' + device.firstName : ''}}"), "language"),
         { type: "menu", items: [
           { id: "explore", label: L("Explore products", "استكشف المنتجات"), text: L("Choose from our diverse selection of products to meet your financial needs", "اختر من مجموعتنا المتنوعة من المنتجات التي تلبي احتياجاتك المالية"), icon: "search", actions: [go("fullapp")] },
           { id: "resume", label: L("Resume Application", "استئناف الطلب"), text: L("Would you like to resume your existing application", "تابع من حيث توقفت في طلبك الحالي"), icon: "refresh", actions: [go("fullapp")] },
@@ -69,10 +71,10 @@ export const signIn: Journey = {
     },
     {
       id: "login", title: L("Sign in", "تسجيل الدخول"),
-      onEnter: [{ type: "setData", path: "login.remember", value: true }],
+      onEnter: [{ type: "setData", path: "login.remember", value: true }, { type: "setData", path: "ui.password", value: false }, { type: "callApi", integration: "deviceOptions", saveAs: "device" }],
       blocks: [
         hero,
-        header(L("Welcome", "مرحباً"), "language"),
+        header(L("Welcome{{device.firstName ? ' ' + device.firstName : ''}}", "مرحباً{{device.firstName ? ' ' + device.firstName : ''}}"), "language"),
         input("login.username", L("Username", "اسم المستخدم")),
         input("login.password", L("Password", "كلمة المرور"), { secure: true }),
         alert("error", L("Incorrect username or password. {{auth.result.attemptsLeft}} attempt(s) left before your profile is locked.", "اسم المستخدم أو كلمة المرور غير صحيحة. تبقّت {{auth.result.attemptsLeft}} محاولة قبل قفل ملفك الشخصي."), "auth.result.code == 'INVALID_CREDENTIALS'"),
@@ -82,6 +84,19 @@ export const signIn: Journey = {
           { type: "callApi", integration: "signIn", input: { username: "{{login.username}}", password: "{{login.password}}" }, saveAs: "auth.result", onError: { showToast: L("We couldn't reach the bank. Try again.", "تعذّر الاتصال بالبنك. حاول مرة أخرى.") } },
           { type: "navigate" },
         ]),
+        // when the customer made PIN or fingerprint their default way in, the screen opens with that prompt over it (as designed)
+        { type: "dialog", visibleWhen: "device.default == 'pin' && !ui.password", icon: "lock", bind: "login.pin", length: 6,
+          title: L("Enter Sign in PIN", "أدخل رمز الدخول"), text: L("{{auth.result && !auth.result.ok ? 'That PIN is not right. Try again.' : 'Enter your six digit PIN to sign in.'}}", "{{auth.result && !auth.result.ok ? 'الرمز غير صحيح. حاول مرة أخرى.' : 'أدخل رمزك المكوّن من ستة أرقام لتسجيل الدخول.'}}"),
+          buttons: [
+            { label: L("Use password", "استخدم كلمة المرور"), variant: "secondary", actions: [{ type: "setData", path: "ui.password", value: true }] },
+            { label: L("Sign In", "تسجيل الدخول"), actions: [{ type: "callApi", integration: "verifyPin", input: { pin: "{{login.pin}}" }, saveAs: "auth.result", onError: { showToast: L("We couldn't reach the bank. Try again.", "تعذّر الوصول إلى البنك. حاول مرة أخرى.") } }, { type: "navigate" }] },
+          ] },
+        { type: "dialog", visibleWhen: "device.default == 'biometric' && !ui.password", icon: "shield",
+          title: L("Unlock", "فتح القفل"), text: L("Use your fingerprint or face to sign in.", "استخدم بصمتك أو وجهك لتسجيل الدخول."),
+          buttons: [
+            { label: L("Use password", "استخدم كلمة المرور"), variant: "secondary", actions: [{ type: "setData", path: "ui.password", value: true }] },
+            { label: L("Unlock", "فتح"), actions: [{ type: "callApi", integration: "verifyPin", input: { pin: "{{device.pin}}" }, saveAs: "auth.result" }, { type: "navigate" }] },
+          ] },
         shortcuts(),
       ],
       navigation: route([
@@ -91,21 +106,18 @@ export const signIn: Journey = {
     },
     {
       id: "language", title: L("Welcome", "مرحباً"),
-      onEnter: [{ type: "callApi", integration: "languages", saveAs: "ctx.languages" }, { type: "callApi", integration: "selection", input: { chosen: "{{language.code}}" }, saveAs: "language" }],
+      onEnter: [{ type: "setData", path: "ui.confirm", value: false }, { type: "callApi", integration: "languages", saveAs: "ctx.languages" }, { type: "callApi", integration: "selection", input: { chosen: "{{language.code}}" }, saveAs: "language" }],
       blocks: [
         text(L("Choose your language", "اختر لغتك"), "title"),
         { type: "select", bind: "language.code", label: L("Language", "اللغة"), source: "ctx.languages", variant: "rows" },
-        button(L("Update Language", "تحديث اللغة"), [{ type: "validate" }, go("language-confirm")]),
+        button(L("Update Language", "تحديث اللغة"), [{ type: "validate" }, { type: "setData", path: "ui.confirm", value: true }]),
         button(L("Cancel", "إلغاء"), [go("login")], "ghost"),
-      ],
-    },
-    {
-      id: "language-confirm", title: L("Language change", "تغيير اللغة"),
-      blocks: [
-        text(L("Language change", "تغيير اللغة"), "title"),
-        text(L("Are you sure you want to change your language setting to {{ctx.languages[language.code].name}}?", "هل أنت متأكد من رغبتك في تغيير إعداد اللغة إلى {{ctx.languages[language.code].name}}؟")),
-        button(L("No", "لا"), [go("language")], "secondary"),
-        button(L("Yes", "نعم"), [{ type: "callApi", integration: "setLanguage", input: { code: "{{language.code}}" }, saveAs: "changed", onError: { showToast: L("That language isn't available.", "هذه اللغة غير متاحة.") } }, { type: "showToast", text: L("Language updated to {{changed.name}}", "تم تحديث اللغة إلى {{changed.name}}") }, go("login")]),
+        // the confirmation is a pop-up over the list, as in the design
+        { type: "dialog", visibleWhen: "ui.confirm", title: L("Language change", "تغيير اللغة"), text: L("Are you sure you want to change your language setting to {{ctx.languages[language.code].name}}?", "هل أنت متأكد من رغبتك في تغيير إعداد اللغة إلى {{ctx.languages[language.code].name}}؟"),
+          buttons: [
+            { label: L("No", "لا"), variant: "secondary", actions: [{ type: "setData", path: "ui.confirm", value: false }] },
+            { label: L("Yes", "نعم"), actions: [{ type: "callApi", integration: "setLanguage", input: { code: "{{language.code}}" }, saveAs: "changed", onError: { showToast: L("That language isn't available.", "هذه اللغة غير متاحة.") } }, { type: "showToast", text: L("Language updated to {{changed.name}}", "تم تحديث اللغة إلى {{changed.name}}") }, { type: "setData", path: "ui.confirm", value: false }, go("login")] },
+          ], dismiss: [{ type: "setData", path: "ui.confirm", value: false }] },
       ],
     },
     end("cant", L("Can't Sign In?", "لا يمكنني تسجيل الدخول؟"), [
@@ -266,23 +278,22 @@ export const changeLanguage: Journey = {
   screens: [
     {
       id: "choose", title: L("Language", "اللغة"),
-      onEnter: [{ type: "callApi", integration: "languages", saveAs: "ctx.languages" }, { type: "callApi", integration: "selection", input: { chosen: "{{language.code}}" }, saveAs: "language" }],
+      onEnter: [{ type: "setData", path: "ui.confirm", value: false }, { type: "callApi", integration: "languages", saveAs: "ctx.languages" }, { type: "callApi", integration: "selection", input: { chosen: "{{language.code}}" }, saveAs: "language" }],
       blocks: [
         text(L("Choose your language", "اختر لغتك"), "title"),
         { type: "select", bind: "language.code", label: L("Language", "اللغة"), source: "ctx.languages", variant: "rows" },
-        button(L("Update Language", "تحديث اللغة"), [{ type: "validate" }, go("confirm")]),
+        button(L("Update Language", "تحديث اللغة"), [{ type: "validate" }, { type: "setData", path: "ui.confirm", value: true }]),
         button(L("Cancel", "إلغاء"), [{ type: "exit" }], "ghost"),
+        // the confirmation is a pop-up over the list; after Yes the flow ends and the app is back on the sign-in screen, as in the design
+        { type: "dialog", visibleWhen: "ui.confirm", title: L("Language change", "تغيير اللغة"), text: L("Are you sure you want to change your language setting to {{ctx.languages[language.code].name}}?", "هل أنت متأكد من رغبتك في تغيير إعداد اللغة إلى {{ctx.languages[language.code].name}}؟"),
+          buttons: [
+            { label: L("No", "لا"), variant: "secondary", actions: [{ type: "setData", path: "ui.confirm", value: false }] },
+            { label: L("Yes", "نعم"), actions: [{ type: "callApi", integration: "setLanguage", input: { code: "{{language.code}}" }, saveAs: "changed", onError: { showToast: L("That language isn't available.", "هذه اللغة غير متاحة.") } }, go("done")] },
+          ], dismiss: [{ type: "setData", path: "ui.confirm", value: false }] },
       ],
     },
-    {
-      id: "confirm", title: L("Language change", "تغيير اللغة"), kind: "terminal",
-      blocks: [
-        text(L("Are you sure you want to change your language setting to {{ctx.languages[language.code].name}}?", "هل أنت متأكد من رغبتك في تغيير إعداد اللغة إلى {{ctx.languages[language.code].name}}؟"), "title"),
-        button(L("No", "لا"), [go("choose")], "secondary"),
-        // after Yes the flow ends and the app is back on the sign-in screen, as in the design
-        button(L("Yes", "نعم"), [{ type: "callApi", integration: "setLanguage", input: { code: "{{language.code}}" }, saveAs: "changed", onError: { showToast: L("That language isn't available.", "هذه اللغة غير متاحة.") } }, { type: "exit" }]),
-      ],
-    },
+    // the language is saved: the app goes straight back to sign in, so this end screen closes itself
+    { id: "done", title: L("Language change", "تغيير اللغة"), kind: "terminal", onEnter: [{ type: "exit" }], blocks: [result("success", L("Language updated", "تم تحديث اللغة"))] },
   ],
 };
 
@@ -630,6 +641,8 @@ export const locateUs: Journey = {
     {
       id: "results", title: L("{{loc.kind == 'atm' ? 'ATM' : (loc.kind == 'branch' ? 'Branches' : 'All')}}", "{{loc.kind == 'atm' ? 'الصراف الآلي' : (loc.kind == 'branch' ? 'الفروع' : 'الكل')}}"),
       blocks: [
+        // the places on a map (pins on a grid); pressing one opens its details, like its row below
+        { type: "map", source: "loc.found", label: L("Locations on the map", "المواقع على الخريطة"), onSelect: [{ type: "callApi", integration: "locationDetail", input: { id: "{{item.id}}" }, saveAs: "loc.detail", onError: { showToast: L("We couldn't load that location.", "تعذّر تحميل هذا الموقع.") } }, { type: "navigate", to: "details" }] },
         // each location is a row; tapping it opens its details straight away
         { type: "menu", source: "loc.found", item: {
           label: L("{{item.name}}", "{{item.name}}"), text: L("{{item.address}}", "{{item.address}}"), icon: "mapPin",
@@ -671,6 +684,7 @@ export const support: Journey = {
   screens: [
     {
       id: "home", title: L("Support", "الدعم"),
+      onEnter: [{ type: "setData", path: "ui.call", value: false }],
       blocks: [
         { type: "menu", items: [
           { id: "faqs", label: L("FAQs", "الأسئلة الشائعة"), actions: [go("faqs")] },
@@ -680,7 +694,13 @@ export const support: Journey = {
         { type: "reviewSummary", rows: [
           { label: L("Monday - Friday", "الاثنين - الجمعة"), value: L("8 am to 10 pm", "8 صباحاً حتى 10 مساءً") }, { label: L("Saturday", "السبت"), value: L("8 am to 6:30 pm", "8 صباحاً حتى 6:30 مساءً") },
         ] },
-        button(L("Call Us", "اتصل بنا"), [go("call")]),
+        button(L("Call Us", "اتصل بنا"), [{ type: "setData", path: "ui.call", value: true }]),
+        // the dialer is a pop-up over the screen, as in the design
+        { type: "dialog", visibleWhen: "ui.call", icon: "phone", title: L("Call us", "اتصل بنا"), text: L("+96112025050", "+96112025050"),
+          buttons: [
+            { label: L("Cancel", "إلغاء"), variant: "secondary", actions: [{ type: "setData", path: "ui.call", value: false }] },
+            { label: L("Call", "اتصال"), actions: [{ type: "showToast", text: L("Calling the bank…", "جارٍ الاتصال بالبنك…") }, { type: "setData", path: "ui.call", value: false }] },
+          ], dismiss: [{ type: "setData", path: "ui.call", value: false }] },
       ],
     },
     {
@@ -703,7 +723,7 @@ export const support: Journey = {
       ],
     },
     {
-      id: "terms", title: L("Terms & Conditions", "الشروط والأحكام"),
+      id: "terms", title: L("Terms & Conditions", "الشروط والأحكام"), kind: "terminal",
       blocks: [
         text(L("Using Cairo Amman Bank digital banking means you accept these terms. You are responsible for keeping your username, password and one-time codes private, and for telling the bank at once if you think someone else knows them.", "باستخدامك الخدمات المصرفية الرقمية لبنك القاهرة عمّان فإنك توافق على هذه الشروط. أنت مسؤول عن الحفاظ على سرية اسم المستخدم وكلمة المرور والرموز لمرة واحدة، وعن إبلاغ البنك فوراً إذا اعتقدت أن شخصاً آخر يعرفها.")),
         text(L("Sample text: the bank's approved terms replace this.", "نص تجريبي: ستحل محله الشروط المعتمدة من البنك."), "caption"),
@@ -711,18 +731,10 @@ export const support: Journey = {
       ],
     },
     {
-      id: "privacy", title: L("Privacy Policy", "سياسة الخصوصية"),
+      id: "privacy", title: L("Privacy Policy", "سياسة الخصوصية"), kind: "terminal",
       blocks: [
         text(L("At CAB, safeguarding your account information is our top priority. We use encryption, firewalls and secure transmission to keep your information confidential, and we keep you informed about current security issues.", "في بنك القاهرة عمّان، تُعد حماية معلومات حسابك أولويتنا القصوى. نستخدم التشفير وجدران الحماية والنقل الآمن للحفاظ على سرية معلوماتك، ونبقيك على اطلاع بمستجدات الأمان.")),
         text(L("Sample text: the bank's approved policy replaces this.", "نص تجريبي: ستحل محله السياسة المعتمدة من البنك."), "caption"),
-        button(L("Back", "رجوع"), [go("home")], "secondary"), done,
-      ],
-    },
-    {
-      id: "call", title: L("Call us", "اتصل بنا"), kind: "terminal",
-      blocks: [
-        result("success", L("+96112025050", "+96112025050"), L("Monday to Friday 8 am to 10 pm, Saturday 8 am to 6:30 pm", "من الاثنين إلى الجمعة 8 صباحاً حتى 10 مساءً، والسبت 8 صباحاً حتى 6:30 مساءً")),
-        button(L("Call", "اتصال"), [{ type: "showToast", text: L("Calling the bank…", "جارٍ الاتصال بالبنك…") }]),
         button(L("Back", "رجوع"), [go("home")], "secondary"), done,
       ],
     },

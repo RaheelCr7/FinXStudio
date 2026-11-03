@@ -86,6 +86,16 @@ export const Block = z.discriminatedUnion("type", [
   z.object({ ...base, type: z.literal("divider"), label: LocalizedText.optional() }),
   /** Read-only rows of accounts: name and number, a type tag, the balance and a note under it. `source` is a path to the accounts (a list or a record). */
   z.object({ ...base, type: z.literal("balanceList"), source: z.string() }),
+  /**
+   * A pop-up over the screen, shown while its `visibleWhen` is true (open it with a setData on a flag, close it the same way).
+   * It asks one thing: a PIN (`bind` and `length`), a fingerprint unlock, a call, a confirmation. Its buttons run actions like any button.
+   */
+  z.object({ ...base, type: z.literal("dialog"), title: LocalizedText, text: LocalizedText.optional(), icon: z.string().optional(), bind: z.string().optional(), length: z.number().int().min(4).max(8).optional(), buttons: z.array(z.object({ label: LocalizedText, variant: z.enum(["primary", "secondary", "ghost"]).optional(), actions: z.array(Action) })).min(1).max(3), dismiss: z.array(Action).optional() }),
+  /**
+   * A schematic map of the places in a list (`source`: records with `id`, `name`, `lat`, `lng`). Pressing a pin saves its id in
+   * `bind` (when given) and runs `onSelect`, where {{item.x}} reads that place. It draws pins on a grid, not streets.
+   */
+  z.object({ ...base, type: z.literal("map"), source: z.string(), label: LocalizedText, bind: z.string().optional(), onSelect: z.array(Action).optional(), height: z.number().int().min(120).max(400).optional() }),
   /** Questions that open to show their answer, one at a time. */
   z.object({ ...base, type: z.literal("accordion"), items: z.array(z.object({ id: z.string(), title: LocalizedText, text: LocalizedText })).min(1) }),
   z.object({ ...base, type: z.literal("sectionHeader"), title: LocalizedText, subtitle: LocalizedText.optional(), action: z.object({ label: LocalizedText, actions: z.array(Action) }).optional() }),

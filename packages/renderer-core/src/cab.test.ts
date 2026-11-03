@@ -22,6 +22,13 @@ const tap = async (r: JourneyRunner, label: string) => {
   await r.press(item.actions);
 };
 const fill = (r: JourneyRunner, values: Record<string, any>) => { for (const [k, v] of Object.entries(values)) r.set(k, v); };
+/** The pop-up on screen now, and pressing one of its buttons. */
+const dialogOf = (r: JourneyRunner) => r.view().blocks.find((b) => b.type === "dialog");
+const pressDialog = async (r: JourneyRunner, label: string) => {
+  const d = dialogOf(r); const btn = d?.buttons.find((x: any) => x.label === label);
+  if (!btn) throw new Error(`No pop-up button "${label}" on ${r.current}. ${d ? `Buttons: ${d.buttons.map((x: any) => x.label).join(", ")}` : "No pop-up is open."}`);
+  await r.press(btn.actions);
+};
 const alerts = (r: JourneyRunner) => r.view().blocks.filter((b) => b.type === "alert").map((b) => b.text);
 const resultOf = (r: JourneyRunner) => r.view().blocks.find((b) => b.type === "result");
 
@@ -91,7 +98,7 @@ describe("Sign in", () => {
     expect(r.view().blocks.find((b) => b.type === "shortcuts")!.items.map((i: any) => [i.label, i.icon])).toEqual([["Enroll/Activate", "userPlus"], ["Locate us", "mapPin"], ["Support", "send"]]);
     await r.press(r.view().blocks.find((b) => b.type === "sectionHeader")!.action.actions);
     expect(r.current).toBe("language");
-    r.set("language.code", "ar_AE"); await press(r, "Update Language"); await press(r, "Yes");
+    r.set("language.code", "ar_AE"); await press(r, "Update Language"); await pressDialog(r, "Yes");
     expect(r.current).toBe("login");
     expect((await bank.call("cab.language.current")).current).toBe("ar_AE");
     const link = r.view().blocks.find((b) => b.type === "toggle")!.link;
@@ -175,13 +182,14 @@ describe("Change language", () => {
     const { r, bank } = mk(cabChangeLanguage); await r.start();
     expect(r.view().blocks.find((b) => b.type === "select")!.items.map((i: any) => i.name)).toEqual(["US English", "UK English", "French", "Arabic"]);
     expect(r.get("language.code")).toBe("en_US"); // the design opens with the current language selected
+    expect(dialogOf(r)).toBeUndefined(); // nothing is asked until Update Language
     r.set("language.code", "ar_AE"); await press(r, "Update Language");
-    expect(r.current).toBe("confirm");
-    expect(r.view().blocks.find((b) => b.type === "text")!.text).toBe("Are you sure you want to change your language setting to Arabic?");
-    expect(r.view().blocks.filter((b) => b.type === "button").map((b) => b.label)).toEqual(["No", "Yes"]); // No on the left, Yes on the right
-    await press(r, "No"); expect(r.current).toBe("choose");
+    expect(r.current).toBe("choose"); // the confirmation is a pop-up over the list, not another screen
+    expect(dialogOf(r)!.text).toBe("Are you sure you want to change your language setting to Arabic?");
+    expect(dialogOf(r)!.buttons.map((b: any) => b.label)).toEqual(["No", "Yes"]); // No on the left, Yes on the right
+    await pressDialog(r, "No"); expect(dialogOf(r)).toBeUndefined();
     expect(r.get("language.code")).toBe("ar_AE"); // the choice is kept
-    await press(r, "Update Language"); await press(r, "Yes");
+    await press(r, "Update Language"); await pressDialog(r, "Yes");
     expect(r.view().exited).toBe(true); // no "Language updated" screen: the app is back on sign in
     expect((await bank.call("cab.language.current")).current).toBe("ar_AE");
   });
@@ -388,7 +396,67 @@ describe("Support", () => {
       await tap(r, label);
       expect(r.current).toBe(screen);
     }
-    const { r } = mk(cabSupport); await r.start(); await press(r, "Call Us");
-    expect(resultOf(r)!.title).toBe("+96112025050");
+    const { r } = mk(cabSupport); await r.start();
+    expect(dialogOf(r)).toBeUndefined();
+    await press(r, "Call Us"); // the dialer is a pop-up over the screen
+    expect(r.current).toBe("home");
+    expect(dialogOf(r)).toMatchObject({ title: "Call us", text: "+96112025050", icon: "phone" });
+    await pressDialog(r, "Cancel"); expect(dialogOf(r)).toBeUndefined();
+    await press(r, "Call Us"); await pressDialog(r, "Call");
+    expect(r.view().toast).toBe("Calling the bank…"); expect(dialogOf(r)).toBeUndefined();
+  });
+});
+
+describe("Sign in with a default PIN or fingerprint, the greeting, and the map", () => {
+  const withDefault = async (mode: "pin" | "biometric") => {
+    const x = mk(cabSignIn); await x.bank.call("cab.device.setDefault", mode === "pin" ? { mode, pin: "123456" } : { mode });
+    await x.r.start(); await x.r.press(x.r.view().blocks.find((b) => b.type === "menu")!.items.find((i: any) => i.label === "Existing user login").actions);
+    return x;
+  };
+  it("greets the remembered person by name", async () => {
+    const { r } = mk(cabSignIn); await r.start();
+    expect(r.view().blocks.find((b) => b.type === "sectionHeader")!.title).toBe("Welcome Nour");
+    const yasmin = mk(cabSignIn, "yasmin"); await yasmin.r.start();
+    expect(yasmin.r.view().blocks.find((b) => b.type === "sectionHeader")!.title).toBe("Welcome"); // not activated: nobody to greet
+  });
+  it("opens with a password prompt only when password is the default", async () => {
+    const { r } = mk(cabSignIn); await r.start(); await tap(r, "Existing user login");
+    expect(r.current).toBe("login"); expect(dialogOf(r)).toBeUndefined();
+  });
+  it("opens the PIN prompt over the login screen, signs in with the right PIN and says when it is wrong", async () => {
+    const { r } = await withDefault("pin");
+    expect(r.current).toBe("login");
+    expect(dialogOf(r)).toMatchObject({ title: "Enter Sign in PIN", bind: "login.pin", length: 6, text: "Enter your six digit PIN to sign in." });
+    r.set("login.pin", "000000"); await pressDialog(r, "Sign In");
+    expect(r.current).toBe("login"); expect(dialogOf(r)!.text).toBe("That PIN is not right. Try again.");
+    expect(alerts(r)).toEqual([]); // the wrong-password message is not shown for a wrong PIN
+    r.set("login.pin", "123456"); await pressDialog(r, "Sign In");
+    expect(r.current).toBe("signed-in");
+    expect(resultOf(r)!.title).toBe("Welcome back, Nour");
+  });
+  it("lets the person choose the password instead of the PIN or fingerprint", async () => {
+    for (const mode of ["pin", "biometric"] as const) {
+      const { r } = await withDefault(mode);
+      expect(dialogOf(r)).toBeTruthy();
+      await pressDialog(r, "Use password"); expect(dialogOf(r)).toBeUndefined();
+      expect(r.view().blocks.some((b) => b.type === "textInput")).toBe(true);
+    }
+  });
+  it("opens the Unlock prompt when fingerprint is the default", async () => {
+    const { r } = await withDefault("biometric");
+    expect(dialogOf(r)).toMatchObject({ title: "Unlock", icon: "shield" });
+    expect(dialogOf(r)!.buttons.map((b: any) => b.label)).toEqual(["Use password", "Unlock"]);
+  });
+  it("shows the found locations on a map, and a pin opens that place", async () => {
+    const { r } = mk(cabLocateUs); await r.start();
+    await press(r, "Filters"); r.set("loc.kind", "all"); r.set("loc.range", "100"); await press(r, "Apply");
+    const map = r.view().blocks.find((b) => b.type === "map")!;
+    expect(map.pins).toHaveLength(5);
+    expect(map.pins.every((p: any) => Number.isFinite(p.lat) && Number.isFinite(p.lng))).toBe(true);
+    const abdoun = map.pins.find((p: any) => p.id === "loc_abdoun");
+    expect(abdoun.label).toBe("Abdoun Branch – Signature");
+    await r.press(abdoun.actions);
+    expect(r.current).toBe("details");
+    expect(r.view().blocks.find((b) => b.type === "text")!.text).toBe("Abdoun Branch – Signature");
   });
 });

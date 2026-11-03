@@ -1,4 +1,4 @@
-export type { ButtonProps, TextFieldProps, AppBarProps, ListRowProps, AlertProps, ResultProps, SummaryListProps, SwitchProps, CheckboxProps, ChoiceOption, ChoiceGroupProps, QuickAmount, AmountFieldProps, CodeInputProps, SectionHeaderProps, ShortcutsProps, HeroProps, DividerProps, AccordionProps, BalanceListProps, KeypadKey, KeypadProps, PinDotsProps } from "./props";
+export type { ButtonProps, TextFieldProps, AppBarProps, ListRowProps, AlertProps, ResultProps, SummaryListProps, SwitchProps, CheckboxProps, ChoiceOption, ChoiceGroupProps, QuickAmount, AmountFieldProps, CodeInputProps, SectionHeaderProps, ShortcutsProps, HeroProps, DividerProps, AccordionProps, DialogProps, MapPinsProps, BalanceListProps, KeypadKey, KeypadProps, PinDotsProps } from "./props";
 export { Button } from "./web/Button";
 export { TextField } from "./web/TextField";
 export { AppBar } from "./web/AppBar";
@@ -16,6 +16,8 @@ export { SectionHeader } from "./web/SectionHeader";
 export { Shortcuts } from "./web/Shortcuts";
 export { Hero } from "./web/Hero";
 export { Divider } from "./web/Divider";
+export { Dialog } from "./web/Dialog";
+export { MapPins, pinPositions } from "./web/MapPins";
 export { BalanceList } from "./web/BalanceList";
 export { Accordion } from "./web/Accordion";
 export { Icon } from "./web/Icon";

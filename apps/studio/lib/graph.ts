@@ -29,6 +29,8 @@ export function buildEdges(j: Journey): FlowEdge[] {
     for (const b of s.blocks as any[]) {
       if (b.type === "button") b.actions.forEach((a: any) => walk(a, textOf(b.label)));
       if (b.type === "otp") b.onResend?.forEach((a: any) => walk(a, ""));
+      if (b.type === "dialog") { b.buttons.forEach((x: any) => x.actions.forEach((a: any) => walk(a, textOf(x.label)))); b.dismiss?.forEach((a: any) => walk(a, "")); }
+      if (b.type === "map") b.onSelect?.forEach((a: any) => walk(a, ""));
     }
   }
   return out;

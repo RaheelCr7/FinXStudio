@@ -113,7 +113,7 @@ export class JourneyRunner {
         else if (max != null && n > max) this.errors[b.bind] = this.tx(b.validation.messages?.max ?? ui(this.lang, "maximum", { n: max }));
       }
       if (b.type === "textInput" && v != null && v !== "" && b.pattern && !new RegExp(b.pattern).test(String(v))) this.errors[b.bind] = b.patternMessage ? this.tx(b.patternMessage) : ui(this.lang, "invalid");
-      if (b.type === "otp" && v != null && String(v).length !== b.length) this.errors[b.bind] = ui(this.lang, "allDigits", { n: b.length });
+      if ((b.type === "otp" || b.type === "dialog") && v != null && String(v).length !== b.length) this.errors[b.bind] = ui(this.lang, "allDigits", { n: b.length });
       if (def?.pattern && v != null && !new RegExp(def.pattern).test(String(v))) this.errors[b.bind] ??= ui(this.lang, "invalid");
     }
     this.emit();
@@ -257,6 +257,14 @@ export class JourneyRunner {
     if (b.type === "toggle" && b.link) out.link = { ...b.link, label: this.tx(b.link.label) };
     if (b.type === "balanceList") out.rows = balanceRows({ items: Object.values(this.get(b.source) ?? {}) });
     if (b.type === "accordion") out.items = b.items.map((i: any) => ({ id: i.id, title: this.tx(i.title), text: this.tx(i.text) }));
+    if (b.type === "dialog") out.buttons = b.buttons.map((x: any) => ({ label: this.tx(x.label), variant: x.variant, actions: x.actions }));
+    if (b.type === "map") {
+      out.pins = Object.values(this.get(b.source) ?? {}).filter((x: any) => Number.isFinite(Number(x?.lat)) && Number.isFinite(Number(x?.lng))).map((x: any, n) => {
+        const scope = { ...this.scope(), item: x };
+        return { id: String(x?.id ?? n), label: String(x?.name ?? x?.id ?? n), lat: Number(x.lat), lng: Number(x.lng), actions: [...(b.bind ? [{ type: "setData", path: b.bind, value: String(x?.id ?? n) }] : []), ...bindItem(b.onSelect ?? [], scope)] };
+      });
+      out.selected = b.bind ? this.get(b.bind) : undefined;
+    }
     if (b.type === "sectionHeader" && b.action) out.action = { ...b.action, label: this.tx(b.action.label) };
     return out;
   }

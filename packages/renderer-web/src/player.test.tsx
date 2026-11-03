@@ -116,6 +116,29 @@ describe("a bank with its own look", () => {
     expect(await axeCheck(container)).toHaveNoViolations();
   });
 
+  it("opens the call pop-up over the screen: named by its heading, Escape closes it, and it passes the accessibility check", async () => {
+    const { container } = cabPlayer("support");
+    await userEvent.click(await screen.findByRole("button", { name: "Call Us" }));
+    const dialog = await screen.findByRole("dialog", { name: "Call us" });
+    expect(dialog.getAttribute("aria-modal")).toBe("true");
+    expect(dialog.textContent).toContain("+96112025050");
+    expect(await axeCheck(container)).toHaveNoViolations();
+    await userEvent.keyboard("{Escape}");
+    expect(screen.queryByRole("dialog")).toBeNull();
+  });
+
+  it("shows the places of a search as pins, each a named button, and a pin opens that place", async () => {
+    const { container } = cabPlayer("locate-us");
+    await userEvent.click(await screen.findByRole("button", { name: "List view" }));
+    const group = await screen.findByRole("group", { name: "Locations on the map" });
+    const pin = await screen.findByRole("button", { name: "Abdoun Branch – Signature", pressed: false });
+    expect(group.contains(pin)).toBe(true);
+    expect(await axeCheck(container)).toHaveNoViolations();
+    await userEvent.click(pin);
+    expect((await screen.findAllByText("Abdoun Branch – Signature")).length).toBeGreaterThan(0);
+    expect(screen.queryByRole("group", { name: "Locations on the map" })).toBeNull(); // it is on the details screen now
+  });
+
   it("keeps the standard look when the bank has none", async () => {
     const bank = new MockBank("nour");
     const { container } = render(<JourneyPlayer journey={cab("sign-in")} adapter={(id, input) => bank.call(id, input)} />);

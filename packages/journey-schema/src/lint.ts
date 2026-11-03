@@ -12,6 +12,8 @@ export const blockActions = (b: any): any[] => {
     case "menu": case "shortcuts": return [...(b.items ?? []).flatMap((i: any) => i.actions ?? []), ...(b.item?.actions ?? [])];
     case "sectionHeader": return b.action?.actions ?? [];
     case "toggle": return b.link?.actions ?? [];
+    case "dialog": return [...(b.buttons ?? []).flatMap((x: any) => x.actions ?? []), ...(b.dismiss ?? [])];
+    case "map": return b.onSelect ?? [];
     default: return [];
   }
 };
