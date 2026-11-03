@@ -80,4 +80,20 @@ describe("projects", () => {
     await expect(projects.updateProjectAccent("bankworkx", "#FFEE99")).rejects.toMatchObject({ status: 400 });
     await expect(projects.updateProjectAccent("nobank", "#7C3AED")).rejects.toMatchObject({ status: 404 });
   });
+
+  it("stores only the component sizes that differ from the defaults, and can clear them", async () => {
+    const r = await projects.updateProjectComponents("meezan", { field: { height: 48, radius: 12 }, button: { height: 54 } });
+    expect(r.project.components).toEqual({ field: { height: 48 } });
+    expect(JSON.parse(readFileSync(file, "utf8")).meezan.components).toEqual({ field: { height: 48 } });
+    const cleared = await projects.updateProjectComponents("meezan", { field: { height: 52 } });
+    expect(cleared.previous).toEqual({ field: { height: 48 } });
+    expect(JSON.parse(readFileSync(file, "utf8")).meezan.components).toBeUndefined();
+  });
+
+  it("refuses bad component sizes and unknown projects", async () => {
+    await expect(projects.updateProjectComponents("meezan", { field: { height: -1 } })).rejects.toThrow(/0 to 200/);
+    await expect(projects.updateProjectComponents("meezan", { field: { height: "big" } })).rejects.toThrow(/0 to 200/);
+    await expect(projects.updateProjectComponents("meezan", null)).rejects.toThrow(/object/);
+    await expect(projects.updateProjectComponents("nope", {})).rejects.toThrow(/No project/);
+  });
 });

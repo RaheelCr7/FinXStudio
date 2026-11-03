@@ -1,4 +1,4 @@
-import { DesignView } from "@/components/DesignView";
+import { DesignShell } from "@/components/DesignShell";
 
 export const dynamic = "force-dynamic";
-export default function DesignPage() { return <DesignView />; }
+export default function DesignPage() { return <DesignShell />; }

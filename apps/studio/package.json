@@ -11,6 +11,7 @@
   },
   "dependencies": {
     "@finx/codegen": "workspace:*",
+    "@finx/components": "workspace:*",
     "@finx/journey-schema": "workspace:*",
     "@finx/mock-bank-api": "workspace:*",
     "@finx/renderer-core": "workspace:*",
