@@ -2,6 +2,8 @@ import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import "@fontsource-variable/inter";
 import "@fontsource/noto-nastaliq-urdu/400.css";
+import "@fontsource/noto-sans-arabic/400.css";
+import "@fontsource/noto-sans-arabic/600.css";
 import "@finx/renderer-web/src/styles/renderer.css";
 import "../globals.css";
 import "../bankworkx.css";

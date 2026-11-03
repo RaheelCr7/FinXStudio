@@ -145,6 +145,7 @@ export const ADAPTER_CATALOG: AdapterInfo[] = [
   { adapter: "cab.preview.set", suggestedId: "previewSet", description: "Turns account preview before sign-in on or off.", input: { enabled: "true or false" }, returns: "{ ok, enabled }" },
   { adapter: "cab.language.list", suggestedId: "languages", description: "Languages the app offers.", input: {}, returns: "Object map keyed by language code: { id, name, sub }. Save as ctx.languages and use with select source." },
   { adapter: "cab.language.current", suggestedId: "currentLanguage", description: "The language the app uses now.", input: {}, returns: "{ current, name }" },
+  { adapter: "cab.language.selection", suggestedId: "languageSelection", description: "Which language to show as selected on the language list: the one already picked, else the one in use.", input: { chosen: "the code picked so far, or empty" }, returns: "{ code, name }. Save as language so the list opens with it ticked." },
   { adapter: "cab.language.set", suggestedId: "setLanguage", description: "Changes the app language.", input: { code: "en_US, en_GB, fr_FR or ar_AE" }, returns: "{ ok, current, name }", errors: ["LANGUAGE_UNSUPPORTED"] },
   {
     adapter: "cab.enroll.retail", suggestedId: "enroll", description: "Enrols a retail customer from the details the bank holds, after a picture-code check.",

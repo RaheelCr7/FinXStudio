@@ -40,7 +40,7 @@ A bank can carry a **look** in `packages/ui-kit/src/brands.json`: a coloured app
 
 New journey blocks that the design needed, available to every project and listed in the AI catalog and the Studio builder: `divider` (a line with a word such as OR) and `accordion` (questions that open to show answers), `hero` (logo banner), `sectionHeader` (heading with a link), `shortcuts` (icon button row), `menu` (tappable rows). `select` gained a `rows` variant, `otp` a number pad and masked digits (`keypad`, `masked`), and `toggle` a link on the same row.
 
-Known gaps against the Figma: the bank's own typeface is not loaded, the map on Locate us, a date picker, the picture-code image, the OR divider between menu rows, and the language confirmation as a pop-up (it is a screen).
+Known gaps against the Figma: the bank's own typeface is not available, so the web uses open fonts picked for it (Inter for Latin, Noto Sans Arabic for Arabic, both loaded through `@fontsource`; the phone apps still use the system font), the map on Locate us, a date picker, the picture-code image, the OR divider between menu rows, and the language confirmation as a pop-up (it is a screen).
 
 ## Checked
 
@@ -53,16 +53,17 @@ Every CAB sheet was compared screen by screen with its journey (content and flow
 
 **Fixed (copy and small changes, English and Arabic):** password screens (labels, placeholders, "Security Requirements:" and the four rules in the design's order), the picture-code placeholder "Enter the above text here" (caption removed), sub-headers and titles as designed (Select the Legal Entity, Enter Recipient E-mail ID, Enter Phone Number, Enter Your Birth Date, Change Password, Activation Code, Enable Account Preview, Terms & Conditions, Privacy Policy), welcome menu order and wording, PIN and Biometric intro screens (the design's heading and text; two info alerts that made claims the design does not make were removed), enrolled screen button "Activate your profile", Locate us (opens on Branches, "ATM", "Select search range" with "N miles", the zip-code placeholder, result title follows the filter, details titled "Locate us"), Support hours as two rows.
 
+**Also fixed (second pass):** *Enrol* is now two screens as designed: the entity dropdown with Continue, then "Selected Entity" (read-only) with Personal and Business rows that go straight on. *Language*: the list opens with the language in use ticked (new sandbox adapter `cab.language.selection`), the confirmation names the chosen language, No sits before Yes, and after Yes the change-language journey ends (back on sign in) with no "Language updated" screen.
+
+**Decision, reset order:** the journey keeps the platform's order (security code first, then the new password, with a "where to send the code" step). The design shows found, Change Password, Security Code, success. The platform order was checked against the bank's platform code; revisit it only if the bank confirms the design order is the intended one.
+
 **Kept on purpose (not in the frames, from the platform):** locked, expired, inactive and not-found screens, the three-mistake locks, the wrong-code alerts, business banking and already-enrolled paths.
 
 **Open: needs a decision or a new block**
-- *Reset order.* The design goes found, Change Password, Security Code, success. The journey follows the platform: code first, then the new password, with a "where to send the code" step the design does not have. Confirm with the bank which is right.
-- *Enrol.* The design splits the entity into two screens (a dropdown with Continue, then "Selected Entity" read-only with Personal and Business rows that go straight on). The journey has one screen.
 - *Not modelled:* the login-time PIN modal and the biometric "Unlock" modal, the "Welcome Nour" remembered-user greeting, the Menu and My Accounts screens that lead to Default sign in and Account preview.
 - *Default sign in:* the list should tick the current default with the status words (Default sign in, Enabled, Generated), and the success screen should show the Default Sign In card with a Change link.
 - *Found screen:* username dropdown, avatar, and "Sign in as" returning to the login with the username filled in. (The OR divider is done.)
 - *Account preview:* the sign-in list shows an "As of" time, a type pill and "Available balance" per row and is not selectable; the setup screen has no Save button or warning.
-- *Language:* the confirmation should name the chosen language, the current one should be pre-selected, No sits left of Yes, and after Yes the flow returns to sign-in (no "Language updated" screen).
 - *Locate us:* map first, with a search bar, "List view" and "Filters" buttons, a separate filter sheet with a Services section, tappable result rows, details with the country and one primary button.
 - *Support:* the Call us dialer as a pop-up, and the FAQ, Terms and Privacy text taken from the design. (FAQs are now one accordion screen of six topics.)
 - *Details:* the design's Account Activity answers and Privacy text are fuller than the samples here.
