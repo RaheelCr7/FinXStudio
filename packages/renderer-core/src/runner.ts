@@ -203,8 +203,10 @@ export class JourneyRunner {
     const steps: string[] = stepper?.steps ?? [];
     const idx = steps.indexOf(s.id);
     const blocks = (s.blocks as any[])
-      .filter((b) => !b.visibleWhen || this.safeEval(b.visibleWhen))
-      .map((b) => this.viewBlock(b));
+      .map((b, i) => ({ b, i }))
+      .filter(({ b }) => !b.visibleWhen || this.safeEval(b.visibleWhen))
+      // where the block sits in the screen's own list, so a click in a preview can find it in the builder (not part of the block's data)
+      .map(({ b, i }) => Object.defineProperty(this.viewBlock(b), "srcIndex", { value: i, enumerable: false }));
     return {
       screenId: s.id, title: this.tx(s.title), kind: s.kind ?? "screen", blocks, toast: this.toast,
       busy: this.busy, exited: this.exited, stepIndex: idx, stepCount: steps.length,

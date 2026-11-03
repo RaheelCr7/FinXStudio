@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { localTransfer } from "@finx/journey-schema";
+import { Journey, localTransfer } from "@finx/journey-schema";
 import { MockBank } from "@finx/mock-bank-api";
 import { JourneyRunner } from "./runner";
 
@@ -124,5 +124,15 @@ describe("Local transfer journey, end to end against the sandbox", () => {
     expect(r.view().strings.account).toBe("اکاؤنٹ");
     await press(r, "جاری رکھیں");
     expect(r.errors["transfer.fromAccountId"]).toBe("ضروری ہے");
+  });
+});
+
+describe("view blocks know their place in the screen", () => {
+  it("keeps the index in the screen's own list, past hidden blocks, without adding it to the block's data", async () => {
+    const j = Journey.parse({ ...localTransfer, screens: localTransfer.screens.map((s, i) => i === 0 ? { ...s, blocks: [{ ...s.blocks[0]!, visibleWhen: "false" }, ...s.blocks.slice(1)] } : s) });
+    const r = new JourneyRunner(j, { adapter: async () => ({}) }); await r.start();
+    const first = r.view().blocks[0] as any;
+    expect(first.srcIndex).toBe(1);
+    expect(Object.keys(first)).not.toContain("srcIndex");
   });
 });

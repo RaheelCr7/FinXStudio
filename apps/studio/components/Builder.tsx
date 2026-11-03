@@ -47,6 +47,8 @@ export function Builder({ initial, aiRun }: { initial: Rec; aiRun?: { id: string
   const [dock, setDock] = useState<"edit" | "preview">("edit");
   const [leftTab, setLeftTab] = useState<"screens" | "settings">("screens");
   const [problems, setProblems] = useState(false);
+  const [askTick, setAskTick] = useState(0);
+  const [selectMode, setSelectMode] = useState(false);
   const [newScreen, setNewScreen] = useState<string | null>(null);
   const [publishing, setPublishing] = useState(false);
   const wide = useMedia("(min-width: 1600px)");
@@ -135,6 +137,14 @@ export function Builder({ initial, aiRun }: { initial: Rec; aiRun?: { id: string
     const k = KNOWN_ADAPTERS.find((a) => a.adapter === adapter); if (!k || journey.integrations.some((i) => i.id === k.id)) return;
     commit({ ...journey, integrations: [...journey.integrations, { id: k.id, adapter: k.adapter, mode: "sandbox" }] });
   }
+  // a block clicked in the phone preview: select it (and its screen) here
+  const pickBlock = useCallback((screen: string, index: number) => { setSelScreen(screen); setSelBlock(index); setLeftTab("screens"); setDock("edit"); }, []);
+  const picked = useMemo(() => {
+    const s = journey.screens.find((x) => x.id === selScreen); const b: any = selBlock != null ? s?.blocks[selBlock] : null;
+    if (!s || !b) return null;
+    const what = textOf(b.label ?? b.title ?? b.text ?? "").slice(0, 40);
+    return `the ${BLOCK_LABELS[b.type as keyof typeof BLOCK_LABELS] ?? b.type} block${what ? ` "${what}"` : ""} (number ${selBlock! + 1}) on screen "${s.id}"`;
+  }, [journey, selScreen, selBlock]);
   const goScreen = useCallback((id: string) => { setSelScreen(id); setSelBlock(null); setLeftTab("screens"); }, []);
   const togglePreview = useCallback(() => { if (wide) setShowPreview((v) => !v); else setDock((d) => (d === "preview" ? "edit" : "preview")); }, [wide]);
   const previewOn = wide ? showPreview : dock === "preview";
@@ -182,7 +192,7 @@ export function Builder({ initial, aiRun }: { initial: Rec; aiRun?: { id: string
           ) : null}
         </div>
         {journey.acceptance?.length ? <Link href={`/journeys/${journey.slug}/proof`} className="btn" title="Acceptance criteria and the tests that prove them"><CircleCheck size={15} aria-hidden />Proof</Link> : null}
-        <Copilot slug={journey.slug} name={textOf(journey.name)} run={aiRun} />
+        <Copilot slug={journey.slug} name={textOf(journey.name)} run={aiRun} focus={picked ?? undefined} openTick={askTick} />
         <button className="btn" onClick={togglePreview} aria-pressed={previewOn} title="Phone preview">{previewOn ? <EyeOff size={15} aria-hidden /> : <Eye size={15} aria-hidden />}Preview</button>
         <button className="btn primary" onClick={doPublish} disabled={publishing || !canPublish} title={canPublish ? undefined : `${myRole}s cannot publish here. Ask someone who can publish.`}>{publishing ? <><LoaderCircle size={15} className="spin" aria-hidden />Publishing…</> : <><Rocket size={15} aria-hidden />Publish to UAT</>}</button>
       </div>
@@ -263,7 +273,7 @@ export function Builder({ initial, aiRun }: { initial: Rec; aiRun?: { id: string
         {wide ? (
           <>
             <Inspector journey={journey} screenId={selScreen} blockIndex={selBlock} issues={issues} onChange={commit} onSelectBlock={setSelBlock} onSelectScreen={(id) => setSelScreen(id)} onAddBlock={onAddBlock} />
-            {showPreview ? <aside className="pane right preview-pane" aria-label="Preview"><Preview journey={journey} /></aside> : null}
+            {showPreview ? <aside className="pane right preview-pane" aria-label="Preview"><Preview journey={journey} onPick={pickBlock} picked={picked} onAsk={() => setAskTick((t) => t + 1)} select={selectMode} onSelectMode={setSelectMode} /></aside> : null}
           </>
         ) : (
           <aside className="pane right" aria-label={dock === "preview" ? "Preview" : "Inspector"} style={{ display: "flex", flexDirection: "column" }}>
@@ -273,7 +283,7 @@ export function Builder({ initial, aiRun }: { initial: Rec; aiRun?: { id: string
                 <button role="tab" aria-selected={dock === "preview"} onClick={() => setDock("preview")}>Phone preview</button>
               </div>
             </div>
-            {dock === "preview" ? <div className="preview-pane" style={{ flex: 1, minHeight: 0 }}><Preview journey={journey} /></div> : (
+            {dock === "preview" ? <div className="preview-pane" style={{ flex: 1, minHeight: 0 }}><Preview journey={journey} onPick={pickBlock} picked={picked} onAsk={() => setAskTick((t) => t + 1)} select={selectMode} onSelectMode={setSelectMode} /></div> : (
               <Inspector bare journey={journey} screenId={selScreen} blockIndex={selBlock} issues={issues} onChange={commit} onSelectBlock={setSelBlock} onSelectScreen={(id) => setSelScreen(id)} onAddBlock={onAddBlock} />
             )}
           </aside>

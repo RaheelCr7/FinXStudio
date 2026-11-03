@@ -34,13 +34,15 @@ export function JourneyPlayer({ journey, adapter, lang, onExit, onClose, initial
 
   const { body, buttons, terminal } = layout;
   const Btn = registry.button!;
+  // each block is findable by where it sits in its screen (the Studio preview selects blocks by clicking them)
+  const mark = (b: any) => (typeof b.srcIndex === "number" ? `fxblock:${v.screenId}:${b.srcIndex}` : undefined);
   const draw = (b: any, i: number) => {
     const C = registry[b.type as BlockType];
-    return C ? <View key={`${v.screenId}-${i}`}><C b={b} set={(p, val) => controller.set(p, val)} press={(a) => controller.press(a)} busy={v.busy} lang={layout.lang} strings={v.strings} /></View> : null;
+    return C ? <View key={`${v.screenId}-${i}`} testID={mark(b)}><C b={b} set={(p, val) => controller.set(p, val)} press={(a) => controller.press(a)} busy={v.busy} lang={layout.lang} strings={v.strings} /></View> : null;
   };
   const kit = useKit();
   const wrap = (n: React.ReactElement) => <KitProvider kit={{ ...kit, rtl: layout.rtl }}>{n}</KitProvider>;
-  const drawButtons = () => buttons.map((b, i) => <Btn key={`${v.screenId}-b${i}`} b={b} set={() => {}} press={(a: any[]) => controller.press(a)} busy={v.busy} lang={layout.lang} strings={v.strings} />);
+  const drawButtons = () => buttons.map((b, i) => <View key={`${v.screenId}-b${i}`} testID={mark(b)}><Btn b={b} set={() => {}} press={(a: any[]) => controller.press(a)} busy={v.busy} lang={layout.lang} strings={v.strings} /></View>);
   const toast = v.toast ? <View accessibilityRole="alert" style={{ marginHorizontal: 20, marginTop: 8, padding: 12, borderRadius: 8, backgroundColor: c.negativeBg }}><Text style={{ color: c.negative, fontSize: 14, fontWeight: "500" }}>{v.toast}</Text></View> : null;
 
   // A bank with its own screens (an app bar in the accent colour, a banner with its logo): drawn here, in the same order of blocks.
@@ -115,12 +117,12 @@ export function JourneyPlayer({ journey, adapter, lang, onExit, onClose, initial
       <ScrollView ref={scroller} contentContainerStyle={{ padding: 20, paddingBottom: 32, gap: 22 }} keyboardShouldPersistTaps="handled">
         {body.map((b, i) => {
           const C = registry[b.type as BlockType];
-          return C ? <View key={`${v.screenId}-${i}`}><C b={b} set={(p, val) => controller.set(p, val)} press={(a) => controller.press(a)} busy={v.busy} lang={layout.lang} strings={v.strings} /></View> : null;
+          return C ? <View key={`${v.screenId}-${i}`} testID={mark(b)}><C b={b} set={(p, val) => controller.set(p, val)} press={(a) => controller.press(a)} busy={v.busy} lang={layout.lang} strings={v.strings} /></View> : null;
         })}
       </ScrollView>
 
       <View style={{ padding: 20, paddingTop: 12, gap: 10, borderTopWidth: 1, borderTopColor: c.border, backgroundColor: c.bg }}>
-        {buttons.map((b, i) => <Btn key={`${v.screenId}-b${i}`} b={b} set={() => {}} press={(a: any[]) => controller.press(a)} busy={v.busy} lang={layout.lang} strings={v.strings} />)}
+        {buttons.map((b, i) => <View key={`${v.screenId}-b${i}`} testID={mark(b)}><Btn b={b} set={() => {}} press={(a: any[]) => controller.press(a)} busy={v.busy} lang={layout.lang} strings={v.strings} /></View>)}
       </View>
      </View>
     </View>
