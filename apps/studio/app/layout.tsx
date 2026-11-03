@@ -3,6 +3,7 @@ import Script from "next/script";
 import { cookies } from "next/headers";
 import "@fontsource-variable/inter";
 import "./globals.css";
+import "./futuristic.css";
 import { Shell } from "@/components/Shell";
 import { ProjectsProvider } from "@/components/Projects";
 import { COOKIE } from "@/lib/project-utils";
@@ -15,7 +16,7 @@ export const metadata: Metadata = { title: "FinX Studio", description: "Build an
 export const dynamic = "force-dynamic";
 
 /** Applies a saved theme before first paint so there is no flash of the wrong one. */
-const THEME_INIT = `try{var t=localStorage.getItem("finx.theme");if(t==="light"||t==="dark")document.documentElement.dataset.theme=t}catch(e){}`;
+const THEME_INIT = `try{var t=localStorage.getItem("finx.theme");document.documentElement.dataset.theme=t==="light"?"light":"dark"}catch(e){}`;
 
 export default async function RootLayout({ children }: { children: React.ReactNode }) {
   const projects = await listProjects();

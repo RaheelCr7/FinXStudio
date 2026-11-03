@@ -1,0 +1,61 @@
+/* ===== Studio look: calm, dark, precise ================================================================================
+   Loaded after globals.css. Flat surfaces, thin borders, one accent colour, no decoration that carries no meaning.
+   Dark is the default; an explicit light choice is still honoured. */
+:root[data-theme="dark"], :root:not([data-theme="light"]) {
+  --bg: #0a0b0f; --surface: #111318; --surface-2: #15181e; --muted: #1a1d25; --border: #23262f; --border-strong: #2f333e;
+  --text: #ecedf1; --text-2: #a0a5b3; --text-3: #70758a;
+  --accent: #8b93ff; --accent-solid: #5a63f0; --accent-hover: #4b54e0; --accent-soft: rgba(110,118,255,.14); --accent-text: #b3b8ff;
+  --positive: #3fcf9f; --positive-bg: rgba(63,207,159,.11); --warning: #f0b95a; --warning-bg: rgba(240,185,90,.11);
+  --negative: #f2788a; --negative-bg: rgba(242,120,138,.12); --info: #6aa8ff; --info-bg: rgba(106,168,255,.12);
+  --side-bg: #0a0b0f; --side-border: #1c1f27; --side-text: #8a90a3; --side-text-on: #f2f3f7; --side-hover: rgba(255,255,255,.05); --side-active: rgba(255,255,255,.07);
+  --shadow-sm: none; --shadow-md: 0 8px 24px rgba(0,0,0,.35); --shadow-lg: 0 24px 64px rgba(0,0,0,.55);
+  --ring: 0 0 0 3px rgba(110,118,255,.28);
+  --radius: 8px; --radius-lg: 10px; --radius-xl: 12px;
+  color-scheme: dark;
+}
+:root:not([data-theme="light"]) { color-scheme: dark; }
+
+/* Sidebar: same surface as the page, separated by a line; active item is a quiet fill with a small marker */
+.sidebar { background: var(--side-bg); }
+.brand .mark { background: var(--accent-solid) !important; border-radius: 8px; }
+.workspace, .search-btn { background: var(--surface); border-color: var(--border); }
+.workspace:hover, .search-btn:hover { border-color: var(--border-strong); }
+.nav a.on { background: var(--side-active); }
+.nav a.on::before { background: var(--accent); }
+
+/* Buttons: flat. Primary is a single solid accent. */
+.btn { box-shadow: none; background: var(--surface); border-color: var(--border-strong); }
+.btn:hover { background: var(--muted); }
+.btn.primary { background: var(--accent-solid); border-color: var(--accent-solid); color: #fff; box-shadow: none; }
+.btn.primary:hover { background: var(--accent-hover); filter: none; }
+.btn.ghost { background: transparent; border-color: transparent; }
+.btn.ghost:hover { background: var(--muted); }
+
+/* Panels */
+.card, .pane, .topbar, .modal, .palette, .proj-menu, .picker, .canvas .float { background: var(--surface); border-color: var(--border); box-shadow: none; }
+.modal, .palette, .proj-menu { box-shadow: var(--shadow-lg); }
+.scrim { background: rgba(0,0,0,.6); }
+a.card:hover { border-color: var(--border-strong); box-shadow: none; transform: none; background: var(--surface-2); }
+.page h1 { font-size: 26px; line-height: 32px; font-weight: 600; letter-spacing: -0.02em; }
+
+/* Chips and segments: no borders, no glow */
+.chip { background: var(--muted); }
+.seg { background: var(--muted); }
+.seg button[aria-pressed="true"], .seg button[aria-selected="true"] { background: var(--surface); box-shadow: inset 0 0 0 1px var(--border-strong); }
+.input, .select, .textarea { background: var(--bg); border-color: var(--border-strong); }
+.input:focus, .select:focus, .textarea:focus { border-color: var(--accent); box-shadow: var(--ring); }
+.palette .it[aria-selected="true"] { background: var(--accent-soft); }
+
+/* Flow canvas */
+.canvas { background: var(--bg); }
+.rf-node { background: var(--surface); border-color: var(--border-strong); box-shadow: none; }
+.rf-node:hover { box-shadow: none; transform: none; border-color: #444a5a; }
+.rf-node.sel { border-color: var(--accent); box-shadow: var(--ring); }
+.react-flow__edge-path { stroke: #4a5062; }
+.react-flow__minimap, .react-flow__controls { box-shadow: none; }
+
+.jcard .thumb { background-color: var(--bg); background-image: radial-gradient(#262a35 1px, transparent 1px); }
+.phone { box-shadow: 0 0 0 1.5px #2a3342, 0 24px 64px rgba(0,0,0,.5); }
+.tbl th { text-transform: none; letter-spacing: 0; font-size: 12px; }
+.toast { background: var(--surface-2); border-color: var(--border-strong); }
+*::-webkit-scrollbar { width: 10px; height: 10px; } *::-webkit-scrollbar-thumb { background: #2a2e39; border-radius: 8px; border: 2px solid transparent; background-clip: padding-box; }

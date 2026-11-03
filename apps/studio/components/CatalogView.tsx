@@ -79,9 +79,8 @@ export function CatalogView({ entries, categories }: { entries: Entry[]; categor
                   <FlowThumb shape={e.shape} /><span className="open">Try it <Play size={13} aria-hidden /></span>
                 </button>
                 <div className="body">
-                  <div className="row"><h3 style={{ flex: 1 }}>{e.name}</h3><span className="chip">{e.category}</span></div>
+                  <div className="row"><h3 style={{ flex: 1 }}>{e.name}</h3><span className="faint" style={{ fontSize: 12.5 }}>{e.category}</span></div>
                   <p className="muted" style={{ margin: 0, fontSize: 13.5 }}>{e.summary}</p>
-                  <div className="row" style={{ flexWrap: "wrap", gap: 6 }}>{e.highlights.map((h) => <span key={h} className="chip accent">{h}</span>)}</div>
                   <div className="meta">
                     <span title="Screens"><Layers size={14} aria-hidden />{e.screens} screens</span>
                     <span title="Channels">{e.channels.includes("mobile") ? <Smartphone size={14} aria-hidden /> : <Globe size={14} aria-hidden />}{e.channels.join(" + ")}</span>
