@@ -59,3 +59,13 @@ A journey can carry its own proof: **`acceptance`** (criteria `AC-1 …`, each a
 - Bulk payments and payroll (more journeys for the generator to try).
 - A checkpoint of a generator run that can be undone in one click (Studio's journey history covers published versions only), and a Studio view of scenarios and coverage.
 - Choosing the bank API per project in Studio, and a real vendor behind a mapping file.
+
+
+## Bulk payments
+
+A company pays many approved suppliers from one file. The journey (`bulk-payment`, made by the generator and kept in the catalog) takes pasted rows, `beneficiary,amount,reference` per line (an optional header, blank lines and spaces are ignored), in a multi-line text box (`textInput` with `lines`).
+
+- `corp.bulk.check` reads the file and checks every row, moving nothing: the beneficiary must be on the approved list, the amount valid for the account's currency, and a row identical to an earlier one is a duplicate. It answers with each row (`ok`, `code`, `message`), `problems` (only the failing rows, for a list), the count and total of what passes, and how many approvers it needs. A file with no rows, or more than 50, is refused.
+- `corp.bulk.submit` (needs the one-time code) starts ONE payment of the rows that pass. It is a payment like any other (`lines` lists what it pays, `payee` reads "3 payments"): the total counts once against the person's and the company's limits, the approval rule applies to the total, one approval releases all of it, and approve, reject and withdraw use the usual `corp.payments.*` adapters.
+- Both bank APIs do it: Bank B has `batches.validate` and `batches.create` with its own row shape (`creditorRef`, `amountValue`, `remark`), verdict codes (B-201 to B-203) and error codes (ERR-4101 to ERR-4103), all mapped in `bank-b.corporate.json`. The same 27 scenarios pass on both.
+- Every payment the adapters return now carries `payee` (the supplier's name, or "N payments"), so the approval journey needs no lookup and shows a bulk payment correctly.
