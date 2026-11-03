@@ -1,10 +1,13 @@
 "use client";
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
-import { CircleAlert, Clock, FilePlus2, Languages, Layers, Search, Sparkles } from "lucide-react";
+import { CircleAlert, Clock, FilePlus2, Languages, Layers, Maximize2, Search, Sparkles } from "lucide-react";
+import type { Journey } from "@finx/journey-schema";
 import type { Shape } from "@/lib/graph";
 import { NewJourney } from "./NewJourney";
 import { useProjects } from "./Projects";
+import { CardSlider } from "./JourneySlider";
+import { JourneyOverview } from "./JourneyOverview";
 
 export type Row = {
   slug: string; name: any; publishedVersion: number | null; draftDiffers: boolean; screens: number; channels: string[];
@@ -66,10 +69,11 @@ function Status({ r }: { r: Row }) {
   return <span className="chip pos dot">Live · v{r.publishedVersion}</span>;
 }
 
-export function JourneyList({ journeys, defaultNew, showAll }: { journeys: Row[]; defaultNew: boolean; showAll: boolean }) {
+export function JourneyList({ journeys, docs, defaultNew, showAll }: { journeys: Row[]; docs: Record<string, Journey>; defaultNew: boolean; showAll: boolean }) {
   const { current, byId } = useProjects();
   const [q, setQ] = useState("");
   const [f, setF] = useState<Filter>("all");
+  const [overview, setOverview] = useState<string | null>(null);
   const counts = useMemo(() => ({
     all: journeys.length,
     live: journeys.filter((j) => j.publishedVersion != null && !j.draftDiffers).length,
@@ -119,8 +123,16 @@ export function JourneyList({ journeys, defaultNew, showAll }: { journeys: Row[]
       ) : (
         <div className="grid">
           {shown.map((j) => (
-            <Link key={j.slug} href={`/journeys/${j.slug}`} className="card jcard" aria-label={`Open ${en(j.name)}`}>
-              <div className="thumb"><FlowThumb shape={j.shape} /></div>
+            <div key={j.slug} className="card jcard">
+              <div className="thumb">
+                {docs[j.slug] ? (
+                  <>
+                    <div role="button" tabIndex={0} className="shot-open" onClick={() => setOverview(j.slug)} onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); setOverview(j.slug); } }} aria-label={`Preview the screens of ${en(j.name)}`}><CardSlider journey={docs[j.slug]!} /></div>
+                    <span className="zoom chip" aria-hidden><Maximize2 size={12} />Preview</span>
+                  </>
+                ) : <FlowThumb shape={j.shape} />}
+              </div>
+              <Link href={`/journeys/${j.slug}`} className="body-link" aria-label={`Open ${en(j.name)}`}>
               <div className="body">
                 <div className="row"><h3 style={{ flex: 1 }}>{en(j.name)}</h3><Status r={j} /></div>
                 {showAll ? <div className="row" style={{ marginTop: -2 }}><span className="chip accent">{(j.apps.length ? j.apps : ["meezan"]).map((a) => byId(a)?.name ?? a).join(" · ")}</span></div> : null}
@@ -133,10 +145,12 @@ export function JourneyList({ journeys, defaultNew, showAll }: { journeys: Row[]
                   {j.issues ? <span style={{ color: "var(--warning)", fontWeight: 600 }}><CircleAlert size={14} aria-hidden />{j.issues} to fix</span> : null}
                 </div>
               </div>
-            </Link>
+              </Link>
+            </div>
           ))}
         </div>
       )}
+      {overview && docs[overview] ? <JourneyOverview journey={docs[overview]!} slug={overview} onClose={() => setOverview(null)} /> : null}
     </div>
   );
 }
