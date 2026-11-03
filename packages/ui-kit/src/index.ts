@@ -1,5 +1,6 @@
 export * from "./tokens";
 export * from "./charts";
+export * from "./currency";
 export * from "./icons";
 export * from "./components";
 export * from "./languages";

@@ -86,14 +86,6 @@ export function toCssVars(theme: Theme): string {
   return Object.entries(theme.colors).map(([k, v]) => `--fds-${k.replace(/[A-Z]/g, (m) => "-" + m.toLowerCase())}:${v};`).join("");
 }
 
-/** Format money with tabular-friendly grouping. */
-export function formatMoney(amount: number, currency = "PKR", locale = "en-US"): string {
-  if (currency !== "PKR") {
-    try { return new Intl.NumberFormat(locale, { style: "currency", currency, minimumFractionDigits: Number.isInteger(amount) ? 0 : 2, maximumFractionDigits: 2 }).format(amount); } catch { /* unknown currency: fall through */ }
-  }
-  return `${currency} ${amount.toLocaleString(locale, { minimumFractionDigits: 0, maximumFractionDigits: 2 })}`;
-}
-
 /** BankWorkx: a fintech look with a lavender canvas, a blue hero gradient, cyan highlights and a mint action button. */
 const bankworkxLight = {
   bg: "#F6F4FC", surface: "#FFFFFF", surfaceMuted: "#EFEDF8", border: "#E7E4F3", borderStrong: "#D6D2E8",
