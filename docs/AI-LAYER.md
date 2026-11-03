@@ -10,7 +10,7 @@ FinX Studio has no AI backend and needs no Anthropic API key. AI runs in **your 
 | `/finx-generate` skill | `.claude/skills/finx-generate` | Builds a journey from a brief and acceptance criteria with the tests that prove it: plan first (waits for a yes), draft, scenarios that cover numbered criteria, run, mutation check. Never publishes |
 | `/finx-code` skill | `.claude/skills/finx-code` | Changes this repository's code on a feature branch with tests, docs and a pull request |
 | Agents board | Studio, `/agents` | Shows each AI run, its progress and result, and links to the draft for review |
-| Ask Claude | Studio, in the Builder | Writes the exact Claude Code command for this journey (change it or review it); the Agents page does the same for any task |
+| Ask Claude | Studio, in the Builder | Writes the exact Claude Code command for this journey (change it or review it); the Agents page does the same for any task. In the phone preview, the pointer button turns on Select mode: click a block to select it in the Builder, and "Ask Claude about this block" puts it in the command |
 
 ## Quick start
 

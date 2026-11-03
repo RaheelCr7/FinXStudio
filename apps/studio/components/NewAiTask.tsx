@@ -27,7 +27,7 @@ const AGENTS: Record<Agent, { label: string; skill: string; blurb: string; place
  * Turns a request into the exact `claude` command to run. AI runs in Claude Code on your own subscription, so Studio hands over the
  * command instead of calling any AI service. With a journey, the command already names it.
  */
-export function NewAiTask({ journey, compact }: { journey?: { slug: string; name: string }; compact?: boolean }) {
+export function NewAiTask({ journey, compact }: { journey?: { slug: string; name: string; focus?: string }; compact?: boolean }) {
   const [agent, setAgent] = useState<Agent>("journey");
   const [brief, setBrief] = useState("");
   const [copied, setCopied] = useState(false);
