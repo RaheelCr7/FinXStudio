@@ -46,6 +46,7 @@ describe.each(PROVIDERS)("corporate journeys on the %s bank API", (p) => {
     const x = setup();
     const r = await startPayment(x, "sara", { amount: 250_000, reference: "INV-77" });
     expect(r.current).toBe("review");
+    expect(rows(r)).toContainEqual({ label: "From", value: "Operations ••6100" });
     expect(rows(r)).toContainEqual({ label: "To", value: "Crescent Textiles" });
     expect(rows(r)).toContainEqual({ label: "Amount", value: "PKR 250,000" });
     expect(rows(r)).toContainEqual({ label: "Approvers needed", value: "1" });
@@ -153,6 +154,17 @@ describe.each(PROVIDERS)("corporate journeys on the %s bank API", (p) => {
     expect(r.current).toBe("rejected");
     expect((await x.bank.call("corp.payments.get", { paymentId: made.id }))).toMatchObject({ status: "rejected", rejectReason: "Wrong supplier" });
     expect((await x.bank.call("corp.company.get", { userId: "sara" })).me.remainingToday).toBe(3_000_000); // the limit came back
+  });
+});
+
+describe("a customer who is not a company", () => {
+  it("is told it is not available, instead of the journey breaking", async () => {
+    const bank = new MockBank("ayesha");
+    const r = new JourneyRunner(Journey.parse(corporatePayment), { adapter: (id, input) => bank.call(id, input) });
+    await r.start();
+    expect(r.current).toBe("unavailable");
+    expect((r.view().blocks.find((b) => b.type === "result") as any).text).toBe("Not available for this customer");
+    await press(r, "Try again"); expect(r.current).toBe("unavailable");
   });
 });
 

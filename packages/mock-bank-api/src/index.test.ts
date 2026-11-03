@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { MockBank, BankError, ADAPTER_CATALOG, describePersonas, personasFor, INSTRUMENTS, RANGES, portfolioSeries } from "./index";
+import { defaultPersonaFor, MockBank, BankError, ADAPTER_CATALOG, describePersonas, personasFor, INSTRUMENTS, RANGES, portfolioSeries } from "./index";
 
 describe("mock bank sandbox", () => {
   it("lists accounts and limits for Ayesha", async () => {
@@ -223,5 +223,16 @@ describe("corporate payments through the bank", () => {
   });
   it("is only for a company customer", async () => {
     await expect(new MockBank("ayesha").call("corp.company.get", { userId: "x" })).rejects.toMatchObject({ code: "NOT_SUPPORTED" });
+  });
+});
+
+describe("which sandbox customer a journey previews with", () => {
+  const people = personasFor("meezan");
+  it("picks a company for corporate adapters, a Cairo Amman Bank profile for cab adapters, otherwise the first", () => {
+    expect(defaultPersonaFor(people, [{ adapter: "corp.company.get" }]).id).toBe("acme");
+    expect(defaultPersonaFor(personasFor("meezan", "cab"), [{ adapter: "cab.auth.signIn" }]).id).toBe("nour");
+    expect(defaultPersonaFor(people, [{ adapter: "bank.accounts.list" }]).id).toBe("ayesha");
+    expect(defaultPersonaFor(people).id).toBe("ayesha");
+    expect(defaultPersonaFor(personasFor("bankworkx"), [{ adapter: "corp.company.get" }]).id).toBe("alex"); // none has a company: the first
   });
 });

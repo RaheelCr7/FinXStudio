@@ -2,7 +2,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Moon, RotateCcw, Sun } from "lucide-react";
 import type { Journey } from "@finx/journey-schema";
-import { MockBank, personasFor } from "@finx/mock-bank-api";
+import { MockBank, defaultPersonaFor, personasFor } from "@finx/mock-bank-api";
 import { brands, type Brand } from "@finx/ui-kit";
 import { useProjects } from "./Projects";
 import { JourneyPlayer, ThemeProvider } from "@finx/renderer-native";
@@ -20,7 +20,7 @@ export function Preview({ journey }: { journey: Journey }) {
   const { byId } = useProjects();
   const brand: Brand = byId(journey.apps?.[0] ?? "meezan")?.brand ?? brands.meezan!;
   const people = personasFor(brand.preset, brand.id);
-  const [persona, setPersona] = useState(people[0]!.id);
+  const [persona, setPersona] = useState(defaultPersonaFor(people, journey.integrations).id);
   const [lang, setLang] = useState("en");
   const [dark, setDark] = useState(false);
   const [seed, setSeed] = useState(0);
