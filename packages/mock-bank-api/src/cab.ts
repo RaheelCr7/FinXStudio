@@ -150,7 +150,7 @@ export class CabSandbox {
         };
       }
 
-      case "cab.device.options": return { default: this.device.default, pinSet: !!this.device.pin, biometricAvailable: this.device.biometric };
+      case "cab.device.options": return { mode: this.device.default, default: this.device.default, pinSet: !!this.device.pin, biometricAvailable: this.device.biometric };
       case "cab.device.setDefault": {
         const mode = String(input.mode ?? "");
         if (!["password", "pin", "biometric"].includes(mode)) throw new BankError("INVALID_MODE", "Choose password, pin or biometric");

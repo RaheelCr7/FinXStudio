@@ -150,16 +150,16 @@ export const defaultSignIn: Journey = {
   screens: [
     {
       id: "choose", title: L("Default sign in", "تسجيل الدخول الافتراضي"),
-      onEnter: [{ type: "callApi", integration: "deviceOptions", saveAs: "device" }],
+      // the current default is read into signin.mode, so it opens ticked, with the status words of the design under each way
+      onEnter: [{ type: "callApi", integration: "deviceOptions", saveAs: "signin" }],
       blocks: [
         text(L("Please select your default sign in option", "يرجى اختيار طريقة تسجيل الدخول الافتراضية"), "title"),
-        text(L("Current default: {{device.default}}", "الطريقة الحالية: {{device.default}}"), "caption"),
         {
           type: "select", bind: "signin.mode", label: L("Sign in with", "تسجيل الدخول باستخدام"), variant: "rows",
           choices: [
-            { id: "password", label: L("Username & password", "اسم المستخدم وكلمة المرور"), text: L("Default sign in", "الافتراضي") },
-            { id: "biometric", label: L("Biometric", "البصمة"), text: L("Use your fingerprint or face", "استخدم بصمتك أو وجهك") },
-            { id: "pin", label: L("PIN", "الرقم السري"), text: L("A 6-digit PIN you choose", "رقم سري من 6 أرقام تختاره") },
+            { id: "password", label: L("Username & password", "اسم المستخدم وكلمة المرور"), text: L("{{signin.default == 'password' ? 'Default sign in' : ''}}", "{{signin.default == 'password' ? 'الافتراضي' : ''}}") },
+            { id: "biometric", label: L("Biometric", "البصمة"), text: L("{{signin.default == 'biometric' ? 'Default sign in' : (signin.biometricAvailable ? 'Enabled' : '')}}", "{{signin.default == 'biometric' ? 'الافتراضي' : (signin.biometricAvailable ? 'مفعّل' : '')}}") },
+            { id: "pin", label: L("PIN", "الرقم السري"), text: L("{{signin.default == 'pin' ? 'Default sign in' : (signin.pinSet ? 'Generated' : '')}}", "{{signin.default == 'pin' ? 'الافتراضي' : (signin.pinSet ? 'تم الإنشاء' : '')}}") },
           ],
         },
         button(L("Continue", "متابعة"), [{ type: "validate" }, { type: "navigate" }]),
@@ -214,8 +214,13 @@ export const defaultSignIn: Journey = {
       ],
     },
     end("done", L("Success", "تم بنجاح"), [
-      result("success", L("Success", "تم بنجاح"),
-        L("You have successfully set {{signin.mode == 'pin' ? 'PIN' : (signin.mode == 'biometric' ? 'Biometric' : 'Username & password')}} sign in as default. You can change it any time from Menu, then Settings.", "لقد قمت بتعيين طريقة تسجيل الدخول الافتراضية بنجاح. يمكنك تغييرها في أي وقت من القائمة ثم الإعدادات.")),
+      alert("success", L("You have successfully set below Sign In method as default Sign In", "لقد قمت بتعيين طريقة تسجيل الدخول أدناه كطريقة افتراضية بنجاح")),
+      { type: "sectionHeader", title: L("Default Sign In", "تسجيل الدخول الافتراضي"), action: { label: L("Change", "تغيير"), actions: [go("choose")] } },
+      { type: "reviewSummary", rows: [{
+        label: L("{{signin.mode == 'pin' ? 'PIN SIGN IN' : (signin.mode == 'biometric' ? 'BIOMETRIC' : 'USERNAME & PASSWORD')}}", "{{signin.mode == 'pin' ? 'الدخول بالرقم السري' : (signin.mode == 'biometric' ? 'البصمة' : 'اسم المستخدم وكلمة المرور')}}"),
+        value: L("{{signin.mode == 'pin' ? 'Generated' : 'Enabled'}}", "{{signin.mode == 'pin' ? 'تم الإنشاء' : 'مفعّل'}}"),
+      }] },
+      text(L("You can enable & set other option as default from Menu > Settings in future", "يمكنك تفعيل خيار آخر وتعيينه كافتراضي من القائمة > الإعدادات في المستقبل"), "caption"),
       done,
     ]),
   ],
