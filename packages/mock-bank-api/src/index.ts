@@ -2,11 +2,17 @@ import { instrumentOf, INSTRUMENTS, dayChange } from "./invest";
 import { alexFinance, BANKS, cardNetwork, luhnValid, type Finance } from "./finance";
 import { customerRate, midRate, priceQuote, fxSupports, FX_SPREAD, QUOTE_TTL_SECONDS, type Quote } from "./fx";
 import { currencyInfo, roundMoney } from "@finx/ui-kit";
-import { CorporateSandbox, ACME, type CorpCompany } from "./corporate";
+import { BankError } from "./errors";
+import { ACME, type CorpCompany } from "./corporate";
+import { createCorporateProvider, type CorporateProvider, type ProviderId } from "./corporate-provider";
 import { CabSandbox, CAB_PROFILES, type CabProfile } from "./cab";
 export * from "./finance";
 export { CAB_PROFILES, CAB_CURRENCY, PASSWORD_RULES, passwordProblems, type CabProfile } from "./cab";
+export { BankError } from "./errors";
 export * from "./invest";
+export { createCorporateProvider, MappedCorporateProvider, PROVIDERS, type CorporateProvider, type ProviderId } from "./corporate-provider";
+export { BankBApi, ApiError } from "./corporate-b";
+export { applyRule, build, mapError, type MappingSpec } from "./mapping";
 export { ACME, CorporateSandbox, type CorporateBankAdapter, type CorpCompany, type CorpPayment, type CorpUser, type CorpRole, type InitiateInput } from "./corporate";
 export { PER_USD, FX_SPREAD, FX_FEE_RATE, QUOTE_TTL_SECONDS, midRate, customerRate, type Quote } from "./fx";
 
@@ -150,12 +156,13 @@ export class MockBank {
   /** The clock quotes expire by; tests replace it. */
   now: () => number = () => Date.now();
   private cab: CabSandbox;
-  private corp?: CorporateSandbox;
-  constructor(personaId = "ayesha") {
+  private corp?: CorporateProvider;
+  /** `corpProvider` picks which corporate bank API stands behind the corp.* adapters; journeys do not change. */
+  constructor(personaId = "ayesha", options: { corpProvider?: ProviderId } = {}) {
     const base = personas[personaId];
     if (!base) throw new Error(`Unknown persona ${personaId}`);
     this.p = structuredClone(base);
-    if (this.p.corp) { this.corp = new CorporateSandbox(this.p.corp); this.corp.now = () => this.now(); }
+    if (this.p.corp) { this.corp = createCorporateProvider(options.corpProvider ?? "reference", this.p.corp); this.corp.now = () => this.now(); }
     this.cab = new CabSandbox(this.p, { otpVerified: () => this.otpVerified, clearOtp: () => { this.otpVerified = false; } });
   }
   get persona() { return this.p; }
@@ -175,9 +182,9 @@ export class MockBank {
     if (!corp) throw new BankError("NOT_SUPPORTED", "Not available for this customer");
     const userId = String(input.userId ?? "");
     switch (adapter) {
-      case "corp.users.list": return Object.fromEntries(corp.summary.users.map((u) => [u.id, { id: u.id, name: u.name, sub: u.roles.join(" and ") }]));
+      case "corp.users.list": return Object.fromEntries(corp.getCompany().users.map((u) => [u.id, { id: u.id, name: u.name, sub: u.roles.join(" and ") }]));
       case "corp.company.get": {
-        const c = corp.summary;
+        const c = corp.getCompany();
         const me = c.users.find((u) => u.id === userId);
         return { id: c.id, name: c.name, currency: c.currency, accounts: Object.fromEntries(c.accounts.map((a) => [a.id, { ...a, name: `${a.name} ${a.maskedNumber}` }])), beneficiaries: Object.fromEntries(c.whitelist.map((b) => [b.id, { ...b, displayName: b.name }])), users: c.users.map((u) => ({ id: u.id, name: u.name, roles: u.roles })), me: me ? { id: me.id, name: me.name, roles: me.roles, dailyLimit: me.dailyLimit, usedToday: me.usedToday, remainingToday: me.dailyLimit - me.usedToday } : undefined, companyDailyLimit: c.companyDailyLimit, companyUsedToday: c.companyUsedToday, dualApprovalAbove: c.dualApprovalAbove, cutoff: c.cutoff };
       }
@@ -447,13 +454,6 @@ export class MockBank {
       default:
         throw new BankError("UNKNOWN_ADAPTER", `No sandbox handler for ${adapter}`);
     }
-  }
-}
-
-export class BankError extends Error {
-  constructor(public code: string, message: string, public attempt?: number) {
-    super(message);
-    this.name = "BankError";
   }
 }
 

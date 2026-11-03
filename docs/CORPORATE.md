@@ -36,6 +36,18 @@ Two catalog journeys (Payments, English only, run as the sandbox customer **Acme
 
 New in the engine for this: a journey can declare **`authorisation`** (role, where the roles are read from, denied screen; lint `authorisation_missing` if a journey that starts or approves a company payment does not), a failed call saves **`ctx.error`** (`code`, `message`) for the next screen, and a block `source` may point inside a saved result (`ctx.company.accounts`).
 
+## A second bank API, and the mapping layer (the stage gate)
+**Bank B** (`corporate-b.ts`) is a second simulated corporate API in its own language: operations `payments.create / authorise / decline / list / get` and `company.profile`; its own names (`initiator`, `debit.accountNo`, `creditor.ref`, `remittanceInfo`, `authChain.signedBy`), states (`AWAITING_AUTH`, `EXECUTED`, `CANCELLED`), ids (`TXN-000001`), amounts as strings, and numbered error codes with their own wording (`ERR-4291` for a per-user cap). Its rule engine is the corporate sandbox's (a simulation: a real vendor has its own).
+
+The **mapping layer** (`mapping.ts`) turns the bank-neutral shapes the journeys use into that API and back, from a **declarative file**: `mappings/bank-b.corporate.json` says which API call each operation makes, how each request field is built (paths, constants, conversions, conditions), how the response becomes a payment (value maps for states, lists, masks) and how each error code becomes ours (code and wording, with the facts filled in). A new bank is a new mapping file plus an adapter, not a new journey. `MockBank("acme", { corpProvider: "bank-b" })` puts Bank B behind the same `corp.*` adapters.
+
+**The gate, checked by tests:**
+- The same 11 journey tests (start, approve, two approvers, reject, four eyes, limits, wrong currency, three wrong codes, denied role) pass on both APIs.
+- The journeys' bytes contain none of either bank's vocabulary, and running them leaves them unchanged.
+- Both banks give the same company, the same payments (apart from each bank's own id), the same pending lists, the same balances, and the same refusals with the same code and wording, in a table of nine rules plus the approval steps.
+- Every field a journey can read is mapped, and every error code Bank B can answer has a mapping.
+
 ## Not built yet
-- The API mapping layer and the second simulated API with other endpoints and error codes (the gate: the same journeys, byte-identical, on both).
-- Bulk payments, payroll, and the generator that writes these journeys from a requirement.
+- Bulk payments, payroll, and the generator that writes these journeys from a brief and criteria. The mutation check of the gate (change a limit or skip the approver and the generated tests fail) needs the generator's tests.
+- Choosing the bank API per project in Studio (a "Connection" setting); today it is chosen when the sandbox bank is created.
+- A real vendor behind a mapping file (Temenos, Finacle, open banking): the contract and the mapping format are ready for one.

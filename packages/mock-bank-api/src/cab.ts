@@ -1,4 +1,4 @@
-import { BankError } from "./index";
+import { BankError } from "./errors";
 
 /**
  * Sandbox for the access journeys of Cairo Amman Bank (sign in, enrol, activate, recover, locate, support).

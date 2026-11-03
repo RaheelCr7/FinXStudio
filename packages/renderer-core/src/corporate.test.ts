@@ -1,13 +1,15 @@
-import { describe, it, expect } from "vitest";
+import { beforeEach, describe, it, expect } from "vitest";
 import { corporateApproval, corporatePayment, Journey } from "@finx/journey-schema";
-import { MockBank } from "@finx/mock-bank-api";
+import { MockBank, PROVIDERS, type ProviderId } from "@finx/mock-bank-api";
 import { JourneyRunner } from "./runner";
 import { lintAll } from "./lint-expr";
 
 const T = Date.parse("2026-11-03T10:00:00Z"); // Tuesday morning, before the 16:00 cut-off
 
+// the same journeys, the same tests, on every corporate bank API: only the mapping and the adapter behind them differ
+let provider: ProviderId = "reference";
 const setup = () => {
-  const bank = new MockBank("acme"); bank.now = () => T;
+  const bank = new MockBank("acme", { corpProvider: provider }); bank.now = () => T;
   const run = (journey: unknown) => new JourneyRunner(Journey.parse(journey), { adapter: (id, input) => bank.call(id, input) });
   return { bank, run };
 };
@@ -34,7 +36,8 @@ const confirmWithCode = async (r: JourneyRunner, button: string, code = "482100"
   r.set("otp.code", code); await press(r, button);
 };
 
-describe("corporate journeys", () => {
+describe.each(PROVIDERS)("corporate journeys on the %s bank API", (p) => {
+  beforeEach(() => { provider = p; });
   it("are lint clean and say which role may use them", () => {
     for (const j of [corporatePayment, corporateApproval]) { expect(lintAll(Journey.parse(j)), j.slug).toEqual([]); expect(j.authorisation).toBeTruthy(); }
   });
@@ -49,9 +52,10 @@ describe("corporate journeys", () => {
     await confirmWithCode(r, "Verify and send for approval");
     expect(r.current).toBe("success");
     expect(result(r)[0].text).toContain("PKR 250,000 to Crescent Textiles now waits for 1 approver(s)");
-    expect(result(r)[0].meta).toBe("Payment pay_1 · value date 2026-11-03");
+    const [id] = Object.keys(await x.bank.call("corp.payments.pending", { userId: "hassan" }));
+    expect(result(r)[0].meta).toBe(`Payment ${id} · value date 2026-11-03`);
     expect((await x.bank.call("corp.company.get", { userId: "sara" })).accounts.acme_ops.balance).toBe(25_000_000);
-    expect(Object.keys(await x.bank.call("corp.payments.pending", { userId: "hassan" }))).toEqual(["pay_1"]);
+    expect(Object.keys(await x.bank.call("corp.payments.pending", { userId: "hassan" }))).toEqual([id]);
   });
 
   it("shows two approvers needed above the threshold, and the cut-off note", async () => {
@@ -142,12 +146,23 @@ describe("corporate journeys", () => {
   });
 
   it("an approver rejects with a reason", async () => {
-    const x = setup(); await initiate(x, "sara", 100_000, "WRONG");
+    const x = setup(); const made = await initiate(x, "sara", 100_000, "WRONG");
     const r = await approver(x, "layla"); await tapRow(r, "PKR 100,000");
     await press(r, "Reject"); expect(r.current).toBe("reject");
     r.set("appr.reason", "Wrong supplier"); await press(r, "Reject payment");
     expect(r.current).toBe("rejected");
-    expect((await x.bank.call("corp.payments.get", { paymentId: "pay_1" }))).toMatchObject({ status: "rejected", rejectReason: "Wrong supplier" });
+    expect((await x.bank.call("corp.payments.get", { paymentId: made.id }))).toMatchObject({ status: "rejected", rejectReason: "Wrong supplier" });
     expect((await x.bank.call("corp.company.get", { userId: "sara" })).me.remainingToday).toBe(3_000_000); // the limit came back
+  });
+});
+
+describe("the stage gate: one journey, two banks", () => {
+  it("the journeys know nothing of either bank's vocabulary, so they are the same bytes whichever API stands behind them", () => {
+    for (const j of [corporatePayment, corporateApproval]) {
+      const bytes = JSON.stringify(j);
+      expect(bytes, j.slug).not.toMatch(/bank-b|TXN-|ERR-\d|AWAITING_AUTH|EXECUTED|CANCELLED|authChain|remittanceInfo|signer|txnId|approvedCreditors/);
+      expect(j.integrations.map((i) => i.adapter).filter((a) => a.startsWith("corp.")).sort(), j.slug).toEqual(j.integrations.map((i) => i.adapter).filter((a) => a.startsWith("corp.")).sort());
+      expect(JSON.stringify(j)).toBe(bytes); // running them on either API leaves them untouched
+    }
   });
 });
