@@ -20,6 +20,8 @@ export type Persona = {
   accounts: Account[];
   beneficiaries: Beneficiary[];
   limits: { daily: number; usedToday: number };
+  /** Daily limits for accounts in other currencies, by currency code. `limits` applies to the currency of the first account. */
+  limitsByCurrency?: Record<string, { daily: number; usedToday: number }>;
   /** Spending, budgets and cards, for the BankWorkx app. */
   finance?: Finance;
   /** deterministic failure modes for testing unhappy paths */
@@ -78,6 +80,19 @@ export const personas: Record<string, Persona> = {
     limits: { daily: 25000, usedToday: 0 },
     behaviour: { otpCode: "123456", kyc: "rejected" },
   },
+  hina: {
+    id: "hina", brand: "meezan", name: "Hina Qureshi (accounts in four currencies)", phone: "+92 321 5550144",
+    accounts: [
+      { id: "acc_pkr", name: "Current", maskedNumber: "••5521", iban: "PK41 MEZN 0000 5555 0000 5521", balance: 320000, currency: "PKR", status: "active", canDebit: true },
+      { id: "acc_usd", name: "Dollar savings", maskedNumber: "••8830", iban: "PK77 MEZN 0000 5555 0000 8830", balance: 4200.5, currency: "USD", status: "active", canDebit: true },
+      { id: "acc_aed", name: "Dirham account", maskedNumber: "••1147", iban: "PK19 MEZN 0000 5555 0000 1147", balance: 15000, currency: "AED", status: "active", canDebit: true },
+      { id: "acc_kwd", name: "Dinar account", maskedNumber: "••9042", iban: "PK63 MEZN 0000 5555 0000 9042", balance: 120.75, currency: "KWD", status: "active", canDebit: true },
+    ],
+    beneficiaries: [{ id: "ben_4821", displayName: "Ahmed Khan", bank: "HBL", maskedNumber: "••4821", addedAt: Date.now() - 90 * day }],
+    limits: { daily: 50000, usedToday: 0 },
+    limitsByCurrency: { USD: { daily: 2000, usedToday: 0 }, AED: { daily: 7000, usedToday: 0 }, KWD: { daily: 300, usedToday: 0 } },
+    behaviour: { otpCode: "482100", kyc: "verified" },
+  },
   nour: {
     id: "nour", brand: "meezan", project: "cab", name: "Nour Haddad (active customer)", phone: "+962 34 56 78 90", cab: CAB_PROFILES.nour!,
     accounts: [], beneficiaries: [], limits: { daily: 5000, usedToday: 0 },
@@ -128,6 +143,15 @@ export class MockBank {
   }
   get persona() { return this.p; }
 
+  /** The daily limit that applies to an account in this currency. The first account's currency uses `limits`; another needs its own entry. */
+  private limitFor(currency: string) {
+    const base = this.p.accounts[0]?.currency;
+    if (!base || currency === base) return this.p.limits;
+    const own = this.p.limitsByCurrency?.[currency];
+    if (!own) throw new BankError("LIMIT_NOT_SET", `No daily limit is set for ${currency}`);
+    return own;
+  }
+
   /** Single entry point used by journeys: adapter id + input -> result. */
   async call(adapter: string, input: Record<string, any> = {}): Promise<any> {
     if (this.cab.handles(adapter)) {
@@ -140,7 +164,17 @@ export class MockBank {
       case "bank.beneficiaries.list":
         return Object.fromEntries(this.p.beneficiaries.map((b) => [b.id, { ...b, ageHours: Math.floor((Date.now() - b.addedAt) / 3600000) }]));
       case "bank.limits.get":
-        return { ...this.p.limits };
+        // with a currency: the limit for accounts in that currency; without: the main one, as before
+        return input.currency ? { ...this.limitFor(String(input.currency)), currency: String(input.currency) } : { ...this.p.limits };
+      case "bank.accounts.totals": {
+        // balances added up per currency, never across currencies; a record keyed by currency so it can feed a list
+        const out: Record<string, { id: string; currency: string; total: number; count: number }> = {};
+        for (const a of this.p.accounts) {
+          const t = out[a.currency] ?? (out[a.currency] = { id: a.currency, currency: a.currency, total: 0, count: 0 });
+          t.total = Math.round((t.total + a.balance) * 1000) / 1000; t.count += 1;
+        }
+        return out;
+      }
       case "bank.otp.send":
         this.otpAttempts = 0;
         this.otpVerified = false;
@@ -158,12 +192,13 @@ export class MockBank {
         const from = this.p.accounts.find((a) => a.id === input.fromAccountId);
         if (!from) throw new BankError("ACCOUNT_NOT_FOUND", "Account not found");
         if (amount > from.balance) throw new BankError("INSUFFICIENT_FUNDS", "Insufficient funds");
-        if (this.p.limits.usedToday + amount > this.p.limits.daily) throw new BankError("LIMIT_EXCEEDED", "Daily limit exceeded");
-        from.balance -= amount;
-        this.p.limits.usedToday += amount;
+        const limit = this.limitFor(from.currency);
+        if (limit.usedToday + amount > limit.daily) throw new BankError("LIMIT_EXCEEDED", "Daily limit exceeded");
+        from.balance = Math.round((from.balance - amount) * 1000) / 1000;
+        limit.usedToday += amount;
         this.otpVerified = false;
         this.seq += 1;
-        return { reference: `TRX-20261102-${String(930 + this.seq).padStart(4, "0")}`, newBalance: from.balance };
+        return { reference: `TRX-20261102-${String(930 + this.seq).padStart(4, "0")}`, newBalance: from.balance, currency: from.currency };
       }
       case "bank.billers.list":
         return Object.fromEntries(BILLERS.map((b) => [b.id, b]));
@@ -185,9 +220,10 @@ export class MockBank {
         const from = this.p.accounts.find((a) => a.id === input.fromAccountId);
         if (!from) throw new BankError("ACCOUNT_NOT_FOUND", "Account not found");
         if (amount > from.balance) throw new BankError("INSUFFICIENT_FUNDS", "Insufficient funds");
-        if (this.p.limits.usedToday + amount > this.p.limits.daily) throw new BankError("LIMIT_EXCEEDED", "Daily limit exceeded");
-        from.balance -= amount;
-        this.p.limits.usedToday += amount;
+        const limit = this.limitFor(from.currency);
+        if (limit.usedToday + amount > limit.daily) throw new BankError("LIMIT_EXCEEDED", "Daily limit exceeded");
+        from.balance = Math.round((from.balance - amount) * 1000) / 1000;
+        limit.usedToday += amount;
         this.otpVerified = false;
         this.seq += 1;
         return { reference: `${isBill ? "BILL" : "TOP"}-20261102-${String(930 + this.seq).padStart(4, "0")}`, newBalance: from.balance };

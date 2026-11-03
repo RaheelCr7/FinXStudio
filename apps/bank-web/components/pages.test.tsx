@@ -21,7 +21,7 @@ describe("sign in", () => {
     const { container } = renderPage(<Login />, MEEZAN, { signedIn: false });
     expect(await axeCheck(container)).toHaveNoViolations();
     const radios = await screen.findAllByRole("radio");
-    expect(radios.map((r) => (r as HTMLInputElement).value)).toEqual(["ayesha", "bilal", "zara"]);
+    expect(radios.map((r) => (r as HTMLInputElement).value)).toEqual(["ayesha", "bilal", "zara", "hina"]);
     expect((radios[0] as HTMLInputElement).checked).toBe(true);
     await userEvent.click(radios[1]!);
     await userEvent.click(screen.getByRole("button", { name: "Log in" }));

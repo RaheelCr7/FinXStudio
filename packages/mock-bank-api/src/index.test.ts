@@ -66,8 +66,8 @@ describe("mock bank sandbox", () => {
     expect(ADAPTER_CATALOG.find((a) => a.adapter === "bank.otp.verify")!.suggestedId).toBe("otpVerify");
   });
   it("describes the sandbox customers with their test OTPs, per bank app", () => {
-    expect(describePersonas().map((p) => [p.id, p.otpCode])).toEqual([["ayesha", "482100"], ["bilal", "111111"], ["alex", "482100"], ["sam", "123456"], ["zara", "123456"], ["nour", "482100"], ["sara", "482100"], ["yasmin", "482100"], ["lina", "482100"], ["omar", "482100"]]);
-    expect(personasFor("meezan").map((p) => p.id)).toEqual(["ayesha", "bilal", "zara"]);
+    expect(describePersonas().map((p) => [p.id, p.otpCode])).toEqual([["ayesha", "482100"], ["bilal", "111111"], ["alex", "482100"], ["sam", "123456"], ["zara", "123456"], ["hina", "482100"], ["nour", "482100"], ["sara", "482100"], ["yasmin", "482100"], ["lina", "482100"], ["omar", "482100"]]);
+    expect(personasFor("meezan").map((p) => p.id)).toEqual(["ayesha", "bilal", "zara", "hina"]);
     expect(personasFor("bankworkx").map((p) => p.id)).toEqual(["alex", "sam"]);
   });
 });
@@ -155,5 +155,41 @@ describe("sandbox investing", () => {
     const all = await b.call("bank.invest.sell", { symbol: "GLBX", amount: 30 * 42.18, toAccountId: "acc_main" });
     expect(all.shares).toBe(30);
     expect(b.persona.finance!.invest.holdings.some((h) => h.symbol === "GLBX")).toBe(false);
+  });
+});
+
+describe("accounts in several currencies", () => {
+  const verified = async () => { const b = new MockBank("hina"); await b.call("bank.otp.send"); await b.call("bank.otp.verify", { code: "482100" }); return b; };
+  it("lists an account per currency, each with its own balance and currency", async () => {
+    const accs = await new MockBank("hina").call("bank.accounts.list");
+    expect(Object.values<any>(accs).map((a) => [a.id, a.currency, a.balance])).toEqual([["acc_pkr", "PKR", 320000], ["acc_usd", "USD", 4200.5], ["acc_aed", "AED", 15000], ["acc_kwd", "KWD", 120.75]]);
+  });
+  it("adds balances up per currency and never across currencies", async () => {
+    const b = new MockBank("hina");
+    const t = await b.call("bank.accounts.totals");
+    expect(Object.keys(t)).toEqual(["PKR", "USD", "AED", "KWD"]);
+    expect(t.KWD).toEqual({ id: "KWD", currency: "KWD", total: 120.75, count: 1 });
+    const a = new MockBank("ayesha");
+    expect((await a.call("bank.accounts.totals")).PKR).toMatchObject({ total: 1434250, count: 2 });
+  });
+  it("has a daily limit for each currency, and the main one is unchanged", async () => {
+    const b = new MockBank("hina");
+    expect(await b.call("bank.limits.get")).toEqual({ daily: 50000, usedToday: 0 });
+    expect(await b.call("bank.limits.get", { currency: "USD" })).toEqual({ daily: 2000, usedToday: 0, currency: "USD" });
+    expect(await b.call("bank.limits.get", { currency: "KWD" })).toMatchObject({ daily: 300 });
+    await expect(b.call("bank.limits.get", { currency: "EUR" })).rejects.toMatchObject({ code: "LIMIT_NOT_SET" });
+  });
+  it("takes a transfer from the account in its own currency, against that currency's limit", async () => {
+    const b = await verified();
+    const r = await b.call("bank.transfers.create", { fromAccountId: "acc_kwd", amount: 20.25 });
+    expect(r).toMatchObject({ newBalance: 100.5, currency: "KWD" });
+    expect((await b.call("bank.limits.get", { currency: "KWD" })).usedToday).toBe(20.25);
+    expect((await b.call("bank.limits.get")).usedToday).toBe(0); // PKR limit untouched
+  });
+  it("refuses more than that currency's balance or limit", async () => {
+    let b = await verified();
+    await expect(b.call("bank.transfers.create", { fromAccountId: "acc_usd", amount: 2500 })).rejects.toMatchObject({ code: "LIMIT_EXCEEDED" }); // balance is enough, USD limit is 2,000
+    b = await verified();
+    await expect(b.call("bank.transfers.create", { fromAccountId: "acc_kwd", amount: 250 })).rejects.toMatchObject({ code: "INSUFFICIENT_FUNDS" });
   });
 });
