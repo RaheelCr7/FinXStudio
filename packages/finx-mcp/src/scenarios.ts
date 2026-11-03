@@ -7,7 +7,7 @@ import { simulate, type SimOptions, type Step } from "./simulate";
  * scenario that passes, and whether the tests would notice if the journey (or the bank's rules) were wrong. A mutation check
  * breaks the journey or the sandbox on purpose, one thing at a time, and expects at least one scenario to fail each time.
  */
-export type ScenarioResult = { id: string; name: string; covers: string[]; ok: boolean; failures: string[]; finalScreen: string };
+export type ScenarioResult = { id: string; name: string; covers: string[]; ok: boolean; failures: string[]; finalScreen: string; /** the screens the scenario went through */ visited: string[] };
 export type CoverageRow = { id: string; text: string; scenarios: string[]; passing: string[]; status: "proved" | "failing" | "uncovered" };
 export type ScenarioReport = {
   ok: boolean; total: number; passed: number; results: ScenarioResult[];
@@ -26,9 +26,9 @@ export async function runScenarios(journey: Journey, over: Overrides = {}): Prom
     };
     try {
       const r = await simulate(opts);
-      results.push({ id: t.id, name: t.name, covers: t.covers, ok: r.ok, failures: r.failures, finalScreen: r.finalScreen });
+      results.push({ id: t.id, name: t.name, covers: t.covers, ok: r.ok, failures: r.failures, finalScreen: r.finalScreen, visited: r.visited });
     } catch (e) {
-      results.push({ id: t.id, name: t.name, covers: t.covers, ok: false, failures: [(e as Error).message], finalScreen: "" });
+      results.push({ id: t.id, name: t.name, covers: t.covers, ok: false, failures: [(e as Error).message], finalScreen: "", visited: [] });
     }
   }
   const coverage: CoverageRow[] = (journey.acceptance ?? []).map((a) => {

@@ -1,5 +1,7 @@
 import type { Journey } from "./schema";
 
+/** The adapters that move money. A journey that calls one needs consent and a verified one-time code first. */
+export const MOVES_MONEY = /transfers\.create|payments\.create|bills\.pay|topup\.create|corp\.payments\.(initiate|approve)|corp\.(bulk|payroll)\.submit/;
 export type LintIssue = { code: string; message: string; screen?: string };
 
 /** Every action a block can run: a button's, a code's resend, and those of menu rows, shortcut icons and a heading's link. */
@@ -69,7 +71,7 @@ export function lintJourney(j: Journey): LintIssue[] {
 
   // consent before submit: any screen that calls a money-moving integration must be preceded by a screen with consent
   const hasConsent = j.screens.some((s) => s.blocks.some((b) => b.type === "consent"));
-  const moves = j.integrations.some((i) => /transfers\.create|payments\.create|bills\.pay|topup\.create/.test(i.adapter));
+  const moves = j.integrations.some((i) => MOVES_MONEY.test(i.adapter));
   if (moves && !hasConsent) issues.push({ code: "consent_before_submit", message: "Money-moving journey has no consent block" });
 
   // OTP before money moves
@@ -77,7 +79,7 @@ export function lintJourney(j: Journey): LintIssue[] {
   const verifyIdx = (s: typeof j.screens[number]) =>
     s.blocks.flatMap((b: any) => (b.type === "button" ? b.actions : [])).findIndex((a: any) => a.type === "callApi" && /otpVerify/.test(a.integration));
   const moveIdx = (s: typeof j.screens[number]) =>
-    s.blocks.flatMap((b: any) => (b.type === "button" ? b.actions : [])).findIndex((a: any) => a.type === "callApi" && j.integrations.find((i) => i.id === a.integration && /transfers\.create|payments\.create|bills\.pay|topup\.create/.test(i.adapter)));
+    s.blocks.flatMap((b: any) => (b.type === "button" ? b.actions : [])).findIndex((a: any) => a.type === "callApi" && j.integrations.find((i) => i.id === a.integration && MOVES_MONEY.test(i.adapter)));
   if (moves) {
     if (!otpScreen) issues.push({ code: "otp_before_money", message: "Money-moving journey has no OTP screen" });
     else if (verifyIdx(otpScreen) < 0 || (moveIdx(otpScreen) >= 0 && verifyIdx(otpScreen) > moveIdx(otpScreen))) {
