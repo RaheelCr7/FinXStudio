@@ -70,7 +70,7 @@ export type SimOptions = {
   /** The sandbox clock, in milliseconds since 1970. */
   now?: number;
   /** Calls made on the bank before the walk starts. */
-  setup?: { adapter: string; input?: Record<string, unknown> }[];
+  setup?: { adapter: string; input?: Record<string, unknown>; saveAs?: string }[];
   /** Rules switched off in the sandbox, for mutation checks. */
   flaws?: Flaws;
 };
@@ -84,8 +84,21 @@ export async function simulate(opts: SimOptions): Promise<SimResult> {
   const bank = new MockBank(persona, { corpProvider: opts.provider, corpFlaws: opts.flaws });
   if (opts.now !== undefined) bank.now = () => opts.now!;
   const setupFailures: string[] = [];
+  // what a setup call answered, by the name it was saved under: later inputs read it as {{setup.name.id}}, so a scenario never
+  // hard-codes an id that differs from one bank API to the next (pay_1 on one, TXN-000001 on another)
+  const saved: Record<string, unknown> = {};
+  const pick = (path: string) => path.split(".").reduce((o: any, k) => o?.[k], { setup: saved });
+  const resolve = (v: unknown): unknown => {
+    if (typeof v === "string") { const m = /^\{\{\s*(setup\.[^}]+?)\s*\}\}$/.exec(v); return m ? pick(m[1]!) : v; }
+    if (Array.isArray(v)) return v.map(resolve);
+    if (v && typeof v === "object") return Object.fromEntries(Object.entries(v).map(([k, x]) => [k, resolve(x)]));
+    return v;
+  };
   for (const [k, call] of (opts.setup ?? []).entries()) {
-    try { await bank.call(call.adapter, (call.input ?? {}) as Record<string, any>); } catch (e) { setupFailures.push(`Setup ${k + 1} (${call.adapter}) failed: ${(e as Error).message}`); }
+    try {
+      const answer = await bank.call(call.adapter, resolve(call.input ?? {}) as Record<string, any>);
+      if (call.saveAs) saved[call.saveAs] = answer;
+    } catch (e) { setupFailures.push(`Setup ${k + 1} (${call.adapter}) failed: ${(e as Error).message}`); }
   }
   const runner = new JourneyRunner(journey, { adapter: (id, input) => bank.call(id, input), lang });
   const frames: Frame[] = [];
@@ -114,7 +127,7 @@ export async function simulate(opts: SimOptions): Promise<SimResult> {
     const n = i + 1;
     const step = steps[i] as any;
     if ("set" in step) {
-      for (const [path, value] of Object.entries(step.set)) runner.set(path, value);
+      for (const [path, value] of Object.entries(step.set)) runner.set(path, resolve(value));
       view = snap(n, `set ${Object.keys(step.set).join(", ")}`);
     } else if ("press" in step) {
       // a button, or a row of a menu (a list row, a shortcut) with that label
@@ -155,7 +168,7 @@ export async function simulate(opts: SimOptions): Promise<SimResult> {
         did = `expect bank ${e.adapter} ${e.path} = ${JSON.stringify(e.equals)}`;
         try {
           // an input value that is exactly {{path}} is read from the journey's data (for example the id of the payment just chosen)
-          const input = Object.fromEntries(Object.entries(e.input ?? {}).map(([k, v]) => [k, typeof v === "string" && /^\{\{[^}]+\}\}$/.test(v) ? runner.get(v.slice(2, -2).trim()) : v]));
+          const input = Object.fromEntries(Object.entries(e.input ?? {}).map(([k, v]) => [k, typeof v === "string" && /^\{\{\s*setup\./.test(v) ? resolve(v) : typeof v === "string" && /^\{\{[^}]+\}\}$/.test(v) ? runner.get(v.slice(2, -2).trim()) : v]));
           const got = e.path.split(".").reduce((o: any, k: string) => o?.[k], await bank.call(e.adapter, input as Record<string, any>));
           if (JSON.stringify(got) !== JSON.stringify(e.equals)) fail(n, `${did}: it is ${JSON.stringify(got)}`, view);
         } catch (err) { fail(n, `${did}: the bank call failed: ${(err as Error).message}`, view); }

@@ -62,8 +62,16 @@ export const ADAPTER_CATALOG: AdapterInfo[] = [
     returns: "The payment, 'released' (with releaseReference) or still 'pending_approval' when a second approver is needed. Errors: OTP_REQUIRED, NOT_AUTHORISED, SELF_APPROVAL, ALREADY_APPROVED, PAYMENT_NOT_PENDING, PAYMENT_NOT_FOUND, INSUFFICIENT_FUNDS, LIMIT_COMPANY_EXCEEDED.",
   },
   {
-    adapter: "corp.payments.reject", suggestedId: "rejectPayment", description: "Rejects a pending payment (an approver), or withdraws it (the person who started it). The initiator's daily limit is given back.",
-    input: { userId: "an approver, or the initiator", paymentId: "from corp.payments.pending", reason: "optional text" }, returns: "The payment, 'rejected'. Errors: NOT_AUTHORISED, PAYMENT_NOT_PENDING, PAYMENT_NOT_FOUND.",
+    adapter: "corp.payments.reject", suggestedId: "rejectPayment", description: "An approver rejects a pending payment, with a reason. The initiator's daily limit is given back. (The person who started it uses corp.payments.withdraw.)",
+    input: { userId: "an approver other than the one who started it", paymentId: "from corp.payments.pending", reason: "optional text" }, returns: "The payment, 'rejected'. Errors: NOT_AUTHORISED, PAYMENT_NOT_PENDING, PAYMENT_NOT_FOUND.",
+  },
+  {
+    adapter: "corp.payments.withdraw", suggestedId: "withdrawPayment", description: "The person who started a payment takes it back while it waits for approval. Only them; their daily limit is given back. Moves no money.",
+    input: { userId: "the initiator who started it", paymentId: "from corp.payments.pending with as: 'initiator'" }, returns: "The payment, 'rejected' with reason 'Withdrawn by the person who started it'. Errors: NOT_AUTHORISED (not theirs), PAYMENT_NOT_PENDING, PAYMENT_NOT_FOUND.",
+  },
+  {
+    adapter: "corp.payments.get", suggestedId: "getPayment", description: "One payment by id: status, amounts, who started it, who approved, value date, release reference or rejection reason.",
+    input: { paymentId: "the payment's id" }, returns: "The payment. Error: PAYMENT_NOT_FOUND.",
   },
   {
     adapter: "corp.payments.pending", suggestedId: "pendingPayments", description: "The pending payments a person can act on: an approver sees what waits for them (not their own, not ones they approved); anyone sees what they started.",

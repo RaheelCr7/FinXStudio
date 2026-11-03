@@ -83,3 +83,21 @@ describe("the tests that travel with a journey", () => {
     expect(m.survived.map((s) => s.id)).toContain("bank-whitelist"); // nothing in that one test needs the approved list
   }, 120_000);
 });
+
+describe("scenario setup can keep what the bank answered", () => {
+  it.each(["reference", "bank-b"] as const)("a later step reads the id of a payment made in setup, on the %s API", async (provider) => {
+    const j = structuredClone(journeys[1]!) as any;
+    j.acceptance = [{ id: "AC-1", text: "x" }];
+    j.scenarios = [{
+      id: "T-1", name: "reads a saved id", covers: ["AC-1"], persona: "acme", now: "2026-11-03T10:00:00Z",
+      setup: [
+        { adapter: "bank.otp.send" }, { adapter: "bank.otp.verify", input: { code: "482100" } },
+        { adapter: "corp.payments.initiate", input: { userId: "sara", fromAccountId: "acme_ops", beneficiaryId: "sup_textile", amount: 1000, reference: "S" }, saveAs: "p" },
+        { adapter: "corp.payments.withdraw", input: { userId: "sara", paymentId: "{{setup.p.id}}" } },
+      ],
+      steps: [{ expectBank: { adapter: "corp.payments.get", input: { paymentId: "{{setup.p.id}}" }, path: "status", equals: "rejected" } }],
+    }];
+    const r = await runScenarios(Journey.parse(j), { provider });
+    expect(r.results.map((x) => x.failures)).toEqual([[]]);
+  });
+});

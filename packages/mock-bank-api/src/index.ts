@@ -211,6 +211,7 @@ export class MockBank {
         this.otpVerified = false;
         return p;
       }
+      case "corp.payments.withdraw": return corp.withdrawPayment({ userId, paymentId: String(input.paymentId ?? "") });
       case "corp.payments.reject": return corp.rejectPayment({ userId, paymentId: String(input.paymentId ?? ""), reason: input.reason });
       case "corp.payments.pending": return Object.fromEntries(corp.listPending({ userId, as: input.as === "initiator" ? "initiator" : input.as === "approver" ? "approver" : undefined }).map((p) => [p.id, p]));
       case "corp.payments.get": return corp.getPayment(String(input.paymentId ?? ""));

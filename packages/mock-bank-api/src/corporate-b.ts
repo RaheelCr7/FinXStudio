@@ -54,12 +54,12 @@ export class BankBApi {
   }
 
   /** Our rules, in this bank's words: a numbered code, an HTTP-like status, its own wording and the facts the wording needs. */
-  private fail(e: unknown, ctx: { action: "create" | "authorise" | "decline"; user: string; txnState?: string; ccy?: string }): never {
+  private fail(e: unknown, ctx: { action: "create" | "authorise" | "decline" | "cancel"; user: string; txnState?: string; ccy?: string }): never {
     if (!(e instanceof BankError)) throw e;
     const who = this.name(ctx.user);
-    const verb = { create: "initiate", authorise: "approve", decline: "reject" }[ctx.action];
+    const verb = { create: "initiate", authorise: "approve", decline: "reject", cancel: "withdraw" }[ctx.action];
     const table: Record<string, [string, number, string, Record<string, unknown>]> = {
-      NOT_AUTHORISED: ["ERR-4031", 403, `Signer ${ctx.user} lacks the ${ctx.action === "create" ? "MAKE" : "SIGN"} permission`, { userName: who, action: verb }],
+      NOT_AUTHORISED: ctx.action === "cancel" ? ["ERR-4032", 403, "Only the maker may cancel a transaction", { userName: who }] : ["ERR-4031", 403, `Signer ${ctx.user} lacks the ${ctx.action === "create" ? "MAKE" : "SIGN"} permission`, { userName: who, action: verb }],
       USER_NOT_FOUND: ["ERR-4043", 404, `Unknown staff id ${ctx.user}`, { userId: ctx.user, company: this.inner.summary.name }],
       ACCOUNT_NOT_FOUND: ["ERR-4044", 404, "Debit account unknown", {}],
       BENEFICIARY_NOT_WHITELISTED: ["ERR-4041", 422, "Creditor is not in the approved creditor register", {}],
@@ -98,6 +98,12 @@ export class BankBApi {
           const p = action === "authorise" ? this.inner.approvePayment({ userId: user, paymentId: id }) : this.inner.rejectPayment({ userId: user, paymentId: id, reason: body.note });
           return this.shape(p);
         } catch (e) { return this.fail(e, { action, user, txnState: stateNow }); }
+      }
+      case "payments.cancel": {
+        const user = String(body.maker ?? "");
+        const id = this.innerId(String(body.txnId ?? ""));
+        const stateNow = (() => { try { return this.shape(this.inner.getPayment(id)).state; } catch { return ""; } })();
+        try { return this.shape(this.inner.withdrawPayment({ userId: user, paymentId: id })); } catch (e) { return this.fail(e, { action: "cancel", user, txnState: stateNow }); }
       }
       case "payments.get": {
         const id = this.innerId(String(body.txnId ?? ""));

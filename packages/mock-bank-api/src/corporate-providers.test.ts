@@ -63,8 +63,8 @@ describe("the mapping engine", () => {
     const fields = new Set([...Object.keys(a.getPayment(released.id)), ...Object.keys(a.getPayment(rejected.id))]);
     const shape = Object.keys((bankBSpec as any).shapes.payment);
     expect([...fields].filter((f) => !shape.includes(f))).toEqual([]); // nothing a journey can read is left unmapped
-    const codes = ["NOT_AUTHORISED", "USER_NOT_FOUND", "ACCOUNT_NOT_FOUND", "BENEFICIARY_NOT_WHITELISTED", "INVALID_AMOUNT", "CURRENCY_NOT_SUPPORTED", "INSUFFICIENT_FUNDS", "LIMIT_USER_EXCEEDED", "LIMIT_COMPANY_EXCEEDED", "SELF_APPROVAL", "ALREADY_APPROVED", "PAYMENT_NOT_PENDING", "PAYMENT_NOT_FOUND"];
-    expect(Object.values((bankBSpec as any).errors).map((e: any) => e.code).sort()).toEqual([...codes].sort());
+    const codes = ["NOT_AUTHORISED", "USER_NOT_FOUND", "ACCOUNT_NOT_FOUND", "BENEFICIARY_NOT_WHITELISTED", "INVALID_AMOUNT", "CURRENCY_NOT_SUPPORTED", "INSUFFICIENT_FUNDS", "LIMIT_USER_EXCEEDED", "LIMIT_COMPANY_EXCEEDED", "SELF_APPROVAL", "ALREADY_APPROVED", "PAYMENT_NOT_PENDING", "PAYMENT_NOT_FOUND", "NOT_AUTHORISED"];
+    expect([...new Set(Object.values((bankBSpec as any).errors).map((e: any) => e.code))].sort()).toEqual([...new Set(codes)].sort());
   });
 });
 
@@ -82,6 +82,15 @@ describe("the same answers from both banks, through the mapping", () => {
     expect(sans(b.approvePayment({ userId: "hassan", paymentId: pb.id }))).toEqual(sans(a.approvePayment({ userId: "hassan", paymentId: pa.id })));
     expect(sans(b.approvePayment({ userId: "layla", paymentId: pb.id }))).toEqual(sans(a.approvePayment({ userId: "layla", paymentId: pa.id })));
     expect(b.getCompany().accounts).toEqual(a.getCompany().accounts);
+  });
+  it("withdraws the same way, and refuses the same people", () => {
+    const { a, b } = both();
+    const x = a.initiatePayment(pay()), y = b.initiatePayment(pay());
+    const err = (f: () => unknown) => { try { f(); } catch (e) { return (e as any).code; } };
+    expect(err(() => a.withdrawPayment({ userId: "omar", paymentId: x.id }))).toBe("NOT_AUTHORISED");
+    expect(err(() => b.withdrawPayment({ userId: "omar", paymentId: y.id }))).toBe("NOT_AUTHORISED");
+    expect(sans(b.withdrawPayment({ userId: "sara", paymentId: y.id }))).toEqual(sans(a.withdrawPayment({ userId: "sara", paymentId: x.id })));
+    expect(err(() => b.withdrawPayment({ userId: "sara", paymentId: y.id }))).toBe(err(() => a.withdrawPayment({ userId: "sara", paymentId: x.id })));
   });
   it("lists, rejects and gives the limit back the same way", () => {
     const { a, b } = both();

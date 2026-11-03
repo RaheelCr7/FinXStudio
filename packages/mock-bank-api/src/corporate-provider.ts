@@ -37,6 +37,7 @@ export class MappedCorporateProvider implements CorporateProvider {
   initiatePayment(input: InitiateInput) { return this.run("initiatePayment", input) as CorpPayment; }
   approvePayment(input: { userId: string; paymentId: string }) { return this.run("approvePayment", input) as CorpPayment; }
   rejectPayment(input: { userId: string; paymentId: string; reason?: string }) { return this.run("rejectPayment", input) as CorpPayment; }
+  withdrawPayment(input: { userId: string; paymentId: string }) { return this.run("withdrawPayment", input) as CorpPayment; }
   listPending(input: { userId: string; as?: "approver" | "initiator" }) { return this.run("listPending", input) as CorpPayment[]; }
 }
 

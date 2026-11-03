@@ -140,7 +140,7 @@ export const Journey = z.object({
     /** The sandbox clock, as an ISO time, for rules that depend on it (a cut-off). */
     now: z.string().optional(),
     /** Calls made on the bank before the walk starts, for example a payment waiting for approval. */
-    setup: z.array(z.object({ adapter: z.string(), input: z.record(z.string(), z.unknown()).optional() })).optional(),
+    setup: z.array(z.object({ adapter: z.string(), input: z.record(z.string(), z.unknown()).optional(), saveAs: z.string().regex(/^[a-zA-Z][a-zA-Z0-9]*$/).optional() })).optional(),
     steps: z.array(z.record(z.string(), z.unknown())).min(1),
   })).optional(),
   /**
