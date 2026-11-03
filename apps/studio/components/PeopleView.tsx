@@ -64,7 +64,8 @@ export function PeopleView() {
         ) : null}
       </div>
 
-      <h2 style={{ margin: "28px 0 10px", fontSize: 16 }}>What each role can do</h2>
+      <details style={{ marginTop: 24 }}>
+      <summary style={{ cursor: "pointer", fontWeight: 600, fontSize: 15, marginBottom: 10 }}>What each role can do</summary>
       <div className="card" style={{ padding: 0, overflow: "auto" }}>
         <table className="tbl">
           <thead><tr><th>Role</th>{ACTIONS.map((a) => <th key={a} style={{ textAlign: "center", maxWidth: 150 }}>{ACTION_INFO[a]}</th>)}</tr></thead>
@@ -78,6 +79,7 @@ export function PeopleView() {
           </tbody>
         </table>
       </div>
+      </details>
       <p className="faint" style={{ marginTop: 12 }}>Editors cannot publish and reviewers cannot edit, so a change is always published by someone other than the person who made it, unless an Admin does both. Studio has no sign-in yet: &ldquo;Working as&rdquo; in the sidebar is a demo identity. The AI tools and scripts act as the first Admin.</p>
     </div>
   );

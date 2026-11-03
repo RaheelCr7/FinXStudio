@@ -33,6 +33,7 @@ export function Shell({ children }: { children: React.ReactNode }) {
     setTheme(t); store.set("finx.theme", t);
     if (t === "system") delete document.documentElement.dataset.theme; else document.documentElement.dataset.theme = t;
   }, []);
+  const dark = theme !== "light";
   const rail = (side ?? (inBuilder ? "rail" : "open")) === "rail";
   const toggleSide = useCallback(() => { const n: Side = rail ? "open" : "rail"; setSide(n); store.set("finx.sidebar", n); }, [rail]);
 
@@ -61,7 +62,6 @@ export function Shell({ children }: { children: React.ReactNode }) {
           <ProjectSwitcher />
           <SearchButton mac={mac} />
           <nav className="nav" aria-label="Sections">
-            <div className="nav-label">Build</div>
             <Link href="/" className={path === "/" || inBuilder ? "on" : ""} aria-current={path === "/" || inBuilder ? "page" : undefined} title="Journeys"><Workflow size={18} aria-hidden /><span className="lbl">Journeys</span></Link>
             <Link href="/catalog" className={path.startsWith("/catalog") ? "on" : ""} aria-current={path.startsWith("/catalog") ? "page" : undefined} title="Catalog"><LibraryBig size={18} aria-hidden /><span className="lbl">Catalog</span></Link>
             <Link href="/projects" className={path.startsWith("/projects") ? "on" : ""} aria-current={path.startsWith("/projects") ? "page" : undefined} title="Projects"><FolderKanban size={18} aria-hidden /><span className="lbl">Projects</span></Link>
@@ -72,11 +72,9 @@ export function Shell({ children }: { children: React.ReactNode }) {
           </nav>
           <div className="side-foot">
             <UserSwitcher />
-            <div className="theme-switch" role="group" aria-label="Theme">
-              <button aria-pressed={theme === "light"} onClick={() => applyTheme("light")} aria-label="Light theme" title="Light"><Sun size={15} /></button>
-              <button aria-pressed={theme === "system"} onClick={() => applyTheme("system")} aria-label="Match system theme" title="System"><Monitor size={15} /></button>
-              <button aria-pressed={theme === "dark"} onClick={() => applyTheme("dark")} aria-label="Dark theme" title="Dark"><Moon size={15} /></button>
-            </div>
+            <button className="collapse-btn" onClick={() => applyTheme(dark ? "light" : "dark")} aria-label={dark ? "Switch to light theme" : "Switch to dark theme"} title={dark ? "Light theme" : "Dark theme"}>
+              {dark ? <Sun size={18} /> : <Moon size={18} />}<span className="lbl">{dark ? "Light theme" : "Dark theme"}</span>
+            </button>
             <button className="collapse-btn" onClick={toggleSide} aria-label={rail ? "Expand sidebar" : "Collapse sidebar"} title={rail ? "Expand sidebar" : "Collapse sidebar"}>
               {rail ? <PanelLeftOpen size={18} /> : <PanelLeftClose size={18} />}<span className="lbl">Collapse</span>
             </button>
