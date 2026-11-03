@@ -1,3 +1,5 @@
+import type { Ref } from "react";
+
 /** The props of every shared component. The web and the native versions take exactly these, so a screen can swap one for the other. */
 
 export type ButtonProps = {
@@ -23,6 +25,8 @@ export type TextFieldProps = {
   secure?: boolean;
   keyboard?: "default" | "number" | "phone" | "email";
   disabled?: boolean;
+  /** The browser's autofill hint. By default: off for passwords and plain text, email or tel for those fields. */
+  autoComplete?: string;
   /** Words for the show/hide control, in the screen's language. */
   strings?: { show: string; hide: string };
 };
@@ -34,6 +38,8 @@ export type AppBarProps = {
   onBack?: () => void;
   onClose?: () => void;
   labels?: { back: string; close: string };
+  /** For a screen that moves focus to its title when it opens. Web only. */
+  titleRef?: Ref<HTMLHeadingElement>;
 };
 
 export type ListRowProps = {

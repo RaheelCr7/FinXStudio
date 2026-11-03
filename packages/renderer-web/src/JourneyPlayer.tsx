@@ -3,6 +3,7 @@ import { useEffect, useMemo, useReducer, useRef } from "react";
 import type { Journey } from "@finx/journey-schema";
 import { JourneyController, ui, type Adapter, type BlockType } from "@finx/renderer-core";
 import type { BrandLook } from "@finx/ui-kit";
+import { AppBar, componentsCss } from "@finx/components";
 import { Button, registry } from "./blocks/blocks";
 import { LookContext } from "./look";
 
@@ -64,6 +65,12 @@ export function JourneyPlayer({ journey, adapter, lang, initial, onClose, onExit
     <LookContext.Provider value={{ look, name: brandName }}>
     <div className="fx-player" dir={layout.rtl ? "rtl" : "ltr"} lang={layout.lang} data-chrome={bar ? "bar" : undefined} data-hero={hero ? "" : undefined}
       style={bar ? ({ ...(look?.pageBg ? { "--page-bg": look.pageBg } : {}), ...(look?.bar ? { "--bar-bg": look.bar } : {}) } as React.CSSProperties) : undefined}>
+      <style>{componentsCss}</style>
+      {bar ? (
+        <div className="fx-player-head">
+          <AppBar tone="bar" title={v.title} titleRef={title} onBack={layout.canGoBack ? () => controller.stepBack() : undefined} onClose={onClose} labels={{ back, close }} />
+        </div>
+      ) : (
       <header className="fx-player-head">
         <div className="fx-player-bar">
           {layout.canGoBack ? <button type="button" className="fx-icon-btn" aria-label={back} onClick={() => controller.stepBack()}><span aria-hidden className="fx-flip">‹</span></button> : null}
@@ -79,6 +86,7 @@ export function JourneyPlayer({ journey, adapter, lang, initial, onClose, onExit
           </ol>
         ) : null}
       </header>
+      )}
 
       {/* announced when the screen changes, without moving the visible layout */}
       <p className="fx-sr" role="status" aria-live="polite">{layout.steps ? `${v.title}. ${layout.steps.label}` : ""}</p>

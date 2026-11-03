@@ -16,9 +16,13 @@ export const defaultComponentTokens: ComponentTokens = {
   keypad: { key: 84, keyHeight: 40, gapX: 14, gapY: 10 },
 };
 
-/** The defaults with a bank's overrides applied. Unknown or non-numeric values are ignored. */
-export function resolveComponentTokens(overrides?: ComponentTokenOverrides): ComponentTokens {
+/**
+ * The defaults with a bank's overrides applied. Unknown or non-numeric values are ignored. Field and button corners follow the bank's
+ * corner radii (medium and large) unless the bank overrides them, so a bank with rounder cards also gets rounder fields.
+ */
+export function resolveComponentTokens(overrides?: ComponentTokenOverrides, radii?: { md: number; lg: number }): ComponentTokens {
   const out = structuredClone(defaultComponentTokens) as Record<string, Record<string, number>>;
+  if (radii) { out.field!.radius = radii.md; out.button!.radius = radii.lg; }
   for (const [group, values] of Object.entries(overrides ?? {})) {
     if (!out[group] || !values) continue;
     for (const [k, v] of Object.entries(values)) if (k in out[group]! && typeof v === "number" && Number.isFinite(v) && v >= 0) out[group]![k] = v;

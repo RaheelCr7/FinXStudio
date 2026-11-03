@@ -9,6 +9,7 @@
     "typecheck": "tsc -p ."
   },
   "dependencies": {
+    "@finx/components": "workspace:*",
     "@finx/journey-schema": "workspace:*",
     "@finx/renderer-core": "workspace:*",
     "@finx/ui-kit": "workspace:*"

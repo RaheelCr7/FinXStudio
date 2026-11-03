@@ -94,7 +94,7 @@ describe("select, text, toggle, alert", () => {
   });
 
   it("uses the right keyboard and autofill hint for email, phone and numbers", () => {
-    for (const [keyboard, type, mode, auto] of [["email", "email", null, "email"], ["phone", "tel", null, "tel"], ["number", "text", "numeric", "off"], [undefined, "text", null, "off"]] as const) {
+    for (const [keyboard, type, mode, auto] of [["email", "email", "email", "email"], ["phone", "tel", "tel", "tel"], ["number", "text", "numeric", "off"], [undefined, "text", null, "off"]] as const) {
       const { unmount } = renderBlock("textInput", { bind: "c.x", label: "Field", keyboard });
       const el = screen.getByLabelText("Field") as HTMLInputElement;
       expect([el.type, el.getAttribute("inputmode"), el.getAttribute("autocomplete")]).toEqual([type, mode, auto]);
@@ -247,7 +247,7 @@ describe("a bank's own screens", () => {
     await userEvent.click(screen.getByRole("button", { name: "Back" }));
     expect(set).toHaveBeenLastCalledWith("pin", "1");
     expect(screen.getByRole("img").getAttribute("aria-label")).toContain("2/4");
-    expect(container.querySelector(".fx-dash span")!.textContent).toBe("•");
+    expect(container.querySelector(".fxc-dash span")!.textContent).toBe("•");
     expect(await axeCheck(container)).toHaveNoViolations();
   });
 

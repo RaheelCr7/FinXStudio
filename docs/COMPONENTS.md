@@ -22,5 +22,8 @@ One place that owns how things look. Every shared visual (button, text field, ap
 ## Tests
 `pnpm --filter @finx/components test`: every state of every component renders on web with no accessibility violations, every component has a native twin that renders in a bank's look, behaviour of the busy button, keypad and password field, and the stylesheet only reads variables the theme provides.
 
+## Who uses it
+The journey renderers draw their button, text field, menu rows, keypad and PIN boxes, and the bank-bar header of a screen, with these components (web: `renderer-web`, phone: `renderer-native`). A change here changes every journey screen. CAB's differences from the standard look (a 48px button with 8px corners, a 50px field with 10px corners, a 58px bar) are size tokens in `brands.json`, not code. Field and button corners follow each bank's own corner radii unless the bank overrides them.
+
 ## Not done yet
-The journey renderers still draw their own blocks; moving them onto this library (so a change here changes every screen) is the next step. After that: the pixel comparison against the Figma frames (needs the frames exported as SVG and the bank's font), the Import tab, and more components (date picker, map, captcha, modal).
+Blocks that still draw their own visuals: amount, select (chips, tiles, rows), cards, alerts, results, shortcuts, hero, switches, review rows, the standard (non-bar) header with its step list. Next: move those over, then the pixel comparison against the Figma frames (needs the frames exported as SVG and the bank's font), the Import tab, and more components (date picker, map, captcha, modal).

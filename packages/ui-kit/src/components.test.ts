@@ -11,6 +11,12 @@ describe("component tokens", () => {
     expect(t.field.radius).toBe(defaultComponentTokens.field.radius);
     expect(t.button.radius).toBe(defaultComponentTokens.button.radius);
   });
+  it("makes field and button corners follow the bank's radii unless overridden", () => {
+    const r = { md: 14, lg: 20 };
+    expect(resolveComponentTokens(undefined, r).field.radius).toBe(14);
+    expect(resolveComponentTokens(undefined, r).button.radius).toBe(20);
+    expect(resolveComponentTokens({ button: { radius: 8 } }, r).button.radius).toBe(8);
+  });
   it("does not change the defaults", () => {
     resolveComponentTokens({ field: { height: 1 } });
     expect(defaultComponentTokens.field.height).toBe(52);

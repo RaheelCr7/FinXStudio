@@ -1,3 +1,4 @@
+import { AppBar as KitAppBar, Button as KitButton, Keypad as KitKeypad, ListRow as KitListRow, PinDots as KitPinDots, TextField as KitTextField } from "@finx/components/native";
 import React from "react";
 import { Image, Pressable, Text, TextInput, View, StyleSheet, Platform } from "react-native";
 import { mix, space } from "@finx/ui-kit";
@@ -166,22 +167,10 @@ export function SelectChips({ b, set }: P) {
 }
 
 export function TextField({ b, set, lang }: P) {
-  const { c, r: radius, look } = useTheme();
-  const outlined = look?.fields === "outlined";
-  const [focus, setFocus] = React.useState(false);
-  const [shown, setShown] = React.useState(false);
-  const kb = ({ number: "number-pad", phone: "phone-pad", email: "email-address", default: "default" } as const)[keyboardKind(b.keyboard)];
+  const outlined = useTheme().look?.fields === "outlined";
   return (
-    <View>
-      {outlined ? null : <Label>{b.label}</Label>}
-      <View>
-        <TextInput accessibilityLabel={b.label} value={String(b.value ?? "")} placeholder={outlined ? b.placeholder ?? b.label : b.placeholder} placeholderTextColor={c.textFaint} keyboardType={kb} secureTextEntry={!!b.secure && !shown} textContentType={b.secure ? "none" : undefined} autoComplete={b.secure ? "off" : undefined} importantForAutofill={b.secure ? "no" : undefined}
-          autoCapitalize="none" autoCorrect={false} onFocus={() => setFocus(true)} onBlur={() => setFocus(false)} onChangeText={(t) => set(b.bind, t)}
-          style={[{ height: outlined ? 50 : 52, borderRadius: outlined ? 10 : radius.md, borderWidth: focus || b.error ? 2 : 1, borderColor: b.error ? c.negative : focus ? c.accent : c.borderStrong, backgroundColor: c.surface, paddingStart: 14, paddingEnd: b.secure ? (outlined ? 48 : 64) : 14, fontSize: 16, color: c.text }, tab, Platform.OS === "web" ? ({ outlineStyle: "none" } as any) : null]} />
-        {b.secure ? <Pressable accessibilityRole="button" accessibilityLabel={shown ? ui(lang, "hide") : ui(lang, "show")} onPress={() => setShown(!shown)} hitSlop={8} style={{ position: "absolute", end: 14, top: 0, bottom: 0, justifyContent: "center" }}>{outlined ? <Icon name={shown ? "eyeOff" : "eye"} size={20} color={c.textMuted} /> : <Text style={{ color: c.accent, fontWeight: "700", fontSize: 13 }}>{shown ? ui(lang, "hide") : ui(lang, "show")}</Text>}</Pressable> : null}
-      </View>
-      <ErrorText e={b.error} />
-    </View>
+    <KitTextField label={b.label} value={String(b.value ?? "")} onChange={(t) => set(b.bind, t)} look={outlined ? "outlined" : "standard"} placeholder={b.placeholder} error={b.error} secure={!!b.secure}
+      keyboard={keyboardKind(b.keyboard)} strings={{ show: ui(lang, "show"), hide: ui(lang, "hide") }} />
   );
 }
 
@@ -277,26 +266,10 @@ function KeypadCode({ b, set, lang }: P) {
   return (
     <View>
       {b.hint ? <Text style={{ color: c.text, fontSize: 14, textAlign: "center", marginBottom: 28, lineHeight: 20 }}>{b.hint}</Text> : null}
-      <View accessibilityLabel={otpLabel(lang, b.length)} style={{ flexDirection: "row", justifyContent: "center", gap: 10, direction: "ltr" as any }}>
-        {otpCells(v, b.length, !!b.masked).map((cell, i) => (
-          <View key={i} style={{ width: 36, alignItems: "center" }}>
-            <Text style={[{ height: 28, fontSize: 22, fontWeight: "600", color: c.text }, tab]}>{cell.char}</Text>
-            <View style={{ height: 2, width: "100%", backgroundColor: cell.active ? c.accent : c.borderStrong }} />
-          </View>
-        ))}
-      </View>
+      <KitPinDots length={b.length} filled={v.length} masked={!!b.masked} digits={v} label={otpLabel(lang, b.length)} />
       <ErrorText e={b.error} />
-      <View style={{ marginTop: 32, gap: 10, direction: "ltr" as any }}>
-        {KEYPAD_ROWS.map((row, ri) => (
-          <View key={ri} style={{ flexDirection: "row", justifyContent: "center", gap: 14 }}>
-            {row.map((k, ki) => k === "" ? <View key={ki} style={{ width: 84, height: 40 }} /> : (
-              <Pressable key={ki} accessibilityRole="button" accessibilityLabel={k === "back" ? ui(lang, "back") : k} onPress={() => set(b.bind, applyKey(v, k, b.length))}
-                style={({ pressed }) => ({ width: 84, height: 40, borderRadius: 20, alignItems: "center", justifyContent: "center", backgroundColor: pressed ? mix(c.accent, c.surface, 0.8) : c.surfaceMuted })}>
-                {k === "back" ? <Icon name="backspace" size={20} color={c.textMuted} /> : <Text style={[{ fontSize: 18, fontWeight: "600", color: c.text }, tab]}>{k}</Text>}
-              </Pressable>
-            ))}
-          </View>
-        ))}
+      <View style={{ marginTop: 32 }}>
+        <KitKeypad labels={{ back: ui(lang, "back") }} onKey={(k) => set(b.bind, applyKey(v, k, b.length))} />
       </View>
     </View>
   );
@@ -349,18 +322,7 @@ export function TextBlock({ b }: P) {
 }
 
 export function Button({ b, press, busy, strings }: P) {
-  const { c, r: radius, look } = useTheme();
-  const bar = look?.chrome === "bar";
-  const primary = (b.variant ?? "primary") === "primary";
-  const label = busy ? strings.wait : b.label;
-  // An explicit label keeps screen readers announcing the button's name. Without one, React Native on Android
-  // leaves the description "busy" behind after the button has been busy once.
-  return (
-    <Pressable accessibilityRole="button" accessibilityLabel={label} accessibilityState={{ busy, disabled: busy }} onPress={() => press(b.actions)}
-      style={({ pressed }) => ({ minHeight: bar ? 48 : 54, paddingVertical: 8, borderRadius: bar ? 8 : radius.lg, alignItems: "center", justifyContent: "center", backgroundColor: primary ? (bar ? look?.bar ?? c.accent : c.accent) : "transparent", borderWidth: primary ? 0 : 1, borderColor: bar ? look?.bar ?? c.accent : c.borderStrong, opacity: busy ? 0.6 : pressed ? 0.88 : 1, transform: [{ scale: pressed ? 0.985 : 1 }] })}>
-      <Text style={{ color: primary ? c.accentOn : bar ? look?.bar ?? c.accent : c.text, fontSize: 16, fontWeight: "600" }}>{label}</Text>
-    </Pressable>
-  );
+  return <KitButton label={busy ? strings.wait : b.label} variant={(b.variant ?? "primary") === "primary" ? "primary" : "secondary"} busy={busy} onPress={() => press(b.actions)} />;
 }
 
 /** The bank's banner: its logo (or its name) on the accent colour. The player draws the sheet that overlaps its bottom edge. */
@@ -408,20 +370,9 @@ export function Shortcuts({ b, press }: P) {
 
 /** Rows that each do something when tapped, with an icon, a title, a chevron and an optional line of help below. */
 export function Menu({ b, press }: P) {
-  const { c, r: radius, layoutRtl } = { ...useTheme(), layoutRtl: false };
   return (
     <View style={{ gap: 14 }}>
-      {b.items.map((it: any) => (
-        <View key={it.id}>
-          <Pressable accessibilityRole="button" accessibilityLabel={it.label} onPress={() => press(it.actions)}
-            style={({ pressed }) => ({ flexDirection: "row", alignItems: "center", gap: 12, paddingHorizontal: 14, minHeight: 54, borderRadius: 10, borderWidth: 1, borderColor: c.border, backgroundColor: pressed ? c.surfaceMuted : c.surface })}>
-            {it.icon ? <Icon name={it.icon} size={22} color={c.textMuted} /> : null}
-            <Text style={{ flex: 1, fontSize: 14, fontWeight: "600", color: c.text }}>{it.label}</Text>
-            <Icon name="chevronRight" size={18} color={c.text} />
-          </Pressable>
-          {it.text ? <Text style={{ fontSize: 11, color: c.textMuted, marginTop: 6, marginStart: 4 }}>{it.text}</Text> : null}
-        </View>
-      ))}
+      {b.items.map((it: any) => <KitListRow key={it.id} label={it.label} text={it.text} icon={it.icon} onPress={() => press(it.actions)} />)}
     </View>
   );
 }

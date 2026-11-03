@@ -5,7 +5,7 @@ import { completeColors, resolveComponentTokens, type Brand, type Colors, type C
 export type Kit = { c: Colors; r: Brand["radius"]; t: ComponentTokens; bar?: string; rtl: boolean };
 
 export const kitFor = (brand: Brand, mode: "light" | "dark" = "light", rtl = false): Kit => ({
-  c: completeColors((mode === "dark" ? brand.dark : brand.light).colors), r: brand.radius, t: resolveComponentTokens(brand.components), bar: brand.look?.bar, rtl,
+  c: completeColors((mode === "dark" ? brand.dark : brand.light).colors), r: brand.radius, t: resolveComponentTokens(brand.components, brand.radius), bar: brand.look?.bar, rtl,
 });
 
 const Ctx = createContext<Kit | null>(null);

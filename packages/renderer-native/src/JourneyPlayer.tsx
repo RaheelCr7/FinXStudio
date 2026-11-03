@@ -4,6 +4,7 @@ import type { Journey } from "@finx/journey-schema";
 import { JourneyController, type Adapter } from "@finx/renderer-core";
 import { registry } from "./blocks";
 import type { BlockType } from "@finx/renderer-core";
+import { AppBar as KitAppBar, KitProvider, useKit } from "@finx/components/native";
 import { useTheme } from "./theme";
 import { Icon } from "./widgets";
 
@@ -37,6 +38,8 @@ export function JourneyPlayer({ journey, adapter, lang, onExit, onClose, initial
     const C = registry[b.type as BlockType];
     return C ? <View key={`${v.screenId}-${i}`}><C b={b} set={(p, val) => controller.set(p, val)} press={(a) => controller.press(a)} busy={v.busy} lang={layout.lang} strings={v.strings} /></View> : null;
   };
+  const kit = useKit();
+  const wrap = (n: React.ReactElement) => <KitProvider kit={{ ...kit, rtl: layout.rtl }}>{n}</KitProvider>;
   const drawButtons = () => buttons.map((b, i) => <Btn key={`${v.screenId}-b${i}`} b={b} set={() => {}} press={(a: any[]) => controller.press(a)} busy={v.busy} lang={layout.lang} strings={v.strings} />);
   const toast = v.toast ? <View accessibilityRole="alert" style={{ marginHorizontal: 20, marginTop: 8, padding: 12, borderRadius: 8, backgroundColor: c.negativeBg }}><Text style={{ color: c.negative, fontSize: 14, fontWeight: "500" }}>{v.toast}</Text></View> : null;
 
@@ -48,7 +51,7 @@ export function JourneyPlayer({ journey, adapter, lang, onExit, onClose, initial
     const shortcuts = body.filter((b) => b.type === "shortcuts");
     if (layout.hero) {
       const rest = body.slice(1).filter((b) => b.type !== "shortcuts");
-      return (
+      return wrap(
         <View style={{ flex: 1, backgroundColor: barBg, direction: layout.rtl ? "rtl" : "ltr" } as any}>
           <View style={{ flex: 1, width: "100%", maxWidth: 520, alignSelf: "center" }}>
             {draw(body[0], 0)}
@@ -67,20 +70,10 @@ export function JourneyPlayer({ journey, adapter, lang, onExit, onClose, initial
     const first = body[0];
     const band = first?.type === "text" && first.variant === "title" ? first : null;
     const rest = band ? body.slice(1) : body;
-    return (
+    return wrap(
       <View style={{ flex: 1, backgroundColor: c.surface, direction: layout.rtl ? "rtl" : "ltr" } as any}>
         <View style={{ flex: 1, width: "100%", maxWidth: 520, alignSelf: "center" }}>
-          <View style={{ backgroundColor: barBg, paddingHorizontal: 12, paddingTop: 14, paddingBottom: 14, flexDirection: "row", alignItems: "center", minHeight: 58 }}>
-            <View style={{ width: 40, alignItems: "flex-start" }}>
-              {layout.canGoBack ? (
-                <Pressable accessibilityRole="button" accessibilityLabel={v.strings.back} onPress={() => controller.stepBack()} hitSlop={10}><Icon name="back" size={22} color={c.accentOn} /></Pressable>
-              ) : null}
-            </View>
-            <Text accessibilityRole="header" numberOfLines={1} style={{ flex: 1, textAlign: "center", fontSize: 16, fontWeight: "600", color: c.accentOn, fontFamily: font }}>{v.title}</Text>
-            <View style={{ width: 40, alignItems: "flex-end" }}>
-              <Pressable accessibilityRole="button" accessibilityLabel={v.strings.close} onPress={onClose} hitSlop={10}><Icon name="x" size={22} color={c.accentOn} /></Pressable>
-            </View>
-          </View>
+          <KitAppBar tone="bar" title={v.title} onBack={layout.canGoBack ? () => controller.stepBack() : undefined} onClose={onClose} labels={{ back: v.strings.back ?? "Back", close: v.strings.close ?? "Close" }} />
           {band ? <View style={{ backgroundColor: page, paddingVertical: 12, paddingHorizontal: 20 }}><Text style={{ textAlign: "center", fontSize: 13, fontWeight: "700", color: c.text, fontFamily: font }}>{band.text}</Text></View> : null}
           {toast}
           <ScrollView ref={scroller} contentContainerStyle={{ padding: 20, paddingBottom: 24, gap: 18 }} keyboardShouldPersistTaps="handled">
@@ -92,7 +85,7 @@ export function JourneyPlayer({ journey, adapter, lang, onExit, onClose, initial
     );
   }
 
-  return (
+  return wrap(
     <View style={{ flex: 1, backgroundColor: c.bg, direction: layout.rtl ? "rtl" : "ltr" } as any}>
      <View style={{ flex: 1, width: "100%", maxWidth: 520, alignSelf: "center" }}>
       <View style={{ paddingHorizontal: 20, paddingTop: 12, paddingBottom: 8 }}>
