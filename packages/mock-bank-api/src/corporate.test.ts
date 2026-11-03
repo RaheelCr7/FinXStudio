@@ -127,11 +127,20 @@ describe("rejecting and listing", () => {
     expect(s.summary.users.find((u) => u.id === "sara")!.usedToday).toBe(0);
     expect(code(() => s.approvePayment({ userId: "hassan", paymentId: p.id }))).toBe("PAYMENT_NOT_PENDING");
   });
-  it("the person who started a payment may withdraw it, but not another initiator", () => {
+  it("the person who started a payment may withdraw it, but not another initiator, and not once it is closed", () => {
     const { s } = make();
     const p = s.initiatePayment(pay());
-    expect(code(() => s.rejectPayment({ userId: "omar", paymentId: p.id }))).toBe("NOT_AUTHORISED");
-    expect(s.rejectPayment({ userId: "sara", paymentId: p.id })).toMatchObject({ status: "rejected", rejectReason: "Withdrawn by the person who started it" });
+    expect(code(() => s.withdrawPayment({ userId: "omar", paymentId: p.id }))).toBe("NOT_AUTHORISED");
+    expect(code(() => s.rejectPayment({ userId: "sara", paymentId: p.id }))).toBe("NOT_AUTHORISED"); // rejecting is for approvers
+    expect(s.withdrawPayment({ userId: "sara", paymentId: p.id })).toMatchObject({ status: "rejected", rejectReason: "Withdrawn by the person who started it" });
+    expect(code(() => s.withdrawPayment({ userId: "sara", paymentId: p.id }))).toBe("PAYMENT_NOT_PENDING");
+  });
+  it("withdrawing gives the daily limit back", () => {
+    const { s } = make();
+    const before = s.summary.users.find((u) => u.id === "sara")!.usedToday;
+    const p = s.initiatePayment(pay());
+    s.withdrawPayment({ userId: "sara", paymentId: p.id });
+    expect(s.summary.users.find((u) => u.id === "sara")!.usedToday).toBe(before);
   });
   it("lists what each person can act on", () => {
     const { s } = make();

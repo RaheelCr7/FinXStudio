@@ -90,6 +90,7 @@
       },
       "response": "payment"
     },
+    "withdrawPayment": { "call": "payments.cancel", "request": { "txnId": "input.paymentId", "maker": "input.userId" }, "response": "payment" },
     "listPending": {
       "call": "payments.list",
       "request": {
@@ -167,6 +168,7 @@
       "code": "NOT_AUTHORISED",
       "message": "{userName} is not allowed to {action} payments"
     },
+    "ERR-4032": { "code": "NOT_AUTHORISED", "message": "{userName} can only withdraw payments they started" },
     "ERR-4043": {
       "code": "USER_NOT_FOUND",
       "message": "No user {userId} at {company}"

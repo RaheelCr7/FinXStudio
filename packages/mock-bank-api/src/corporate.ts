@@ -48,6 +48,8 @@ export interface CorporateBankAdapter {
   initiatePayment(input: InitiateInput): CorpPayment;
   approvePayment(input: { userId: string; paymentId: string }): CorpPayment;
   rejectPayment(input: { userId: string; paymentId: string; reason?: string }): CorpPayment;
+  /** The person who started a payment takes it back while it waits. Only them, and only while it is pending. */
+  withdrawPayment(input: { userId: string; paymentId: string }): CorpPayment;
   /** What a person can act on: as an approver, what waits for them; as an initiator, what they started. `as` defaults to approver for anyone who holds that role. */
   listPending(input: { userId: string; as?: "approver" | "initiator" }): CorpPayment[];
 }
@@ -160,13 +162,22 @@ export class CorporateSandbox implements CorporateBankAdapter {
     const user = this.user(input.userId);
     const p = this.payment(input.paymentId);
     if (p.status !== "pending_approval") throw new BankError("PAYMENT_NOT_PENDING", `This payment is already ${p.status.replace("_", " ")}`);
-    // an approver may reject any pending payment but their own; the person who started it may withdraw it
-    const mayWithdraw = user.id === p.initiatedBy;
-    if (!user.roles.includes("approver") && !mayWithdraw) throw new BankError("NOT_AUTHORISED", `${user.name} is not allowed to reject payments`);
+    if (!user.roles.includes("approver")) throw new BankError("NOT_AUTHORISED", `${user.name} is not allowed to reject payments`);
     p.status = "rejected"; p.rejectedBy = user.id; p.rejectedAt = new Date(this.now()).toISOString();
-    p.rejectReason = (input.reason ?? "").trim() || (mayWithdraw ? "Withdrawn by the person who started it" : "");
+    p.rejectReason = (input.reason ?? "").trim();
     // the payment will not happen, so what it used of the person's day is given back
     const maker = this.user(p.initiatedBy); maker.usedToday = roundMoney(Math.max(0, maker.usedToday - p.amount), this.company.currency);
+    return structuredClone(p);
+  }
+
+  withdrawPayment(input: { userId: string; paymentId: string }): CorpPayment {
+    const user = this.user(input.userId);
+    const p = this.payment(input.paymentId);
+    if (p.status !== "pending_approval") throw new BankError("PAYMENT_NOT_PENDING", `This payment is already ${p.status.replace("_", " ")}`);
+    if (p.initiatedBy !== user.id) throw new BankError("NOT_AUTHORISED", `${user.name} can only withdraw payments they started`);
+    p.status = "rejected"; p.rejectedBy = user.id; p.rejectedAt = new Date(this.now()).toISOString(); p.rejectReason = "Withdrawn by the person who started it";
+    // it will not happen, so what it used of the person's day is given back
+    user.usedToday = roundMoney(Math.max(0, user.usedToday - p.amount), this.company.currency);
     return structuredClone(p);
   }
 
