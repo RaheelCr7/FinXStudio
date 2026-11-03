@@ -23,6 +23,7 @@ const raw = `
 .fxc-error { margin: 6px 0 0; font-size: 13px; color: var(--c-negative); }
 .fxc-input-wrap { position: relative; }
 .fxc-input { inline-size: 100%; block-size: var(--fxc-field-height); box-sizing: border-box; padding-inline: 14px; border-radius: var(--fxc-field-radius); border: var(--fxc-field-border) solid var(--c-border-strong); background: var(--c-surface); color: var(--c-text); font: inherit; font-size: 16px; }
+.fxc-textarea { block-size: auto; padding-block: 12px; resize: vertical; line-height: 1.45; }
 .fxc-input:focus { outline: none; border-color: var(--c-accent); box-shadow: 0 0 0 1px var(--c-accent); }
 .fxc-input.has-error { border-color: var(--c-negative); box-shadow: 0 0 0 1px var(--c-negative); }
 .fxc-input.has-action { padding-inline-end: 72px; }

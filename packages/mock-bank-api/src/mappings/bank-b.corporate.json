@@ -90,7 +90,14 @@
       },
       "response": "payment"
     },
-    "withdrawPayment": { "call": "payments.cancel", "request": { "txnId": "input.paymentId", "maker": "input.userId" }, "response": "payment" },
+    "withdrawPayment": {
+      "call": "payments.cancel",
+      "request": {
+        "txnId": "input.paymentId",
+        "maker": "input.userId"
+      },
+      "response": "payment"
+    },
     "listPending": {
       "call": "payments.list",
       "request": {
@@ -122,6 +129,82 @@
         "txnId": "input.paymentId"
       },
       "response": "payment"
+    },
+    "checkBatch": {
+      "call": "batches.validate",
+      "request": {
+        "maker": "input.userId",
+        "debit.accountNo": "input.fromAccountId",
+        "items": {
+          "from": "input.lines",
+          "each": {
+            "creditorRef": "item.beneficiaryId",
+            "amountValue": {
+              "from": "item.amount",
+              "as": "string"
+            },
+            "remark": "item.reference"
+          }
+        }
+      },
+      "response": {
+        "lines": {
+          "from": "response.items",
+          "each": {
+            "n": "item.seq",
+            "beneficiaryId": "item.creditorRef",
+            "amount": {
+              "from": "item.amountValue",
+              "as": "number"
+            },
+            "reference": {
+              "from": "item.remark",
+              "default": ""
+            },
+            "ok": {
+              "from": "item.verdict",
+              "map": {
+                "OK": true,
+                "REJECT": false
+              }
+            },
+            "code": {
+              "from": "item.reason",
+              "map": {
+                "B-201": "BENEFICIARY_NOT_WHITELISTED",
+                "B-202": "INVALID_AMOUNT",
+                "B-203": "DUPLICATE_LINE"
+              }
+            }
+          }
+        },
+        "validCount": "response.okCount",
+        "invalidCount": "response.rejectCount",
+        "total": {
+          "from": "response.okTotal.value",
+          "as": "number"
+        }
+      }
+    },
+    "initiateBulk": {
+      "call": "batches.create",
+      "request": {
+        "maker": "input.userId",
+        "debit.accountNo": "input.fromAccountId",
+        "items": {
+          "from": "input.lines",
+          "each": {
+            "creditorRef": "item.beneficiaryId",
+            "amountValue": {
+              "from": "item.amount",
+              "as": "string"
+            },
+            "remark": "item.reference"
+          }
+        },
+        "remittanceInfo": "input.reference"
+      },
+      "response": "payment"
     }
   },
   "shapes": {
@@ -139,7 +222,12 @@
       "initiatedBy": "response.initiator",
       "initiatedAt": "response.createdTs",
       "fromAccountId": "response.debit.accountNo",
-      "beneficiaryId": "response.creditor.ref",
+      "beneficiaryId": {
+        "from": "response.creditor.ref",
+        "map": {
+          "BULK": "bulk"
+        }
+      },
       "amount": {
         "from": "response.amount.value",
         "as": "number"
@@ -160,7 +248,22 @@
       "releaseReference": "response.execRef",
       "rejectedBy": "response.cancelledBy",
       "rejectReason": "response.cancelNote",
-      "rejectedAt": "response.cancelledTs"
+      "rejectedAt": "response.cancelledTs",
+      "lines": {
+        "from": "response.batchItems",
+        "each": {
+          "n": "item.seq",
+          "beneficiaryId": "item.creditorRef",
+          "amount": {
+            "from": "item.amountValue",
+            "as": "number"
+          },
+          "reference": {
+            "from": "item.remark",
+            "default": ""
+          }
+        }
+      }
     }
   },
   "errors": {
@@ -168,7 +271,10 @@
       "code": "NOT_AUTHORISED",
       "message": "{userName} is not allowed to {action} payments"
     },
-    "ERR-4032": { "code": "NOT_AUTHORISED", "message": "{userName} can only withdraw payments they started" },
+    "ERR-4032": {
+      "code": "NOT_AUTHORISED",
+      "message": "{userName} can only withdraw payments they started"
+    },
     "ERR-4043": {
       "code": "USER_NOT_FOUND",
       "message": "No user {userId} at {company}"
@@ -223,6 +329,18 @@
     "ERR-4042": {
       "code": "PAYMENT_NOT_FOUND",
       "message": "No payment {txnId}"
+    },
+    "ERR-4101": {
+      "code": "EMPTY_BATCH",
+      "message": "The file has no payment lines"
+    },
+    "ERR-4102": {
+      "code": "BATCH_TOO_LARGE",
+      "message": "A file may have at most {max} payment lines"
+    },
+    "ERR-4103": {
+      "code": "NO_VALID_LINES",
+      "message": "None of the lines can be paid"
     }
   },
   "unmapped": {

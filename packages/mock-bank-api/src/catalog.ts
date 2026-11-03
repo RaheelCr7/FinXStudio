@@ -57,6 +57,16 @@ export const ADAPTER_CATALOG: AdapterInfo[] = [
     returns: "The payment: { id, status 'pending_approval', required (1 or 2 approvers), valueDate, afterCutoff, … }. Errors: OTP_REQUIRED, NOT_AUTHORISED, BENEFICIARY_NOT_WHITELISTED, INVALID_AMOUNT, CURRENCY_NOT_SUPPORTED, INSUFFICIENT_FUNDS, LIMIT_USER_EXCEEDED, LIMIT_COMPANY_EXCEEDED.",
   },
   {
+    adapter: "corp.bulk.check", suggestedId: "checkBulk", description: "Checks a bulk payment file (rows of `beneficiary,amount,reference`, an optional header row) without starting anything: which rows would be paid and which not, and why. Each row is checked for the approved list, a valid amount and duplicates.",
+    input: { userId: "the initiator", fromAccountId: "the company account to pay from", file: "the text of the file, as the person pasted it" },
+    returns: "{ lines (object keyed by row number: n, payee, amount, reference, ok, code, message), problems (only the rows that fail, same shape; use as a list source), validCount, invalidCount, total (of the rows that pass), requiredApprovers (1 or 2), currency }. Errors: NOT_AUTHORISED, ACCOUNT_NOT_FOUND, EMPTY_BATCH, BATCH_TOO_LARGE (over 50 rows).",
+  },
+  {
+    adapter: "corp.bulk.submit", suggestedId: "submitBulk", description: "Starts ONE bulk payment of the rows that pass the checks (the failing rows are left out) and sends it for approval as one. The total counts against the person's and the company's daily limits. Moves no money until it is approved. Needs the one-time code first.",
+    input: { userId: "the initiator", fromAccountId: "the account to pay from", file: "the same file text that was checked", reference: "optional label for the whole file" },
+    returns: "The payment (payee shows '3 payments'; lines lists what it pays), 'pending_approval'. Errors: OTP_REQUIRED, NOT_AUTHORISED, NO_VALID_LINES, EMPTY_BATCH, BATCH_TOO_LARGE, INSUFFICIENT_FUNDS, LIMIT_USER_EXCEEDED, LIMIT_COMPANY_EXCEEDED, CURRENCY_NOT_SUPPORTED. Approve, reject and withdraw it with the corp.payments.* adapters like any payment.",
+  },
+  {
     adapter: "corp.payments.approve", suggestedId: "approvePayment", description: "Approves a pending payment. The last approval releases it: the money moves. Needs the one-time code first.",
     input: { userId: "an approver other than the one who started it", paymentId: "from corp.payments.pending" },
     returns: "The payment, 'released' (with releaseReference) or still 'pending_approval' when a second approver is needed. Errors: OTP_REQUIRED, NOT_AUTHORISED, SELF_APPROVAL, ALREADY_APPROVED, PAYMENT_NOT_PENDING, PAYMENT_NOT_FOUND, INSUFFICIENT_FUNDS, LIMIT_COMPANY_EXCEEDED.",

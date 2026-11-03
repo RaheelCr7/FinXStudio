@@ -209,7 +209,7 @@ export const corporateApproval: Journey = {
         {
           // each pending payment is a row; tapping it opens it for review
           type: "menu", source: "ctx.pending", item: {
-            label: "{{item.amount | money:item.currency}} to {{ctx.company.beneficiaries[item.beneficiaryId].name}}",
+            label: "{{item.amount | money:item.currency}} to {{item.payee}}",
             text: "{{item.reference}} · started by {{item.initiatedBy}} · {{len(item.approvals)}} of {{item.required}} approved", icon: "send",
             actions: [{ type: "setData", path: "appr.paymentId", value: "{{item.id}}" }, { type: "callApi", integration: "payment", input: { paymentId: "{{item.id}}" }, saveAs: "appr.payment", onError: { navigate: "unavailable" } }, go("review")],
           },
@@ -223,7 +223,7 @@ export const corporateApproval: Journey = {
         {
           type: "reviewSummary", rows: [
             { label: "From", value: "{{ctx.company.accounts[appr.payment.fromAccountId].name}} {{ctx.company.accounts[appr.payment.fromAccountId].maskedNumber}}" },
-            { label: "To", value: "{{ctx.company.beneficiaries[appr.payment.beneficiaryId].name}}" },
+            { label: "To", value: "{{appr.payment.payee}}" },
             { label: "Amount", value: money("appr.payment.amount", "appr.payment.currency") },
             { label: "Reference", value: "{{appr.payment.reference}}" },
             { label: "Started by", value: "{{appr.payment.initiatedBy}}" },

@@ -1,5 +1,5 @@
 import { currencyInfo } from "@finx/ui-kit";
-import { CorporateSandbox, type CorpCompany, type CorpPayment, type Flaws } from "./corporate";
+import { CorporateSandbox, MAX_BULK_LINES, type BatchCheck, type CorpCompany, type CorpPayment, type Flaws } from "./corporate";
 import { BankError } from "./errors";
 
 /**
@@ -19,7 +19,11 @@ export type BTransaction = {
   authChain: { needed: number; signedBy: { user: string; ts: string }[] };
   valueDt: string; pastCutOff: boolean; createdTs: string;
   execRef?: string; executedTs?: string; cancelledBy?: string; cancelNote?: string; cancelledTs?: string;
+  /** A batch: what it pays, row by row. */
+  batchItems?: { seq: number; creditorRef: string; amountValue: string; remark: string }[];
 };
+/** A row of a batch as this bank takes it and answers it. */
+export type BBatchItem = { creditorRef: string; amountValue: string; remark?: string };
 export type BCompanyProfile = {
   companyId: string; legalName: string; baseCcy: string;
   accounts: { accountNo: string; title: string; last4: string; ccy: string; available: number }[];
@@ -44,11 +48,12 @@ export class BankBApi {
   private shape(p: CorpPayment): BTransaction {
     const digits = currencyInfo(p.currency).decimals;
     return {
-      txnId: this.txnId(p.id), state: STATE[p.status], initiator: p.initiatedBy, debit: { accountNo: p.fromAccountId }, creditor: { ref: p.beneficiaryId },
+      txnId: this.txnId(p.id), state: STATE[p.status], initiator: p.initiatedBy, debit: { accountNo: p.fromAccountId }, creditor: { ref: p.lines ? "BULK" : p.beneficiaryId },
       amount: { value: p.amount.toFixed(digits), ccy: p.currency }, remittanceInfo: p.reference,
       authChain: { needed: p.required, signedBy: p.approvals.map((a) => ({ user: a.userId, ts: a.at })) },
       valueDt: p.valueDate, pastCutOff: p.afterCutoff, createdTs: p.initiatedAt,
       ...(p.releaseReference ? { execRef: p.releaseReference, executedTs: p.releasedAt } : {}),
+      ...(p.lines ? { batchItems: p.lines.map((l) => ({ seq: l.n, creditorRef: l.beneficiaryId, amountValue: l.amount.toFixed(digits), remark: l.reference })) } : {}),
       ...(p.status === "rejected" ? { cancelledBy: p.rejectedBy, cancelNote: p.rejectReason ?? "", cancelledTs: p.rejectedAt } : {}),
     };
   }
@@ -72,6 +77,9 @@ export class BankBApi {
       ALREADY_APPROVED: ["ERR-4094", 409, "Signer already present in the authorisation chain", {}],
       PAYMENT_NOT_PENDING: ["ERR-4095", 409, `Transaction is ${ctx.txnState ?? "closed"}`, { state: ctx.txnState ?? "" }],
       PAYMENT_NOT_FOUND: ["ERR-4042", 404, "Transaction does not exist", {}],
+      EMPTY_BATCH: ["ERR-4101", 422, "Batch has no items", {}],
+      BATCH_TOO_LARGE: ["ERR-4102", 422, "Batch exceeds the item limit", { max: MAX_BULK_LINES }],
+      NO_VALID_LINES: ["ERR-4103", 422, "Batch has no acceptable item", {}],
     };
     const row = table[e.code];
     if (!row) throw new ApiError("ERR-5000", 500, e.message);
@@ -105,6 +113,15 @@ export class BankBApi {
         const stateNow = (() => { try { return this.shape(this.inner.getPayment(id)).state; } catch { return ""; } })();
         try { return this.shape(this.inner.withdrawPayment({ userId: user, paymentId: id })); } catch (e) { return this.fail(e, { action: "cancel", user, txnState: stateNow }); }
       }
+      case "batches.validate": case "batches.create": {
+        const user = String(body.maker ?? "");
+        const items = (Array.isArray(body.items) ? body.items : []) as BBatchItem[];
+        const input = { userId: user, fromAccountId: String(body.debit?.accountNo ?? ""), reference: body.remittanceInfo as string | undefined, lines: items.map((i) => ({ beneficiaryId: String(i.creditorRef ?? ""), amount: Number(i.amountValue), reference: i.remark })) };
+        try {
+          if (op === "batches.create") return this.shape(this.inner.initiateBulk(input));
+          return this.verdicts(this.inner.checkBatch(input), this.inner.summary.currency);
+        } catch (e) { return this.fail(e, { action: "create", user }); }
+      }
       case "payments.get": {
         const id = this.innerId(String(body.txnId ?? ""));
         try { return this.shape(this.inner.getPayment(id)); } catch (e) { return this.fail(e, { action: "create", user: "" }); }
@@ -116,6 +133,16 @@ export class BankBApi {
       }
       default: throw new ApiError("ERR-4000", 400, `Unknown operation ${op}`);
     }
+  }
+
+  /** A batch check in this bank's words: a verdict and a reason code per item, and the totals. */
+  private verdicts(check: BatchCheck, ccy: string) {
+    const digits = currencyInfo(ccy).decimals;
+    const REASON = { BENEFICIARY_NOT_WHITELISTED: "B-201", INVALID_AMOUNT: "B-202", DUPLICATE_LINE: "B-203" } as const;
+    return {
+      items: check.lines.map((l) => ({ seq: l.n, creditorRef: l.beneficiaryId, amountValue: Number.isFinite(l.amount) ? l.amount.toFixed(digits) : String(l.amount), remark: l.reference, verdict: l.ok ? "OK" : "REJECT", ...(l.code ? { reason: REASON[l.code] } : {}) })),
+      okCount: check.validCount, rejectCount: check.invalidCount, okTotal: { value: check.total.toFixed(digits), ccy },
+    };
   }
 
   private profile(): BCompanyProfile {

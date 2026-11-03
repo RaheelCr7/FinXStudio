@@ -51,6 +51,7 @@ export const catalog: ComponentSpec[] = [
       { name: "helper / error", type: "string", description: "A line of help, or what is wrong. The error is announced." },
       { name: "secure", type: "boolean", description: "Hides what is typed, with a show/hide control." },
       { name: "keyboard", type: "default | number | phone | email", description: "Which on-screen keyboard to open." },
+      { name: "lines", type: "number", description: "More than 1 makes it a taller box for pasted rows or a note." },
     ],
     states: [
       { name: "Empty", props: { label: "Mobile number", value: "", helper: "10 to 14 digits", keyboard: "phone" } },
@@ -58,6 +59,7 @@ export const catalog: ComponentSpec[] = [
       { name: "Error", props: { label: "Mobile number", value: "0300", error: "Enter 10 to 14 digits" } },
       { name: "Password", props: { label: "Password", value: "hunter22", secure: true } },
       { name: "Outlined", props: { label: "Username", value: "", look: "outlined" } },
+      { name: "Several lines", props: { label: "Payment lines", value: "sup_textile,25000,INV-1\nsup_logistics,18000,INV-2", lines: 4 } },
       { name: "Outlined password", props: { label: "Password", value: "hunter22", look: "outlined", secure: true } },
       { name: "Disabled", props: { label: "Account", value: "Current ••4321", disabled: true } },
     ],

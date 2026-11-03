@@ -40,7 +40,17 @@ export type CorpPayment = {
   required: number; approvals: { userId: string; at: string }[];
   rejectedBy?: string; rejectReason?: string; rejectedAt?: string;
   releasedAt?: string; releaseReference?: string;
+  /** A bulk payment pays many beneficiaries at once and is approved as one: `amount` is the total and `beneficiaryId` is "bulk". */
+  lines?: { n: number; beneficiaryId: string; amount: number; reference: string }[];
 };
+
+/** One row of a bulk file, as the person gave it. */
+export type BulkLineInput = { beneficiaryId: string; amount: number; reference?: string };
+export type BulkLineCode = "BENEFICIARY_NOT_WHITELISTED" | "INVALID_AMOUNT" | "DUPLICATE_LINE";
+export type BulkLineResult = { n: number; beneficiaryId: string; amount: number; reference: string; ok: boolean; code?: BulkLineCode };
+export type BatchCheck = { lines: BulkLineResult[]; validCount: number; invalidCount: number; /** the sum of the lines that passed */ total: number };
+/** Most rows a bulk file may have. */
+export const MAX_BULK_LINES = 50;
 
 export type InitiateInput = { userId: string; fromAccountId: string; beneficiaryId: string; amount: number; reference?: string };
 /** What a corporate bank API has to offer the generated journeys. Both simulated APIs (and a real one later) implement it. */
@@ -50,6 +60,10 @@ export interface CorporateBankAdapter {
   rejectPayment(input: { userId: string; paymentId: string; reason?: string }): CorpPayment;
   /** The person who started a payment takes it back while it waits. Only them, and only while it is pending. */
   withdrawPayment(input: { userId: string; paymentId: string }): CorpPayment;
+  /** Checks every row of a bulk file and says which would be paid; moves nothing and keeps nothing. */
+  checkBatch(input: { userId: string; fromAccountId: string; lines: BulkLineInput[] }): BatchCheck;
+  /** Starts one bulk payment of the rows that pass the checks (the rest are left out). It is approved as one and counts as one payment against the limits. */
+  initiateBulk(input: { userId: string; fromAccountId: string; lines: BulkLineInput[]; reference?: string }): CorpPayment;
   /** What a person can act on: as an approver, what waits for them; as an initiator, what they started. `as` defaults to approver for anyone who holds that role. */
   listPending(input: { userId: string; as?: "approver" | "initiator" }): CorpPayment[];
 }
@@ -61,7 +75,7 @@ const dayOf = (ms: number) => new Date(ms).toISOString().slice(0, 10);
  * Rules that can be switched off, to check that a test suite notices: a mutation check runs the scenarios against a sandbox with
  * one rule missing and expects at least one to fail. Every rule is on by default; nothing in the apps ever turns one off.
  */
-export type Flaws = { roles?: false; whitelist?: false; userLimit?: false; companyLimit?: false; dualApproval?: false; fourEyes?: false; cutoff?: false };
+export type Flaws = { roles?: false; whitelist?: false; userLimit?: false; companyLimit?: false; dualApproval?: false; fourEyes?: false; cutoff?: false; lineChecks?: false };
 
 export class CorporateSandbox implements CorporateBankAdapter {
   private payments = new Map<string, CorpPayment>();
@@ -117,7 +131,18 @@ export class CorporateSandbox implements CorporateBankAdapter {
     if (!to && this.flaws.whitelist !== false) throw new BankError("BENEFICIARY_NOT_WHITELISTED", "This beneficiary is not on the company's approved list");
     const amount = Number(input.amount);
     const digits = currencyInfo(from.currency).decimals;
-    if (!(amount > 0) || Math.abs(amount * 10 ** digits - Math.round(amount * 10 ** digits)) > 1e-6) throw new BankError("INVALID_AMOUNT", `Enter an amount in ${from.currency} with at most ${digits} decimal places`);
+    if (!this.validAmount(amount, from.currency)) throw new BankError("INVALID_AMOUNT", `Enter an amount in ${from.currency} with at most ${digits} decimal places`);
+    return this.start(user, from, amount, input.beneficiaryId, input.reference ?? "");
+  }
+
+  private validAmount(amount: number, currency: string) {
+    const digits = currencyInfo(currency).decimals;
+    return amount > 0 && Math.abs(amount * 10 ** digits - Math.round(amount * 10 ** digits)) <= 1e-6;
+  }
+
+  /** What a payment or a bulk payment has to pass whatever its rows: currency, funds, the limits. Then it waits for approval. */
+  private start(user: CorpUser, from: CorpAccount, amount: number, beneficiaryId: string, reference: string, lines?: CorpPayment["lines"]): CorpPayment {
+    const c = this.company;
     if (from.currency !== c.currency) throw new BankError("CURRENCY_NOT_SUPPORTED", `Payments are limited in ${c.currency}: choose a ${c.currency} account`);
     if (amount > from.balance) throw new BankError("INSUFFICIENT_FUNDS", "Insufficient funds");
     if (this.flaws.userLimit !== false && user.usedToday + amount > user.dailyLimit) throw new BankError("LIMIT_USER_EXCEEDED", `This is above ${user.name}'s daily limit`);
@@ -126,12 +151,41 @@ export class CorporateSandbox implements CorporateBankAdapter {
     this.seq += 1;
     const { valueDate, afterCutoff } = this.valueDate();
     const p: CorpPayment = {
-      id: `pay_${this.seq}`, companyId: c.id, fromAccountId: from.id, beneficiaryId: input.beneficiaryId, amount, currency: from.currency, reference: input.reference ?? "",
+      id: `pay_${this.seq}`, companyId: c.id, fromAccountId: from.id, beneficiaryId, amount, currency: from.currency, reference, ...(lines ? { lines } : {}),
       status: "pending_approval", initiatedBy: user.id, initiatedAt: new Date(this.now()).toISOString(), valueDate, afterCutoff,
       required: this.flaws.dualApproval !== false && amount > c.dualApprovalAbove ? 2 : 1, approvals: [],
     };
     this.payments.set(p.id, p);
     return structuredClone(p);
+  }
+
+  checkBatch(input: { userId: string; fromAccountId: string; lines: BulkLineInput[] }): BatchCheck {
+    const user = this.user(input.userId);
+    if (this.flaws.roles !== false && !user.roles.includes("initiator")) throw new BankError("NOT_AUTHORISED", `${user.name} is not allowed to initiate payments`);
+    const from = this.account(input.fromAccountId);
+    if (!input.lines.length) throw new BankError("EMPTY_BATCH", "The file has no payment lines");
+    if (input.lines.length > MAX_BULK_LINES) throw new BankError("BATCH_TOO_LARGE", `A file may have at most ${MAX_BULK_LINES} payment lines`);
+    const seen = new Set<string>();
+    const lines = input.lines.map((l, i): BulkLineResult => {
+      const row = { n: i + 1, beneficiaryId: l.beneficiaryId, amount: Number(l.amount), reference: l.reference ?? "" };
+      if (this.flaws.lineChecks === false) return { ...row, ok: true };
+      if (!this.company.whitelist.some((b) => b.id === l.beneficiaryId) && this.flaws.whitelist !== false) return { ...row, ok: false, code: "BENEFICIARY_NOT_WHITELISTED" };
+      if (!this.validAmount(row.amount, from.currency)) return { ...row, ok: false, code: "INVALID_AMOUNT" };
+      const key = `${row.beneficiaryId}|${row.amount}|${row.reference}`;
+      if (seen.has(key)) return { ...row, ok: false, code: "DUPLICATE_LINE" };
+      seen.add(key);
+      return { ...row, ok: true };
+    });
+    const ok = lines.filter((l) => l.ok);
+    return { lines, validCount: ok.length, invalidCount: lines.length - ok.length, total: roundMoney(ok.reduce((s, l) => s + l.amount, 0), from.currency) };
+  }
+
+  initiateBulk(input: { userId: string; fromAccountId: string; lines: BulkLineInput[]; reference?: string }): CorpPayment {
+    const check = this.checkBatch(input);
+    if (!check.validCount) throw new BankError("NO_VALID_LINES", "None of the lines can be paid");
+    const user = this.user(input.userId);
+    const from = this.account(input.fromAccountId);
+    return this.start(user, from, check.total, "bulk", input.reference ?? "", check.lines.filter((l) => l.ok).map(({ n, beneficiaryId, amount, reference }) => ({ n, beneficiaryId, amount, reference })));
   }
 
   approvePayment(input: { userId: string; paymentId: string }): CorpPayment {
