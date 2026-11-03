@@ -47,7 +47,7 @@ export const Block = z.discriminatedUnion("type", [
   z.object({
     ...base, type: z.literal("select"), bind: z.string(), label: LocalizedText, options: z.array(z.string()).optional(), source: z.string().optional(),
     /** chips (default) are small pills. tiles are larger cards, good for banks or account types. */
-    variant: z.enum(["chips", "tiles"]).optional(),
+    variant: z.enum(["chips", "tiles", "rows"]).optional(),
     /** Richer fixed options with an icon and a line of help. Used instead of options when present. */
     choices: z.array(z.object({ id: z.string(), label: LocalizedText, icon: z.string().optional(), text: LocalizedText.optional() })).optional(),
   }),
@@ -55,7 +55,11 @@ export const Block = z.discriminatedUnion("type", [
     ...base, type: z.literal("textInput"), bind: z.string(), label: LocalizedText, placeholder: LocalizedText.optional(),
     keyboard: z.enum(["default", "number", "phone", "email"]).optional(), secure: z.boolean().optional(), pattern: z.string().optional(), patternMessage: LocalizedText.optional(),
   }),
-  z.object({ ...base, type: z.literal("toggle"), bind: z.string(), label: LocalizedText, helper: LocalizedText.optional() }),
+  z.object({
+    ...base, type: z.literal("toggle"), bind: z.string(), label: LocalizedText, helper: LocalizedText.optional(),
+    /** A link at the start of the same row ("Can't sign in?" beside "Remember me"). */
+    link: z.object({ label: LocalizedText, actions: z.array(Action) }).optional(),
+  }),
   /** Card number, name, expiry and security code with a live card picture. bind is the object the four fields are saved in. */
   z.object({ ...base, type: z.literal("cardForm"), bind: z.string() }),
   z.object({ ...base, type: z.literal("alert"), tone: z.enum(["info", "warning", "error", "success"]), text: LocalizedText }),
@@ -67,8 +71,20 @@ export const Block = z.discriminatedUnion("type", [
   z.object({
     ...base, type: z.literal("otp"), bind: z.string(), length: z.number().int().min(4).max(8), maxAttempts: z.number().int().optional(),
     resendAfterSeconds: z.number().int().optional(), hint: LocalizedText.optional(), onResend: z.array(Action).optional(),
+    /** Draw a number pad under the code instead of using the device keyboard. */
+    keypad: z.boolean().optional(),
+    /** Show dots instead of the digits, for a PIN. */
+    masked: z.boolean().optional(),
   }),
   z.object({ ...base, type: z.literal("result"), tone: z.enum(["success", "error"]), title: LocalizedText, text: LocalizedText.optional(), meta: LocalizedText.optional() }),
+  /** A banner with the bank's logo at the top of a screen. The bank decides how it looks. */
+  z.object({ ...base, type: z.literal("hero") }),
+  /** A bold heading with an optional link on the same row, for example "Welcome" and the language. */
+  z.object({ ...base, type: z.literal("sectionHeader"), title: LocalizedText, action: z.object({ label: LocalizedText, actions: z.array(Action) }).optional() }),
+  /** A row of icon buttons, for example Enroll, Locate us and Support at the bottom of a sign-in screen. */
+  z.object({ ...base, type: z.literal("shortcuts"), items: z.array(z.object({ id: z.string(), label: LocalizedText, icon: z.string().optional(), actions: z.array(Action) })) }),
+  /** A list of rows that each do something when tapped, with an optional icon and a line of help. */
+  z.object({ ...base, type: z.literal("menu"), items: z.array(z.object({ id: z.string(), label: LocalizedText, text: LocalizedText.optional(), icon: z.string().optional(), actions: z.array(Action) })) }),
   z.object({ ...base, type: z.literal("button"), label: LocalizedText, variant: z.enum(["primary", "secondary", "ghost"]).optional(), actions: z.array(Action) }),
 ]);
 export type Block = z.infer<typeof Block>;

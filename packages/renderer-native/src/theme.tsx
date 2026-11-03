@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useMemo } from "react";
-import { brands, completeColors, type Brand, type BrandId, type Colors, type Preset, type } from "@finx/ui-kit";
+import { brands, completeColors, type Brand, type BrandId, type BrandLook, type Colors, type Preset, type } from "@finx/ui-kit";
 
 export type FdsTheme = {
   c: Colors;
@@ -12,11 +12,13 @@ export type FdsTheme = {
   locale: string;
   mode: "light" | "dark";
   fontFamily: (lang: string) => string;
+  /** How this bank's screens differ from the standard look, if they do. */
+  look?: BrandLook;
 };
 const make = (mode: "light" | "dark", brand: BrandId | Brand): FdsTheme => {
   const b = typeof brand === "string" ? brands[brand] ?? brands.meezan! : brand;
   return {
-    c: completeColors((mode === "dark" ? b.dark : b.light).colors), r: b.radius, brand: b.id, preset: b.preset, currency: b.currency, locale: b.locale, mode,
+    c: completeColors((mode === "dark" ? b.dark : b.light).colors), r: b.radius, brand: b.id, preset: b.preset, currency: b.currency, locale: b.locale, mode, look: b.look,
     fontFamily: (lang) => (lang === "ur" ? type.family.urdu : type.family.body),
   };
 };

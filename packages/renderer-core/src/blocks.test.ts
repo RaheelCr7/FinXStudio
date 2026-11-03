@@ -1,12 +1,12 @@
 import { describe, expect, it } from "vitest";
 import {
-  BLOCK_TYPES, accountRows, amountText, beneficiaryRows, cardFields, cardNetwork, cardPictureDigits, cleanCardNumber, cleanCvv, cleanOtp, expiryText, groupCard, keyboardKind,
+  BLOCK_TYPES, KEYPAD_ROWS, accountRows, amountText, applyKey, beneficiaryRows, cardFields, cardNetwork, cardPictureDigits, cleanCardNumber, cleanCvv, cleanOtp, expiryText, groupCard, keyboardKind,
   otpCells, otpLabel, parseAmountText, prefixOf, quickAmounts, selectChoices, symbolOf,
 } from "./index";
 
 describe("block contract", () => {
   it("lists every block type of the schema", () => {
-    expect([...BLOCK_TYPES].sort()).toEqual(["accountPicker", "alert", "amountInput", "beneficiaryPicker", "button", "cardForm", "consent", "otp", "result", "reviewSummary", "select", "stepper", "text", "textInput", "toggle"]);
+    expect([...BLOCK_TYPES].sort()).toEqual(["accountPicker", "alert", "amountInput", "beneficiaryPicker", "button", "cardForm", "consent", "hero", "menu", "otp", "result", "reviewSummary", "sectionHeader", "select", "shortcuts", "stepper", "text", "textInput", "toggle"]);
   });
 });
 
@@ -87,5 +87,22 @@ describe("caret after formatting", () => {
     expect(caretAfterFormat("12/", 3, "12")).toBe(2);
     expect(caretAfterFormat("abc", 2, "")).toBe(0);
     expect(caretAfterFormat("12", 99, "12")).toBe(2);
+  });
+});
+
+describe("number pad", () => {
+  it("lays out three keys across, with a blank, 0 and delete last", () => {
+    expect(KEYPAD_ROWS).toEqual([["1", "2", "3"], ["4", "5", "6"], ["7", "8", "9"], ["", "0", "back"]]);
+  });
+  it("adds digits up to the length and removes the last one", () => {
+    expect(applyKey("", "4", 6)).toBe("4");
+    expect(applyKey("123456", "7", 6)).toBe("123456");
+    expect(applyKey("123", "back", 6)).toBe("12");
+    expect(applyKey("", "back", 6)).toBe("");
+    expect(applyKey("12", "", 6)).toBe("12");
+  });
+  it("shows dots for a PIN and the next cell as active", () => {
+    expect(otpCells("48", 4, true)).toEqual([{ char: "•", active: false }, { char: "•", active: false }, { char: "", active: true }, { char: "", active: false }]);
+    expect(otpCells("48", 4)[0]!.char).toBe("4");
   });
 });

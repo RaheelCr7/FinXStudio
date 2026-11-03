@@ -55,7 +55,7 @@ export const BLOCKS: BlockDoc[] = [
     example: { type: "amountInput", bind: "topup.amount", currency: "PKR", label: { en: "Amount", ur: "رقم" }, validation: { min: 50, max: 5000, messages: { min: { en: "The least you can top up is PKR 50", ur: "کم از کم ٹاپ اپ PKR 50 ہے" }, max: { en: "The most you can top up is PKR 5,000", ur: "زیادہ سے زیادہ ٹاپ اپ PKR 5,000 ہے" } } } },
   },
   {
-    type: "select", purpose: "Pick one option, shown as chips.", fields: { bind: "data path", label: "Loc", options: "fixed list of strings (the value is the text)", choices: "OR a fixed list of { id, label: Loc, icon?, text?: Loc } for tiles with an icon and a line of help. Icons: bank, card, food, bag, trend, shield, wallet, repeat, dollar, home, briefcase", source: "OR a ctx path of an object map whose values have { id, name, color?, sub? } (the value is the id)", variant: "chips (default) or tiles (larger cards, good for banks or account types)" },
+    type: "select", purpose: "Pick one option, shown as chips.", fields: { bind: "data path", label: "Loc", options: "fixed list of strings (the value is the text)", choices: "OR a fixed list of { id, label: Loc, icon?, text?: Loc } for tiles with an icon and a line of help. Icons: bank, card, food, bag, trend, shield, wallet, repeat, dollar, home, briefcase", source: "OR a ctx path of an object map whose values have { id, name, color?, sub? } (the value is the id)", variant: "chips (default), tiles (larger cards, good for banks or account types) or rows (a plain list with a tick on the chosen row, good for languages)" },
     notes: ["Use source for data from the bank (billers, carriers). Use options only for short fixed lists. Use variant tiles with choices for a short list of big options."],
     example: { type: "select", bind: "topup.carrier", label: { en: "Carrier", ur: "کیریئر" }, source: "ctx.carriers" },
   },
@@ -75,7 +75,7 @@ export const BLOCKS: BlockDoc[] = [
     example: { type: "consent", bind: "bill.consent", termsVersion: "bills-v2", text: { en: "I confirm I want to pay this bill", ur: "میں اس بل کی ادائیگی کی تصدیق کرتا/کرتی ہوں" }, validation: { mustBeTrue: true, messages: { mustBeTrue: { en: "Tick the confirmation first", ur: "پہلے تصدیق کریں" } } } },
   },
   {
-    type: "toggle", purpose: "An on/off switch for a yes-or-no choice that is not a legal confirmation.", fields: { bind: "boolean data path", label: "Loc", helper: "Loc" },
+    type: "toggle", purpose: "An on/off switch for a yes-or-no choice that is not a legal confirmation.", fields: { bind: "boolean data path", label: "Loc", helper: "Loc", link: "optional { label: Loc, actions } shown at the other end of the same row, e.g. \"Can't sign in?\" beside Remember me" },
     notes: ["Use consent, not toggle, for anything the customer must agree to. A toggle is never required."],
     example: { type: "toggle", bind: "budget.alert", label: { en: "Alert me at 80%" }, helper: { en: "We will tell you when you are close to the limit" } },
   },
@@ -85,9 +85,26 @@ export const BLOCKS: BlockDoc[] = [
     example: { type: "cardForm", bind: "card" },
   },
   {
-    type: "otp", purpose: "One-time code entry.", fields: { bind: "data path, normally otp.code", length: "4 to 8 digits", hint: "Loc, e.g. \"Enter the code sent to {{ctx.otp.maskedPhone}}\"", maxAttempts: "informational only today", resendAfterSeconds: "informational only today", onResend: "actions, not run by the UI yet" },
+    type: "otp", purpose: "One-time code entry.", fields: { bind: "data path, normally otp.code", length: "4 to 8 digits", hint: "Loc, e.g. \"Enter the code sent to {{ctx.otp.maskedPhone}}\"", maxAttempts: "informational only today", resendAfterSeconds: "informational only today", onResend: "actions, not run by the UI yet", keypad: "true shows a number pad (good for a PIN)", masked: "true shows dots instead of digits" },
     notes: ["The attempt limit is enforced by the verify call: put lockAfter and lockTo in its onError (see the otp pattern). The integration must be named exactly otpVerify for failures to be counted.", "Mark otp.code required: true in dataModel so an empty code is caught before the call."],
     example: { type: "otp", bind: "otp.code", length: 6, hint: { en: "Enter the code sent to {{ctx.otp.maskedPhone}}", ur: "{{ctx.otp.maskedPhone}} پر بھیجا گیا کوڈ درج کریں" } },
+  },
+  {
+    type: "hero", purpose: "A banner with the bank's logo at the top of a screen. Only banks with a brand logo show one; otherwise nothing is drawn.", fields: {},
+    notes: ["Use once, as the first block of the first screen."],
+    example: { type: "hero" },
+  },
+  {
+    type: "sectionHeader", purpose: "A bold heading with an optional link on the same row.", fields: { title: "Loc", action: "optional { label: Loc, actions } shown at the end of the row, e.g. the language" },
+    example: { type: "sectionHeader", title: { en: "Welcome" }, action: { label: { en: "English" }, actions: [{ type: "navigate", to: "language" }] } },
+  },
+  {
+    type: "shortcuts", purpose: "A row of icon buttons, e.g. Enroll, Locate us and Support at the bottom of a sign-in screen.", fields: { items: "[{ id, label: Loc, icon?, actions }]. Icons are the names the select tiles use plus pin, user, help, globe, key, lock" },
+    example: { type: "shortcuts", items: [{ id: "enroll", label: { en: "Enroll" }, icon: "user", actions: [{ type: "navigate", to: "enroll" }] }] },
+  },
+  {
+    type: "menu", purpose: "A list of rows that each run actions when tapped, with an optional icon and a line of help.", fields: { items: "[{ id, label: Loc, text?: Loc, icon?, actions }]" },
+    example: { type: "menu", items: [{ id: "chat", label: { en: "Chat with us" }, text: { en: "Mon to Fri, 9 to 5" }, icon: "help", actions: [{ type: "navigate", to: "chat" }] }] },
   },
   {
     type: "result", purpose: "The outcome on a terminal screen.", fields: { tone: "success | error", title: "Loc", text: "Loc", meta: "Loc, e.g. \"Ref {{result.reference}}\"" },

@@ -19,6 +19,6 @@ export function beneficiaryRows(b: { items: any[]; value?: unknown }): PickerRow
 
 export type Choice = { id: string; name: string; sub?: string; icon?: string; color?: string; letter: string; selected: boolean };
 /** The options of a select block, as chips or tiles. */
-export function selectChoices(b: { items: { id: string; name: string; sub?: string; icon?: string; color?: string }[]; value?: unknown; variant?: string }): { tiles: boolean; choices: Choice[] } {
-  return { tiles: b.variant === "tiles", choices: b.items.map((o) => ({ ...o, letter: o.name.slice(0, 1), selected: b.value === o.id })) };
+export function selectChoices(b: { items: { id: string; name: string; sub?: string; icon?: string; color?: string }[]; value?: unknown; variant?: string }): { tiles: boolean; rows: boolean; choices: Choice[] } {
+  return { tiles: b.variant === "tiles", rows: b.variant === "rows", choices: b.items.map((o) => ({ ...o, letter: o.name.slice(0, 1), selected: b.value === o.id })) };
 }

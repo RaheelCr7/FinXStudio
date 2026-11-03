@@ -34,6 +34,14 @@ These are sandbox test values only. The picture code is shown on screen in the s
 
 Adapters are named `cab.*` (22 of them, listed with inputs and outputs in the adapter catalog the AI tools read). A project's own customers are used instead of its look's customers (`personasFor(preset, projectId)`).
 
+## How it looks like the design
+
+A bank can carry a **look** in `packages/ui-kit/src/brands.json`: a coloured app bar with a back arrow and a close button, a rounded sheet on a light page, outlined fields, the bank's logo and font. CAB's look is taken from the Figma export (bar colour #00853E, logo cropped from the exported frames for this project only). Both renderers, the phone app and the web app, draw it from the same definition, so a screen is built once.
+
+New journey blocks that the design needed, available to every project and listed in the AI catalog and the Studio builder: `hero` (logo banner), `sectionHeader` (heading with a link), `shortcuts` (icon button row), `menu` (tappable rows). `select` gained a `rows` variant, `otp` a number pad and masked digits (`keypad`, `masked`), and `toggle` a link on the same row.
+
+Known gaps against the Figma: the bank's own typeface is not loaded, the map on Locate us, a date picker, the picture-code image, the OR divider between menu rows, and the language confirmation as a pop-up (it is a screen).
+
 ## Checked
 
 - 29 end-to-end tests run every journey through the engine against the sandbox: happy paths, wrong password to locked, locked, expired and inactive profiles, PIN mismatch, wrong picture code, not found, already enrolled, activation block, wrong one-time code to lock, password rules, and Arabic right to left. 43 sandbox tests cover the rules.

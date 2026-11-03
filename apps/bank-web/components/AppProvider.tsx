@@ -1,9 +1,9 @@
 "use client";
 import { createContext, useContext, useEffect, useState, useSyncExternalStore } from "react";
 import { BankApp, createLive, isRtl, type AppState } from "@finx/bank-client";
-import type { Preset } from "@finx/ui-kit";
+import type { BrandLook, Preset } from "@finx/ui-kit";
 
-export type ProjectInfo = { id: string; preset: Preset; name: string; shell: "meezan" | "bankworkx"; currency: string };
+export type ProjectInfo = { id: string; preset: Preset; name: string; shell: "meezan" | "bankworkx"; currency: string; /** How this bank's screens differ from the standard look. */ look?: BrandLook };
 type Ctx = { app: BankApp; project: ProjectInfo; /** False until a signed-in session has been looked for in this tab. */ ready: boolean };
 const C = createContext<Ctx | null>(null);
 

@@ -119,15 +119,35 @@ export const PRESETS: Record<Preset, { name: string; description: string }> = {
   bankworkx: { name: "Fintech", description: "Lavender canvas, a gradient balance card, rounded cards, charts and a bottom tab bar." },
 };
 
+/**
+ * How a bank's screens are drawn beyond colour, for banks whose design differs from the standard look.
+ * Every field is optional; a bank with no `look` gets the standard screens.
+ */
+export type BrandLook = {
+  /** "bar": a solid app bar in the accent colour with the title centred and white back and close icons. */
+  chrome?: "bar";
+  /** "outlined": white boxed fields with the label as placeholder and an eye icon on passwords. */
+  fields?: "outlined";
+  /** The exact colour of the app bar and banner, when it must match the bank's design to the pixel (the theme's accent may be nudged for contrast). */
+  bar?: string;
+  /** Page colour behind the screens (the standard look uses the theme's). */
+  pageBg?: string;
+  /** The bank's logo (white on transparent) as a data: address, drawn by the hero block. */
+  logo?: string;
+  /** Font name, when the bank's font is installed or loaded; the standard font is used otherwise. */
+  font?: string;
+};
+
 /** What a bank is, as stored in brands.json (and edited in Studio). Everything else about its look is derived from this. */
 export type BrandDef = {
   name: string; shortName: string; slug: string; bundleId: string; scheme: string;
   preset: Preset; accent: string; currency: string; locale: string;
   /** Folder with the app icons, relative to apps/bank-app. */
   assets: string; background: string; splashDark: string;
+  look?: BrandLook;
 };
 export type BrandId = string;
-export type Brand = { id: BrandId; name: string; preset: Preset; light: Theme; dark: Theme; radius: Record<keyof typeof radius, number>; currency: string; locale: string };
+export type Brand = { id: BrandId; name: string; preset: Preset; light: Theme; dark: Theme; radius: Record<keyof typeof radius, number>; currency: string; locale: string; look?: BrandLook };
 
 // ---- colour helpers ---------------------------------------------------------------------------------------------------
 const toRgb = (hex: string): [number, number, number] => { const n = parseInt(hex.slice(1), 16); return [(n >> 16) & 255, (n >> 8) & 255, n & 255]; };
@@ -182,7 +202,7 @@ export function resolveBrand(id: BrandId, def: BrandDef): Brand {
     }
     return { name: `${id}-${mode}`, colors: c };
   };
-  return { id, name: def.name, preset: def.preset, light: make("light"), dark: make("dark"), radius: base.radius, currency: def.currency, locale: def.locale };
+  return { id, name: def.name, preset: def.preset, light: make("light"), dark: make("dark"), radius: base.radius, currency: def.currency, locale: def.locale, ...(def.look ? { look: def.look } : {}) };
 }
 
 /** Every bank in brands.json. Journeys and the engine never change per bank; only this does. */

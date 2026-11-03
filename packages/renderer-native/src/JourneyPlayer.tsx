@@ -5,11 +5,12 @@ import { JourneyController, type Adapter } from "@finx/renderer-core";
 import { registry } from "./blocks";
 import type { BlockType } from "@finx/renderer-core";
 import { useTheme } from "./theme";
+import { Icon } from "./widgets";
 
 export type JourneyPlayerProps = { journey: Journey; adapter: Adapter; lang?: string; onExit?: () => void; onClose?: () => void; /** Answers to fill in when the journey opens, by data path, for example the item the customer was looking at. */ initial?: Record<string, any> };
 
 export function JourneyPlayer({ journey, adapter, lang, onExit, onClose, initial }: JourneyPlayerProps) {
-  const { c, r: radius, fontFamily } = useTheme();
+  const { c, r: radius, fontFamily, look } = useTheme();
   const controller = useMemo(() => new JourneyController(journey, { adapter, lang, initial }), [journey, adapter]);
   const [, force] = useReducer((x: number) => x + 1, 0);
   const scroller = useRef<React.ComponentRef<typeof ScrollView>>(null);
@@ -32,6 +33,64 @@ export function JourneyPlayer({ journey, adapter, lang, onExit, onClose, initial
 
   const { body, buttons, terminal } = layout;
   const Btn = registry.button!;
+  const draw = (b: any, i: number) => {
+    const C = registry[b.type as BlockType];
+    return C ? <View key={`${v.screenId}-${i}`}><C b={b} set={(p, val) => controller.set(p, val)} press={(a) => controller.press(a)} busy={v.busy} lang={layout.lang} strings={v.strings} /></View> : null;
+  };
+  const drawButtons = () => buttons.map((b, i) => <Btn key={`${v.screenId}-b${i}`} b={b} set={() => {}} press={(a: any[]) => controller.press(a)} busy={v.busy} lang={layout.lang} strings={v.strings} />);
+  const toast = v.toast ? <View accessibilityRole="alert" style={{ marginHorizontal: 20, marginTop: 8, padding: 12, borderRadius: 8, backgroundColor: c.negativeBg }}><Text style={{ color: c.negative, fontSize: 14, fontWeight: "500" }}>{v.toast}</Text></View> : null;
+
+  // A bank with its own screens (an app bar in the accent colour, a banner with its logo): drawn here, in the same order of blocks.
+  if (look?.chrome === "bar") {
+    const page = look.pageBg ?? c.surfaceMuted;
+    const barBg = look.bar ?? c.accent;
+    const font = look.font ?? fontFamily(layout.lang);
+    const shortcuts = body.filter((b) => b.type === "shortcuts");
+    if (layout.hero) {
+      const rest = body.slice(1).filter((b) => b.type !== "shortcuts");
+      return (
+        <View style={{ flex: 1, backgroundColor: barBg, direction: layout.rtl ? "rtl" : "ltr" } as any}>
+          <View style={{ flex: 1, width: "100%", maxWidth: 520, alignSelf: "center" }}>
+            {draw(body[0], 0)}
+            <View style={{ flex: 1, marginTop: -26, borderTopLeftRadius: 28, borderTopRightRadius: 28, backgroundColor: page, overflow: "hidden" }}>
+              {toast}
+              <ScrollView ref={scroller} contentContainerStyle={{ padding: 20, paddingBottom: 24, gap: 18 }} keyboardShouldPersistTaps="handled">
+                {rest.map((b, i) => draw(b, i + 1))}
+                {drawButtons()}
+              </ScrollView>
+              {shortcuts.length ? <View style={{ paddingHorizontal: 16, paddingTop: 14, paddingBottom: 18, borderTopLeftRadius: 24, borderTopRightRadius: 24, backgroundColor: c.bg, borderTopWidth: 1, borderColor: c.border }}>{shortcuts.map((b, i) => draw(b, 900 + i))}</View> : null}
+            </View>
+          </View>
+        </View>
+      );
+    }
+    const first = body[0];
+    const band = first?.type === "text" && first.variant === "title" ? first : null;
+    const rest = band ? body.slice(1) : body;
+    return (
+      <View style={{ flex: 1, backgroundColor: c.surface, direction: layout.rtl ? "rtl" : "ltr" } as any}>
+        <View style={{ flex: 1, width: "100%", maxWidth: 520, alignSelf: "center" }}>
+          <View style={{ backgroundColor: barBg, paddingHorizontal: 12, paddingTop: 14, paddingBottom: 14, flexDirection: "row", alignItems: "center", minHeight: 58 }}>
+            <View style={{ width: 40, alignItems: "flex-start" }}>
+              {layout.canGoBack ? (
+                <Pressable accessibilityRole="button" accessibilityLabel={v.strings.back} onPress={() => controller.stepBack()} hitSlop={10}><Icon name="back" size={22} color={c.accentOn} /></Pressable>
+              ) : null}
+            </View>
+            <Text accessibilityRole="header" numberOfLines={1} style={{ flex: 1, textAlign: "center", fontSize: 16, fontWeight: "600", color: c.accentOn, fontFamily: font }}>{v.title}</Text>
+            <View style={{ width: 40, alignItems: "flex-end" }}>
+              <Pressable accessibilityRole="button" accessibilityLabel={v.strings.close} onPress={onClose} hitSlop={10}><Icon name="x" size={22} color={c.accentOn} /></Pressable>
+            </View>
+          </View>
+          {band ? <View style={{ backgroundColor: page, paddingVertical: 12, paddingHorizontal: 20 }}><Text style={{ textAlign: "center", fontSize: 13, fontWeight: "700", color: c.text, fontFamily: font }}>{band.text}</Text></View> : null}
+          {toast}
+          <ScrollView ref={scroller} contentContainerStyle={{ padding: 20, paddingBottom: 24, gap: 18 }} keyboardShouldPersistTaps="handled">
+            {rest.map((b, i) => draw(b, i + 1))}
+          </ScrollView>
+          <View style={{ paddingHorizontal: 20, paddingTop: 10, paddingBottom: 20, gap: 10, backgroundColor: c.surface }}>{drawButtons()}</View>
+        </View>
+      </View>
+    );
+  }
 
   return (
     <View style={{ flex: 1, backgroundColor: c.bg, direction: layout.rtl ? "rtl" : "ltr" } as any}>

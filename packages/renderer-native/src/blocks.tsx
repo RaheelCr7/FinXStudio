@@ -1,7 +1,7 @@
 import React from "react";
-import { Pressable, Text, TextInput, View, StyleSheet, Platform } from "react-native";
-import { space } from "@finx/ui-kit";
-import { accountRows, amountText, beneficiaryRows, cardFields, cardNetwork, cleanOtp, keyboardKind, otpCells, otpLabel, parseAmountText, prefixOf, quickAmounts, selectChoices, symbolOf, ui, type BlockProps, type BlockType } from "@finx/renderer-core";
+import { Image, Pressable, Text, TextInput, View, StyleSheet, Platform } from "react-native";
+import { mix, space } from "@finx/ui-kit";
+import { accountRows, amountText, applyKey, beneficiaryRows, cardFields, cardNetwork, cleanOtp, keyboardKind, KEYPAD_ROWS, otpCells, otpLabel, parseAmountText, prefixOf, quickAmounts, selectChoices, symbolOf, ui, type BlockProps, type BlockType } from "@finx/renderer-core";
 import { useTheme } from "./theme";
 import { CardVisual, Icon, IconTile } from "./widgets";
 
@@ -102,7 +102,27 @@ export function AmountInput({ b, set }: P) {
 
 export function SelectChips({ b, set }: P) {
   const { c, r: radius } = useTheme();
-  const { tiles, choices } = selectChoices(b as any);
+  const { tiles, rows, choices } = selectChoices(b as any);
+  if (rows) {
+    return (
+      <View accessibilityRole="radiogroup">
+        {b.label ? <Text style={{ fontSize: 13, color: c.textMuted, marginBottom: 4 }}>{b.label}</Text> : null}
+        {choices.map((o) => (
+          <Pressable key={o.id} accessibilityRole="radio" accessibilityState={{ selected: o.selected }} accessibilityLabel={o.name} onPress={() => set(b.bind, o.id)}
+            style={{ flexDirection: "row", alignItems: "center", paddingVertical: 14, borderBottomWidth: 1, borderBottomColor: c.border }}>
+            <View style={{ flex: 1 }}>
+              <Text style={{ color: c.text, fontWeight: "600", fontSize: 15 }}>{o.name}</Text>
+              {o.sub ? <Text style={{ color: c.textMuted, fontSize: 12, marginTop: 2 }}>{o.sub}</Text> : null}
+            </View>
+            <View style={{ width: 22, height: 22, borderRadius: 11, borderWidth: 2, borderColor: o.selected ? c.accent : c.borderStrong, alignItems: "center", justifyContent: "center" }}>
+              {o.selected ? <View style={{ width: 10, height: 10, borderRadius: 5, backgroundColor: c.accent }} /> : null}
+            </View>
+          </Pressable>
+        ))}
+        <ErrorText e={b.error} />
+      </View>
+    );
+  }
   if (tiles) {
     return (
       <View>
@@ -146,28 +166,29 @@ export function SelectChips({ b, set }: P) {
 }
 
 export function TextField({ b, set, lang }: P) {
-  const { c, r: radius } = useTheme();
+  const { c, r: radius, look } = useTheme();
+  const outlined = look?.fields === "outlined";
   const [focus, setFocus] = React.useState(false);
   const [shown, setShown] = React.useState(false);
   const kb = ({ number: "number-pad", phone: "phone-pad", email: "email-address", default: "default" } as const)[keyboardKind(b.keyboard)];
   return (
     <View>
-      <Label>{b.label}</Label>
+      {outlined ? null : <Label>{b.label}</Label>}
       <View>
-        <TextInput accessibilityLabel={b.label} value={String(b.value ?? "")} placeholder={b.placeholder} placeholderTextColor={c.textFaint} keyboardType={kb} secureTextEntry={!!b.secure && !shown} textContentType={b.secure ? "none" : undefined} autoComplete={b.secure ? "off" : undefined} importantForAutofill={b.secure ? "no" : undefined}
+        <TextInput accessibilityLabel={b.label} value={String(b.value ?? "")} placeholder={outlined ? b.placeholder ?? b.label : b.placeholder} placeholderTextColor={c.textFaint} keyboardType={kb} secureTextEntry={!!b.secure && !shown} textContentType={b.secure ? "none" : undefined} autoComplete={b.secure ? "off" : undefined} importantForAutofill={b.secure ? "no" : undefined}
           autoCapitalize="none" autoCorrect={false} onFocus={() => setFocus(true)} onBlur={() => setFocus(false)} onChangeText={(t) => set(b.bind, t)}
-          style={[{ height: 52, borderRadius: radius.md, borderWidth: focus || b.error ? 2 : 1, borderColor: b.error ? c.negative : focus ? c.accent : c.borderStrong, backgroundColor: c.surface, paddingStart: 14, paddingEnd: b.secure ? 64 : 14, fontSize: 16, color: c.text }, tab, Platform.OS === "web" ? ({ outlineStyle: "none" } as any) : null]} />
-        {b.secure ? <Pressable accessibilityRole="button" accessibilityLabel={shown ? ui(lang, "hide") : ui(lang, "show")} onPress={() => setShown(!shown)} hitSlop={8} style={{ position: "absolute", end: 14, top: 0, bottom: 0, justifyContent: "center" }}><Text style={{ color: c.accent, fontWeight: "700", fontSize: 13 }}>{shown ? ui(lang, "hide") : ui(lang, "show")}</Text></Pressable> : null}
+          style={[{ height: outlined ? 50 : 52, borderRadius: outlined ? 10 : radius.md, borderWidth: focus || b.error ? 2 : 1, borderColor: b.error ? c.negative : focus ? c.accent : c.borderStrong, backgroundColor: c.surface, paddingStart: 14, paddingEnd: b.secure ? (outlined ? 48 : 64) : 14, fontSize: 16, color: c.text }, tab, Platform.OS === "web" ? ({ outlineStyle: "none" } as any) : null]} />
+        {b.secure ? <Pressable accessibilityRole="button" accessibilityLabel={shown ? ui(lang, "hide") : ui(lang, "show")} onPress={() => setShown(!shown)} hitSlop={8} style={{ position: "absolute", end: 14, top: 0, bottom: 0, justifyContent: "center" }}>{outlined ? <Icon name={shown ? "eyeOff" : "eye"} size={20} color={c.textMuted} /> : <Text style={{ color: c.accent, fontWeight: "700", fontSize: 13 }}>{shown ? ui(lang, "hide") : ui(lang, "show")}</Text>}</Pressable> : null}
       </View>
       <ErrorText e={b.error} />
     </View>
   );
 }
 
-export function Toggle({ b, set }: P) {
+export function Toggle({ b, set, press }: P) {
   const { c } = useTheme();
   const on = b.value === true;
-  return (
+  const toggle = (
     <Pressable accessibilityRole="switch" accessibilityState={{ checked: on }} accessibilityLabel={b.label} onPress={() => set(b.bind, !on)} style={{ flexDirection: "row", alignItems: "center", gap: 14 }}>
       <View style={{ flex: 1 }}>
         <Text style={{ color: c.text, fontSize: 15, fontWeight: "600" }}>{b.label}</Text>
@@ -177,6 +198,13 @@ export function Toggle({ b, set }: P) {
         <View style={{ width: 24, height: 24, borderRadius: 12, backgroundColor: "#fff" }} />
       </View>
     </Pressable>
+  );
+  if (!b.link) return toggle;
+  return (
+    <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 12 }}>
+      <Pressable accessibilityRole="link" accessibilityLabel={b.link.label} onPress={() => press(b.link.actions)} hitSlop={8}><Text style={{ color: c.accent, fontSize: 13, fontWeight: "600" }}>{b.link.label}</Text></Pressable>
+      {toggle}
+    </View>
   );
 }
 
@@ -242,10 +270,43 @@ export function Consent({ b, set }: P) {
   );
 }
 
+/** A code typed on the bank's own number pad: dashes that fill in, then three keys across. The device keyboard is not used. */
+function KeypadCode({ b, set, lang }: P) {
+  const { c } = useTheme();
+  const v = String(b.value ?? "");
+  return (
+    <View>
+      {b.hint ? <Text style={{ color: c.text, fontSize: 14, textAlign: "center", marginBottom: 28, lineHeight: 20 }}>{b.hint}</Text> : null}
+      <View accessibilityLabel={otpLabel(lang, b.length)} style={{ flexDirection: "row", justifyContent: "center", gap: 10, direction: "ltr" as any }}>
+        {otpCells(v, b.length, !!b.masked).map((cell, i) => (
+          <View key={i} style={{ width: 36, alignItems: "center" }}>
+            <Text style={[{ height: 28, fontSize: 22, fontWeight: "600", color: c.text }, tab]}>{cell.char}</Text>
+            <View style={{ height: 2, width: "100%", backgroundColor: cell.active ? c.accent : c.borderStrong }} />
+          </View>
+        ))}
+      </View>
+      <ErrorText e={b.error} />
+      <View style={{ marginTop: 32, gap: 10, direction: "ltr" as any }}>
+        {KEYPAD_ROWS.map((row, ri) => (
+          <View key={ri} style={{ flexDirection: "row", justifyContent: "center", gap: 14 }}>
+            {row.map((k, ki) => k === "" ? <View key={ki} style={{ width: 84, height: 40 }} /> : (
+              <Pressable key={ki} accessibilityRole="button" accessibilityLabel={k === "back" ? ui(lang, "back") : k} onPress={() => set(b.bind, applyKey(v, k, b.length))}
+                style={({ pressed }) => ({ width: 84, height: 40, borderRadius: 20, alignItems: "center", justifyContent: "center", backgroundColor: pressed ? mix(c.accent, c.surface, 0.8) : c.surfaceMuted })}>
+                {k === "back" ? <Icon name="backspace" size={20} color={c.textMuted} /> : <Text style={[{ fontSize: 18, fontWeight: "600", color: c.text }, tab]}>{k}</Text>}
+              </Pressable>
+            ))}
+          </View>
+        ))}
+      </View>
+    </View>
+  );
+}
+
 export function Otp({ b, set, lang }: P) {
   const { c, r: radius } = useTheme();
   const ref = React.useRef<React.ComponentRef<typeof TextInput>>(null);
   const v = String(b.value ?? "");
+  if (b.keypad) return <KeypadCode b={b} set={set} press={() => {}} busy={false} lang={lang} strings={{}} />;
   return (
     <View>
       {b.hint ? <Text style={{ color: c.textMuted, fontSize: 14, marginBottom: 16, lineHeight: 20 }}>{b.hint}</Text> : null}
@@ -288,16 +349,80 @@ export function TextBlock({ b }: P) {
 }
 
 export function Button({ b, press, busy, strings }: P) {
-  const { c, r: radius } = useTheme();
+  const { c, r: radius, look } = useTheme();
+  const bar = look?.chrome === "bar";
   const primary = (b.variant ?? "primary") === "primary";
   const label = busy ? strings.wait : b.label;
   // An explicit label keeps screen readers announcing the button's name. Without one, React Native on Android
   // leaves the description "busy" behind after the button has been busy once.
   return (
     <Pressable accessibilityRole="button" accessibilityLabel={label} accessibilityState={{ busy, disabled: busy }} onPress={() => press(b.actions)}
-      style={({ pressed }) => ({ minHeight: 54, paddingVertical: 8, borderRadius: radius.lg, alignItems: "center", justifyContent: "center", backgroundColor: primary ? c.accent : "transparent", borderWidth: primary ? 0 : 1, borderColor: c.borderStrong, opacity: busy ? 0.6 : pressed ? 0.88 : 1, transform: [{ scale: pressed ? 0.985 : 1 }] })}>
-      <Text style={{ color: primary ? c.accentOn : c.text, fontSize: 16, fontWeight: "600" }}>{label}</Text>
+      style={({ pressed }) => ({ minHeight: bar ? 48 : 54, paddingVertical: 8, borderRadius: bar ? 8 : radius.lg, alignItems: "center", justifyContent: "center", backgroundColor: primary ? (bar ? look?.bar ?? c.accent : c.accent) : "transparent", borderWidth: primary ? 0 : 1, borderColor: bar ? look?.bar ?? c.accent : c.borderStrong, opacity: busy ? 0.6 : pressed ? 0.88 : 1, transform: [{ scale: pressed ? 0.985 : 1 }] })}>
+      <Text style={{ color: primary ? c.accentOn : bar ? look?.bar ?? c.accent : c.text, fontSize: 16, fontWeight: "600" }}>{label}</Text>
     </Pressable>
+  );
+}
+
+/** The bank's banner: its logo (or its name) on the accent colour. The player draws the sheet that overlaps its bottom edge. */
+export function Hero({ b }: P) {
+  const { c, look, brand } = useTheme();
+  return (
+    <View accessibilityRole="header" style={{ backgroundColor: look?.bar ?? c.accent, height: 200, alignItems: "center", justifyContent: "center" }}>
+      {look?.logo ? <Image accessibilityLabel={brand} source={{ uri: look.logo }} resizeMode="contain" style={{ width: 230, height: 70 }} />
+        : <Text style={{ color: c.accentOn, fontSize: 26, fontWeight: "700" }}>{brand}</Text>}
+    </View>
+  );
+}
+
+/** A heading with a link on the same row ("Welcome" … "English ⌄"). */
+export function SectionHeader({ b, press }: P) {
+  const { c } = useTheme();
+  return (
+    <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between" }}>
+      <Text accessibilityRole="header" style={{ fontSize: 16, fontWeight: "700", color: c.text }}>{b.title}</Text>
+      {b.action ? (
+        <Pressable accessibilityRole="button" onPress={() => press(b.action.actions)} hitSlop={8} style={{ flexDirection: "row", alignItems: "center", gap: 4 }}>
+          <Text style={{ fontSize: 13, color: c.text }}>{b.action.label}</Text><Icon name="chevronDown" size={14} color={c.text} />
+        </Pressable>
+      ) : null}
+    </View>
+  );
+}
+
+/** Icon buttons in a row, for the shortcuts at the foot of a sign-in screen. */
+export function Shortcuts({ b, press }: P) {
+  const { c } = useTheme();
+  return (
+    <View style={{ flexDirection: "row", justifyContent: "space-around", paddingVertical: 4 }}>
+      {b.items.map((it: any) => (
+        <Pressable key={it.id} accessibilityRole="button" accessibilityLabel={it.label} onPress={() => press(it.actions)} style={{ alignItems: "center", gap: 8, minWidth: 88 }}>
+          <View style={{ width: 50, height: 50, borderRadius: 14, backgroundColor: mix(c.accent, "#000000", 0.35), alignItems: "center", justifyContent: "center" }}>
+            {it.icon ? <Icon name={it.icon} size={22} color="#FFFFFF" /> : null}
+          </View>
+          <Text style={{ fontSize: 12, fontWeight: "500", color: c.text }}>{it.label}</Text>
+        </Pressable>
+      ))}
+    </View>
+  );
+}
+
+/** Rows that each do something when tapped, with an icon, a title, a chevron and an optional line of help below. */
+export function Menu({ b, press }: P) {
+  const { c, r: radius, layoutRtl } = { ...useTheme(), layoutRtl: false };
+  return (
+    <View style={{ gap: 14 }}>
+      {b.items.map((it: any) => (
+        <View key={it.id}>
+          <Pressable accessibilityRole="button" accessibilityLabel={it.label} onPress={() => press(it.actions)}
+            style={({ pressed }) => ({ flexDirection: "row", alignItems: "center", gap: 12, paddingHorizontal: 14, minHeight: 54, borderRadius: 10, borderWidth: 1, borderColor: c.border, backgroundColor: pressed ? c.surfaceMuted : c.surface })}>
+            {it.icon ? <Icon name={it.icon} size={22} color={c.textMuted} /> : null}
+            <Text style={{ flex: 1, fontSize: 14, fontWeight: "600", color: c.text }}>{it.label}</Text>
+            <Icon name="chevronRight" size={18} color={c.text} />
+          </Pressable>
+          {it.text ? <Text style={{ fontSize: 11, color: c.textMuted, marginTop: 6, marginStart: 4 }}>{it.text}</Text> : null}
+        </View>
+      ))}
+    </View>
   );
 }
 
@@ -306,6 +431,6 @@ const s = StyleSheet.create({
 });
 export const registry: Record<BlockType, (p: P) => React.ReactElement | null> = {
   accountPicker: AccountPicker, beneficiaryPicker: BeneficiaryPicker, amountInput: AmountInput, select: SelectChips, textInput: TextField,
-  alert: Alert, toggle: Toggle, cardForm: CardForm, reviewSummary: ReviewSummary, consent: Consent, otp: Otp, result: Result, text: TextBlock, button: Button, stepper: () => null,
+  alert: Alert, toggle: Toggle, cardForm: CardForm, reviewSummary: ReviewSummary, consent: Consent, otp: Otp, result: Result, text: TextBlock, button: Button, stepper: () => null, hero: Hero, sectionHeader: SectionHeader, shortcuts: Shortcuts, menu: Menu,
 };
 export { space };
