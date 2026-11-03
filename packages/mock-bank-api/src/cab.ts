@@ -164,6 +164,11 @@ export class CabSandbox {
 
       case "cab.language.list": return LANGUAGES;
       case "cab.language.current": return { current: this.language, name: LANGUAGES[this.language as keyof typeof LANGUAGES].name };
+      case "cab.language.selection": {
+        // the language to show as selected: the one the person already picked on this screen, else the one in use
+        const code = typeof input.chosen === "string" && input.chosen in LANGUAGES ? input.chosen : this.language;
+        return { code, name: LANGUAGES[code as keyof typeof LANGUAGES].name };
+      }
       case "cab.language.set": {
         const code = String(input.code ?? "");
         if (!(code in LANGUAGES)) throw new BankError("LANGUAGE_UNSUPPORTED", "That language is not available");

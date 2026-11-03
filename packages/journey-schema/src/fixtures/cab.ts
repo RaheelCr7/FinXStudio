@@ -52,7 +52,7 @@ export const signIn: Journey = {
     "login.password": { type: "string", required: true },
     "login.remember": { type: "boolean" },
   },
-  integrations: [{ id: "signIn", adapter: "cab.auth.signIn", mode: "sandbox" }, { id: "languages", adapter: "cab.language.list", mode: "sandbox" }, { id: "setLanguage", adapter: "cab.language.set", mode: "sandbox" }],
+  integrations: [{ id: "signIn", adapter: "cab.auth.signIn", mode: "sandbox" }, { id: "languages", adapter: "cab.language.list", mode: "sandbox" }, { id: "selection", adapter: "cab.language.selection", mode: "sandbox" }, { id: "setLanguage", adapter: "cab.language.set", mode: "sandbox" }],
   screens: [
     {
       id: "welcome", title: L("Welcome", "مرحباً"),
@@ -91,7 +91,7 @@ export const signIn: Journey = {
     },
     {
       id: "language", title: L("Welcome", "مرحباً"),
-      onEnter: [{ type: "callApi", integration: "languages", saveAs: "ctx.languages" }],
+      onEnter: [{ type: "callApi", integration: "languages", saveAs: "ctx.languages" }, { type: "callApi", integration: "selection", input: { chosen: "{{language.code}}" }, saveAs: "language" }],
       blocks: [
         text(L("Choose your language", "اختر لغتك"), "title"),
         { type: "select", bind: "language.code", label: L("Language", "اللغة"), source: "ctx.languages", variant: "rows" },
@@ -103,9 +103,9 @@ export const signIn: Journey = {
       id: "language-confirm", title: L("Language change", "تغيير اللغة"),
       blocks: [
         text(L("Language change", "تغيير اللغة"), "title"),
-        text(L("Are you sure you want to change your language setting?", "هل أنت متأكد من رغبتك في تغيير إعداد اللغة؟")),
+        text(L("Are you sure you want to change your language setting to {{ctx.languages[language.code].name}}?", "هل أنت متأكد من رغبتك في تغيير إعداد اللغة إلى {{ctx.languages[language.code].name}}؟")),
+        button(L("No", "لا"), [go("language")], "secondary"),
         button(L("Yes", "نعم"), [{ type: "callApi", integration: "setLanguage", input: { code: "{{language.code}}" }, saveAs: "changed", onError: { showToast: L("That language isn't available.", "هذه اللغة غير متاحة.") } }, { type: "showToast", text: L("Language updated to {{changed.name}}", "تم تحديث اللغة إلى {{changed.name}}") }, go("login")]),
-        button(L("No", "لا"), [go("language")], "ghost"),
       ],
     },
     end("cant", L("Can't Sign In?", "لا يمكنني تسجيل الدخول؟"), [
@@ -256,11 +256,11 @@ export const accountPreview: Journey = {
 export const changeLanguage: Journey = {
   ...base, id: "jrn_cab_change_language", slug: "change-language", name: L("Change language", "تغيير اللغة"), entryScreen: "choose",
   dataModel: { "language.code": { type: "string", required: true } },
-  integrations: [{ id: "languages", adapter: "cab.language.list", mode: "sandbox" }, { id: "setLanguage", adapter: "cab.language.set", mode: "sandbox" }],
+  integrations: [{ id: "languages", adapter: "cab.language.list", mode: "sandbox" }, { id: "selection", adapter: "cab.language.selection", mode: "sandbox" }, { id: "setLanguage", adapter: "cab.language.set", mode: "sandbox" }],
   screens: [
     {
       id: "choose", title: L("Language", "اللغة"),
-      onEnter: [{ type: "callApi", integration: "languages", saveAs: "ctx.languages" }],
+      onEnter: [{ type: "callApi", integration: "languages", saveAs: "ctx.languages" }, { type: "callApi", integration: "selection", input: { chosen: "{{language.code}}" }, saveAs: "language" }],
       blocks: [
         text(L("Choose your language", "اختر لغتك"), "title"),
         { type: "select", bind: "language.code", label: L("Language", "اللغة"), source: "ctx.languages", variant: "rows" },
@@ -269,14 +269,14 @@ export const changeLanguage: Journey = {
       ],
     },
     {
-      id: "confirm", title: L("Language change", "تغيير اللغة"),
+      id: "confirm", title: L("Language change", "تغيير اللغة"), kind: "terminal",
       blocks: [
-        text(L("Are you sure you want to change your language setting?", "هل أنت متأكد من رغبتك في تغيير إعداد اللغة؟"), "title"),
-        button(L("Yes", "نعم"), [{ type: "callApi", integration: "setLanguage", input: { code: "{{language.code}}" }, saveAs: "changed", onError: { showToast: L("That language isn't available.", "هذه اللغة غير متاحة.") } }, go("done")]),
+        text(L("Are you sure you want to change your language setting to {{ctx.languages[language.code].name}}?", "هل أنت متأكد من رغبتك في تغيير إعداد اللغة إلى {{ctx.languages[language.code].name}}؟"), "title"),
         button(L("No", "لا"), [go("choose")], "secondary"),
+        // after Yes the flow ends and the app is back on the sign-in screen, as in the design
+        button(L("Yes", "نعم"), [{ type: "callApi", integration: "setLanguage", input: { code: "{{language.code}}" }, saveAs: "changed", onError: { showToast: L("That language isn't available.", "هذه اللغة غير متاحة.") } }, { type: "exit" }]),
       ],
     },
-    end("done", L("Language updated", "تم تحديث اللغة"), [result("success", L("Language updated", "تم تحديث اللغة"), L("Your language is now {{changed.name}}.", "أصبحت لغتك الآن {{changed.name}}.")), done]),
   ],
 };
 
@@ -315,10 +315,20 @@ export const enroll: Journey = {
       blocks: [
         text(L("Select the Legal Entity", "اختر الكيان القانوني"), "title"),
         { type: "select", bind: "enroll.entity", label: L("Legal entity", "الكيان القانوني"), source: "legal.list", variant: "rows" },
-        { type: "select", bind: "enroll.kind", label: L("Select an enrollment option", "اختر خيار التسجيل"), variant: "rows", choices: [{ id: "personal", label: L("Personal Banking", "الخدمات المصرفية الشخصية") }, { id: "business", label: L("Business Banking", "خدمات الأعمال المصرفية") }] },
-        button(L("Continue", "متابعة"), [{ type: "validate" }, { type: "navigate" }]),
+        button(L("Continue", "متابعة"), [{ type: "validate" }, go("option")]),
       ],
-      navigation: route([{ when: "enroll.kind == 'business'", to: "business" }, { when: "enroll.kind == 'personal'", to: "last-name" }]),
+    },
+    {
+      id: "option", title: L("Legal entity", "الكيان القانوني"),
+      blocks: [
+        { type: "reviewSummary", rows: [{ label: L("Selected Entity", "الكيان المحدد"), value: "{{legal.list[enroll.entity].name}}" }] },
+        text(L("Select an enrollment option", "اختر خيار التسجيل"), "title"),
+        // tapping a row goes straight on, as in the design: there is no Continue button here
+        { type: "menu", items: [
+          { id: "personal", label: L("Personal Banking", "الخدمات المصرفية الشخصية"), icon: "user", actions: [{ type: "setData", path: "enroll.kind", value: "personal" }, go("last-name")] },
+          { id: "business", label: L("Business Banking", "خدمات الأعمال المصرفية"), icon: "rocket", actions: [{ type: "setData", path: "enroll.kind", value: "business" }, go("business")] },
+        ] },
+      ],
     },
     end("business", L("Business banking", "الخدمات المصرفية للأعمال"), [
       result("error", L("Business banking is enrolled separately", "التسجيل في خدمات الأعمال يتم بشكل منفصل"), L("Mobile enrollment is for retail customers. Contact the bank to enrol a business profile.", "التسجيل عبر الهاتف مخصص للعملاء الأفراد. تواصل مع البنك لتسجيل ملف أعمال.")),

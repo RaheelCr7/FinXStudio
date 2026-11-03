@@ -146,6 +146,9 @@ describe("settings, language, locations", () => {
     const b = new MockBank("nour");
     expect(await b.call("cab.language.set", { code: "ar_AE" })).toMatchObject({ ok: true, name: "Arabic" });
     await expect(b.call("cab.language.set", { code: "xx" })).rejects.toMatchObject({ code: "LANGUAGE_UNSUPPORTED" });
+    expect(await b.call("cab.language.selection", {})).toEqual({ code: "ar_AE", name: "Arabic" }); // the one in use
+    expect(await b.call("cab.language.selection", { chosen: "fr_FR" })).toEqual({ code: "fr_FR", name: "French" }); // the one picked so far
+    expect(await b.call("cab.language.selection", { chosen: "xx" })).toEqual({ code: "ar_AE", name: "Arabic" }); // an unknown pick falls back
   });
   it("finds branches and ATMs by kind, range and text, and gives the details of one", async () => {
     const b = new MockBank("nour");
