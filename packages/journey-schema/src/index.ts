@@ -1,6 +1,7 @@
 export * from "./schema";
 export * from "./lint";
 export * from "./validate";
+export * from "./requirement";
 export { localTransfer } from "./fixtures/local-transfer";
 export { convertCurrency } from "./fixtures/convert-currency";
 export { payBill } from "./fixtures/pay-bill";

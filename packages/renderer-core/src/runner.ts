@@ -6,6 +6,14 @@ import { ui } from "./strings";
 import { cardExpiryValid, luhnValid } from "./card";
 import { balanceRows } from "./blocks/pickers";
 
+/** The actions of a list row with every {{item.…}} filled in from that row, so pressing it acts on the right entry. */
+function bindItem(node: any, scope: any): any {
+  if (typeof node === "string") return node.includes("{{item.") ? interpolate(node, scope) : node;
+  if (Array.isArray(node)) return node.map((v) => bindItem(v, scope));
+  if (node && typeof node === "object") return Object.fromEntries(Object.entries(node).map(([k, v]) => [k, bindItem(v, scope)]));
+  return node;
+}
+
 export type Adapter = (adapterId: string, input: Record<string, any>) => Promise<any>;
 export type RunnerOptions = { adapter: Adapter; lang?: string };
 export type ViewBlock = Block & { _error?: string };
@@ -215,7 +223,15 @@ export class JourneyRunner {
     if (b.type === "cardForm") out.errors = Object.fromEntries(["number", "holder", "expiry", "cvv"].map((k) => [k, this.errors[`${b.bind}.${k}`]]));
     if (b.type === "beneficiaryPicker") out.items = Object.values(this.get(b.source) ?? {});
     if (b.type === "button") out.label = this.tx(b.label);
-    if (b.type === "menu" || b.type === "shortcuts") out.items = b.items.map((i: any) => ({ ...i, label: this.tx(i.label), ...(i.text ? { text: this.tx(i.text) } : {}) }));
+    if (b.type === "menu" || b.type === "shortcuts") out.items = (b.items ?? []).map((i: any) => ({ ...i, label: this.tx(i.label), ...(i.text ? { text: this.tx(i.text) } : {}) }));
+    if (b.type === "menu" && b.source && b.item) {
+      // one row per entry of the list; {{item.x}} in the row's texts and actions reads that entry
+      out.items = Object.values(this.get(b.source) ?? {}).map((x: any, n) => {
+        const scope = { ...this.scope(), item: x };
+        const say = (t: any) => interpolate(localize(t, this.lang, this.journey.locale.default), scope);
+        return { id: String(x?.id ?? n), label: say(b.item.label), ...(b.item.text ? { text: say(b.item.text) } : {}), ...(b.item.icon ? { icon: b.item.icon } : {}), actions: bindItem(b.item.actions, scope) };
+      });
+    }
     if (b.type === "toggle" && b.link) out.link = { ...b.link, label: this.tx(b.link.label) };
     if (b.type === "balanceList") out.rows = balanceRows({ items: Object.values(this.get(b.source) ?? {}) });
     if (b.type === "accordion") out.items = b.items.map((i: any) => ({ id: i.id, title: this.tx(i.title), text: this.tx(i.text) }));

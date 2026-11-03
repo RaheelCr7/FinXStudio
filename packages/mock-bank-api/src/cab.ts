@@ -150,7 +150,7 @@ export class CabSandbox {
         };
       }
 
-      case "cab.device.options": return { default: this.device.default, pinSet: !!this.device.pin, biometricAvailable: this.device.biometric };
+      case "cab.device.options": return { mode: this.device.default, default: this.device.default, pinSet: !!this.device.pin, biometricAvailable: this.device.biometric };
       case "cab.device.setDefault": {
         const mode = String(input.mode ?? "");
         if (!["password", "pin", "biometric"].includes(mode)) throw new BankError("INVALID_MODE", "Choose password, pin or biometric");
@@ -236,7 +236,7 @@ export class CabSandbox {
       case "cab.locations.details": {
         const x = PLACES.find((l) => l.id === input.id);
         if (!x) throw new BankError("LOCATION_NOT_FOUND", "Location not found");
-        return { ...x, status: x.open ? "Open" : "Closed", type: x.kind === "atm" ? "ATM" : "Branch", distanceKm: x.km, services: x.services.join(", ") };
+        return { ...x, status: x.open ? "Open" : "Closed", type: x.kind === "atm" ? "ATM" : "Branch", distanceKm: x.km, country: "Jordan", services: x.services.join(", ") };
       }
 
       default: return undefined;

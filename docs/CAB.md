@@ -38,7 +38,7 @@ Adapters are named `cab.*` (22 of them, listed with inputs and outputs in the ad
 
 A bank can carry a **look** in `packages/ui-kit/src/brands.json`: a coloured app bar with a back arrow and a close button, a rounded sheet on a light page, outlined fields, the bank's logo and font. CAB's look is taken from the Figma export (bar colour #00853E, logo cropped from the exported frames for this project only). Both renderers, the phone app and the web app, draw it from the same definition, so a screen is built once.
 
-New journey blocks that the design needed, available to every project and listed in the AI catalog and the Studio builder: `divider` (a line with a word such as OR), `balanceList` (read-only account rows) and `accordion` (questions that open to show answers), `hero` (logo banner), `sectionHeader` (heading with a link), `shortcuts` (icon button row), `menu` (tappable rows). `select` gained a `rows` variant, `otp` a number pad and masked digits (`keypad`, `masked`), and `toggle` a link on the same row.
+New journey blocks that the design needed, available to every project and listed in the AI catalog and the Studio builder: `divider` (a line with a word such as OR), `menu` rows built from a saved list (`source` and `item`), `balanceList` (read-only account rows) and `accordion` (questions that open to show answers), `hero` (logo banner), `sectionHeader` (heading with a link), `shortcuts` (icon button row), `menu` (tappable rows). `select` gained a `rows` variant, `otp` a number pad and masked digits (`keypad`, `masked`), and `toggle` a link on the same row.
 
 Known gaps against the Figma: the bank's own typeface is not available, so the web uses open fonts picked for it (Inter for Latin, Noto Sans Arabic for Arabic, both loaded through `@fontsource`; the phone apps still use the system font), the map on Locate us, a date picker, the picture-code image, the OR divider between menu rows, and the language confirmation as a pop-up (it is a screen).
 
@@ -57,14 +57,16 @@ Every CAB sheet was compared screen by screen with its journey (content and flow
 
 **Decision, reset order:** the journey keeps the platform's order (security code first, then the new password, with a "where to send the code" step). The design shows found, Change Password, Security Code, success. The platform order was checked against the bank's platform code; revisit it only if the bank confirms the design order is the intended one.
 
+**Also fixed (third pass):** *Default sign in* opens with the current default ticked and the design's status words under each way (Default sign in, Enabled, Generated), and the success screen is the design's banner, "Default Sign In" card with a Change link, the chosen way with its status, and the Menu > Settings note.
+
 **Kept on purpose (not in the frames, from the platform):** locked, expired, inactive and not-found screens, the three-mistake locks, the wrong-code alerts, business banking and already-enrolled paths.
 
 **Open: needs a decision or a new block**
-- *Not modelled:* the login-time PIN modal and the biometric "Unlock" modal, the "Welcome Nour" remembered-user greeting, the Menu and My Accounts screens that lead to Default sign in and Account preview.
-- *Default sign in:* the list should tick the current default with the status words (Default sign in, Enabled, Generated), and the success screen should show the Default Sign In card with a Change link.
+- *Not modelled:* the "Welcome Nour" remembered-user greeting, the Menu and My Accounts screens that lead to Default sign in and Account preview.
+- *Login-time modals:* the PIN modal ("Enter Sign in PIN") and the biometric "Unlock" modal on the login screen, shown when that way is the default. Needs a modal/sheet concept.
 - *Found screen:* username dropdown, avatar, and "Sign in as" returning to the login with the username filled in. (The OR divider is done.)
 - *Account preview:* the setup screen still has a Save button and a warning the design does not show. (The preview list itself is done: heading with an "As of" time, rows with a type tag, balance and note, new `balanceList` block.)
-- *Locate us:* map first, with a search bar, "List view" and "Filters" buttons, a separate filter sheet with a Services section, tappable result rows, details with the country and one primary button.
+- *Locate us:* the map itself (no map block yet; the design opens on a map with the search bar). The rest is done: search bar with "List view" and "Filters", a separate Advance Filter screen, a result list of tappable rows (a menu built from the found locations), details with the country and a single "Call us" button. The filter's empty "Services" section is not modelled.
 - *Support:* the Call us dialer as a pop-up, and the FAQ, Terms and Privacy text taken from the design. (FAQs are now one accordion screen of six topics.)
 - *Details:* the design's Account Activity answers and Privacy text are fuller than the samples here.
 

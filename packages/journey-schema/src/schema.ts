@@ -90,7 +90,14 @@ export const Block = z.discriminatedUnion("type", [
   /** A row of icon buttons, for example Enroll, Locate us and Support at the bottom of a sign-in screen. */
   z.object({ ...base, type: z.literal("shortcuts"), items: z.array(z.object({ id: z.string(), label: LocalizedText, icon: z.string().optional(), actions: z.array(Action) })) }),
   /** A list of rows that each do something when tapped, with an optional icon and a line of help. */
-  z.object({ ...base, type: z.literal("menu"), items: z.array(z.object({ id: z.string(), label: LocalizedText, text: LocalizedText.optional(), icon: z.string().optional(), actions: z.array(Action) })) }),
+  z.object({
+    ...base, type: z.literal("menu"),
+    /** Fixed rows. */
+    items: z.array(z.object({ id: z.string(), label: LocalizedText, text: LocalizedText.optional(), icon: z.string().optional(), actions: z.array(Action) })).optional(),
+    /** Or one row per entry of a saved list (a path such as loc.found), drawn from the `item` template: {{item.name}} in its texts and actions reads that entry. */
+    source: z.string().optional(),
+    item: z.object({ label: LocalizedText, text: LocalizedText.optional(), icon: z.string().optional(), actions: z.array(Action) }).optional(),
+  }),
   z.object({ ...base, type: z.literal("button"), label: LocalizedText, variant: z.enum(["primary", "secondary", "ghost"]).optional(), actions: z.array(Action) }),
 ]);
 export type Block = z.infer<typeof Block>;

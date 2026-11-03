@@ -7,7 +7,7 @@ export const blockActions = (b: any): any[] => {
   switch (b?.type) {
     case "button": return b.actions ?? [];
     case "otp": return b.onResend ?? [];
-    case "menu": case "shortcuts": return (b.items ?? []).flatMap((i: any) => i.actions ?? []);
+    case "menu": case "shortcuts": return [...(b.items ?? []).flatMap((i: any) => i.actions ?? []), ...(b.item?.actions ?? [])];
     case "sectionHeader": return b.action?.actions ?? [];
     case "toggle": return b.link?.actions ?? [];
     default: return [];
