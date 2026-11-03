@@ -24,7 +24,11 @@ export const ADAPTER_CATALOG: AdapterInfo[] = [
   },
   {
     adapter: "bank.limits.get", suggestedId: "limits", description: "Daily transfer limit and how much is used today.",
-    input: {}, returns: "{ daily, usedToday } in PKR. Save as ctx.limits.",
+    input: { currency: "optional, e.g. 'USD': the limit for accounts in that currency (customers with accounts in several currencies have one per currency)" }, returns: "{ daily, usedToday } in the currency of the customer's first account; with a currency, also { currency }. Fails with LIMIT_NOT_SET for a currency with no limit. Save as ctx.limits.",
+  },
+  {
+    adapter: "bank.accounts.totals", suggestedId: "totals", description: "Balances added up per currency (never across currencies), for a customer with accounts in several currencies.",
+    input: {}, returns: "Object keyed by currency code: { id, currency, total, count }. Save as ctx.totals and use it as a list source (a balance per currency).",
   },
   {
     adapter: "bank.otp.send", suggestedId: "otpSend", description: "Sends a one-time code by SMS to the customer's phone.",
