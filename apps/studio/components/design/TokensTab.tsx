@@ -10,7 +10,7 @@ import { Themed } from "./Preview";
 
 const FIELDS: { group: keyof ComponentTokens; title: string; sizes: { key: string; label: string }[] }[] = [
   { group: "field", title: "Text field", sizes: [{ key: "height", label: "Height" }, { key: "radius", label: "Corner radius" }, { key: "border", label: "Border width" }] },
-  { group: "button", title: "Button", sizes: [{ key: "height", label: "Height" }, { key: "radius", label: "Corner radius" }] },
+  { group: "button", title: "Button", sizes: [{ key: "height", label: "Height" }, { key: "radius", label: "Corner radius" }, { key: "border", label: "Outline width" }] },
   { group: "bar", title: "App bar", sizes: [{ key: "height", label: "Height" }] },
   { group: "row", title: "List row", sizes: [{ key: "height", label: "Height" }, { key: "radius", label: "Corner radius" }] },
   { group: "keypad", title: "Keypad", sizes: [{ key: "key", label: "Key width" }, { key: "keyHeight", label: "Key height" }, { key: "gapX", label: "Gap across" }, { key: "gapY", label: "Gap down" }] },

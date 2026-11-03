@@ -15,7 +15,7 @@ export function Button({ label, variant = "primary", busy, disabled, onPress }: 
   return (
     <Pressable accessibilityRole="button" accessibilityLabel={label} accessibilityState={{ busy: !!busy, disabled: !!off }} disabled={off} onPress={onPress}
       style={({ pressed }) => ({ minHeight: t.button.height, paddingVertical: 8, paddingHorizontal: 16, borderRadius: t.button.radius, alignItems: "center", justifyContent: "center",
-        backgroundColor: primary ? bar ?? c.accent : "transparent", borderWidth: primary ? 0 : 1, borderColor: bar ?? c.borderStrong, opacity: off ? 0.6 : pressed ? 0.9 : 1 })}>
+        backgroundColor: primary ? bar ?? c.accent : "transparent", borderWidth: primary ? 0 : t.button.border, borderColor: bar ?? c.borderStrong, opacity: off ? 0.6 : pressed ? 0.9 : 1 })}>
       <Text style={{ color: primary ? c.accentOn : bar ?? c.text, fontSize: 16, fontWeight: "600" }}>{label}</Text>
     </Pressable>
   );

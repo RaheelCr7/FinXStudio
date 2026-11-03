@@ -15,7 +15,7 @@ const raw = `
 .fxc-btn[aria-busy="true"] { cursor: progress; }
 .fxc-btn-primary { border: 0; background: var(--bar-bg, var(--c-accent)); color: var(--c-accent-on); }
 .fxc-btn-primary:hover:not(:disabled) { opacity: .92; }
-.fxc-btn-secondary { border: 1px solid var(--bar-bg, var(--c-border-strong)); background: transparent; color: var(--bar-bg, var(--c-text)); }
+.fxc-btn-secondary { border: var(--fxc-button-border) solid var(--bar-bg, var(--c-border-strong)); background: transparent; color: var(--bar-bg, var(--c-text)); }
 
 .fxc-field { margin: 0; min-inline-size: 0; }
 .fxc-label { display: block; margin-block-end: 8px; font-size: 13px; font-weight: 500; color: var(--c-text-muted); }

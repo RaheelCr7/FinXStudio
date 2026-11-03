@@ -1,7 +1,7 @@
 /** Sizes of the shared components, in px. Each bank can override any of them in brands.json under "components". */
 export type ComponentTokens = {
   field: { height: number; radius: number; border: number };
-  button: { height: number; radius: number };
+  button: { height: number; radius: number; border: number };
   bar: { height: number; icon: number };
   row: { height: number; radius: number };
   keypad: { key: number; keyHeight: number; gapX: number; gapY: number };
@@ -10,7 +10,7 @@ export type ComponentTokenOverrides = { [K in keyof ComponentTokens]?: Partial<C
 
 export const defaultComponentTokens: ComponentTokens = {
   field: { height: 52, radius: 12, border: 1 },
-  button: { height: 54, radius: 16 },
+  button: { height: 54, radius: 16, border: 1 },
   bar: { height: 56, icon: 24 },
   row: { height: 54, radius: 10 },
   keypad: { key: 84, keyHeight: 40, gapX: 14, gapY: 10 },

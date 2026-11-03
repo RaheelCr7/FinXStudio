@@ -35,7 +35,7 @@ export async function POST(req: Request) {
     // starters go live only when the person is allowed to publish; otherwise they arrive as drafts to be reviewed
     const body = await req.json();
     const goLive = canDo(who, "publish", undefined, await listRoles()) && body.publishStarters !== false;
-    const created = await createProject({ name: body.name, bundleId: body.bundleId, preset: body.preset, accent: body.accent, currency: body.currency });
+    const created = await createProject({ name: body.name, bundleId: body.bundleId, preset: body.preset, accent: body.accent, currency: body.currency, look: body.look, radius: body.radius, components: body.components, country: body.country, channels: body.channels, languages: body.languages, customLanguages: body.customLanguages, entities: body.entities });
     const started: string[] = [], failed: { slug: string; error: string }[] = [];
     for (const slug of Array.isArray(body.starters) ? body.starters.slice(0, 20) : []) {
       try { await cloneJourney(String(slug), created.project.id, { publishNow: goLive }); started.push(`${slug}-${created.project.id}`); }

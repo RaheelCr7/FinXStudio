@@ -8,17 +8,20 @@ Today there are two: **Meezan Digital** (classic look, PKR) and **BankWorkx** (f
 
 - **Sidebar, top:** the current project. Click it to switch. The Journeys page then shows that project's journeys (*Show every project* lifts the filter).
 - **Projects** (sidebar, or ⌘K → *Projects*): every project, how many journeys are live, its app id, and the commands to build its app.
-- **New project:** a four-step wizard.
-  1. **Basics:** a name, the app id (suggested, for example `com.acmebank.app`; it cannot change once the app is in a store), and the currency.
-  2. **Look:** *Classic* or *Fintech*, and a brand colour. A phone mock shows the result as you choose. A colour too light for white text is refused, and dark mode gets a lighter version of it automatically.
-  3. **Starting journeys:** copies of working journeys from another bank with the same look, published straight away (or left as drafts). The originals are not changed.
-  4. **Review and create.** You get the build commands.
+- **New project:** a seven-step wizard with a live preview (light, dark, high contrast, left to right or right to left).
+  1. **Basics:** a name and the app id (suggested, for example `com.acmebank.app`; it cannot change once the app is in a store).
+  2. **Channels:** mobile and web. Tablet and watch are listed as coming later: they are saved with the project but nothing is built for them yet.
+  3. **Country and languages:** pick a country and its draft profile fills the currency and usual languages (the profile names the regulator and links to it; it is a starting point to confirm with the bank, not compliance guidance). Choose any number of languages, the first being the default, or add your own with a code, name and direction.
+  4. **Entities:** one entity by default. Turn on *group with more than one legal entity* to add entities, each with its own country, currency and languages.
+  5. **Look:** a ready look (Classic, Fintech, Coloured bar, Islamic bank, Neobank, Corporate, High contrast), a brand colour, a *Roundness* slider and a *Density* slider, and an accessibility check (contrast of the button, link and text, and the smallest tap target) that says what to fix. A colour too light for white text is refused.
+  6. **Starting journeys:** copies of working journeys from another bank with the same base look, published straight away (or left as drafts). The originals are not changed.
+  7. **Review and create.** You get the build commands.
 - **New journey** asks which project it is for, and starts as the current one. **Settings → Shown in** changes it later.
 - The **phone preview** uses the journey's project: its look, currency and sandbox customers.
 
 ## What creating a project really does
 
-It adds an entry to `packages/ui-kit/src/brands.json`, the one file the design system, Studio and the build scripts all read. So a project made in Studio is a real, buildable app straight away:
+It adds an entry to `packages/ui-kit/src/brands.json` (including its channels, languages, entities and the sizes the look sets; see [COMPONENTS.md](COMPONENTS.md)), the one file the design system, Studio and the build scripts all read. So a project made in Studio is a real, buildable app straight away:
 
 ```bash
 pnpm ios:sim --brand acme-bank --install       # iPhone Simulator

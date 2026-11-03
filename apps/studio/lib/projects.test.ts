@@ -123,4 +123,28 @@ describe("projects", () => {
     await expect(projects.updateProjectShape("cab", { languages: ["en"], entities: [{ id: "jo", name: "CAB Jordan", country: "JO", currency: "JOD", languages: ["ar"] }] })).rejects.toThrow(/does not offer/);
     await expect(projects.updateProjectShape("nope", {})).rejects.toThrow(/No project/);
   });
+
+  it("creates a project from a country, a library look and the sliders, with the shape filled in", async () => {
+    const { project } = await projects.createProject({ name: "Levant Bank", preset: "meezan", accent: "#0B5D4B", currency: "", country: "JO", look: "corporate", radius: { md: 9 }, components: { field: { height: 48 } } });
+    const saved = JSON.parse(readFileSync(file, "utf8"))["levant-bank"];
+    expect(saved.currency).toBe("JOD");
+    expect(saved.locale).toBe("en-JO");
+    expect(saved.look.chrome).toBe("bar");
+    expect(saved.radius.md).toBe(9);
+    expect(saved.components.field.height).toBe(48);
+    expect(saved.components.button.height).toBe(46);
+    expect(saved.languages).toEqual(["en", "ar"]);
+    expect(saved.entities).toEqual([{ id: "main", name: "Levant Bank", country: "JO", currency: "JOD", languages: ["en", "ar"] }]);
+    expect(project.brand.radius.md).toBe(9);
+  });
+
+  it("creates a two-entity group and refuses an entity that needs a language the project lacks", async () => {
+    const ent = (id: string, country: string, currency: string, languages: string[]) => ({ id, name: id.toUpperCase(), country, currency, languages });
+    const ok = await projects.createProject({ name: "Gulf Group", preset: "meezan", accent: "#0F6E56", currency: "AED", country: "AE", languages: ["en", "ar"], entities: [ent("ae", "AE", "AED", ["en", "ar"]), ent("om", "OM", "OMR", ["ar"])] });
+    expect(ok.project.entities).toHaveLength(2);
+    await expect(projects.createProject({ name: "Bad Group", preset: "meezan", accent: "#0F6E56", currency: "AED", country: "AE", languages: ["en"], entities: [ent("ae", "AE", "AED", ["ar"])] })).rejects.toThrow(/does not offer/);
+    await expect(projects.createProject({ name: "Nowhere Bank", preset: "meezan", accent: "#0F6E56", currency: "USD", country: "ZZ" })).rejects.toThrow(/country/);
+    await expect(projects.createProject({ name: "Odd Look", preset: "meezan", accent: "#0F6E56", currency: "USD", look: "nope" })).rejects.toThrow(/library/);
+    await expect(projects.createProject({ name: "Odd Radius", preset: "meezan", accent: "#0F6E56", currency: "USD", radius: { md: 99 } })).rejects.toThrow(/0 to 40/);
+  });
 });
