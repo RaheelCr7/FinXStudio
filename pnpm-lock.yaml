@@ -160,6 +160,9 @@ importers:
       '@finx/renderer-native':
         specifier: workspace:*
         version: link:../../packages/renderer-native
+      '@finx/renderer-web':
+        specifier: workspace:*
+        version: link:../../packages/renderer-web
       '@finx/ui-kit':
         specifier: workspace:*
         version: link:../../packages/ui-kit

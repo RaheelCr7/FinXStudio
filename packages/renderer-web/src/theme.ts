@@ -3,12 +3,27 @@ import { completeColors, type Brand } from "@finx/ui-kit";
 const kebab = (k: string) => k.replace(/[A-Z]/g, (m) => "-" + m.toLowerCase());
 const SAFE_ID = /^[a-z0-9][a-z0-9-]{0,62}$/;
 
-function declarations(brand: Brand, mode: "light" | "dark"): string {
+/** The CSS variables for one bank in one mode, as name to value. */
+function variables(brand: Brand, mode: "light" | "dark"): Record<string, string> {
   const colors = completeColors((mode === "dark" ? brand.dark : brand.light).colors) as Record<string, string>;
-  const lines = Object.entries(colors).map(([k, v]) => `--c-${kebab(k)}:${v};`);
-  for (const [k, v] of Object.entries(brand.radius)) lines.push(`--r-${k}:${v}px;`);
-  lines.push(`color-scheme:${mode};`);
-  return lines.join("");
+  const out: Record<string, string> = {};
+  for (const [k, v] of Object.entries(colors)) out[`--c-${kebab(k)}`] = v;
+  for (const [k, v] of Object.entries(brand.radius)) out[`--r-${k}`] = `${v}px`;
+  out["color-scheme"] = mode;
+  return out;
+}
+
+function declarations(brand: Brand, mode: "light" | "dark"): string {
+  return Object.entries(variables(brand, mode)).map(([k, v]) => `${k}:${v};`).join("");
+}
+
+/**
+ * The same variables for one element, to scope a bank's colours to a single box (for example a preview inside another
+ * app) instead of the whole page. Pass it as `style` (React wants `colorScheme` in camel case, so that one key differs).
+ */
+export function themeVars(brand: Brand, mode: "light" | "dark"): Record<string, string> {
+  const { "color-scheme": scheme, ...custom } = variables(brand, mode);
+  return { ...custom, colorScheme: scheme as string };
 }
 
 /**

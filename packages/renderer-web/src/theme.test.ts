@@ -2,7 +2,19 @@ import { describe, expect, it } from "vitest";
 import { readFileSync, readdirSync } from "node:fs";
 import path from "node:path";
 import { brands } from "@finx/ui-kit";
-import { themeCss } from "./theme";
+import { themeCss, themeVars } from "./theme";
+
+describe("theme variables for one element", () => {
+  it("gives the same variables as the stylesheet, per mode, so a preview can scope a bank to one box", () => {
+    const light = themeVars(brands.bankworkx!, "light"), dark = themeVars(brands.bankworkx!, "dark");
+    expect(light["--c-accent"]?.toLowerCase()).toBe("#3155ce");
+    expect(light.colorScheme).toBe("light");
+    expect(dark.colorScheme).toBe("dark");
+    expect(dark["--c-bg"]).not.toBe(light["--c-bg"]);
+    expect(Object.keys(light).some((k) => k.startsWith("--r-"))).toBe(true);
+    for (const [k, v] of Object.entries(light).filter(([k]) => k.startsWith("--"))) expect(themeCss(brands.bankworkx!)).toContain(`${k}:${v};`);
+  });
+});
 
 describe("theme stylesheet", () => {
   it("gives a bank its light and dark variables, scoped to its own pages", () => {

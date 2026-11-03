@@ -6,6 +6,8 @@ import { MockBank, personasFor } from "@finx/mock-bank-api";
 import { brands, type Brand } from "@finx/ui-kit";
 import { useProjects } from "./Projects";
 import { JourneyPlayer, ThemeProvider } from "@finx/renderer-native";
+import { JourneyPlayer as WebPlayer, themeVars } from "@finx/renderer-web";
+import "@finx/renderer-web/src/styles/renderer.css";
 
 function useDebounced<T>(value: T, ms: number) {
   const [v, setV] = useState(value);
@@ -24,6 +26,10 @@ export function Preview({ journey }: { journey: Journey }) {
   const [lang, setLang] = useState("en");
   const [dark, setDark] = useState(false);
   const [seed, setSeed] = useState(0);
+  // A journey made for both channels previews on a phone or as a web page; one made for a single channel shows only that.
+  const hasWeb = journey.channels.includes("web"), hasMobile = journey.channels.includes("mobile");
+  const [chosen, setChosen] = useState<"phone" | "web">("phone");
+  const view: "phone" | "web" = hasWeb && hasMobile ? chosen : hasWeb ? "web" : "phone";
   const [scale, setScale] = useState(1);
   const fit = useRef<HTMLDivElement>(null);
   const live = useDebounced(journey, 450);
@@ -54,6 +60,22 @@ export function Preview({ journey }: { journey: Journey }) {
           <button className="btn sm icon" onClick={restart} aria-label="Restart preview" title="Restart"><RotateCcw size={14} /></button>
         </div>
       </div>
+      {hasWeb && hasMobile ? (
+        <div className="seg" role="group" aria-label="Preview as">
+          <button aria-pressed={view === "phone"} onClick={() => { setChosen("phone"); restart(); }}>Phone</button>
+          <button aria-pressed={view === "web"} onClick={() => { setChosen("web"); restart(); }}>Web</button>
+        </div>
+      ) : null}
+      {view === "web" ? (
+        <div className="web-frame" role="region" aria-label="Web preview">
+          <div className="web-bar" aria-hidden><i /><i /><i /><span>{(byId(journey.apps?.[0] ?? "meezan")?.name ?? "bank").toLowerCase().replace(/[^a-z0-9]+/g, "")}.example/j/{journey.slug}</span></div>
+          <div className="web-body" style={themeVars(brand, dark ? "dark" : "light")}>
+            <div className="web-card">
+              <WebPlayer key={seed} journey={live} adapter={adapter} lang={lang} onClose={restart} onExit={restart} />
+            </div>
+          </div>
+        </div>
+      ) : (
       <div className="phone-fit" ref={fit}>
         <div style={{ width: PHONE.w * scale, height: PHONE.h * scale, flex: "none" }}>
           <div className="phone" role="region" aria-label="Phone preview" style={{ transform: `scale(${scale})`, transformOrigin: "top left" }}>
@@ -67,6 +89,7 @@ export function Preview({ journey }: { journey: Journey }) {
           </div>
         </div>
       </div>
+      )}
       <div className="faint" style={{ textAlign: "center" }}>Live preview · sandbox data · v{journey.version} draft</div>
     </>
   );
