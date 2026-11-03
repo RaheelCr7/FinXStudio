@@ -334,7 +334,11 @@ importers:
         specifier: 3.23.8
         version: 3.23.8
 
-  packages/mock-bank-api: {}
+  packages/mock-bank-api:
+    dependencies:
+      '@finx/ui-kit':
+        specifier: workspace:*
+        version: link:../ui-kit
 
   packages/renderer-core:
     dependencies:

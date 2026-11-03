@@ -1,9 +1,12 @@
 import { instrumentOf, INSTRUMENTS, dayChange } from "./invest";
 import { alexFinance, BANKS, cardNetwork, luhnValid, type Finance } from "./finance";
+import { customerRate, midRate, priceQuote, fxSupports, FX_SPREAD, QUOTE_TTL_SECONDS, type Quote } from "./fx";
+import { currencyInfo, roundMoney } from "@finx/ui-kit";
 import { CabSandbox, CAB_PROFILES, type CabProfile } from "./cab";
 export * from "./finance";
 export { CAB_PROFILES, CAB_CURRENCY, PASSWORD_RULES, passwordProblems, type CabProfile } from "./cab";
 export * from "./invest";
+export { PER_USD, FX_SPREAD, FX_FEE_RATE, QUOTE_TTL_SECONDS, midRate, customerRate, type Quote } from "./fx";
 
 export type Account = { id: string; name: string; maskedNumber: string; iban: string; balance: number; currency: string; status: "active" | "frozen"; canDebit: boolean };
 export type Beneficiary = { id: string; displayName: string; bank: string; maskedNumber: string; addedAt: number };
@@ -134,6 +137,9 @@ export class MockBank {
   private otpAttempts = 0;
   private otpVerified = false;
   private seq = 0;
+  private quotes = new Map<string, Quote & { used: boolean }>();
+  /** The clock quotes expire by; tests replace it. */
+  now: () => number = () => Date.now();
   private cab: CabSandbox;
   constructor(personaId = "ayesha") {
     const base = personas[personaId];
@@ -166,6 +172,45 @@ export class MockBank {
       case "bank.limits.get":
         // with a currency: the limit for accounts in that currency; without: the main one, as before
         return input.currency ? { ...this.limitFor(String(input.currency)), currency: String(input.currency) } : { ...this.p.limits };
+      case "bank.fx.rate": {
+        const from = String(input.from ?? ""), to = String(input.to ?? "");
+        if (!fxSupports(from) || !fxSupports(to)) throw new BankError("CURRENCY_NOT_SUPPORTED", "We do not convert that currency pair");
+        return { from, to, midRate: Math.round(midRate(from, to)! * 1e6) / 1e6, rate: customerRate(from, to), spreadPercent: FX_SPREAD * 100 };
+      }
+      case "bank.fx.quote": {
+        const from = this.p.accounts.find((a) => a.id === input.fromAccountId), to = this.p.accounts.find((a) => a.id === input.toAccountId);
+        if (!from || !to) throw new BankError("ACCOUNT_NOT_FOUND", "Account not found");
+        if (from.currency === to.currency) throw new BankError("SAME_CURRENCY", "Choose two accounts in different currencies");
+        if (!fxSupports(from.currency) || !fxSupports(to.currency)) throw new BankError("CURRENCY_NOT_SUPPORTED", "We do not convert that currency pair");
+        const amount = Number(input.amount);
+        const digits = currencyInfo(from.currency).decimals;
+        if (!(amount > 0) || Math.abs(amount * 10 ** digits - Math.round(amount * 10 ** digits)) > 1e-6) throw new BankError("INVALID_AMOUNT", `Enter an amount in ${from.currency} with at most ${digits} decimal places`);
+        const price = priceQuote(from.currency, to.currency, amount);
+        if (price.total > from.balance) throw new BankError("INSUFFICIENT_FUNDS", "Insufficient funds");
+        this.seq += 1;
+        const q: Quote = {
+          quoteId: `fxq_${this.seq}`, fromAccountId: from.id, toAccountId: to.id,
+          from: { currency: from.currency, amount }, to: { currency: to.currency, amount: price.receive },
+          midRate: price.midRate, rate: price.rate, fee: price.fee, feeCurrency: from.currency, total: price.total,
+          expiresAt: new Date(this.now() + QUOTE_TTL_SECONDS * 1000).toISOString(), ttlSeconds: QUOTE_TTL_SECONDS,
+        };
+        this.quotes.set(q.quoteId, { ...q, used: false });
+        return q;
+      }
+      case "bank.fx.convert": {
+        if (!this.otpVerified) throw new BankError("OTP_REQUIRED", "OTP not verified");
+        if (this.p.behaviour.transferFails) throw new BankError("CORE_UNAVAILABLE", "Core banking unavailable");
+        const q = this.quotes.get(String(input.quoteId));
+        if (!q) throw new BankError("QUOTE_NOT_FOUND", "Quote not found");
+        if (q.used) throw new BankError("QUOTE_USED", "This quote has already been used");
+        if (this.now() > Date.parse(q.expiresAt)) throw new BankError("QUOTE_EXPIRED", "The rate has expired. Get a new one.");
+        const from = this.p.accounts.find((a) => a.id === q.fromAccountId)!, to = this.p.accounts.find((a) => a.id === q.toAccountId)!;
+        if (q.total > from.balance) throw new BankError("INSUFFICIENT_FUNDS", "Insufficient funds");
+        from.balance = roundMoney(from.balance - q.total, from.currency);
+        to.balance = roundMoney(to.balance + q.to.amount, to.currency);
+        q.used = true; this.otpVerified = false; this.seq += 1;
+        return { reference: `FX-20261102-${String(930 + this.seq).padStart(4, "0")}`, from: { currency: from.currency, newBalance: from.balance }, to: { currency: to.currency, newBalance: to.balance }, quoteId: q.quoteId };
+      }
       case "bank.accounts.totals": {
         // balances added up per currency, never across currencies; a record keyed by currency so it can feed a list
         const out: Record<string, { id: string; currency: string; total: number; count: number }> = {};

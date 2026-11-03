@@ -1,6 +1,7 @@
 import type { Journey } from "./schema";
 import { localTransfer } from "./fixtures/local-transfer";
 import { payBill } from "./fixtures/pay-bill";
+import { convertCurrency } from "./fixtures/convert-currency";
 import { addMoney, addCard, connectAccount, createBudget, invest, sellInvestment } from "./fixtures/bankworkx";
 import { cabJourneys } from "./fixtures/cab";
 
@@ -34,6 +35,11 @@ export const catalog: CatalogEntry[] = [
     id: payBill.slug, category: "Payments", madeFor: "meezan", journey: payBill,
     summary: "Look up a bill by company and reference, review it and pay from an account.",
     highlights: ["Bill lookup", "Review before paying", "One-time code", "English and Urdu"],
+  },
+  {
+    id: convertCurrency.slug, category: "Accounts", madeFor: "meezan", journey: convertCurrency,
+    summary: "Convert money between two of your own accounts in different currencies, with the rate and fee shown before you confirm.",
+    highlights: ["Amount in the account's own currency", "Rate and fee on the review", "Rate that expires", "One-time code", "English and Urdu"],
   },
   {
     id: addMoney.slug, category: "Accounts", madeFor: "bankworkx", journey: addMoney,
