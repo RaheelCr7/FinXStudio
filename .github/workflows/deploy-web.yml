@@ -1,0 +1,36 @@
+name: Deploy web app
+
+# Studio's Deploy button commits a project's published journeys to finx/<project>/published/, tags the commit
+# deploy/<project>/<time> and pushes the tag. This workflow builds the web banking app from that tag and keeps the build as an
+# artifact. Where the build is hosted is each bank's choice: add the upload step for your host below the marked line.
+on:
+  push:
+    tags: ["deploy/**"]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    name: Build the web app for the tag
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm typecheck
+      - run: pnpm test
+      - run: pnpm --filter @finx/bank-web build
+      - uses: actions/upload-artifact@v4
+        with:
+          name: web-${{ github.ref_name }}
+          path: apps/bank-web/.next
+          include-hidden-files: true
+          retention-days: 30
+      # --- host-specific step goes here (for example upload to your CDN or container registry) ---

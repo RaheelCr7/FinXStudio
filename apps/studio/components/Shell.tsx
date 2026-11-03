@@ -2,7 +2,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import { Coins, FilePlus2, FolderKanban, LibraryBig, Code2, Palette, Users, Monitor, Moon, PanelLeftClose, PanelLeftOpen, Search, Sparkles, Sun, Workflow } from "lucide-react";
+import { Coins, FilePlus2, GitBranch, FolderKanban, LibraryBig, Code2, Palette, Users, Monitor, Moon, PanelLeftClose, PanelLeftOpen, Search, Sparkles, Sun, Workflow } from "lucide-react";
 import { CommandsProvider, useCommandPalette, type Command } from "./CommandPalette";
 import { ProjectSwitcher } from "./ProjectSwitcher";
 import { UserSwitcher } from "./UserSwitcher";
@@ -69,6 +69,7 @@ export function Shell({ children }: { children: React.ReactNode }) {
             <Link href="/design" className={path.startsWith("/design") ? "on" : ""} aria-current={path.startsWith("/design") ? "page" : undefined} title="Design"><Palette size={18} aria-hidden /><span className="lbl">Design</span></Link>
             <Link href="/currencies" className={path.startsWith("/currencies") ? "on" : ""} aria-current={path.startsWith("/currencies") ? "page" : undefined} title="Currencies"><Coins size={18} aria-hidden /><span className="lbl">Currencies</span></Link>
             <Link href="/code" className={path.startsWith("/code") ? "on" : ""} aria-current={path.startsWith("/code") ? "page" : undefined} title="Code"><Code2 size={18} aria-hidden /><span className="lbl">Code</span></Link>
+            <Link href="/git" className={path.startsWith("/git") ? "on" : ""} aria-current={path.startsWith("/git") ? "page" : undefined} title="Git sync and deploy"><GitBranch size={18} aria-hidden /><span className="lbl">Git</span></Link>
             <Link href="/people" className={path.startsWith("/people") ? "on" : ""} aria-current={path.startsWith("/people") ? "page" : undefined} title="People"><Users size={18} aria-hidden /><span className="lbl">People</span></Link>
             <Link href="/agents" className={path.startsWith("/agents") ? "on" : ""} aria-current={path.startsWith("/agents") ? "page" : undefined} title="Agents"><Sparkles size={18} aria-hidden /><span className="lbl">Agents</span></Link>
           </nav>
