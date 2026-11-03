@@ -26,5 +26,19 @@
     "assets": "./assets/bankworkx",
     "background": "#F6F4FC",
     "splashDark": "#0D1022"
+  },
+  "acme-corporate": {
+    "name": "Acme Corporate Banking",
+    "shortName": "Acme Corporate",
+    "slug": "acme-corporate",
+    "bundleId": "com.acme.corporate",
+    "scheme": "acmecorporate",
+    "preset": "corporate",
+    "accent": "#293276",
+    "currency": "GBP",
+    "locale": "en-GB",
+    "assets": "./assets/acme-corporate",
+    "background": "#F4F5FB",
+    "splashDark": "#0B0F2A"
   }
 }

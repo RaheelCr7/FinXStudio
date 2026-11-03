@@ -19,11 +19,11 @@ describe("projects", () => {
 
   it("falls back to the bundled banks when Studio is down, answers badly, or lists nothing usable", async () => {
     vi.stubGlobal("fetch", vi.fn(async () => { throw new Error("down"); }));
-    expect((await listProjects()).map((x) => x.id)).toEqual(["meezan", "bankworkx"]);
+    expect((await listProjects()).map((x) => x.id)).toEqual(["meezan", "bankworkx", "acme-corporate"]);
     resetProjectsCache(); studio({ projects: [{ id: "x" }] });
-    expect((await listProjects()).map((x) => x.id)).toEqual(["meezan", "bankworkx"]);
+    expect((await listProjects()).map((x) => x.id)).toEqual(["meezan", "bankworkx", "acme-corporate"]);
     resetProjectsCache(); studio("nonsense");
-    expect((await listProjects()).map((x) => x.id)).toEqual(["meezan", "bankworkx"]);
+    expect((await listProjects()).map((x) => x.id)).toEqual(["meezan", "bankworkx", "acme-corporate"]);
   });
 
   it("remembers the answer for a short while", async () => {

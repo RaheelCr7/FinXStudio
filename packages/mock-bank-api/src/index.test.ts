@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { MockBank, BankError, ADAPTER_CATALOG, describePersonas, personasFor, INSTRUMENTS, RANGES, portfolioSeries } from "./index";
+import { MockBank, BankError, ADAPTER_CATALOG, describePersonas, personasFor, INSTRUMENTS, RANGES, portfolioSeries, PASSWORD_PATTERN } from "./index";
 
 describe("mock bank sandbox", () => {
   it("lists accounts and limits for Ayesha", async () => {
@@ -66,9 +66,10 @@ describe("mock bank sandbox", () => {
     expect(ADAPTER_CATALOG.find((a) => a.adapter === "bank.otp.verify")!.suggestedId).toBe("otpVerify");
   });
   it("describes the sandbox customers with their test OTPs, per bank app", () => {
-    expect(describePersonas().map((p) => [p.id, p.otpCode])).toEqual([["ayesha", "482100"], ["bilal", "111111"], ["alex", "482100"], ["sam", "123456"], ["zara", "123456"]]);
+    expect(describePersonas().map((p) => [p.id, p.otpCode])).toEqual([["ayesha", "482100"], ["bilal", "111111"], ["alex", "482100"], ["sam", "123456"], ["john", "482100"], ["zara", "123456"]]);
     expect(personasFor("meezan").map((p) => p.id)).toEqual(["ayesha", "bilal", "zara"]);
     expect(personasFor("bankworkx").map((p) => p.id)).toEqual(["alex", "sam"]);
+    expect(personasFor("corporate").map((p) => p.id)).toEqual(["john"]);
   });
 });
 
@@ -155,5 +156,64 @@ describe("sandbox investing", () => {
     const all = await b.call("bank.invest.sell", { symbol: "GLBX", amount: 30 * 42.18, toAccountId: "acc_main" });
     expect(all.shares).toBe(30);
     expect(b.persona.finance!.invest.holdings.some((h) => h.symbol === "GLBX")).toBe(false);
+  });
+});
+
+describe("corporate sign-in sandbox", () => {
+  const verify = (b: MockBank, extra = {}) => b.call("auth.user.verify", { email: "john.smith@acme-corp.example", mobile: "+44 7700 900123", dob: "1985-04-12", captcha: "K7M2Q", ...extra });
+  it("rejects a wrong captcha, keeps the challenge, and moves to a new one on request", async () => {
+    const b = new MockBank("ayesha");
+    await expect(verify(b, { captcha: "WRONG" })).rejects.toMatchObject({ code: "CAPTCHA_INVALID" });
+    expect((await b.call("auth.captcha.current")).text).toBe("K7M2Q");
+    expect((await b.call("auth.captcha.new")).text).toBe("R4T9X");
+  });
+  it("resets a password with a service key and rules", async () => {
+    const b = new MockBank("ayesha");
+    expect(await verify(b, { email: "nobody@acme-corp.example" })).toMatchObject({ outcome: "notfound" });
+    const v = await verify(b, { captcha: (await b.call("auth.captcha.current")).text });
+    expect(v.usernames).toHaveProperty("jsmith.ops");
+    await expect(b.call("auth.password.reset", { serviceKey: v.serviceKey, password: "Abcdef1!", confirm: "Different1!" })).rejects.toMatchObject({ code: "PASSWORD_MISMATCH" });
+    await expect(b.call("auth.password.reset", { serviceKey: v.serviceKey, password: "abcdefgh", confirm: "abcdefgh" })).rejects.toMatchObject({ code: "PASSWORD_INVALID" });
+    await expect(b.call("auth.password.reset", { serviceKey: "bad", password: "Abcdef1!", confirm: "Abcdef1!" })).rejects.toMatchObject({ code: "SESSION_EXPIRED" });
+    expect(await b.call("auth.password.reset", { serviceKey: v.serviceKey, username: "jsmith.ops", password: "Abcdef1!", confirm: "Abcdef1!" })).toEqual({ reset: true });
+    expect(b.auth.signIn("jsmith.ops", "Abcdef1!").username).toBe("jsmith.ops");
+    expect(() => b.auth.signIn("jsmith.fin", "Abcdef1!")).toThrow(/Incorrect/);
+  });
+  it("enrolls, and reports already-enrolled and unknown people as outcomes", async () => {
+    const b = new MockBank("ayesha");
+    const ok = { taxId: "123-45-6789", lastName: "Smith", dob: "1985-04-12", captcha: "K7M2Q" };
+    expect(await b.call("auth.enroll.verify", ok)).toMatchObject({ outcome: "enrolled" });
+    expect(await b.call("auth.enroll.verify", { ...ok, taxId: "111-11-1111", lastName: "Brown", dob: "1990-09-30" })).toMatchObject({ outcome: "already" });
+    expect(await b.call("auth.enroll.verify", { ...ok, taxId: "000-00-0000" })).toMatchObject({ outcome: "notfound" });
+    await expect(b.call("auth.enroll.verify", { ...ok, captcha: "bad" })).rejects.toMatchObject({ code: "CAPTCHA_INVALID" });
+  });
+  it("activates with a valid code and reports blocked, expired and wrong codes as outcomes", async () => {
+    const b = new MockBank("ayesha");
+    expect(await b.call("auth.activation.verify", { username: "blocked.user", code: "ACT-0001" })).toEqual({ outcome: "blocked" });
+    expect(await b.call("auth.activation.verify", { username: "expired.user", code: "ACT-0002" })).toEqual({ outcome: "expired" });
+    expect(await b.call("auth.activation.verify", { username: "jsmith", code: "nope" })).toEqual({ outcome: "invalid" });
+    const v = await b.call("auth.activation.verify", { username: "jsmith", code: "ACT-4821" });
+    expect(v.outcome).toBe("ok");
+    expect(await b.call("auth.activation.setPassword", { serviceKey: v.serviceKey, password: "Abcdef1!", confirm: "Abcdef1!" })).toEqual({ activated: true });
+  });
+  it("keeps the password pattern in step with the rules", () => {
+    const re = new RegExp(PASSWORD_PATTERN);
+    for (const pw of ["Abcdef1!", "Zz9#zzzz"]) expect(re.test(pw)).toBe(true);
+    for (const pw of ["abcdefgh", "Abcdefg1", "Ab1!", "ABCDEF1!"]) expect(re.test(pw)).toBe(false);
+  });
+});
+
+describe("corporate sign-in", () => {
+  it("signs in with the sandbox password and refuses a wrong one or a locked profile", () => {
+    const b = new MockBank("john");
+    expect(b.auth.signIn("jsmith.ops", "Passw0rd!")).toEqual({ personaId: "john", username: "jsmith.ops" });
+    expect(() => b.auth.signIn("jsmith.ops", "nope")).toThrow(/Incorrect username or password/);
+    expect(() => b.auth.signIn("locked.user", "Passw0rd!")).toThrow(/locked/);
+  });
+  it("lets a person sign in with the password they just activated", async () => {
+    const b = new MockBank("john");
+    const v = await b.call("auth.activation.verify", { username: "jsmith", code: "ACT-4821" });
+    await b.call("auth.activation.setPassword", { serviceKey: v.serviceKey, password: "NewPass1!x", confirm: "NewPass1!x" });
+    expect(b.auth.signIn("jsmith", "NewPass1!x").personaId).toBe("john");
   });
 });

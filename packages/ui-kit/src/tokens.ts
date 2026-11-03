@@ -113,10 +113,11 @@ const bankworkxDark = {
 };
 
 /** The two looks a bank can start from. A project picks one and then sets its own accent colour. */
-export type Preset = "meezan" | "bankworkx";
+export type Preset = "meezan" | "bankworkx" | "corporate";
 export const PRESETS: Record<Preset, { name: string; description: string }> = {
   meezan: { name: "Classic", description: "Calm and clean: white cards on a pale canvas, compact corners, a single accent colour." },
   bankworkx: { name: "Fintech", description: "Lavender canvas, a gradient balance card, rounded cards, charts and a bottom tab bar." },
+  corporate: { name: "Corporate", description: "Sober and dense for business customers: white panels, a deep navy accent, a sign-in page with a language switch and a footer." },
 };
 
 /** What a bank is, as stored in brands.json (and edited in Studio). Everything else about its look is derived from this. */
@@ -160,8 +161,13 @@ const PRESET_BASE: Record<Preset, { light: Record<string, string>; dark: Record<
     radius,
   },
   bankworkx: { light: bankworkxLight, dark: bankworkxDark, radius: { sm: 10, md: 14, lg: 20, xl: 26, pill: 999 } },
+  corporate: {
+    light: { ...neutralLight, ...semanticLight, bg: "#F4F5FB", accent: "#293276", accentOn: "#FFFFFF", accentSoft: "#E9EBF6" },
+    dark: { ...neutralDark, ...semanticDark, accent: "#9AA3E6", accentOn: "#0B0F2A", accentSoft: "#1A2048" },
+    radius: { sm: 6, md: 8, lg: 10, xl: 14, pill: 999 },
+  },
 };
-const PRESET_ACCENT: Record<Preset, string> = { meezan: "#0F6E56", bankworkx: "#3155CE" };
+const PRESET_ACCENT: Record<Preset, string> = { meezan: "#0F6E56", bankworkx: "#3155CE", corporate: "#293276" };
 
 /** A full light and dark theme for a bank: the preset's palette with the bank's own accent colour applied. */
 export function resolveBrand(id: BrandId, def: BrandDef): Brand {

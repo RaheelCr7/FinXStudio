@@ -128,6 +128,51 @@ export const ADAPTER_CATALOG: AdapterInfo[] = [
     adapter: "bank.invest.watch", suggestedId: "watch", description: "Adds a stock or fund to the watchlist, or removes it with on: false (BankWorkx).",
     input: { symbol: "instrument symbol", on: "boolean, default true" }, returns: "{ watching }", errors: ["INSTRUMENT_NOT_FOUND"],
   },
+  {
+    adapter: "auth.legalEntities.list", suggestedId: "legalEntities", description: "Legal entities a corporate user can enroll under (corporate web sign-in).",
+    input: {}, returns: "Object map keyed by entity id: { id, name }. Save as ctx.legalEntities and use with a select block (source).",
+  },
+  {
+    adapter: "auth.captcha.current", suggestedId: "captcha", description: "The current captcha challenge (sandbox shows the text; a real bank returns an image).",
+    input: {}, returns: "{ text }. Save as ctx.captcha and show {{ctx.captcha.text}}.",
+  },
+  {
+    adapter: "auth.captcha.new", suggestedId: "captchaNew", description: "Replaces the captcha with a new one.",
+    input: {}, returns: "{ text }. Save as ctx.captcha.",
+  },
+  {
+    adapter: "auth.passwordRules.get", suggestedId: "passwordRules", description: "The bank's password policy.",
+    input: {}, returns: "{ minLength, maxLength, atLeastNumber, atLeastUpper, atLeastLower, atLeastSymbol, maxRepeat, pattern }. Save as ctx.passwordRules.",
+  },
+  {
+    adapter: "auth.user.verify", suggestedId: "verifyUser", description: "Can't sign in: checks registered email, mobile, date of birth and the captcha.",
+    input: { email: "registered email", mobile: "registered mobile", dob: "YYYY-MM-DD", captcha: "text typed" },
+    returns: "{ outcome: found | notfound, serviceKey, usernames, count, username }. Save as ctx.verified and branch on its outcome. Sandbox user: john.smith@acme-corp.example, +44 7700 900123, 1985-04-12.",
+    errors: ["CAPTCHA_INVALID"],
+  },
+  {
+    adapter: "auth.user.usernames", suggestedId: "usernames", description: "The usernames on the profile just verified (a person can have several).",
+    input: {}, returns: "Object map keyed by username: { id, name }. Save as ctx.usernames and use with a select block (source). Call it after verifyUser.",
+  },
+  {
+    adapter: "auth.password.reset", suggestedId: "resetPassword", description: "Sets a new password after verifyUser.",
+    input: { serviceKey: "from verifyUser", username: "optional: which username to reset when the profile has several", password: "new password", confirm: "same again" }, returns: "{ reset: true }",
+    errors: ["SESSION_EXPIRED", "PASSWORD_MISMATCH", "PASSWORD_INVALID"],
+  },
+  {
+    adapter: "auth.enroll.verify", suggestedId: "enrollVerify", description: "Self-enrollment: checks tax ID, last name, date of birth and the captcha, then sends a username and activation code out of band.",
+    input: { taxId: "tax id", lastName: "last name", dob: "YYYY-MM-DD", captcha: "text typed" }, returns: "{ outcome: enrolled | already | notfound, name }. Branch on ctx.<saveAs>.outcome. Sandbox: 123-45-6789 / Smith / 1985-04-12 enrolls; 111-11-1111 / Brown / 1990-09-30 is already enrolled.",
+    errors: ["CAPTCHA_INVALID"],
+  },
+  {
+    adapter: "auth.activation.verify", suggestedId: "verifyActivation", description: "Activation: checks the username and activation code from the bank.",
+    input: { username: "bank-issued username", code: "activation code" }, returns: "{ outcome: ok | invalid | blocked | expired, serviceKey, name }. Branch on ctx.<saveAs>.outcome. Sandbox: jsmith / ACT-4821; blocked.user / ACT-0001 is blocked; expired.user / ACT-0002 is expired.",
+  },
+  {
+    adapter: "auth.activation.setPassword", suggestedId: "activate", description: "Activation: sets the first password after verifyActivation.",
+    input: { serviceKey: "from verifyActivation", password: "new password", confirm: "same again" }, returns: "{ activated: true }",
+    errors: ["SESSION_EXPIRED", "PASSWORD_MISMATCH", "PASSWORD_INVALID"],
+  },
 ];
 
 /** Sandbox customers for testing. The OTP codes are sandbox-only test values. */

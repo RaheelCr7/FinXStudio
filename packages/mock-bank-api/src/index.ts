@@ -1,14 +1,16 @@
 import { instrumentOf, INSTRUMENTS, dayChange } from "./invest";
+import { AuthSandbox } from "./auth";
 import { alexFinance, BANKS, cardNetwork, luhnValid, type Finance } from "./finance";
 export * from "./finance";
 export * from "./invest";
+export * from "./auth";
 
 export type Account = { id: string; name: string; maskedNumber: string; iban: string; balance: number; currency: string; status: "active" | "frozen"; canDebit: boolean };
 export type Beneficiary = { id: string; displayName: string; bank: string; maskedNumber: string; addedAt: number };
 export type Persona = {
   id: string;
   /** Which bank app this sandbox customer belongs to. */
-  brand: "meezan" | "bankworkx";
+  brand: "meezan" | "bankworkx" | "corporate";
   name: string;
   phone: string;
   accounts: Account[];
@@ -65,6 +67,15 @@ export const personas: Record<string, Persona> = {
     finance: { ...alexFinance(), income: 0, expense: 0, savings: 0, balanceSeries: [], ranges: { "1W": [], "1M": [], "3M": [], "1Y": [] }, spendingByCategory: [], transactions: [], budgets: [], subscriptions: [], linked: [], cards: [], invest: { holdings: [], watchlist: [] } },
     behaviour: { otpCode: "123456", kyc: "verified" },
   },
+  john: {
+    id: "john", brand: "corporate", name: "John Smith", phone: "+44 7700 900123",
+    accounts: [
+      { id: "acc_operating", name: "Operating", maskedNumber: "••5521", iban: "GB29 ACME 6016 1331 9268 5521", balance: 482150.4, currency: "GBP", status: "active", canDebit: true },
+      { id: "acc_payroll", name: "Payroll", maskedNumber: "••9034", iban: "GB82 ACME 6016 1331 9268 9034", balance: 120000, currency: "GBP", status: "active", canDebit: true },
+    ],
+    beneficiaries: [], limits: { daily: 250000, usedToday: 0 },
+    behaviour: { otpCode: "482100", kyc: "verified" },
+  },
   zara: {
     id: "zara", brand: "meezan", name: "Zara Ali (KYC rejected)", phone: "+92 333 2000123",
     accounts: [],
@@ -82,6 +93,7 @@ export class MockBank {
   private otpAttempts = 0;
   private otpVerified = false;
   private seq = 0;
+  readonly auth = new AuthSandbox();
   constructor(personaId = "ayesha") {
     const base = personas[personaId];
     if (!base) throw new Error(`Unknown persona ${personaId}`);
@@ -276,6 +288,7 @@ export class MockBank {
       case "bank.carriers.list":
         return Object.fromEntries(CARRIERS.map((c) => [c.id, c]));
       default:
+        if (adapter.startsWith("auth.")) return this.auth.call(adapter, input);
         throw new BankError("UNKNOWN_ADAPTER", `No sandbox handler for ${adapter}`);
     }
   }

@@ -5,6 +5,7 @@ import { personaSummary } from "@finx/bank-client";
 import { formatMoney } from "@finx/ui-kit";
 import { safeNext } from "@/lib/safe-next";
 import { useApp, useAppState } from "./AppProvider";
+import { CorporateLogin } from "./corporate/Login";
 
 export function Login() {
   const { app, project } = useApp();
@@ -14,6 +15,7 @@ export function Login() {
   const [submitting, setSubmitting] = useState(false);
   const bw = project.shell === "bankworkx";
   const ur = s.lang === "ur";
+  if (project.shell === "corporate") return <CorporateLogin />;
 
   return (
     <main className="wb-login" dir={ur ? "rtl" : "ltr"}>

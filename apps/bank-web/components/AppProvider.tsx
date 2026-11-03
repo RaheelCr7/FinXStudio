@@ -3,7 +3,7 @@ import { createContext, useContext, useEffect, useState, useSyncExternalStore } 
 import { BankApp, createLive, isRtl, type AppState } from "@finx/bank-client";
 import type { Preset } from "@finx/ui-kit";
 
-export type ProjectInfo = { id: string; preset: Preset; name: string; shell: "meezan" | "bankworkx"; currency: string };
+export type ProjectInfo = { id: string; preset: Preset; name: string; shell: "meezan" | "bankworkx" | "corporate"; currency: string };
 type Ctx = { app: BankApp; project: ProjectInfo; /** False until a signed-in session has been looked for in this tab. */ ready: boolean };
 const C = createContext<Ctx | null>(null);
 

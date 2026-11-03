@@ -11,7 +11,7 @@ export function Frame({ children }: { children: React.ReactNode }) {
 }
 
 /** A page that exists only for banks with a given look; other banks are sent to their home. */
-export function OnlyFor({ shell, children }: { shell: "meezan" | "bankworkx"; children: React.ReactNode }) {
+export function OnlyFor({ shell, children }: { shell: "meezan" | "bankworkx" | "corporate"; children: React.ReactNode }) {
   const { project } = useApp();
   const router = useRouter();
   const path = usePathname();

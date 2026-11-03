@@ -1,6 +1,6 @@
 import { PRESETS, accentProblem, brandDefs, resolveBrand, type Brand, type BrandDef } from "@finx/ui-kit";
 
-export type Project = { id: string; brand: Brand; def: BrandDef; /** Which set of screens the project uses. */ shell: "meezan" | "bankworkx" };
+export type Project = { id: string; brand: Brand; def: BrandDef; /** Which set of screens the project uses. */ shell: "meezan" | "bankworkx" | "corporate" };
 
 /** Names that cannot be project ids because they are used by the app's own addresses. */
 export const RESERVED = new Set(["api", "assets", "_next", "theme", "favicon.ico", "manifest.webmanifest", "sw.js"]);
@@ -10,7 +10,7 @@ const TTL = () => Number(process.env.FINX_WEB_PROJECTS_TTL_MS ?? 30_000);
 
 const toProject = (id: string, def: BrandDef): Project => {
   const brand = resolveBrand(id, def);
-  return { id, brand, def, shell: brand.preset === "bankworkx" ? "bankworkx" : "meezan" };
+  return { id, brand, def, shell: brand.preset === "bankworkx" ? "bankworkx" : brand.preset === "corporate" ? "corporate" : "meezan" };
 };
 const bundled = (): Project[] => Object.entries(brandDefs).filter(([id]) => !RESERVED.has(id)).map(([id, def]) => toProject(id, def));
 

@@ -20,9 +20,9 @@ beforeEach(async () => {
 const good = { name: "Acme Bank", preset: "bankworkx", accent: "#7C3AED", currency: "USD" };
 
 describe("projects", () => {
-  it("lists the two original banks with their themes", async () => {
+  it("lists the bundled banks with their themes", async () => {
     const list = await projects.listProjects();
-    expect(list.map((p) => p.id)).toEqual(["meezan", "bankworkx"]);
+    expect(list.map((p) => p.id)).toEqual(["meezan", "bankworkx", "acme-corporate"]);
     expect(list[1]!.brand.light.colors.accent).toBe("#3155CE");
   });
 
@@ -32,7 +32,7 @@ describe("projects", () => {
     expect(iconsMade).toBe(false);
     expect(iconWarning).toMatch(/first time/);
     const saved = JSON.parse(readFileSync(file, "utf8"));
-    expect(Object.keys(saved)).toEqual(["meezan", "bankworkx", "acme-bank"]);
+    expect(Object.keys(saved)).toEqual(["meezan", "bankworkx", "acme-corporate", "acme-bank"]);
     expect(saved["meezan"].name).toBe("Meezan Digital"); // existing banks untouched
     expect((await projects.getProject("acme-bank"))!.brand.light.colors.accent).toBe("#7C3AED");
   });

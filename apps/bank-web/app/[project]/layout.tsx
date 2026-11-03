@@ -5,6 +5,7 @@ import "@fontsource/noto-nastaliq-urdu/400.css";
 import "@finx/renderer-web/src/styles/renderer.css";
 import "../globals.css";
 import "../bankworkx.css";
+import "../corporate.css";
 import { AppProvider } from "@/components/AppProvider";
 import { RegisterSW } from "@/components/RegisterSW";
 import { getProject } from "@/lib/projects";

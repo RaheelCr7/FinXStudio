@@ -1,13 +1,14 @@
 import type { Journey } from "./schema";
 import { localTransfer } from "./fixtures/local-transfer";
 import { payBill } from "./fixtures/pay-bill";
+import { cantSignIn, enroll, activateProfile } from "./fixtures/corporate";
 import { addMoney, addCard, connectAccount, createBudget, invest, sellInvestment } from "./fixtures/bankworkx";
 
 /**
  * The journey catalog: ready-made journeys a project can add to its own app.
  * Each entry is the journey exactly as shipped, so adding it never depends on what someone later edited in Studio.
  */
-export const CATEGORIES = ["Payments", "Accounts", "Cards", "Budgeting", "Investing"] as const;
+export const CATEGORIES = ["Payments", "Accounts", "Cards", "Budgeting", "Investing", "Access"] as const;
 export type CatalogCategory = (typeof CATEGORIES)[number];
 
 export type CatalogEntry = {
@@ -19,7 +20,7 @@ export type CatalogEntry = {
   /** What the journey shows off, as short phrases. */
   highlights: string[];
   /** The look the journey was made in, so a new bank knows what it is getting. */
-  madeFor: "meezan" | "bankworkx";
+  madeFor: "meezan" | "bankworkx" | "corporate";
   journey: Journey;
 };
 
@@ -63,6 +64,21 @@ export const catalog: CatalogEntry[] = [
     id: sellInvestment.slug, category: "Investing", madeFor: "bankworkx", journey: sellInvestment,
     summary: "Sell part or all of a holding and have the money paid into an account.",
     highlights: ["Holding picker", "Amount capped by what you own", "Failure path with nothing sold"],
+  },
+  {
+    id: cantSignIn.slug, category: "Access", madeFor: "corporate", journey: cantSignIn,
+    summary: "Reset a forgotten password: verify email, mobile and date of birth with a captcha, then set a new password.",
+    highlights: ["Captcha", "Several usernames on one profile", "Password policy", "No-match path"],
+  },
+  {
+    id: enroll.slug, category: "Access", madeFor: "corporate", journey: enroll,
+    summary: "Self-enrollment for a business user: pick the company, verify tax ID, last name and date of birth.",
+    highlights: ["Company picker", "Captcha", "Already enrolled and not found outcomes"],
+  },
+  {
+    id: activateProfile.slug, category: "Access", madeFor: "corporate", journey: activateProfile,
+    summary: "Activate a profile with the username and activation code the bank sent, then set a password.",
+    highlights: ["Blocked and expired codes", "Password policy", "Hidden code field"],
   },
 ];
 

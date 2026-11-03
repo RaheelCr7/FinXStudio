@@ -1,4 +1,4 @@
-import { Journey, bankworkxJourneys, localTransfer, payBill } from "@finx/journey-schema";
+import { Journey, bankworkxJourneys, corporateJourneys, localTransfer, payBill } from "@finx/journey-schema";
 import { lintAll } from "@finx/renderer-core";
 
 export type Live = { journey: Journey; source: "studio" | "bundled" };
@@ -11,7 +11,7 @@ export const slugIs = (slug: string, base: string) => slug === base || slug.star
 /** A journey with no apps listed belongs to the original Meezan app; anything else lists the apps that show it. */
 export const forBrand = (brand: string) => (j: { apps?: string[] }) => (j.apps?.length ? j.apps : ["meezan"]).includes(brand);
 
-export const ALL_BUNDLED: Journey[] = [localTransfer, payBill, ...bankworkxJourneys];
+export const ALL_BUNDLED: Journey[] = [localTransfer, payBill, ...bankworkxJourneys, ...corporateJourneys];
 
 export type LiveOptions = {
   /** Which bank's journeys to show. */

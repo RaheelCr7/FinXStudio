@@ -7,7 +7,7 @@ import { instrumentOf } from "@finx/mock-bank-api";
 import { useApp, useAppState } from "./AppProvider";
 
 /** One journey on its own page. Closing or finishing returns to the bank's home. */
-export function JourneyScreen() {
+export function JourneyScreen({ beforeSignIn = false }: { beforeSignIn?: boolean }) {
   const { slug } = useParams<{ slug: string }>();
   const { app, project } = useApp();
   const s = useAppState();
@@ -23,7 +23,7 @@ export function JourneyScreen() {
     return () => { alive = false; };
   }, [app, slug]);
 
-  const leave = () => { app.bump(); router.push(`/${project.id}/${project.shell === "bankworkx" ? "dashboard" : "home"}`); };
+  const leave = () => { app.bump(); router.push(beforeSignIn ? `/${project.id}/login` : `/${project.id}/${project.shell === "bankworkx" ? "dashboard" : "home"}`); };
   if (live === "loading") return <main className="wb-loading" aria-busy="true"><span className="wb-sr">Opening</span></main>;
   if (!live) return <main className="wb-journey"><div className="wb-journey-card wb-pad"><h1>That journey is not available right now</h1><p className="wb-muted">It may not be published for this bank yet.</p><button className="wb-btn wb-btn-primary" onClick={leave}>Back</button></div></main>;
   return (

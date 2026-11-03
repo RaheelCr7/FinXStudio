@@ -4,6 +4,7 @@ import { axe } from "vitest-axe";
 import { AppProvider, type ProjectInfo } from "./AppProvider";
 
 export const BANKWORKX: ProjectInfo = { id: "bankworkx", preset: "bankworkx", name: "BankWorkx", shell: "bankworkx", currency: "USD" };
+export const CORPORATE: ProjectInfo = { id: "acme-corporate", preset: "corporate", name: "Acme Corporate Banking", shell: "corporate", currency: "GBP" };
 export const MEEZAN: ProjectInfo = { id: "meezan", preset: "meezan", name: "Meezan Digital", shell: "meezan", currency: "PKR" };
 
 export const nav = { push: vi.fn(), replace: vi.fn(), params: {} as Record<string, string>, path: "/", search: new URLSearchParams() };
@@ -17,7 +18,7 @@ vi.mock("next/link", () => ({ default: ({ href, children, prefetch: _p, ...rest 
 
 /** Renders a page inside its bank's app store, signed in as the first customer unless told otherwise. */
 export function renderPage(ui: React.ReactNode, project: ProjectInfo, opts: { signedIn?: boolean; personaId?: string; lang?: string } = {}) {
-  sessionStorage.setItem("finx.session", JSON.stringify({ project: project.id, personaId: opts.personaId ?? (project.shell === "bankworkx" ? "alex" : "ayesha"), lang: opts.lang ?? "en", signedIn: opts.signedIn ?? true }));
+  sessionStorage.setItem("finx.session", JSON.stringify({ project: project.id, personaId: opts.personaId ?? (project.shell === "bankworkx" ? "alex" : project.shell === "corporate" ? "john" : "ayesha"), lang: opts.lang ?? "en", signedIn: opts.signedIn ?? true }));
   return render(<AppProvider project={project}>{ui}</AppProvider>);
 }
 
