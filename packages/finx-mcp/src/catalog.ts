@@ -138,7 +138,7 @@ export const ACTIONS = [
   {
     type: "callApi",
     does: "Calls a declared integration. Top-level input values are used as is, except a value that is exactly one {{expression}}, which is replaced by the evaluated value (keeps numbers as numbers). Nested objects are not evaluated. saveAs stores the result (use ctx.<name> for lists and lookups, any other root such as result for a one-off). onError: showToast (message), navigate (go to a screen), lockAfter + lockTo (go to lockTo after that many failures; only counted for the integration named otpVerify), stay (default when there is no navigate): stay on the screen and stop the chain.",
-    notes: ["Without onError, a failing API call raises an error and the journey cannot recover. Always add onError to every callApi, including those in onEnter."],
+    notes: ["Without onError, a failing API call raises an error and the journey cannot recover. Always add onError to every callApi, including those in onEnter.", "When a call fails, the engine saves what went wrong as ctx.error = { code, message, integration }: show {{ctx.error.message}} on the failure screen so the customer learns the reason (for example a limit or a rule of the bank)."],
     example: { type: "callApi", integration: "billLookup", input: { billerId: "{{bill.billerId}}", reference: "{{bill.reference}}" }, saveAs: "ctx.bill", onError: { showToast: { en: "We couldn't find that bill.", ur: "یہ بل نہیں ملا۔" }, stay: true } },
   },
   { type: "showToast", does: "Shows a short message at the top of the screen.", example: { type: "showToast", text: { en: "Saved", ur: "محفوظ ہو گیا" } } },
@@ -187,6 +187,8 @@ export const LINT_RULES = [
   { code: "amount_currency_invalid", means: "An amountInput's currency is neither a 3-4 letter code nor a {{path}}.", fix: "Use a code like JOD, or {{account.currency}}." },
   { code: "currency_mismatch", means: "An amountInput's currency differs from the currency its dataModel entry declares.", fix: "Make both the same." },
   { code: "mixed_currency", means: "One journey has amounts in more than one fixed currency.", fix: "Fine for a conversion. Otherwise use one currency, or read it from the account with {{account.currency}}." },
+  { code: "authorisation_missing", means: "A journey that starts or approves a company payment does not say which role may use it.", fix: "Add authorisation: { role, rolesFrom: \"ctx.company.me.roles\", deniedScreen } and a terminal denied screen." },
+  { code: "authorisation_denied_missing", means: "authorisation.deniedScreen is not a screen, or is not a terminal screen.", fix: "Add a terminal screen with that id that says the person is not allowed." },
   { code: "translation_gap", means: "A { en, ur } object is missing a supported language.", fix: "Add the missing translation." },
   { code: "expression_syntax", means: "A rule or {{template}} is not a valid expression, or uses an unknown function.", fix: "Fix the syntax. See the expressions section." },
   { code: "unknown_reference", means: "An expression uses a root, or a ctx name, that the journey never defines.", fix: "Use the suggested name, or add the dataModel entry or saveAs." },
@@ -219,7 +221,7 @@ export function getCatalog(section: Section = "all") {
       shape: SKELETON,
       fields: {
         id: "string, e.g. jrn_mobile_top_up", slug: "must equal the slug returned by finx_create_journey", name: "Loc", version: "integer, keep the value you were given (0 for a new journey)", status: "\"draft\" (Studio sets it)",
-        channels: "[\"web\", \"mobile\"]", locale: "{ default: \"en\", supported: [\"en\", \"ur\"], rtl: [\"ur\"] }", entryScreen: "id of the first screen",
+        channels: "[\"web\", \"mobile\"]", locale: "{ default: \"en\", supported: [\"en\", \"ur\"], rtl: [\"ur\"] }", entryScreen: "id of the first screen", authorisation: "optional { role, rolesFrom, deniedScreen }: a journey for one role (a company initiator or approver). rolesFrom is a path to the list of the signed-in person's roles (ctx.company.me.roles); once it is loaded, anyone without the role is sent to deniedScreen, a terminal screen. Required for any journey that calls corp.payments.initiate or corp.payments.approve",
         dataModel: "see the data section", integrations: "[{ id, adapter, mode: \"sandbox\" }] where adapter is from the adapters section",
         screens: "[{ id, title: Loc, kind?: screen | branch | terminal, onEnter?: Action[], blocks: Block[], navigation?: { rules?: [{ when, to }] } }]",
       },

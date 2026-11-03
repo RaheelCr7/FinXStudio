@@ -95,9 +95,10 @@ describe("approving", () => {
     const { s } = make();
     const mine = s.initiatePayment(pay({ userId: "nadia", amount: 100_000, reference: "N" }));
     expect(code(() => s.approvePayment({ userId: "nadia", paymentId: mine.id }))).toBe("SELF_APPROVAL");
-    expect(s.listPending({ userId: "nadia" }).map((p) => p.reference)).toEqual(["N"]); // she sees her own, as the maker
+    expect(s.listPending({ userId: "nadia" }).map((p) => p.reference)).toEqual([]); // as an approver she is not offered her own
+    expect(s.listPending({ userId: "nadia", as: "initiator" }).map((p) => p.reference)).toEqual(["N"]); // as the maker she sees it
     const theirs = s.initiatePayment(pay({ userId: "sara", amount: 100_000, reference: "S" }));
-    expect(s.listPending({ userId: "nadia" }).map((p) => p.reference)).toEqual(["N", "S"]);
+    expect(s.listPending({ userId: "nadia" }).map((p) => p.reference)).toEqual(["S"]);
     expect(s.approvePayment({ userId: "nadia", paymentId: theirs.id }).status).toBe("released");
     expect(s.approvePayment({ userId: "hassan", paymentId: mine.id }).status).toBe("released");
   });

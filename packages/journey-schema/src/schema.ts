@@ -126,6 +126,12 @@ export const Journey = z.object({
   apps: z.array(z.string()).optional(),
   locale: z.object({ default: z.string(), supported: z.array(z.string()), rtl: z.array(z.string()).optional() }),
   entryScreen: z.string(),
+  /**
+   * Who may use the journey: a role, read from the data once the person is known (rolesFrom is a path to a list of role names).
+   * When the list is loaded and does not include the role, the person is sent to deniedScreen. Needed by journeys that move
+   * money for a company.
+   */
+  authorisation: z.object({ role: z.string().min(1), rolesFrom: z.string().min(1), deniedScreen: z.string().min(1) }).optional(),
   dataModel: z.record(z.string(), z.object({ type: z.string(), required: z.boolean().optional(), currency: z.string().optional(), pattern: z.string().optional() })).optional(),
   integrations: z.array(z.object({ id: z.string(), adapter: z.string(), mode: z.enum(["sandbox", "live"]) })),
   screens: z.array(Screen).min(1),

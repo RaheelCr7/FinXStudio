@@ -1,6 +1,7 @@
 import type { Journey } from "./schema";
 import { localTransfer } from "./fixtures/local-transfer";
 import { payBill } from "./fixtures/pay-bill";
+import { corporatePayment, corporateApproval } from "./fixtures/corporate-payments";
 import { convertCurrency } from "./fixtures/convert-currency";
 import { addMoney, addCard, connectAccount, createBudget, invest, sellInvestment } from "./fixtures/bankworkx";
 import { cabJourneys } from "./fixtures/cab";
@@ -40,6 +41,16 @@ export const catalog: CatalogEntry[] = [
     id: convertCurrency.slug, category: "Accounts", madeFor: "meezan", journey: convertCurrency,
     summary: "Convert money between two of your own accounts in different currencies, with the rate and fee shown before you confirm.",
     highlights: ["Amount in the account's own currency", "Rate and fee on the review", "Rate that expires", "One-time code", "English and Urdu"],
+  },
+  {
+    id: corporatePayment.slug, category: "Payments", madeFor: "meezan", journey: corporatePayment,
+    summary: "A company initiator starts a payment to an approved supplier: limits, approvers needed, cut-off, and a one-time code. It then waits for an approver.",
+    highlights: ["Only for initiators", "Daily limit shown and checked", "Approved suppliers only", "Cut-off and value date", "One-time code"],
+  },
+  {
+    id: corporateApproval.slug, category: "Payments", madeFor: "meezan", journey: corporateApproval,
+    summary: "A company approver reviews what waits for them, approves or rejects. Nobody approves their own; above a threshold a second approver is needed.",
+    highlights: ["Only for approvers", "Pending list", "Four eyes", "Second approver above a threshold", "One-time code"],
   },
   {
     id: addMoney.slug, category: "Accounts", madeFor: "bankworkx", journey: addMoney,

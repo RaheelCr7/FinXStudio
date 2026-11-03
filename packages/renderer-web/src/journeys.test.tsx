@@ -32,7 +32,7 @@ describe("every shipped journey draws on the web", () => {
     it(`${journey.slug}: every screen renders in English${journey.locale.supported.includes("ur") ? " and Urdu" : ""} with no accessibility violations`, async () => {
       const langs = journey.locale.supported.filter((l) => l === "en" || l === "ur");
       for (const lang of langs) {
-        const bank = journey.apps?.includes("bankworkx") ? "alex" : "ayesha";
+        const bank = journey.apps?.includes("bankworkx") ? "alex" : journey.slug.startsWith("corporate-") ? "acme" : "ayesha";
         for (const { screenId, layout } of await screensOf(journey, bank)) {
           const blocks = [...layout.body, ...layout.buttons];
           expect(blocks.length, `${journey.slug}/${screenId}`).toBeGreaterThan(0);

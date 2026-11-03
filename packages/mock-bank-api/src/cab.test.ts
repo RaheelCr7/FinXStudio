@@ -7,8 +7,8 @@ const captcha = async (b: MockBank) => (await b.call("cab.captcha.generate")) as
 describe("sandbox customers of the Cairo Amman Bank project", () => {
   it("belong to that project, and no other project or look picks them up", () => {
     expect(personasFor("meezan", "cab").map((p) => p.id)).toEqual(["nour", "sara", "yasmin", "lina", "omar"]);
-    expect(personasFor("meezan").map((p) => p.id)).toEqual(["ayesha", "bilal", "zara", "hina"]);
-    expect(personasFor("meezan", "unknown-project").map((p) => p.id)).toEqual(["ayesha", "bilal", "zara", "hina"]);
+    expect(personasFor("meezan").map((p) => p.id)).toEqual(["ayesha", "bilal", "zara", "hina", "acme"]);
+    expect(personasFor("meezan", "unknown-project").map((p) => p.id)).toEqual(["ayesha", "bilal", "zara", "hina", "acme"]);
   });
 });
 
