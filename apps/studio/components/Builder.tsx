@@ -181,6 +181,7 @@ export function Builder({ initial, aiRun }: { initial: Rec; aiRun?: { id: string
             </div>
           ) : null}
         </div>
+        {journey.acceptance?.length ? <Link href={`/journeys/${journey.slug}/proof`} className="btn" title="Acceptance criteria and the tests that prove them"><CircleCheck size={15} aria-hidden />Proof</Link> : null}
         <Copilot slug={journey.slug} name={textOf(journey.name)} run={aiRun} />
         <button className="btn" onClick={togglePreview} aria-pressed={previewOn} title="Phone preview">{previewOn ? <EyeOff size={15} aria-hidden /> : <Eye size={15} aria-hidden />}Preview</button>
         <button className="btn primary" onClick={doPublish} disabled={publishing || !canPublish} title={canPublish ? undefined : `${myRole}s cannot publish here. Ask someone who can publish.`}>{publishing ? <><LoaderCircle size={15} className="spin" aria-hidden />Publishing…</> : <><Rocket size={15} aria-hidden />Publish to UAT</>}</button>

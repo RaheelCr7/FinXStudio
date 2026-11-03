@@ -13,6 +13,7 @@
     "@finx/codegen": "workspace:*",
     "@finx/components": "workspace:*",
     "@finx/journey-schema": "workspace:*",
+    "@finx/mcp": "workspace:*",
     "@finx/mock-bank-api": "workspace:*",
     "@finx/renderer-core": "workspace:*",
     "@finx/renderer-native": "workspace:*",

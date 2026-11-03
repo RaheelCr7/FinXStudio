@@ -1,7 +1,7 @@
 /** @type {import('next').NextConfig} */
 export default {
   transpilePackages: [
-    "@finx/components", "@finx/renderer-native", "@finx/renderer-core", "@finx/ui-kit", "@finx/journey-schema", "@finx/codegen", "@finx/mock-bank-api",
+    "@finx/components", "@finx/renderer-native", "@finx/renderer-core", "@finx/ui-kit", "@finx/journey-schema", "@finx/codegen", "@finx/mock-bank-api", "@finx/mcp",
     "react-native-web", "react-native-svg",
   ],
   turbopack: {

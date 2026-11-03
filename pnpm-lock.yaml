@@ -157,6 +157,9 @@ importers:
       '@finx/journey-schema':
         specifier: workspace:*
         version: link:../../packages/journey-schema
+      '@finx/mcp':
+        specifier: workspace:*
+        version: link:../../packages/finx-mcp
       '@finx/mock-bank-api':
         specifier: workspace:*
         version: link:../../packages/mock-bank-api
