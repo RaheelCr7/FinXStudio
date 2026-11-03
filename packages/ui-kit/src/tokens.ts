@@ -1,6 +1,7 @@
 import brandData from "./brands.json";
 import type { ComponentTokenOverrides } from "./components";
 import type { Channel, Entity, ProjectLanguage } from "./project";
+import type { CurrencyInfo } from "./currency";
 
 /** FinX Design System (FDS) tokens. Single source of truth for Studio and the bank apps. */
 
@@ -147,6 +148,9 @@ export type BrandDef = {
   channels?: Channel[];
   languages?: string[];
   customLanguages?: ProjectLanguage[];
+  /** Every currency the project offers (the base one included) and the ones it added. Unset means just the base currency. */
+  currencies?: string[];
+  customCurrencies?: CurrencyInfo[];
   entities?: Entity[];
 };
 export type BrandId = string;
