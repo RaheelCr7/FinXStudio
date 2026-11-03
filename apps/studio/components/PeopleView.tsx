@@ -5,6 +5,7 @@ import { ChevronDown, ChevronRight, Lock, Pencil, Plus, Trash2 } from "lucide-re
 import { ACTIONS, ACTION_INFO, ACTION_LABEL, SELF_PUBLISH, SELF_PUBLISH_INFO, roleLabel, type Action, type RoleDef, type SelfPublish } from "@/lib/roles";
 import type { Activity } from "@/lib/activity";
 import { useProjects } from "./Projects";
+import { PeopleTab } from "./PeopleTab";
 import { useWho } from "./Who";
 
 type Tab = "people" | "roles" | "rules" | "activity";
@@ -42,7 +43,7 @@ export function PeopleView({ policies, activity }: { policies: Record<string, Se
         {TABS.map((t) => <button key={t.id} role="tab" aria-selected={tab === t.id} onClick={() => { setTab(t.id); setErr(""); }}>{t.label}</button>)}
       </div>
       {err ? <div role="alert" style={{ color: "var(--negative)", fontSize: 13.5 }}>{err}</div> : null}
-      {tab === "people" ? <PeopleTab manage={manage} busy={busy} call={call} /> : null}
+      {tab === "people" ? <PeopleTab manage={manage} busy={busy} call={call} activity={activity} /> : null}
       {tab === "roles" ? <RolesTab manage={manage} busy={busy} call={call} /> : null}
       {tab === "rules" ? <RulesTab manage={manage} busy={busy} call={call} policies={policies} /> : null}
       {tab === "activity" ? <ActivityTab initial={activity} /> : null}
@@ -51,78 +52,6 @@ export function PeopleView({ policies, activity }: { policies: Record<string, Se
 }
 
 type Call = (method: string, url: string, body?: unknown) => Promise<any | null>;
-
-/* ---------------------------------------------------------------- people */
-
-function PeopleTab({ manage, busy, call }: { manage: boolean; busy: boolean; call: Call }) {
-  const { people, you, roles, roleName } = useWho();
-  const { projects } = useProjects();
-  const [name, setName] = useState("");
-  const [role, setRole] = useState("designer");
-  const [open, setOpen] = useState<string | null>(null);
-  const options = roles.map((r) => <option key={r.id} value={r.id}>{r.label}</option>);
-
-  return (
-    <div className="card" style={{ padding: 0, overflow: "hidden" }}>
-      <table className="tbl">
-        <thead><tr><th>Name</th><th>Main role</th><th>Projects</th><th /></tr></thead>
-        <tbody>
-          {people.map((p) => {
-            const extra = Object.entries(p.access ?? {});
-            const isOpen = open === p.id;
-            return (
-              <FragmentRows key={p.id}>
-                <tr>
-                  <td><b>{p.name}</b>{p.id === you.id ? <span className="chip accent" style={{ marginLeft: 8 }}>You</span> : null}</td>
-                  <td>
-                    {manage ? (
-                      <select className="select" style={{ width: 170 }} value={p.role} disabled={busy} aria-label={`Main role of ${p.name}`} onChange={(e) => call("PATCH", `/api/people/${p.id}`, { role: e.target.value })}>{options}</select>
-                    ) : roleName(p)}
-                  </td>
-                  <td>
-                    <button className="btn sm ghost" aria-expanded={isOpen} onClick={() => setOpen(isOpen ? null : p.id)}>
-                      {isOpen ? <ChevronDown size={14} aria-hidden /> : <ChevronRight size={14} aria-hidden />}
-                      {extra.length ? `Different in ${extra.length} project${extra.length === 1 ? "" : "s"}` : "Same in every project"}
-                    </button>
-                  </td>
-                  <td style={{ textAlign: "right" }}>{manage ? <button className="btn sm danger" disabled={busy} onClick={() => { if (window.confirm(`Remove ${p.name}?`)) call("DELETE", `/api/people/${p.id}`); }} aria-label={`Remove ${p.name}`}><Trash2 size={14} aria-hidden />Remove</button> : null}</td>
-                </tr>
-                {isOpen ? (
-                  <tr>
-                    <td colSpan={4} style={{ background: "var(--surface-2)" }}>
-                      <div className="stack" style={{ gap: 8, padding: "4px 0" }}>
-                        <div className="faint">A role in a project replaces the main role there. Creating projects and managing people always follow the main role.</div>
-                        {projects.map((pr) => (
-                          <div key={pr.id} className="row" style={{ gap: 10 }}>
-                            <span style={{ width: 150 }}>{pr.name}</span>
-                            {manage ? (
-                              <select className="select" style={{ width: 270 }} value={p.access?.[pr.id] ?? ""} disabled={busy} aria-label={`${p.name} in ${pr.name}`} onChange={(e) => call("PATCH", `/api/people/${p.id}`, { access: { [pr.id]: e.target.value || null } })}>
-                                <option value="">Same as main role ({roleLabel(p.role, roles)})</option>
-                                {options}
-                              </select>
-                            ) : <span>{p.access?.[pr.id] ? roleLabel(p.access[pr.id]!, roles) : `${roleLabel(p.role, roles)} (main role)`}</span>}
-                          </div>
-                        ))}
-                      </div>
-                    </td>
-                  </tr>
-                ) : null}
-              </FragmentRows>
-            );
-          })}
-        </tbody>
-      </table>
-      {manage ? (
-        <form className="row" style={{ padding: 12, borderTop: "1px solid var(--border)", gap: 8, flexWrap: "wrap" }} onSubmit={async (e) => { e.preventDefault(); if (await call("POST", "/api/people", { name, role })) setName(""); }}>
-          <input className="input" style={{ maxWidth: 260 }} placeholder="Name of a new person" aria-label="Name" value={name} onChange={(e) => setName(e.target.value)} />
-          <select className="select" style={{ width: 170 }} aria-label="Role" value={role} onChange={(e) => setRole(e.target.value)}>{options}</select>
-          <button className="btn primary" disabled={busy || name.trim().length < 2}><Plus size={15} aria-hidden />Add person</button>
-        </form>
-      ) : null}
-    </div>
-  );
-}
-const FragmentRows = ({ children }: { children: React.ReactNode }) => <>{children}</>;
 
 /* ----------------------------------------------------------------- roles */
 

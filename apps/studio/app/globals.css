@@ -411,3 +411,23 @@ button.workspace:hover { background: rgba(255,255,255,.08); border-color: #2a344
 .overview-steps button.on .n { background: var(--accent-solid); color: #fff; }
 .overview-steps small { display: block; color: var(--text-3); font-size: 11.5px; font-weight: 400; }
 @media (max-width: 700px) { .overview-body { grid-template-columns: 1fr; } }
+
+/* ===== People: summary tiles, person cards, matrix and the manage panel =============================================== */
+.stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 12px; }
+.stat { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-lg); padding: 14px 16px; display: flex; flex-direction: column; gap: 2px; }
+.stat b { font-size: 26px; font-weight: 600; letter-spacing: -0.02em; font-variant-numeric: tabular-nums; }
+.stat span { color: var(--text-2); font-size: 12.5px; }
+.people-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 14px; }
+.person { gap: 12px; }
+.person-last { display: flex; align-items: center; gap: 6px; }
+.access-chips { display: flex; flex-wrap: wrap; gap: 6px; }
+.avatar { display: grid; place-items: center; border-radius: 50%; font-weight: 650; color: #fff; flex: none; letter-spacing: .02em; }
+.avatar.tone-0 { background: #5a63f0; } .avatar.tone-1 { background: #0f8a6b; } .avatar.tone-2 { background: #b5651d; }
+.avatar.tone-3 { background: #a8326f; } .avatar.tone-4 { background: #2f7fc1; } .avatar.tone-5 { background: #6b7280; }
+.matrix th, .matrix td { white-space: nowrap; }
+.matrix .tick { text-align: center; }
+.matrix .ok { color: var(--positive); }
+.linklike { all: unset; display: inline-flex; align-items: center; gap: 10px; cursor: pointer; }
+.linklike:hover b { text-decoration: underline; }
+.linklike:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; border-radius: 6px; }
+.drawer { width: min(560px, 100vw); height: 100%; background: var(--surface); border-inline-start: 1px solid var(--border-strong); padding: 20px; display: flex; flex-direction: column; gap: 20px; overflow-y: auto; box-shadow: var(--shadow-lg); }
