@@ -15,7 +15,7 @@ export function usePreviewKit(journey: Journey): { brand: Brand; adapter: (id: s
   const { byId } = useProjects();
   const brand: Brand = byId(journey.apps?.[0] ?? "meezan")?.brand ?? brands.meezan!;
   const adapter = useMemo(() => {
-    const bank = new MockBank(personasFor(brand.preset)[0]!.id);
+    const bank = new MockBank(personasFor(brand.preset, brand.id)[0]!.id);
     return (id: string, input: Record<string, any>) => bank.call(id, input);
   }, [brand.preset]);
   return { brand, adapter };

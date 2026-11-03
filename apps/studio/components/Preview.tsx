@@ -19,7 +19,7 @@ export function Preview({ journey }: { journey: Journey }) {
   // A journey previews with the look and sandbox customers of the project (bank app) it belongs to; none listed means Meezan
   const { byId } = useProjects();
   const brand: Brand = byId(journey.apps?.[0] ?? "meezan")?.brand ?? brands.meezan!;
-  const people = personasFor(brand.preset);
+  const people = personasFor(brand.preset, brand.id);
   const [persona, setPersona] = useState(people[0]!.id);
   const [lang, setLang] = useState("en");
   const [dark, setDark] = useState(false);

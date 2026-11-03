@@ -17,7 +17,7 @@ const write = (v: Saved) => { try { sessionStorage.setItem(KEY, JSON.stringify(v
  * only who is signed in and the language are remembered for the tab.
  */
 export function AppProvider({ project, children }: { project: ProjectInfo; children: React.ReactNode }) {
-  const [app] = useState(() => new BankApp({ preset: project.preset, live: createLive({ brand: project.id }), studioUrl: "/api/studio" }));
+  const [app] = useState(() => new BankApp({ preset: project.preset, projectId: project.id, live: createLive({ brand: project.id }), studioUrl: "/api/studio" }));
   const [ready, setReady] = useState(false);
 
   useEffect(() => {

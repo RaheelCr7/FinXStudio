@@ -34,6 +34,8 @@ export type AppState = {
 export type BankAppDeps = {
   /** The bank this app is. Decides which sandbox customers can sign in. */
   preset: Preset;
+  /** The project (bank app) this is, when it has sandbox customers of its own. Those are used instead of the look's customers. */
+  projectId?: string;
   live: ReturnType<typeof createLive>;
   studioUrl: string;
   /** The customer selected on the sign-in screen at first. Defaults to the first one for this bank. */
@@ -56,7 +58,7 @@ export class BankApp {
   private adapterFn!: (id: string, input: Record<string, any>) => Promise<any>;
 
   constructor(private deps: BankAppDeps) {
-    const personaId = deps.defaultPersona ?? personasFor(deps.preset)[0]?.id ?? "ayesha";
+    const personaId = deps.defaultPersona ?? personasFor(deps.preset, deps.projectId)[0]?.id ?? "ayesha";
     this.current = new MockBank(personaId);
     this.state = {
       screen: "login", personaId, lang: "en", tab: "dashboard", budgetId: null, investView: null, sheet: null, subId: null, paying: false, toast: null, tick: 0,
@@ -75,7 +77,7 @@ export class BankApp {
     if (this.adapterFor !== this.current) { const bank = this.current; this.adapterFor = bank; this.adapterFn = (id, input) => bank.call(id, input); }
     return this.adapterFn;
   }
-  personas = () => personasFor(this.deps.preset);
+  personas = () => personasFor(this.deps.preset, this.deps.projectId);
   money = (n: number) => (this.deps.money ?? usd)(n);
 
   private set(patch: Partial<AppState>) { this.state = { ...this.state, ...patch }; for (const l of [...this.listeners]) l(); }

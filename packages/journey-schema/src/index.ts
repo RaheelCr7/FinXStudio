@@ -4,4 +4,5 @@ export * from "./validate";
 export { localTransfer } from "./fixtures/local-transfer";
 export { payBill } from "./fixtures/pay-bill";
 export { addMoney, addCard, connectAccount, createBudget, invest, sellInvestment, bankworkxJourneys } from "./fixtures/bankworkx";
+export { signIn as cabSignIn, defaultSignIn as cabDefaultSignIn, accountPreview as cabAccountPreview, changeLanguage as cabChangeLanguage, enroll as cabEnroll, activateProfile as cabActivateProfile, cantSignIn as cabCantSignIn, locateUs as cabLocateUs, support as cabSupport, cabJourneys } from "./fixtures/cab";
 export { catalog, catalogEntry, CATEGORIES, type CatalogEntry, type CatalogCategory } from "./catalog";

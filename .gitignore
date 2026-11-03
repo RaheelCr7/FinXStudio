@@ -13,3 +13,6 @@ dist
 *.p12
 *.key
 *.mobileprovision
+
+# A bank's design exports (not ours to publish)
+design/
