@@ -1,6 +1,6 @@
 # Requirements
 
-The front door of the generator (plan, Stage 1). A requirement is captured, refined and **approved** before anything is generated from it. This page covers the core: the record, its rules, and the API. The Studio pages and the FinX tools for Claude Code come next.
+The front door of the generator (plan, Stage 1). A requirement is captured, refined and **approved** before anything is generated from it. This page covers the record, its rules, the API and the Studio pages. The FinX tools for Claude Code come next.
 
 ## The record
 `packages/journey-schema/src/requirement.ts`. Stored in `.data/requirements.json` (next to the journeys).
@@ -39,5 +39,8 @@ New list items only need their words: the ids (A-1, S-2, AC-3 …) are given on 
 
 Every change is written to the activity log.
 
+## In Studio
+**Requirements** (sidebar, and ⌘K): the list for the current project, each with its status, version, criteria count, open questions and what still blocks approval; **New requirement** takes a title and a sentence of intent. A requirement opens in an editor: intent, the lists (who, steps, rules, data, bank operations, failures, acceptance criteria, compliance) with an Add and a remove on each row, **Save changes**, a **Questions** thread (ask, answer) and an **Approval** panel that shows what is missing and enables **Approve** (publish permission) only when nothing is. Changing an approved requirement says so and takes it back to a draft.
+
 ## Next
-Studio pages (list, editor, questions, approval, coverage view), the FinX MCP tools (`finx_get_requirement`, `finx_save_requirement`, `finx_ask_requirement`) and the `/finx-requirements` skill, then the generator that reads an approved requirement and carries each criterion id into journeys, rules and tests.
+The FinX MCP tools (`finx_get_requirement`, `finx_save_requirement`, `finx_ask_requirement`) and the `/finx-requirements` skill, then the generator that reads an approved requirement and carries each criterion id into journeys, rules and tests; and a coverage view of criteria against tests.
