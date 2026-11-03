@@ -1,4 +1,4 @@
-import type { Journey, LintIssue, Requirement } from "@finx/journey-schema";
+import type { Journey, LintIssue } from "@finx/journey-schema";
 
 export class StudioError extends Error {
   constructor(public status: number, message: string, public issues?: unknown) { super(message); this.name = "StudioError"; }
@@ -14,9 +14,6 @@ export type ProjectSummary = { id: string; name: string; preset: string; currenc
 /** One ready-made journey in the catalog. `added` is the slug of the project's copy, when it has one. */
 export type CatalogSummary = { id: string; name: string; category: string; summary: string; highlights: string[]; screens: number; languages: string[]; currencies: string[]; madeFor: string; added: string | null };
 
-/** A requirement as Studio returns it: with what still blocks its approval. */
-export type RequirementRecord = Requirement & { blockers: string[]; resetApproval?: boolean };
-
 /** Everything the tools need from FinX Studio. The HTTP client implements it; tests use an in-memory one. */
 export interface StudioClient {
   readonly baseUrl: string;
@@ -29,11 +26,6 @@ export interface StudioClient {
   saveDraft(slug: string, journey: Journey): Promise<void>;
   publish(slug: string): Promise<{ version: number }>;
   reportRun(input: RunInput): Promise<RunRecord>;
-  listRequirements(project?: string): Promise<RequirementRecord[]>;
-  getRequirement(id: string): Promise<RequirementRecord>;
-  createRequirement(body: Record<string, unknown>): Promise<RequirementRecord>;
-  updateRequirement(id: string, body: Record<string, unknown>): Promise<RequirementRecord>;
-  askRequirement(id: string, text: string): Promise<RequirementRecord>;
 }
 
 export class HttpStudioClient implements StudioClient {
@@ -73,9 +65,4 @@ export class HttpStudioClient implements StudioClient {
   async saveDraft(slug: string, journey: Journey) { await this.request("PUT", `/api/journeys/${encodeURIComponent(slug)}`, journey); }
   publish(slug: string) { return this.request<{ version: number }>("POST", `/api/journeys/${encodeURIComponent(slug)}/publish`); }
   reportRun(input: RunInput) { return this.request<RunRecord>("POST", "/api/runs", input); }
-  listRequirements(project?: string) { return this.request<RequirementRecord[]>("GET", `/api/requirements${project ? `?project=${encodeURIComponent(project)}` : ""}`); }
-  getRequirement(id: string) { return this.request<RequirementRecord>("GET", `/api/requirements/${encodeURIComponent(id)}`); }
-  createRequirement(body: Record<string, unknown>) { return this.request<RequirementRecord>("POST", "/api/requirements", body); }
-  updateRequirement(id: string, body: Record<string, unknown>) { return this.request<RequirementRecord>("PATCH", `/api/requirements/${encodeURIComponent(id)}`, body); }
-  askRequirement(id: string, text: string) { return this.request<RequirementRecord>("POST", `/api/requirements/${encodeURIComponent(id)}/questions`, { text }); }
 }
