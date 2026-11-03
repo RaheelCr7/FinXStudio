@@ -55,10 +55,11 @@ Every CAB sheet was compared screen by screen with its journey (content and flow
 
 **Also fixed (second pass):** *Enrol* is now two screens as designed: the entity dropdown with Continue, then "Selected Entity" (read-only) with Personal and Business rows that go straight on. *Language*: the list opens with the language in use ticked (new sandbox adapter `cab.language.selection`), the confirmation names the chosen language, No sits before Yes, and after Yes the change-language journey ends (back on sign in) with no "Language updated" screen.
 
+**Decision, reset order:** the journey keeps the platform's order (security code first, then the new password, with a "where to send the code" step). The design shows found, Change Password, Security Code, success. The platform order was checked against the bank's platform code; revisit it only if the bank confirms the design order is the intended one.
+
 **Kept on purpose (not in the frames, from the platform):** locked, expired, inactive and not-found screens, the three-mistake locks, the wrong-code alerts, business banking and already-enrolled paths.
 
 **Open: needs a decision or a new block**
-- *Reset order.* The design goes found, Change Password, Security Code, success. The journey follows the platform: code first, then the new password, with a "where to send the code" step the design does not have. Confirm with the bank which is right.
 - *Not modelled:* the login-time PIN modal and the biometric "Unlock" modal, the "Welcome Nour" remembered-user greeting, the Menu and My Accounts screens that lead to Default sign in and Account preview.
 - *Default sign in:* the list should tick the current default with the status words (Default sign in, Enabled, Generated), and the success screen should show the Default Sign In card with a Change link.
 - *Found screen:* username dropdown, avatar, an OR divider, and "Sign in as" returning to the login with the username filled in.
