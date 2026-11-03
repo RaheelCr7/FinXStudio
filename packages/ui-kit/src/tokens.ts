@@ -147,6 +147,8 @@ export type BrandDef = {
   /** Folder with the app icons, relative to apps/bank-app. */
   assets: string; background: string; splashDark: string;
   look?: BrandLook;
+  /** Corner radii that differ from the look's own (small, medium, large, extra large, in px). */
+  radius?: Partial<Record<"sm" | "md" | "lg" | "xl", number>>;
   /** Sizes of the shared components (field, button, bar, row, keypad) when the bank's design differs from the defaults. */
   components?: ComponentTokenOverrides;
   /** Where the project runs, the languages it offers and the legal entities it covers. Anything unset follows the bank's currency and locale (see projectShape). */
@@ -211,7 +213,7 @@ export function resolveBrand(id: BrandId, def: BrandDef): Brand {
     }
     return { name: `${id}-${mode}`, colors: c };
   };
-  return { id, name: def.name, preset: def.preset, light: make("light"), dark: make("dark"), radius: base.radius, currency: def.currency, locale: def.locale, ...(def.look ? { look: def.look } : {}), ...(def.components ? { components: def.components } : {}) };
+  return { id, name: def.name, preset: def.preset, light: make("light"), dark: make("dark"), radius: { ...base.radius, ...(def.radius ?? {}) }, currency: def.currency, locale: def.locale, ...(def.look ? { look: def.look } : {}), ...(def.components ? { components: def.components } : {}) };
 }
 
 /** Every bank in brands.json. Journeys and the engine never change per bank; only this does. */

@@ -1,7 +1,7 @@
 import { promises as fs } from "node:fs";
 import path from "node:path";
 import { spawnSync } from "node:child_process";
-import { PRESETS, accentProblem, projectShape, resolveBrand, resolveComponentTokens, validateShape, type ProjectShape, type Brand, type BrandDef, type ComponentTokenOverrides } from "@finx/ui-kit";
+import { PRESETS, accentProblem, applyLook, countryByCode, lookById, projectShape, resolveBrand, resolveComponentTokens, validateShape, type ProjectShape, type Brand, type BrandDef, type ComponentTokenOverrides } from "@finx/ui-kit";
 import { StoreError } from "./store";
 import { brandsFile } from "./brand-ids";
 
@@ -12,7 +12,16 @@ import { brandsFile } from "./brand-ids";
 export { brandsFile };
 
 export type Project = BrandDef & { id: string; brand: Brand };
-export type NewProject = { name: string; bundleId?: string; preset: string; accent: string; currency: string };
+export type NewProject = {
+  name: string; bundleId?: string; preset: string; accent: string; currency: string;
+  /** A ready look from the library (sets the preset, accent, bar, fields, corners and sizes unless given here). */
+  look?: string;
+  /** Corner radii and component sizes from the look step's sliders. */
+  radius?: unknown; components?: unknown;
+  /** Country profile code (JO, PK...): fills currency, locale, languages and the first entity. */
+  country?: string;
+  channels?: unknown; languages?: unknown; customLanguages?: unknown; entities?: unknown;
+};
 
 const read = async (): Promise<Record<string, BrandDef>> => JSON.parse(await fs.readFile(brandsFile(), "utf8"));
 const toProject = (id: string, def: BrandDef): Project => ({ id, ...def, brand: resolveBrand(id, def) });
@@ -39,6 +48,48 @@ const BUNDLE_ID = /^[a-z][a-z0-9]*(\.[a-z][a-z0-9]*)+$/;
 
 export type Created = { project: Project; iconsMade: boolean; iconWarning?: string };
 
+/** An entity may only use languages the project offers. */
+function checkEntityLanguages(shape: ProjectShape) {
+  for (const e of shape.entities) {
+    const missing = e.languages.filter((l) => !shape.languages.includes(l));
+    if (missing.length) throw new StoreError(400, `Entity ${e.id} uses ${missing.join(", ")}, which the project does not offer. Add it to the project's languages first.`);
+  }
+}
+
+/** Corner radii from the sliders: sm, md, lg and xl, each 0 to 40 px. */
+function cleanRadius(input: unknown): BrandDef["radius"] | undefined {
+  if (input === undefined || input === null) return undefined;
+  if (typeof input !== "object") throw new StoreError(400, "radius must be an object");
+  const out: NonNullable<BrandDef["radius"]> = {};
+  for (const k of ["sm", "md", "lg", "xl"] as const) {
+    const v = (input as Record<string, unknown>)[k];
+    if (v === undefined) continue;
+    if (typeof v !== "number" || !Number.isFinite(v) || v < 0 || v > 40) throw new StoreError(400, `radius.${k} must be a number from 0 to 40`);
+    out[k] = v;
+  }
+  return out;
+}
+
+/** Component sizes that differ from the defaults for these corner radii; throws on a bad value. */
+function cleanComponents(input: unknown, radii: { md: number; lg: number }): ComponentTokenOverrides | undefined {
+  if (input === undefined || input === null) return undefined;
+  if (typeof input !== "object") throw new StoreError(400, "Send the component sizes as an object");
+  const overrides: Record<string, Record<string, number>> = {};
+  const defaultsFor = resolveComponentTokens(undefined, radii);
+  for (const [group, defaults] of Object.entries(defaultsFor)) {
+    const given = (input as Record<string, unknown>)[group];
+    if (given === undefined) continue;
+    if (!given || typeof given !== "object") throw new StoreError(400, `${group} must be an object`);
+    for (const key of Object.keys(defaults)) {
+      const v = (given as Record<string, unknown>)[key];
+      if (v === undefined) continue;
+      if (typeof v !== "number" || !Number.isFinite(v) || v < 0 || v > 200) throw new StoreError(400, `${group}.${key} must be a number from 0 to 200`);
+      if (v !== (defaults as Record<string, number>)[key]) (overrides[group] ??= {})[key] = v;
+    }
+  }
+  return Object.keys(overrides).length ? (overrides as ComponentTokenOverrides) : undefined;
+}
+
 /** Adds a project (bank app). Throws StoreError with a message a person can act on. */
 export async function createProject(input: NewProject): Promise<Created> {
   const name = String(input.name ?? "").trim();
@@ -53,20 +104,43 @@ export async function createProject(input: NewProject): Promise<Created> {
   if (!BUNDLE_ID.test(bundleId) || bundleId.length > 80) throw new StoreError(400, "The app id must look like com.yourbank.app: lowercase letters and numbers in dot-separated parts");
   if (Object.values(all).some((d) => d.bundleId === bundleId)) throw new StoreError(409, `Another project already uses ${bundleId}`);
 
+  const library = input.look ? lookById(String(input.look)) : undefined;
+  if (input.look && !library) throw new StoreError(400, "Choose a look from the library");
   if (!(input.preset in PRESETS)) throw new StoreError(400, `Choose a look: ${Object.keys(PRESETS).join(" or ")}`);
   const accent = String(input.accent ?? "").toUpperCase();
   const bad = accentProblem(accent);
   if (bad) throw new StoreError(400, bad);
-  const currency = String(input.currency ?? "").toUpperCase();
-  if (!(currency in CURRENCIES)) throw new StoreError(400, `Choose a currency: ${Object.keys(CURRENCIES).join(", ")}`);
+  const country = input.country ? countryByCode(String(input.country)) : undefined;
+  if (input.country && !country) throw new StoreError(400, `Choose a country from the list of profiles`);
+  const currency = String(input.currency || country?.currency || "").toUpperCase();
+  if (country ? !/^[A-Z]{3}$/.test(currency) : !(currency in CURRENCIES)) throw new StoreError(400, country ? "The currency must be a 3-letter code like JOD" : `Choose a currency: ${Object.keys(CURRENCIES).join(", ")}`);
+  const locale = country && currency === country.currency ? country.locale : CURRENCIES[currency] ?? (country ? country.locale : "en-US");
 
   const scheme = id.replace(/-/g, "");
   if (Object.values(all).some((d) => d.scheme === scheme)) throw new StoreError(409, "A project with a very similar name already exists");
   const preset = input.preset as keyof typeof PRESETS;
   const def: BrandDef = {
     name, shortName: name.length > 16 ? name.split(/\s+/)[0]!.slice(0, 16) : name, slug: id, bundleId, scheme,
-    preset, accent, currency, locale: CURRENCIES[currency]!, assets: `./assets/${id}`, ...PRESET_LOOK[preset]!,
+    preset, accent, currency, locale, assets: `./assets/${id}`, ...PRESET_LOOK[preset]!,
   };
+  // a library look sets the screens' style; the sliders (radius, components) and an explicit shape come on top
+  if (library) { const l = applyLook(library); if (l.look) def.look = l.look; if (l.radius) def.radius = l.radius; if (l.components) def.components = l.components; }
+  const radius = cleanRadius(input.radius);
+  if (radius) def.radius = { ...(def.radius ?? {}), ...radius };
+  const components = cleanComponents(input.components, { md: resolveBrand(id, def).radius.md, lg: resolveBrand(id, def).radius.lg });
+  if (components) def.components = { ...(def.components ?? {}), ...components };
+  const wantsShape = [input.channels, input.languages, input.customLanguages, input.entities].some((v) => v !== undefined) || !!country;
+  if (wantsShape) {
+    const given = { channels: input.channels, languages: input.languages, customLanguages: input.customLanguages, entities: input.entities };
+    const checked = validateShape(Object.fromEntries(Object.entries(given).filter(([, v]) => v !== undefined)));
+    if (!checked.ok) throw new StoreError(400, checked.errors.join(". "));
+    Object.assign(def, checked.shape);
+    if (country) {
+      def.languages ??= country.languages;
+      def.entities ??= [{ id: "main", name, country: country.code, currency, languages: def.languages }];
+    }
+    checkEntityLanguages(projectShape(def));
+  }
 
   const file = brandsFile();
   const tmp = `${file}.${process.pid}.tmp`;
@@ -129,21 +203,9 @@ export async function updateProjectComponents(id: string, input: unknown): Promi
   const def = all[id];
   if (!def) throw new StoreError(404, `No project called ${id}`);
   if (!input || typeof input !== "object") throw new StoreError(400, "Send the component sizes as an object");
-  const overrides: Record<string, Record<string, number>> = {};
-  const defaultsFor = resolveComponentTokens(undefined, resolveBrand(id, def).radius);
-  for (const [group, defaults] of Object.entries(defaultsFor)) {
-    const given = (input as Record<string, unknown>)[group];
-    if (given === undefined) continue;
-    if (!given || typeof given !== "object") throw new StoreError(400, `${group} must be an object`);
-    for (const key of Object.keys(defaults)) {
-      const v = (given as Record<string, unknown>)[key];
-      if (v === undefined) continue;
-      if (typeof v !== "number" || !Number.isFinite(v) || v < 0 || v > 200) throw new StoreError(400, `${group}.${key} must be a number from 0 to 200`);
-      if (v !== (defaults as Record<string, number>)[key]) (overrides[group] ??= {})[key] = v;
-    }
-  }
+  const overrides = cleanComponents(input, resolveBrand(id, def).radius);
   const { components: previous, ...rest } = def;
-  const updated: BrandDef = Object.keys(overrides).length ? { ...rest, components: overrides as ComponentTokenOverrides } : rest;
+  const updated: BrandDef = overrides ? { ...rest, components: overrides } : rest;
   const file = brandsFile();
   const tmp = `${file}.${process.pid}.tmp`;
   await fs.writeFile(tmp, JSON.stringify({ ...all, [id]: updated }, null, 2) + "\n");

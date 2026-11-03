@@ -435,3 +435,7 @@ button.workspace:hover { background: rgba(255,255,255,.08); border-color: #2a344
 .comp-state { margin: 0; display: flex; flex-direction: column; gap: 6px; min-width: 0; }
 nav button[aria-current="true"] { background: var(--muted); border-color: var(--border-strong); }
 .table th { text-align: start; }
+.looks { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 8px; }
+.looks .preset-card { flex: none; }
+.wiz .side { min-width: 0; }
+.wiz .side > div:nth-child(2) { width: 100%; }
