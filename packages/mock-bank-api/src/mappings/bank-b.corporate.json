@@ -1,0 +1,230 @@
+{
+  "provider": "bank-b",
+  "version": 1,
+  "operations": {
+    "company": {
+      "call": "company.profile",
+      "response": {
+        "id": "response.companyId",
+        "name": "response.legalName",
+        "currency": "response.baseCcy",
+        "accounts": {
+          "from": "response.accounts",
+          "each": {
+            "id": "item.accountNo",
+            "name": "item.title",
+            "maskedNumber": {
+              "from": "item.last4",
+              "as": "mask4"
+            },
+            "currency": "item.ccy",
+            "balance": "item.available"
+          }
+        },
+        "whitelist": {
+          "from": "response.approvedCreditors",
+          "each": {
+            "id": "item.ref",
+            "name": "item.name",
+            "bank": "item.bank",
+            "maskedNumber": {
+              "from": "item.last4",
+              "as": "mask4"
+            }
+          }
+        },
+        "users": {
+          "from": "response.staff",
+          "each": {
+            "id": "item.id",
+            "name": "item.name",
+            "roles": {
+              "from": "item.perms",
+              "mapEach": {
+                "MAKE": "initiator",
+                "SIGN": "approver"
+              }
+            },
+            "dailyLimit": "item.cap.perDay",
+            "usedToday": "item.cap.spentToday"
+          }
+        },
+        "companyDailyLimit": "response.limits.companyPerDay",
+        "companyUsedToday": "response.limits.companySpent",
+        "dualApprovalAbove": "response.signOffAbove",
+        "cutoff": "response.cutOffUtc",
+        "holidays": {
+          "from": "response.holidayList",
+          "default": []
+        }
+      }
+    },
+    "initiatePayment": {
+      "call": "payments.create",
+      "request": {
+        "initiator": "input.userId",
+        "debit.accountNo": "input.fromAccountId",
+        "creditor.ref": "input.beneficiaryId",
+        "amount.value": {
+          "from": "input.amount",
+          "as": "string"
+        },
+        "remittanceInfo": "input.reference"
+      },
+      "response": "payment"
+    },
+    "approvePayment": {
+      "call": "payments.authorise",
+      "request": {
+        "txnId": "input.paymentId",
+        "signer": "input.userId"
+      },
+      "response": "payment"
+    },
+    "rejectPayment": {
+      "call": "payments.decline",
+      "request": {
+        "txnId": "input.paymentId",
+        "signer": "input.userId",
+        "note": "input.reason"
+      },
+      "response": "payment"
+    },
+    "listPending": {
+      "call": "payments.list",
+      "request": {
+        "awaiting": {
+          "from": "input.userId",
+          "unless": {
+            "path": "input.as",
+            "in": [
+              "initiator"
+            ]
+          }
+        },
+        "madeBy": {
+          "from": "input.userId",
+          "if": {
+            "path": "input.as",
+            "in": [
+              "initiator"
+            ]
+          }
+        }
+      },
+      "list": "response.items",
+      "response": "payment"
+    },
+    "getPayment": {
+      "call": "payments.get",
+      "request": {
+        "txnId": "input.paymentId"
+      },
+      "response": "payment"
+    }
+  },
+  "shapes": {
+    "payment": {
+      "id": "response.txnId",
+      "companyId": "context.companyId",
+      "status": {
+        "from": "response.state",
+        "map": {
+          "AWAITING_AUTH": "pending_approval",
+          "EXECUTED": "released",
+          "CANCELLED": "rejected"
+        }
+      },
+      "initiatedBy": "response.initiator",
+      "initiatedAt": "response.createdTs",
+      "fromAccountId": "response.debit.accountNo",
+      "beneficiaryId": "response.creditor.ref",
+      "amount": {
+        "from": "response.amount.value",
+        "as": "number"
+      },
+      "currency": "response.amount.ccy",
+      "reference": "response.remittanceInfo",
+      "valueDate": "response.valueDt",
+      "afterCutoff": "response.pastCutOff",
+      "required": "response.authChain.needed",
+      "approvals": {
+        "from": "response.authChain.signedBy",
+        "each": {
+          "userId": "item.user",
+          "at": "item.ts"
+        }
+      },
+      "releasedAt": "response.executedTs",
+      "releaseReference": "response.execRef",
+      "rejectedBy": "response.cancelledBy",
+      "rejectReason": "response.cancelNote",
+      "rejectedAt": "response.cancelledTs"
+    }
+  },
+  "errors": {
+    "ERR-4031": {
+      "code": "NOT_AUTHORISED",
+      "message": "{userName} is not allowed to {action} payments"
+    },
+    "ERR-4043": {
+      "code": "USER_NOT_FOUND",
+      "message": "No user {userId} at {company}"
+    },
+    "ERR-4044": {
+      "code": "ACCOUNT_NOT_FOUND",
+      "message": "Account not found"
+    },
+    "ERR-4041": {
+      "code": "BENEFICIARY_NOT_WHITELISTED",
+      "message": "This beneficiary is not on the company's approved list"
+    },
+    "ERR-4221": {
+      "code": "INVALID_AMOUNT",
+      "message": "Enter an amount in {ccy} with at most {digits} decimal places"
+    },
+    "ERR-4222": {
+      "code": "CURRENCY_NOT_SUPPORTED",
+      "message": "Payments are limited in {ccy}: choose a {ccy} account"
+    },
+    "ERR-4091": {
+      "code": "INSUFFICIENT_FUNDS",
+      "message": "Insufficient funds"
+    },
+    "ERR-4291": {
+      "code": "LIMIT_USER_EXCEEDED",
+      "message": "This is above {userName}'s daily limit"
+    },
+    "ERR-4292": {
+      "code": "LIMIT_COMPANY_EXCEEDED",
+      "message": "This is above the company's daily limit"
+    },
+    "ERR-4093": {
+      "code": "SELF_APPROVAL",
+      "message": "You cannot approve a payment you started"
+    },
+    "ERR-4094": {
+      "code": "ALREADY_APPROVED",
+      "message": "You have already approved this payment"
+    },
+    "ERR-4095": {
+      "code": "PAYMENT_NOT_PENDING",
+      "message": "This payment is already {state}",
+      "map": {
+        "state": {
+          "AWAITING_AUTH": "pending approval",
+          "EXECUTED": "released",
+          "CANCELLED": "rejected"
+        }
+      }
+    },
+    "ERR-4042": {
+      "code": "PAYMENT_NOT_FOUND",
+      "message": "No payment {txnId}"
+    }
+  },
+  "unmapped": {
+    "code": "BANK_ERROR",
+    "message": "The bank could not process this. Try again."
+  }
+}

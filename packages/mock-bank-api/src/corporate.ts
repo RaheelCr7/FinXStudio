@@ -1,5 +1,5 @@
 import { currencyInfo, roundMoney } from "@finx/ui-kit";
-import { BankError } from "./index";
+import { BankError } from "./errors";
 
 /**
  * Sandbox for corporate payments with maker-checker approval (plan, Stage 1). A company has accounts, users with roles,
