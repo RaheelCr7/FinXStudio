@@ -40,7 +40,7 @@ A bank can carry a **look** in `packages/ui-kit/src/brands.json`: a coloured app
 
 New journey blocks that the design needed, available to every project and listed in the AI catalog and the Studio builder: `divider` (a line with a word such as OR), `menu` rows built from a saved list (`source` and `item`), `balanceList` (read-only account rows) and `accordion` (questions that open to show answers), `hero` (logo banner), `sectionHeader` (heading with a link), `shortcuts` (icon button row), `menu` (tappable rows). `select` gained a `rows` variant, `otp` a number pad and masked digits (`keypad`, `masked`), and `toggle` a link on the same row.
 
-Known gaps against the Figma: the bank's own typeface is not available, so the web uses open fonts picked for it (Inter for Latin, Noto Sans Arabic for Arabic, both loaded through `@fontsource`; the phone apps still use the system font), a date picker, the picture-code image, the OR divider between menu rows, and a real street map (Locate us has a schematic one).
+Known gaps against the Figma: the bank's own typeface is not available, so the web uses open fonts picked for it (Inter for Latin, Noto Sans Arabic for Arabic, both loaded through `@fontsource`; the phone apps still use the system font), the picture-code image, the OR divider between menu rows, and a real street map (Locate us has a schematic one).
 
 ## Checked
 
@@ -63,7 +63,7 @@ Every CAB sheet was compared screen by screen with its journey (content and flow
 
 **Open: needs a decision or a new block**
 - *Not modelled:* the Menu and My Accounts screens that lead to Default sign in and Account preview.
-- *Found screen:* username dropdown, avatar, and "Sign in as" returning to the login with the username filled in. (The OR divider is done.) Still open: needs a dropdown block.
+- *Found screen:* the avatar and the username dropdown are done (see below). Still open: "Sign in as" returning to the login with the username filled in (a journey can end, but cannot yet hand an answer to the next one).
 - *Account preview:* the setup screen still has a Save button and a warning the design does not show. (The preview list itself is done: heading with an "As of" time, rows with a type tag, balance and note, new `balanceList` block.)
 - *Locate us:* the results screen now has a **map** (new `map` block: pins on a grid by latitude and longitude, no streets or tiles, because real tiles need a map provider and its key; pressing a pin opens that place). The design opens on the map with the search bar; here the map sits above the result rows. The rest is done: search bar with "List view" and "Filters", a separate Advance Filter screen, a result list of tappable rows (a menu built from the found locations), details with the country and a single "Call us" button. The filter's empty "Services" section is not modelled.
 - *Support:* the Call us dialer is now a pop-up (done). Still open: the FAQ, Terms and Privacy text taken from the design. (FAQs are now one accordion screen of six topics.)
@@ -73,7 +73,7 @@ Every CAB sheet was compared screen by screen with its journey (content and flow
 
 - **Frames not exported or not built:** the Web (Retail), v1.1 and SME pages, Onboarding, Activate Dormant Account, Open Additional Account, Customer Complaints and Precious Metals. The other pages in the file are the next journeys.
 - **Locate us has a schematic map**, not a street map: a bank that has a map provider replaces the `MapPins` component and no journey changes.
-- **Date entry** is typed as DD / MM / YYYY; there is no date picker block yet.
+- **Date entry** uses the new calendar block (below); it stores YYYY-MM-DD and the sandbox reads both that and the old typed DD / MM / YYYY.
 - **Second factor after sign-in** (secure access code or security questions) and the legal-entity choice after sign-in appear in the platform but not in these frames, so they are not modelled.
 - **Arabic copy and the support texts** (FAQ answers, terms, privacy) are drafts. The bank's content team should replace them with approved text.
 - Studio's **web app** serves published journeys only; these are drafts, so the CAB project does not appear there until someone publishes.
@@ -83,3 +83,9 @@ Every CAB sheet was compared screen by screen with its journey (content and flow
 A new **`dialog`** block (component `Dialog`) is a pop-up over the screen, shown while its `visibleWhen` is true; its buttons run actions, and it can hold a PIN field (`bind`, `length`). It is used for: the **PIN prompt** ("Enter Sign in PIN") and the **fingerprint "Unlock"** prompt on the login screen when that is the customer's default way in (each has "Use password"; a right PIN signs the remembered person in, a wrong one says so; the sandbox's PIN check now returns who signed in, and nothing for a locked or inactive profile), the **Call us dialer** on Support, and the **language confirmation** (sign in and change language) instead of a separate screen. The welcome and login screens greet the remembered person ("Welcome Nour"; nobody is greeted before activation). The Locate us results screen has the **`map`** block.
 
 Honest limits: the fingerprint prompt is a sandbox stand-in (its Unlock button signs in with the stored PIN; a real device asks the operating system); the map has no streets. The CAB drafts in a project made before this change keep the old screens; use the catalog's *Add to project* (or the Studio copy of the journey) to get the new ones.
+
+## Date picker, dropdown and avatar (4 November 2026)
+
+New blocks: **`dateInput`** (a field with a calendar that opens under it; month and year step with buttons; saved as `YYYY-MM-DD`, shown as `DD / MM / YYYY`; `min` and `max` take a date or `today`; the engine checks that it is a real day and inside the range, in English, Urdu or the block's own `messages`), a **`dropdown` variant of `select`** (the browser's own select on the web, a list that opens under the field on a phone) and **`avatar`** (initials, name and a line). A new `date` template filter shows a saved date as a person writes it (`{{enroll.dob | date}}`), and `setData` now reads a value that is a whole `{{expression}}`.
+
+In the CAB journeys: the birth date in **Enroll** and **Can't sign in** is the calendar (no future dates). The **Found** screen shows the avatar with the profile's name and username, and a username dropdown when the person has more than one (sandbox customer `nour` has `nour` and `nour.haddad`); "Sign in as" uses the chosen one. Calendar names for months and weekdays come from the device (`Intl`); a device without them shows English.

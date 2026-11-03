@@ -10,6 +10,8 @@ import { BankError } from "./errors";
 export type CabStatus = "ACTIVE" | "NEW" | "LOCKED" | "PASSWORD_EXPIRED";
 export type CabProfile = {
   username: string; password: string; firstName: string; lastName: string;
+  /** Other usernames the same person signs in with (the recovery flow offers a choice when there are several). */
+  altUsernames?: string[];
   /** National ID, as the customer types it. */
   nationalId: string;
   /** YYYY-MM-DD */
@@ -38,7 +40,7 @@ const NOUR_ACCOUNTS: CabProfile["accounts"] = [
 
 export const CAB_PROFILES: Record<string, CabProfile> = {
   nour: {
-    username: "nour", password: "Cab@Secure123", firstName: "Nour", lastName: "Haddad", nationalId: "199012", dob: "2001-01-01",
+    username: "nour", altUsernames: ["nour.haddad"], password: "Cab@Secure123", firstName: "Nour", lastName: "Haddad", nationalId: "199012", dob: "2001-01-01",
     email: "jeyose8168@cab.com", phone: "+962 34 56 78 90", status: "ACTIVE", enrolled: true, lastLogin: "2026-07-19T21:15:00Z",
     accounts: NOUR_ACCOUNTS, netWorth: { assets: 485458.83, debt: 0 },
   },
@@ -218,7 +220,7 @@ export class CabSandbox {
         const typed = digits(input.phone);
         if (!p || norm(input.email) !== norm(p.email) || typed.length < 7 || !digits(p.phone).endsWith(typed.slice(-8)) || toIsoDate(input.dob) !== p.dob) return { ok: false, code: "NOT_FOUND" };
         this.recovered = { username: p.username };
-        return { ok: true, username: p.username, firstName: p.firstName, status: p.status === "NEW" ? "NEW" : "ACTIVE", maskedEmail: maskEmail(p.email), maskedPhone: maskPhone(p.phone) };
+        return { ok: true, username: p.username, lastName: p.lastName, usernames: Object.fromEntries([p.username, ...(p.altUsernames ?? [])].map((u) => [u, { id: u, name: u }])), firstName: p.firstName, status: p.status === "NEW" ? "NEW" : "ACTIVE", maskedEmail: maskEmail(p.email), maskedPhone: maskPhone(p.phone) };
       }
       case "cab.recover.resetPassword": {
         if (!p || !this.recovered) throw new BankError("VERIFY_FIRST", "Verify the customer first");

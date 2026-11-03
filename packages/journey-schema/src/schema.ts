@@ -47,7 +47,7 @@ export const Block = z.discriminatedUnion("type", [
   z.object({
     ...base, type: z.literal("select"), bind: z.string(), label: LocalizedText, options: z.array(z.string()).optional(), source: z.string().optional(),
     /** chips (default) are small pills. tiles are larger cards, good for banks or account types. */
-    variant: z.enum(["chips", "tiles", "rows"]).optional(),
+    variant: z.enum(["chips", "tiles", "rows", "dropdown"]).optional(),
     /** Richer fixed options with an icon and a line of help. Used instead of options when present. */
     choices: z.array(z.object({ id: z.string(), label: LocalizedText, icon: z.string().optional(), text: LocalizedText.optional() })).optional(),
   }),
@@ -96,6 +96,13 @@ export const Block = z.discriminatedUnion("type", [
    * `bind` (when given) and runs `onSelect`, where {{item.x}} reads that place. It draws pins on a grid, not streets.
    */
   z.object({ ...base, type: z.literal("map"), source: z.string(), label: LocalizedText, bind: z.string().optional(), onSelect: z.array(Action).optional(), height: z.number().int().min(120).max(400).optional() }),
+  /**
+   * A date with a calendar. The answer is saved as YYYY-MM-DD. `min` and `max` are a date or the word "today"
+   * (a birth date has max "today"); `messages` replace the built-in "too early" and "too late" texts.
+   */
+  z.object({ ...base, type: z.literal("dateInput"), bind: z.string(), label: LocalizedText, placeholder: LocalizedText.optional(), helper: LocalizedText.optional(), min: z.string().optional(), max: z.string().optional(), messages: z.object({ min: LocalizedText.optional(), max: LocalizedText.optional() }).optional() }),
+  /** A person's initials in a circle, with their name and a line under it (for example the profile found when signing in). */
+  z.object({ ...base, type: z.literal("avatar"), name: LocalizedText, text: LocalizedText.optional() }),
   /** Questions that open to show their answer, one at a time. */
   z.object({ ...base, type: z.literal("accordion"), items: z.array(z.object({ id: z.string(), title: LocalizedText, text: LocalizedText })).min(1) }),
   z.object({ ...base, type: z.literal("sectionHeader"), title: LocalizedText, subtitle: LocalizedText.optional(), action: z.object({ label: LocalizedText, actions: z.array(Action) }).optional() }),

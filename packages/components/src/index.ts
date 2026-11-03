@@ -1,4 +1,4 @@
-export type { ButtonProps, TextFieldProps, AppBarProps, ListRowProps, AlertProps, ResultProps, SummaryListProps, SwitchProps, CheckboxProps, ChoiceOption, ChoiceGroupProps, QuickAmount, AmountFieldProps, CodeInputProps, SectionHeaderProps, ShortcutsProps, HeroProps, DividerProps, AccordionProps, DialogProps, MapPinsProps, BalanceListProps, KeypadKey, KeypadProps, PinDotsProps } from "./props";
+export type { ButtonProps, TextFieldProps, AppBarProps, ListRowProps, AlertProps, ResultProps, SummaryListProps, SwitchProps, CheckboxProps, ChoiceOption, ChoiceGroupProps, QuickAmount, AmountFieldProps, CodeInputProps, SectionHeaderProps, ShortcutsProps, HeroProps, DividerProps, AccordionProps, DialogProps, DateFieldProps, DropdownProps, AvatarProps, MapPinsProps, BalanceListProps, KeypadKey, KeypadProps, PinDotsProps } from "./props";
 export { Button } from "./web/Button";
 export { TextField } from "./web/TextField";
 export { AppBar } from "./web/AppBar";
@@ -17,6 +17,10 @@ export { Shortcuts } from "./web/Shortcuts";
 export { Hero } from "./web/Hero";
 export { Divider } from "./web/Divider";
 export { Dialog } from "./web/Dialog";
+export { DateField } from "./web/DateField";
+export { Dropdown } from "./web/Dropdown";
+export { Avatar, initialsOf } from "./web/Avatar";
+export * from "./calendar";
 export { MapPins, pinPositions } from "./web/MapPins";
 export { BalanceList } from "./web/BalanceList";
 export { Accordion } from "./web/Accordion";

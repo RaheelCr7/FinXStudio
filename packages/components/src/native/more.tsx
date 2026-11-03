@@ -1,10 +1,12 @@
 import React, { useRef, useState } from "react";
 import { Image, Platform, Pressable, Text, TextInput, View } from "react-native";
 import { mix } from "@finx/ui-kit";
-import type { DialogProps, MapPinsProps, AccordionProps, BalanceListProps, DividerProps, AlertProps, AmountFieldProps, CheckboxProps, ChoiceGroupProps, CodeInputProps, HeroProps, ResultProps, SectionHeaderProps, ShortcutsProps, SummaryListProps, SwitchProps } from "../props";
+import type { DateFieldProps, DropdownProps, AvatarProps, DialogProps, MapPinsProps, AccordionProps, BalanceListProps, DividerProps, AlertProps, AmountFieldProps, CheckboxProps, ChoiceGroupProps, CodeInputProps, HeroProps, ResultProps, SectionHeaderProps, ShortcutsProps, SummaryListProps, SwitchProps } from "../props";
 import { Icon } from "./Icon";
 import { Button } from "./components";
 import { pinPositions } from "../web/MapPins";
+import { displayDate, limitIso, monthGrid, monthName, parseIso, shiftMonth, spokenDate, todayIso, weekdayNames, withinLimits } from "../calendar";
+import { initialsOf } from "../web/Avatar";
 import { useKit } from "./kit";
 
 const tabular = { fontVariant: ["tabular-nums" as const] };
@@ -322,6 +324,100 @@ export function MapPins({ pins, selected, label, onSelect, height = 220 }: MapPi
           </Pressable>
         );
       })}
+    </View>
+  );
+}
+
+const WORDS = { open: "Choose a date", prevMonth: "Previous month", nextMonth: "Next month", prevYear: "Previous year", nextYear: "Next year" };
+
+/** A date field with a calendar that opens under it; month and year can be stepped. */
+export function DateField({ label, value = "", onChange, min, max, placeholder, error, helper, look = "standard", lang = "en", strings = WORDS, weekStart = 0 }: DateFieldProps) {
+  const { c, r } = useKit();
+  const now = todayIso();
+  const lo = limitIso(min), hi = limitIso(max);
+  const chosen = parseIso(value);
+  const start = chosen ?? parseIso(hi && hi < now ? hi : lo && lo > now ? lo : now)!;
+  const [open, setOpen] = useState(false);
+  const [view, setView] = useState({ year: start.y, month: start.m });
+  const move = (months: number) => setView((v) => shiftMonth(v.year, v.month, months));
+  const outlined = look === "outlined";
+  const nav = (text: string, label: string, by: number) => (
+    <Pressable accessibilityRole="button" accessibilityLabel={label} onPress={() => move(by)} style={{ minWidth: 36, minHeight: 36, alignItems: "center", justifyContent: "center" }}><Text style={{ color: c.text, fontSize: 18 }}>{text}</Text></Pressable>
+  );
+  return (
+    <View>
+      {outlined ? null : <Legend>{label}</Legend>}
+      <Pressable accessibilityRole="button" accessibilityLabel={`${label}${value ? `, ${spokenDate(lang, value)}` : ""}`} accessibilityState={{ expanded: open }} onPress={() => setOpen(!open)}
+        style={[{ minHeight: 52, paddingHorizontal: 14, flexDirection: "row", alignItems: "center", justifyContent: "space-between", borderWidth: 1, borderColor: error ? c.negative : outlined ? c.border : c.borderStrong, borderRadius: r.md, backgroundColor: c.surface }, noOutline]}>
+        <Text style={{ fontSize: outlined ? 14 : 16, color: value ? c.text : c.textMuted }}>{value ? displayDate(value) : placeholder ?? (outlined ? label : "DD / MM / YYYY")}</Text>
+        <Icon name="calendar" size={18} color={c.textMuted} />
+      </Pressable>
+      {open ? (
+        <View style={{ marginTop: 8, padding: 12, borderWidth: 1, borderColor: c.border, borderRadius: r.lg, backgroundColor: c.surface }}>
+          <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginBottom: 8 }}>
+            {nav("«", strings.prevYear, -12)}{nav("‹", strings.prevMonth, -1)}
+            <Text accessibilityLiveRegion="polite" style={{ flex: 1, textAlign: "center", color: c.text, fontSize: 15, fontWeight: "700" }}>{monthName(lang, view.month)} {view.year}</Text>
+            {nav("›", strings.nextMonth, 1)}{nav("»", strings.nextYear, 12)}
+          </View>
+          <View style={{ flexDirection: "row", marginBottom: 4 }}>{weekdayNames(lang, weekStart).map((d, i) => <Text key={i} importantForAccessibility="no" style={{ flex: 1, textAlign: "center", color: c.textMuted, fontSize: 12 }}>{d}</Text>)}</View>
+          {monthGrid(view.year, view.month, weekStart).map((week, wi) => (
+            <View key={wi} style={{ flexDirection: "row" }}>
+              {week.map((d) => {
+                const ok = withinLimits(d.iso, lo, hi), on = d.iso === value;
+                return (
+                  <Pressable key={d.iso} disabled={!ok} accessibilityRole="button" accessibilityLabel={spokenDate(lang, d.iso)} accessibilityState={{ selected: on, disabled: !ok }} onPress={() => { onChange?.(d.iso); setOpen(false); }}
+                    style={{ flex: 1, minHeight: 38, margin: 1, borderRadius: 19, alignItems: "center", justifyContent: "center", backgroundColor: on ? c.accent : "transparent", borderWidth: d.iso === now && !on ? 1 : 0, borderColor: c.accent, opacity: ok ? (d.inMonth || on ? 1 : 0.55) : 0.3 }}>
+                    <Text style={{ fontSize: 14, color: on ? c.accentOn : c.text }}>{d.day}</Text>
+                  </Pressable>
+                );
+              })}
+            </View>
+          ))}
+        </View>
+      ) : null}
+      {helper ? <Text style={{ color: c.textMuted, fontSize: 13, marginTop: 6 }}>{helper}</Text> : null}
+      <ErrorText text={error} />
+    </View>
+  );
+}
+
+/** A list that folds into one line until pressed. */
+export function Dropdown({ label, options, value = "", onChange, placeholder, error, look = "standard" }: DropdownProps) {
+  const { c, r } = useKit();
+  const [open, setOpen] = useState(false);
+  const outlined = look === "outlined";
+  const current = options.find((o) => o.id === value);
+  return (
+    <View>
+      {outlined ? null : <Legend>{label}</Legend>}
+      <Pressable accessibilityRole="button" accessibilityLabel={`${label}${current ? `, ${current.name}` : ""}`} accessibilityState={{ expanded: open }} onPress={() => setOpen(!open)}
+        style={[{ minHeight: 52, paddingHorizontal: 14, flexDirection: "row", alignItems: "center", justifyContent: "space-between", borderWidth: 1, borderColor: error ? c.negative : outlined ? c.border : c.borderStrong, borderRadius: r.md, backgroundColor: c.surface }, noOutline]}>
+        <Text style={{ flex: 1, fontSize: outlined ? 14 : 16, color: current ? c.text : c.textMuted }}>{current ? current.name : placeholder ?? (outlined ? label : "")}</Text>
+        <Icon name="chevronDown" size={18} color={c.textMuted} />
+      </Pressable>
+      {open ? (
+        <View accessibilityRole="menu" style={{ marginTop: 4, borderWidth: 1, borderColor: c.border, borderRadius: r.md, backgroundColor: c.surface, overflow: "hidden" }}>
+          {options.map((o, i) => (
+            <Pressable key={o.id} accessibilityRole="menuitem" accessibilityState={{ selected: o.id === value }} onPress={() => { onChange?.(o.id); setOpen(false); }}
+              style={{ minHeight: 48, paddingHorizontal: 14, justifyContent: "center", borderTopWidth: i ? 1 : 0, borderTopColor: c.border, backgroundColor: o.id === value ? mix(c.surface, c.accent, 0.1) : "transparent" }}>
+              <Text style={{ color: c.text, fontSize: 15, fontWeight: o.id === value ? "700" : "400" }}>{o.name}{o.sub ? ` (${o.sub})` : ""}</Text>
+            </Pressable>
+          ))}
+        </View>
+      ) : null}
+      <ErrorText text={error} />
+    </View>
+  );
+}
+
+/** A circle with a person's initials, and their name under it. */
+export function Avatar({ name, text }: AvatarProps) {
+  const { c } = useKit();
+  return (
+    <View accessible accessibilityLabel={[name, text].filter(Boolean).join(", ")} style={{ alignItems: "center", gap: 4 }}>
+      <View style={{ width: 72, height: 72, borderRadius: 36, alignItems: "center", justifyContent: "center", backgroundColor: mix(c.surface, c.accent, 0.14) }}><Text style={{ color: c.accent, fontSize: 26, fontWeight: "700" }}>{initialsOf(name)}</Text></View>
+      <Text style={{ color: c.text, fontSize: 16, fontWeight: "700" }}>{name}</Text>
+      {text ? <Text style={{ color: c.textMuted, fontSize: 13 }}>{text}</Text> : null}
     </View>
   );
 }

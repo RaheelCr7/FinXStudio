@@ -17,6 +17,9 @@ import { Shortcuts } from "./web/Shortcuts";
 import { Hero } from "./web/Hero";
 import { Divider } from "./web/Divider";
 import { Dialog } from "./web/Dialog";
+import { DateField } from "./web/DateField";
+import { Dropdown } from "./web/Dropdown";
+import { Avatar } from "./web/Avatar";
 import { MapPins } from "./web/MapPins";
 import { Accordion } from "./web/Accordion";
 import { BalanceList } from "./web/BalanceList";
@@ -286,6 +289,32 @@ catalog.push(
     props: [{ name: "label", type: "string", description: "A word in the middle of the line. Without it, a plain line." }],
     states: [{ name: "With a word", props: { label: "OR" } }, { name: "Plain line", props: {} }],
     a11y: ["With a label it is a separator named by that word; without one it is a plain horizontal rule."],
+  },
+  {
+    name: "DateField", group: "Inputs", Component: DateField, purpose: "A date field with a calendar that opens under it. It stores the day as YYYY-MM-DD and shows DD / MM / YYYY. Month and year step with buttons, so a birth date takes a few presses.",
+    props: [
+      { name: "label", type: "string", description: "The field's name." }, { name: "value", type: "string", description: "The chosen day, YYYY-MM-DD." }, { name: "onChange", type: "(iso) => void", description: "Called with the chosen day." },
+      { name: "min", type: "string", description: "The earliest day: YYYY-MM-DD or today." }, { name: "max", type: "string", description: "The latest day: YYYY-MM-DD or today." },
+      { name: "placeholder", type: "string", description: "Shown while empty." }, { name: "error", type: "string", description: "A message under the field." },
+      { name: "look", type: "standard | outlined", default: "standard", description: "Label above, or inside as the placeholder." }, { name: "lang", type: "string", default: "en", description: "Month and weekday names." },
+    ],
+    states: [{ name: "Empty", props: { label: "Date of birth", max: "today" } }, { name: "Chosen", props: { label: "Date of birth", value: "2001-01-01", max: "today" } }, { name: "Error", props: { label: "Date of birth", error: "Choose a date" } }],
+    a11y: ["The field is a button that says it opens a dialog and whether it is open; Escape closes the calendar.", "Every day is a button named in words (1 January 2001), the chosen one is pressed, days outside the limits are disabled.", "The month and year are announced when they change."],
+  },
+  {
+    name: "Dropdown", group: "Inputs", Component: Dropdown, purpose: "A list that folds into one line until pressed. On the web it is the browser's own select; on a phone, a list that opens under the field.",
+    props: [
+      { name: "label", type: "string", description: "The field's name." }, { name: "options", type: "{ id, name, sub }[]", description: "The choices." }, { name: "value", type: "string", description: "The id chosen." },
+      { name: "onChange", type: "(id) => void", description: "Called with the id chosen." }, { name: "placeholder", type: "string", description: "Shown while nothing is chosen." }, { name: "error", type: "string", description: "A message under the field." },
+    ],
+    states: [{ name: "Nothing chosen", props: { label: "Username", placeholder: "Choose a username", options: [{ id: "nour", name: "nour" }, { id: "nour.haddad", name: "nour.haddad" }] } }, { name: "Chosen", props: { label: "Username", value: "nour", options: [{ id: "nour", name: "nour" }, { id: "nour.haddad", name: "nour.haddad" }] } }],
+    a11y: ["On the web it is a labelled native select; on a phone each choice is a menu item and the chosen one is marked selected."],
+  },
+  {
+    name: "Avatar", group: "Feedback", Component: Avatar, purpose: "A circle with a person's initials, and their name (and a line such as a username) under it.",
+    props: [{ name: "name", type: "string", description: "The person's name." }, { name: "text", type: "string", description: "A line under the name." }],
+    states: [{ name: "With username", props: { name: "Nour Haddad", text: "nour" } }, { name: "One name", props: { name: "Nour" } }],
+    a11y: ["The initials are decorative; the name and line are real text."],
   },
   {
     name: "Dialog", group: "Feedback", Component: Dialog, purpose: "A pop-up over the screen that asks one thing: a PIN prompt, a fingerprint unlock, a call, a confirmation.",

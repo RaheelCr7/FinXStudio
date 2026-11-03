@@ -8,6 +8,8 @@ export const FORMATTERS: Record<string, (v: any, arg?: string) => string> = {
   money2: (v, _currency) => (v == null || v === "" ? "" : Number(v).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })),
   /** A date and time for a person: 03/30/2026 12:50 PM, in the device's time zone. */
   datetime: (v) => { const d = v ? new Date(v) : null; return d && !isNaN(d.getTime()) ? `${d.toLocaleDateString("en-US", { month: "2-digit", day: "2-digit", year: "numeric" })} ${d.toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit" })}` : ""; },
+  /** A saved date (YYYY-MM-DD) as a person writes it: 01 / 01 / 2001. */
+  date: (v) => { const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(String(v ?? "")); return m ? `${m[3]} / ${m[2]} / ${m[1]}` : v == null ? "" : String(v); },
   upper: (v) => String(v ?? "").toUpperCase(),
 };
 

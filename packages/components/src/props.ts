@@ -179,3 +179,40 @@ export type MapPinsProps = {
   /** The map's height in points. */
   height?: number;
 };
+
+export type DateFieldProps = {
+  label: string;
+  /** The chosen day as YYYY-MM-DD, or empty. */
+  value?: string;
+  onChange?: (iso: string) => void;
+  /** The earliest and latest day that may be chosen: YYYY-MM-DD, or "today". */
+  min?: string;
+  max?: string;
+  placeholder?: string;
+  error?: string;
+  helper?: string;
+  look?: "standard" | "outlined";
+  /** The screen's language, for month and weekday names. */
+  lang?: string;
+  /** Words for the buttons, in the screen's language. */
+  strings?: { open: string; prevMonth: string; nextMonth: string; prevYear: string; nextYear: string };
+  /** The first day of the week (0 = Sunday). */
+  weekStart?: number;
+};
+
+export type DropdownProps = {
+  label: string;
+  options: { id: string; name: string; sub?: string }[];
+  value?: string;
+  onChange?: (id: string) => void;
+  placeholder?: string;
+  error?: string;
+  look?: "standard" | "outlined";
+};
+
+export type AvatarProps = {
+  /** The person's name; the circle shows their initials. */
+  name: string;
+  /** A line under the name, such as a username. */
+  text?: string;
+};

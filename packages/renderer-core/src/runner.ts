@@ -112,6 +112,14 @@ export class JourneyRunner {
         else if (min != null && n < min) this.errors[b.bind] = b.validation?.messages?.min ? this.tx(b.validation.messages.min) : ui(this.lang, "minimum", { n: min });
         else if (max != null && n > max) this.errors[b.bind] = this.tx(b.validation.messages?.max ?? ui(this.lang, "maximum", { n: max }));
       }
+      if (b.type === "dateInput" && v != null && v !== "") {
+        const t = String(v), today = new Date(), now = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, "0")}-${String(today.getDate()).padStart(2, "0")}`;
+        const lim = (x?: string) => (x === "today" ? now : x);
+        const real = /^(\d{4})-(\d{2})-(\d{2})$/.exec(t) && !Number.isNaN(Date.parse(t)) && new Date(t).toISOString().slice(0, 10) === t;
+        if (!real) this.errors[b.bind] = ui(this.lang, "dateInvalid");
+        else if (lim(b.min) && t < lim(b.min)!) this.errors[b.bind] = b.messages?.min ? this.tx(b.messages.min) : ui(this.lang, "dateTooEarly");
+        else if (lim(b.max) && t > lim(b.max)!) this.errors[b.bind] = b.messages?.max ? this.tx(b.messages.max) : ui(this.lang, "dateTooLate");
+      }
       if (b.type === "textInput" && v != null && v !== "" && b.pattern && !new RegExp(b.pattern).test(String(v))) this.errors[b.bind] = b.patternMessage ? this.tx(b.patternMessage) : ui(this.lang, "invalid");
       if ((b.type === "otp" || b.type === "dialog") && v != null && String(v).length !== b.length) this.errors[b.bind] = ui(this.lang, "allDigits", { n: b.length });
       if (def?.pattern && v != null && !new RegExp(def.pattern).test(String(v))) this.errors[b.bind] ??= ui(this.lang, "invalid");
@@ -160,7 +168,12 @@ export class JourneyRunner {
           await this.enter(target);
           return;
         }
-        case "setData": setPath(this.state, a.path, a.value); break;
+        case "setData": {
+          // a value that is a whole {{expression}} is read from the journey's data now (for example the username that was found)
+          const whole = typeof a.value === "string" ? /^\{\{\s*([^}]+?)\s*\}\}$/.exec(a.value) : null;
+          setPath(this.state, a.path, whole ? this.safeEval(whole[1]!) : a.value);
+          break;
+        }
         case "showToast": this.toast = this.tx(a.text); this.emit(); break;
         case "exit": this.exited = true; this.note({ type: "exit", screen: this.current }); this.emit(); return;
         case "share": break;
@@ -233,7 +246,7 @@ export class JourneyRunner {
   private viewBlock(b: any): Record<string, any> {
     const out: Record<string, any> = { ...b };
     if (b.type === "amountInput") { out.currency = this.currencyOf(b); out.decimals = currencyInfo(out.currency).decimals; }
-    for (const k of ["label", "text", "title", "subtitle", "hint", "helper", "meta", "placeholder"]) if (k in b) out[k] = this.tx(b[k]);
+    for (const k of ["label", "text", "title", "subtitle", "hint", "helper", "meta", "placeholder", "name"]) if (k in b) out[k] = this.tx(b[k]);
     if (b.bind) { out.value = this.get(b.bind); out.error = this.errors[b.bind]; }
     if (b.type === "reviewSummary") out.rows = b.rows.map((r: any) => ({ label: this.tx(r.label), value: this.tx(r.value) }));
     if (b.type === "accountPicker") out.items = Object.values(this.get(b.source) ?? {}).filter((a: any) => !b.filter || evaluate(b.filter, { account: a }));
