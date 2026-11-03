@@ -1,7 +1,7 @@
 import React, { useRef, useState } from "react";
 import { Image, Platform, Pressable, Text, TextInput, View } from "react-native";
 import { mix } from "@finx/ui-kit";
-import type { AccordionProps, DividerProps, AlertProps, AmountFieldProps, CheckboxProps, ChoiceGroupProps, CodeInputProps, HeroProps, ResultProps, SectionHeaderProps, ShortcutsProps, SummaryListProps, SwitchProps } from "../props";
+import type { AccordionProps, BalanceListProps, DividerProps, AlertProps, AmountFieldProps, CheckboxProps, ChoiceGroupProps, CodeInputProps, HeroProps, ResultProps, SectionHeaderProps, ShortcutsProps, SummaryListProps, SwitchProps } from "../props";
 import { Icon } from "./Icon";
 import { useKit } from "./kit";
 
@@ -197,11 +197,14 @@ export function CodeInput({ label, length, value, onChange, hint, error }: CodeI
   );
 }
 
-export function SectionHeader({ title, action }: SectionHeaderProps) {
+export function SectionHeader({ title, subtitle, action }: SectionHeaderProps) {
   const { c } = useKit();
   return (
     <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between" }}>
-      <Text accessibilityRole="header" style={{ fontSize: 16, fontWeight: "700", color: c.text }}>{title}</Text>
+      <View style={{ flex: 1 }}>
+        <Text accessibilityRole="header" style={{ fontSize: 16, fontWeight: "700", color: c.text }}>{title}</Text>
+        {subtitle ? <Text style={{ fontSize: 12, color: c.textMuted, marginTop: 2 }}>{subtitle}</Text> : null}
+      </View>
       {action ? (
         <Pressable accessibilityRole="button" onPress={action.onPress} hitSlop={8} style={{ flexDirection: "row", alignItems: "center", gap: 4 }}>
           <Text style={{ fontSize: 13, color: c.text }}>{action.label}</Text><Icon name="chevronDown" size={14} color={c.text} />
@@ -260,6 +263,26 @@ export function Accordion({ items, defaultOpen }: AccordionProps) {
           </View>
         );
       })}
+    </View>
+  );
+}
+
+export function BalanceList({ rows }: BalanceListProps) {
+  const { c, r } = useKit();
+  return (
+    <View>
+      {rows.map((row) => (
+        <View key={row.id} accessible accessibilityLabel={[row.title, row.tag, row.amount, row.caption].filter(Boolean).join(", ")} style={{ flexDirection: "row", justifyContent: "space-between", gap: 12, paddingVertical: 14, borderBottomWidth: 1, borderBottomColor: c.border }}>
+          <View style={{ flexShrink: 1, alignItems: "flex-start", gap: 6 }}>
+            <Text style={{ fontSize: 14, fontWeight: "600", color: c.text }}>{row.title}</Text>
+            {row.tag ? <Text style={{ paddingHorizontal: 10, paddingVertical: 1, borderWidth: 1, borderColor: c.borderStrong, borderRadius: r.pill, fontSize: 11, color: c.textMuted, overflow: "hidden" }}>{row.tag}</Text> : null}
+          </View>
+          <View style={{ alignItems: "flex-end", gap: 4 }}>
+            <Text style={[{ fontSize: 14, fontWeight: "600", color: c.text }, tabular]}>{row.amount}</Text>
+            {row.caption ? <Text style={{ fontSize: 11, color: c.textMuted }}>{row.caption}</Text> : null}
+          </View>
+        </View>
+      ))}
     </View>
   );
 }

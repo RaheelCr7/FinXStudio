@@ -118,6 +118,11 @@ export class CabSandbox {
 
   constructor(persona: { id: string; cab?: CabProfile }, private ctx: Ctx) { this.profile = persona.cab ? structuredClone(persona.cab) : undefined; }
 
+  /** What the sign-in screen shows before sign in: each account's name, number, type, balance and a note under it. */
+  private previewAccounts() {
+    return Object.fromEntries((this.profile?.accounts ?? []).map((a) => [a.id, { id: a.id, name: a.name, balance: a.balance, currency: CAB_CURRENCY, maskedNumber: a.masked, type: a.type, note: a.note }]));
+  }
+
   handles(adapter: string) { return adapter.startsWith("cab."); }
 
   call(adapter: string, input: Record<string, any>): any {
@@ -158,8 +163,8 @@ export class CabSandbox {
       }
       case "cab.device.verifyPin": return { ok: !!this.device.pin && String(input.pin) === this.device.pin };
 
-      case "cab.preview.get": return { enabled: this.preview, accounts: Object.fromEntries((p?.accounts ?? []).map((a) => [a.id, { id: a.id, name: a.name, balance: a.balance, currency: CAB_CURRENCY, maskedNumber: a.masked }])), asOf: new Date().toISOString() };
-      case "cab.preview.accounts": return Object.fromEntries((p?.accounts ?? []).map((a) => [a.id, { id: a.id, name: a.name, balance: a.balance, currency: CAB_CURRENCY, maskedNumber: a.masked }]));
+      case "cab.preview.get": return { enabled: this.preview, accounts: this.previewAccounts(), asOf: new Date().toISOString() };
+      case "cab.preview.accounts": return this.previewAccounts();
       case "cab.preview.set": { this.preview = input.enabled === true || input.enabled === "true"; return { ok: true, enabled: this.preview }; }
 
       case "cab.language.list": return LANGUAGES;

@@ -133,7 +133,7 @@ export type CodeInputProps = {
   error?: string;
 };
 
-export type SectionHeaderProps = { title: string; action?: { label: string; onPress: () => void } };
+export type SectionHeaderProps = { title: string; /** A quieter line under the title, such as "As of 03/30/2026 12:50 PM". */ subtitle?: string; action?: { label: string; onPress: () => void } };
 
 export type ShortcutsProps = { items: { id: string; label: string; icon?: string; onPress?: () => void }[] };
 
@@ -145,4 +145,9 @@ export type AccordionProps = {
   items: { id: string; title: string; text: string }[];
   /** The item open to start with. */
   defaultOpen?: string;
+};
+
+export type BalanceListProps = {
+  /** Read-only rows: the account's name and number, a type tag, the balance and a note under it. */
+  rows: { id: string; title: string; tag?: string; amount: string; caption?: string }[];
 };

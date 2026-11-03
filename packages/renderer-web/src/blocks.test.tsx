@@ -292,3 +292,17 @@ describe("divider and accordion", () => {
     unmount();
   });
 });
+
+describe("balance list and section subtitle", () => {
+  it("shows each account with its tag, amount and note, and a heading with an As-of line", async () => {
+    const head = renderBlock("sectionHeader", { title: "Account Preview", subtitle: "As of 03/30/2026 12:50 PM" }, {});
+    expect(screen.getByRole("heading", { name: "Account Preview" })).toBeTruthy();
+    expect(screen.getByText("As of 03/30/2026 12:50 PM")).toBeTruthy();
+    head.unmount();
+    const { container } = renderBlock("balanceList", { rows: [{ id: "a", title: "Kmart...0375", tag: "Current Account", amount: "JOD 2,173.420", caption: "Available balance" }, { id: "b", title: "Other...1111", amount: "JOD 5" }] }, {});
+    const items = screen.getAllByRole("listitem");
+    expect(items).toHaveLength(2);
+    expect(items[0]!.textContent).toBe("Kmart...0375Current AccountJOD 2,173.420Available balance");
+    expect(await axeCheck(container)).toHaveNoViolations();
+  });
+});

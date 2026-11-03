@@ -95,8 +95,12 @@ export const BLOCKS: BlockDoc[] = [
     example: { type: "hero" },
   },
   {
-    type: "sectionHeader", purpose: "A bold heading with an optional link on the same row.", fields: { title: "Loc", action: "optional { label: Loc, actions } shown at the end of the row, e.g. the language" },
+    type: "sectionHeader", purpose: "A bold heading with an optional link on the same row.", fields: { title: "Loc", subtitle: "optional Loc, a quieter line under the title", action: "optional { label: Loc, actions } shown at the end of the row, e.g. the language" },
     example: { type: "sectionHeader", title: { en: "Welcome" }, action: { label: { en: "English" }, actions: [{ type: "navigate", to: "language" }] } },
+  },
+  {
+    type: "balanceList", purpose: "Read-only account rows: name and number, a type tag, the balance and a note under it, such as the account preview before sign in.", fields: { source: "path to the accounts: a list or a record of { id, name, maskedNumber?, type?, balance, currency, note? }" },
+    example: { type: "balanceList", source: "ctx.previewAccounts" },
   },
   {
     type: "divider", purpose: "A thin line between groups, with an optional word in the middle such as OR.", fields: { label: "optional Loc" },
@@ -186,7 +190,7 @@ export const LINT_RULES = [
   { code: "expression_syntax", means: "A rule or {{template}} is not a valid expression, or uses an unknown function.", fix: "Fix the syntax. See the expressions section." },
   { code: "unknown_reference", means: "An expression uses a root, or a ctx name, that the journey never defines.", fix: "Use the suggested name, or add the dataModel entry or saveAs." },
   { code: "unknown_field", means: "An expression uses a path under a known root that dataModel does not declare (usually a typo).", fix: "Use the suggested path." },
-  { code: "unknown_formatter", means: "A {{x | name}} uses a formatter that does not exist.", fix: "Use money (optionally money:JOD or money:account.currency), money2 or upper." },
+  { code: "unknown_formatter", means: "A {{x | name}} uses a formatter that does not exist.", fix: "Use money (optionally money:JOD or money:account.currency), money2, datetime or upper." },
   { code: "unknown_source", means: "A block's source is never saved by a callApi.", fix: "Add saveAs to the callApi, or fix the name." },
 ];
 

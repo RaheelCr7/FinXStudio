@@ -4,6 +4,7 @@ import { currencyInfo } from "@finx/ui-kit";
 import { interpolate, localize } from "./template";
 import { ui } from "./strings";
 import { cardExpiryValid, luhnValid } from "./card";
+import { balanceRows } from "./blocks/pickers";
 
 export type Adapter = (adapterId: string, input: Record<string, any>) => Promise<any>;
 export type RunnerOptions = { adapter: Adapter; lang?: string };
@@ -202,7 +203,7 @@ export class JourneyRunner {
   private viewBlock(b: any): Record<string, any> {
     const out: Record<string, any> = { ...b };
     if (b.type === "amountInput") { out.currency = this.currencyOf(b); out.decimals = currencyInfo(out.currency).decimals; }
-    for (const k of ["label", "text", "title", "hint", "helper", "meta", "placeholder"]) if (k in b) out[k] = this.tx(b[k]);
+    for (const k of ["label", "text", "title", "subtitle", "hint", "helper", "meta", "placeholder"]) if (k in b) out[k] = this.tx(b[k]);
     if (b.bind) { out.value = this.get(b.bind); out.error = this.errors[b.bind]; }
     if (b.type === "reviewSummary") out.rows = b.rows.map((r: any) => ({ label: this.tx(r.label), value: this.tx(r.value) }));
     if (b.type === "accountPicker") out.items = Object.values(this.get(b.source) ?? {}).filter((a: any) => !b.filter || evaluate(b.filter, { account: a }));
@@ -216,6 +217,7 @@ export class JourneyRunner {
     if (b.type === "button") out.label = this.tx(b.label);
     if (b.type === "menu" || b.type === "shortcuts") out.items = b.items.map((i: any) => ({ ...i, label: this.tx(i.label), ...(i.text ? { text: this.tx(i.text) } : {}) }));
     if (b.type === "toggle" && b.link) out.link = { ...b.link, label: this.tx(b.link.label) };
+    if (b.type === "balanceList") out.rows = balanceRows({ items: Object.values(this.get(b.source) ?? {}) });
     if (b.type === "accordion") out.items = b.items.map((i: any) => ({ id: i.id, title: this.tx(i.title), text: this.tx(i.text) }));
     if (b.type === "sectionHeader" && b.action) out.action = { ...b.action, label: this.tx(b.action.label) };
     return out;

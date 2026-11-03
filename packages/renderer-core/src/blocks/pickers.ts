@@ -17,6 +17,15 @@ export function beneficiaryRows(b: { items: any[]; value?: unknown }): PickerRow
   return b.items.map((x) => ({ id: x.id, label: x.displayName, title: x.displayName, sub: `${x.bank} · ${x.maskedNumber}`, avatar: initialsOf(x.displayName), round: true, selected: b.value === x.id }));
 }
 
+export type BalanceRow = { id: string; title: string; tag?: string; amount: string; caption?: string };
+/** Accounts as read-only rows: "Name...0375", the account type, the balance in its currency and the note under it ("Available balance"). */
+export function balanceRows(b: { items: any[] }): BalanceRow[] {
+  return b.items.map((a) => ({
+    id: a.id, title: a.maskedNumber ? `${a.name}...${String(a.maskedNumber).replace(/[^0-9A-Za-z]/g, "")}` : a.name,
+    ...(a.type ? { tag: a.type } : {}), amount: formatMoney(a.balance, a.currency), ...(a.note ? { caption: a.note } : {}),
+  }));
+}
+
 export type Choice = { id: string; name: string; sub?: string; icon?: string; color?: string; letter: string; selected: boolean };
 /** The options of a select block, as chips or tiles. */
 export function selectChoices(b: { items: { id: string; name: string; sub?: string; icon?: string; color?: string }[]; value?: unknown; variant?: string }): { tiles: boolean; rows: boolean; choices: Choice[] } {

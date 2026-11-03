@@ -17,6 +17,7 @@ import { Shortcuts } from "./web/Shortcuts";
 import { Hero } from "./web/Hero";
 import { Divider } from "./web/Divider";
 import { Accordion } from "./web/Accordion";
+import { BalanceList } from "./web/BalanceList";
 
 const LONG = "A very long label that has to wrap onto a second line without breaking the layout";
 
@@ -253,9 +254,10 @@ catalog.push(
   },
   {
     name: "SectionHeader", group: "Navigation", Component: SectionHeader, purpose: "A heading with a link on the same row, such as the language switcher.",
-    props: [{ name: "title", type: "string", description: "The heading." }, { name: "action", type: "{ label, onPress }", description: "A link at the far end." }],
+    props: [{ name: "title", type: "string", description: "The heading." }, { name: "subtitle", type: "string", description: "A quieter line under the title, such as an \"As of\" time." }, { name: "action", type: "{ label, onPress }", description: "A link at the far end." }],
     states: [
       { name: "With link", props: { title: "Welcome", action: { label: "English", onPress: () => {} } } },
+      { name: "With a subtitle", props: { title: "Account Preview", subtitle: "As of 03/30/2026 12:50 PM", action: { label: "English", onPress: () => {} } } },
       { name: "Title only", props: { title: "Welcome" } },
     ],
     a11y: ["The heading is a real h2; the link is a button."],
@@ -295,3 +297,16 @@ catalog.push(
     tokens: ["radius.lg"],
   },
 );
+
+catalog.push({
+  name: "BalanceList", group: "Lists", Component: BalanceList, purpose: "Read-only account rows: name and number, a type tag, the balance and a note under it (the account preview before sign in).",
+  props: [{ name: "rows", type: "{ id, title, tag?, amount, caption? }[]", description: "One row per account; the amount is already formatted for its currency." }],
+  states: [
+    { name: "Three accounts", props: { rows: [
+      { id: "a", title: "Kmart Corporation...0375", tag: "Current Account", amount: "JOD 2,173.420", caption: "Available balance" },
+      { id: "b", title: "Kmart Corporation...0375", tag: "Savings Account", amount: "-JOD 3,085.310", caption: "Overdrawn" },
+      { id: "c", title: "A very long account name that has to wrap without breaking the layout...0375", amount: "JOD 120,199.800" },
+    ] } },
+  ],
+  a11y: ["A list; each row reads as one sentence (name, type, balance, note).", "A negative balance carries a minus sign, not only a colour."],
+});
