@@ -222,6 +222,7 @@ catalog.push(
     name: "AmountField", group: "Inputs", Component: AmountField, purpose: "A large amount with its currency symbol, optional preset amounts and an error.",
     props: [
       { name: "label / symbol", type: "string", description: "The field's name and the currency symbol." },
+      { name: "decimals", type: "number", default: "0", description: "Decimal places the currency allows; more than 0 opens a keypad with a decimal point." },
       { name: "value / onChange", type: "string / (text) => void", description: "The amount as typed; the screen parses it." },
       { name: "quick / onQuick", type: "QuickAmount[] / (n) => void", description: "Preset amounts shown as chips." },
       { name: "helper / error", type: "string", description: "Help or what is wrong." },
@@ -230,6 +231,7 @@ catalog.push(
       { name: "Empty", props: { label: "Amount", symbol: "Rs", value: "", helper: "Daily limit left: Rs 200,000" } },
       { name: "With quick amounts", props: { label: "Amount", symbol: "Rs", value: "1,000", quick: QUICK } },
       { name: "Error", props: { label: "Amount", symbol: "Rs", value: "9,000,000", error: "That is more than your balance" } },
+      { name: "With decimals", props: { label: "Amount", symbol: "JOD", decimals: 3, value: "12.5", helper: "Up to 3 decimal places" } },
     ],
     a11y: ["A text input with a numeric keypad, not type=number: no spinner, no scroll-to-change.", "The symbol is decorative; the label names the field.", "Quick amounts are a radio group with spoken labels."],
   },

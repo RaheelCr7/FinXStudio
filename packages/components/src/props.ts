@@ -110,6 +110,8 @@ export type AmountFieldProps = {
   value: string;
   /** The currency symbol before the amount. */
   symbol: string;
+  /** Decimal places the currency allows. 0 (the default) opens a number pad; more opens one with a decimal point. */
+  decimals?: number;
   onChange?: (text: string) => void;
   helper?: string;
   error?: string;

@@ -55,6 +55,19 @@ describe("amount", () => {
     expect(await axeCheck(container)).toHaveNoViolations();
   });
 
+  it("takes decimals in a currency that has them, keeps a trailing point while typing, and opens the decimal keypad", () => {
+    const set = vi.fn();
+    renderBlock("amountInput", { bind: "a.amt", label: "Amount", currency: "JOD", decimals: 3 }, { set });
+    const input = screen.getByLabelText("Amount") as HTMLInputElement;
+    expect(input.getAttribute("inputmode")).toBe("decimal");
+    fireEvent.change(input, { target: { value: "12." } });
+    expect(input.value).toBe("12.");
+    expect(set).toHaveBeenLastCalledWith("a.amt", 12);
+    fireEvent.change(input, { target: { value: "12.5678" } });
+    expect(input.value).toBe("12.567");
+    expect(set).toHaveBeenLastCalledWith("a.amt", 12.567);
+  });
+
   it("offers one-tap amounts as a radio group and marks the chosen one", async () => {
     const set = vi.fn();
     renderBlock("amountInput", { bind: "a.amt", label: "Amount", currency: "PKR", value: 100, quickAmounts: [50, 100] }, { set });

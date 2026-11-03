@@ -1,7 +1,7 @@
 import { useId } from "react";
 import type { AmountFieldProps } from "../props";
 
-export function AmountField({ label, value, symbol, onChange, helper, error, quick = [], onQuick, quickLabel = "Quick amounts" }: AmountFieldProps) {
+export function AmountField({ label, value, symbol, decimals = 0, onChange, helper, error, quick = [], onQuick, quickLabel = "Quick amounts" }: AmountFieldProps) {
   const id = useId();
   const describedBy = [helper ? `${id}-help` : null, error ? `${id}-error` : null].filter(Boolean).join(" ") || undefined;
   return (
@@ -10,7 +10,7 @@ export function AmountField({ label, value, symbol, onChange, helper, error, qui
       <div className={`fxc-amount ${error ? "has-error" : ""}`}>
         <span className="fxc-amount-symbol" aria-hidden>{symbol}</span>
         {/* text with a numeric keypad, not type=number: no spinner, no scroll-to-change, no "e" */}
-        <input id={id} className="fxc-amount-input" type="text" inputMode="numeric" autoComplete="off" enterKeyHint="next" placeholder="0" value={value}
+        <input id={id} className="fxc-amount-input" type="text" inputMode={decimals ? "decimal" : "numeric"} autoComplete="off" enterKeyHint="next" placeholder="0" value={value}
           aria-invalid={error ? true : undefined} aria-describedby={describedBy} onChange={(e) => onChange?.(e.target.value)} />
       </div>
       {helper ? <p id={`${id}-help`} className="fxc-help">{helper}</p> : null}

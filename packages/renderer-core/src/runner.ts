@@ -1,5 +1,6 @@
 import type { Journey, Screen, Block } from "@finx/journey-schema";
 import { evaluate, getPath, setPath } from "./expr";
+import { currencyInfo } from "@finx/ui-kit";
 import { interpolate, localize } from "./template";
 import { ui } from "./strings";
 import { cardExpiryValid, luhnValid } from "./card";
@@ -81,7 +82,9 @@ export class JourneyRunner {
         const n = Number(v);
         const min = b.validation?.min != null ? this.num(b.validation.min) : undefined;
         const max = b.validation?.max != null ? this.num(b.validation.max) : undefined;
+        const digits = currencyInfo(this.currencyOf(b)).decimals;
         if (!(n > 0)) this.errors[b.bind] = ui(this.lang, "enterAmount");
+        else if (Math.abs(n * 10 ** digits - Math.round(n * 10 ** digits)) > 1e-6) this.errors[b.bind] = digits === 0 ? ui(this.lang, "amountWhole") : ui(this.lang, "amountDecimals", { n: digits });
         else if (min != null && n < min) this.errors[b.bind] = b.validation?.messages?.min ? this.tx(b.validation.messages.min) : ui(this.lang, "minimum", { n: min });
         else if (max != null && n > max) this.errors[b.bind] = this.tx(b.validation.messages?.max ?? ui(this.lang, "maximum", { n: max }));
       }
@@ -193,8 +196,12 @@ export class JourneyRunner {
     };
   }
 
+  /** The currency of an amount block: a code (JOD), or a path to one ({{account.currency}}) read from the journey's data. */
+  private currencyOf(b: any): string { return /\{\{/.test(String(b.currency ?? "")) ? this.tx(b.currency) : String(b.currency ?? ""); }
+
   private viewBlock(b: any): Record<string, any> {
     const out: Record<string, any> = { ...b };
+    if (b.type === "amountInput") { out.currency = this.currencyOf(b); out.decimals = currencyInfo(out.currency).decimals; }
     for (const k of ["label", "text", "title", "hint", "helper", "meta", "placeholder"]) if (k in b) out[k] = this.tx(b[k]);
     if (b.bind) { out.value = this.get(b.bind); out.error = this.errors[b.bind]; }
     if (b.type === "reviewSummary") out.rows = b.rows.map((r: any) => ({ label: this.tx(r.label), value: this.tx(r.value) }));

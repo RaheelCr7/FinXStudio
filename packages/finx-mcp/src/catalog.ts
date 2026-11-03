@@ -170,11 +170,15 @@ export const LINT_RULES = [
   { code: "consent_before_submit", means: "A money-moving journey has no consent block.", fix: "Add a consent block on the review screen." },
   { code: "otp_before_money", means: "A money-moving journey has no OTP screen, or the money call is not after otpVerify.", fix: "Put otpVerify before the money call in the same button's actions." },
   { code: "unbound_input", means: "A block binds a path that dataModel does not declare.", fix: "Add the path to dataModel." },
+  { code: "amount_no_currency", means: "An amountInput has no currency.", fix: "Set currency to a code like JOD, or a path like {{account.currency}}." },
+  { code: "amount_currency_invalid", means: "An amountInput's currency is neither a 3-4 letter code nor a {{path}}.", fix: "Use a code like JOD, or {{account.currency}}." },
+  { code: "currency_mismatch", means: "An amountInput's currency differs from the currency its dataModel entry declares.", fix: "Make both the same." },
+  { code: "mixed_currency", means: "One journey has amounts in more than one fixed currency.", fix: "Fine for a conversion. Otherwise use one currency, or read it from the account with {{account.currency}}." },
   { code: "translation_gap", means: "A { en, ur } object is missing a supported language.", fix: "Add the missing translation." },
   { code: "expression_syntax", means: "A rule or {{template}} is not a valid expression, or uses an unknown function.", fix: "Fix the syntax. See the expressions section." },
   { code: "unknown_reference", means: "An expression uses a root, or a ctx name, that the journey never defines.", fix: "Use the suggested name, or add the dataModel entry or saveAs." },
   { code: "unknown_field", means: "An expression uses a path under a known root that dataModel does not declare (usually a typo).", fix: "Use the suggested path." },
-  { code: "unknown_formatter", means: "A {{x | name}} uses a formatter that does not exist.", fix: "Use money, money2 or upper." },
+  { code: "unknown_formatter", means: "A {{x | name}} uses a formatter that does not exist.", fix: "Use money (optionally money:JOD or money:account.currency), money2 or upper." },
   { code: "unknown_source", means: "A block's source is never saved by a callApi.", fix: "Add saveAs to the callApi, or fix the name." },
 ];
 

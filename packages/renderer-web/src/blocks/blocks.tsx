@@ -1,7 +1,7 @@
 "use client";
-import { useLayoutEffect, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import {
-  accountRows, amountText, applyKey, beneficiaryRows, caretAfterFormat, cardFields, cardNetwork, cleanOtp, keyboardKind, otpCells, otpLabel, parseAmountText,
+  accountRows, amountText, typedAmount, applyKey, beneficiaryRows, caretAfterFormat, cardFields, cardNetwork, cleanOtp, keyboardKind, otpCells, otpLabel, parseAmountText,
   quickAmounts, selectChoices, symbolOf, ui, type BlockProps, type BlockType, type PickerRow,
 } from "@finx/renderer-core";
 import { Alert as KitAlert, AmountField, Button as KitButton, Checkbox, ChoiceGroup, CodeInput, Hero as KitHero, Keypad, ListRow, PinDots, Result as KitResult, SectionHeader as KitSectionHeader, Shortcuts as KitShortcuts, SummaryList, Switch, TextField as KitTextField, type ChoiceOption } from "@finx/components";
@@ -22,8 +22,12 @@ export function BeneficiaryPicker({ b, set, strings }: P) {
 }
 
 export function AmountInput({ b, set, lang }: P) {
-  const quick = quickAmounts(b as any);
-  return <AmountField label={b.label} symbol={symbolOf(b.currency)} value={amountText(b.value)} onChange={(t) => set(b.bind, parseAmountText(t))} helper={b.helper} error={b.error} quick={quick} onQuick={(v) => set(b.bind, v)} quickLabel={ui(lang, "quickAmounts")} />;
+  const decimals: number = b.decimals ?? 0;
+  const [text, setText] = useState(() => amountText(b.value, decimals));
+  // what is typed stays as typed ("12." while more digits are coming); a change from outside, such as a quick amount, replaces it
+  useEffect(() => { if (typedAmount(text, decimals).value !== (b.value == null || b.value === "" ? undefined : Number(b.value))) setText(amountText(b.value, decimals)); }, [b.value, decimals]); // eslint-disable-line react-hooks/exhaustive-deps
+  const type = (t: string) => { const r = typedAmount(t, decimals); setText(r.text); set(b.bind, r.value); };
+  return <AmountField label={b.label} symbol={symbolOf(b.currency)} decimals={decimals} value={text} onChange={type} helper={b.helper} error={b.error} quick={quickAmounts(b as any)} onQuick={(v) => set(b.bind, v)} quickLabel={ui(lang, "quickAmounts")} />;
 }
 
 export function SelectChips({ b, set }: P) {
