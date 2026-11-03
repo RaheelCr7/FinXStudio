@@ -8,6 +8,7 @@ import type { Journey } from "@finx/journey-schema";
 import { lintAll } from "@finx/renderer-core";
 import { appsOfJourney, useProjects } from "./Projects";
 import { useWho } from "./Who";
+import { Copilot } from "./Copilot";
 import { ROLE_INFO } from "@/lib/roles";
 import { addBlock, addScreen, BLOCK_GROUPS, BLOCK_LABELS, KNOWN_ADAPTERS, sameContent, textOf } from "@/lib/edit";
 import { BLOCK_ICONS } from "@/lib/blocks-ui";
@@ -179,6 +180,7 @@ export function Builder({ initial, aiRun }: { initial: Rec; aiRun?: { id: string
             </div>
           ) : null}
         </div>
+        <Copilot slug={journey.slug} name={textOf(journey.name)} run={aiRun} />
         <button className="btn" onClick={togglePreview} aria-pressed={previewOn} title="Phone preview">{previewOn ? <EyeOff size={15} aria-hidden /> : <Eye size={15} aria-hidden />}Preview</button>
         <button className="btn primary" onClick={doPublish} disabled={publishing || !canPublish} title={canPublish ? undefined : `${ROLE_INFO[you.role].label}s cannot publish. Ask a Reviewer or Admin.`}>{publishing ? <><LoaderCircle size={15} className="spin" aria-hidden />Publishing…</> : <><Rocket size={15} aria-hidden />Publish to UAT</>}</button>
       </div>

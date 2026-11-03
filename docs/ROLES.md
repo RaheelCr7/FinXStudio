@@ -31,7 +31,7 @@ Each write checks the role and answers `403` with a sentence such as *Dana Lee i
 |---|---|
 | `POST /api/journeys`, `PUT /api/journeys/<slug>`, `.../restore`, `POST /api/catalog/<id>/add` | edit |
 | `POST /api/journeys/<slug>/publish`, adding from the catalog with `publish: true` | publish |
-| `POST /api/projects` | create projects. Starter journeys go live only if the person may also publish, otherwise they arrive as drafts |
+| `POST /api/projects`, `PATCH /api/projects/<id>` (brand colour) | create projects. Starter journeys go live only if the person may also publish, otherwise they arrive as drafts |
 | `POST /api/runs` | agents |
 | `GET/POST /api/people`, `PATCH/DELETE /api/people/<id>` | read: anyone. Change: people |
 
