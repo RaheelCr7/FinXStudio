@@ -1,7 +1,7 @@
 "use client";
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
-import { ArrowUpRight, CircleAlert, Clock, FilePlus2, Globe, Languages, Layers, Search, Smartphone, Sparkles } from "lucide-react";
+import { CircleAlert, Clock, FilePlus2, Languages, Layers, Search, Sparkles } from "lucide-react";
 import type { Shape } from "@/lib/graph";
 import { NewJourney } from "./NewJourney";
 import { useProjects } from "./Projects";
@@ -120,15 +120,15 @@ export function JourneyList({ journeys, defaultNew, showAll }: { journeys: Row[]
         <div className="grid">
           {shown.map((j) => (
             <Link key={j.slug} href={`/journeys/${j.slug}`} className="card jcard" aria-label={`Open ${en(j.name)}`}>
-              <div className="thumb"><FlowThumb shape={j.shape} /><span className="open">Open <ArrowUpRight size={14} aria-hidden /></span></div>
+              <div className="thumb"><FlowThumb shape={j.shape} /></div>
               <div className="body">
                 <div className="row"><h3 style={{ flex: 1 }}>{en(j.name)}</h3><Status r={j} /></div>
-                <div className="row" style={{ marginTop: -2 }}><span className="chip accent">{(j.apps.length ? j.apps : ["meezan"]).map((a) => byId(a)?.name ?? a).join(" · ")}</span></div>
+                {showAll ? <div className="row" style={{ marginTop: -2 }}><span className="chip accent">{(j.apps.length ? j.apps : ["meezan"]).map((a) => byId(a)?.name ?? a).join(" · ")}</span></div> : null}
                 {ur(j.name) ? <div className="ur" dir="rtl" lang="ur" style={{ textAlign: "left" }}>{ur(j.name)}</div> : null}
                 <div className="meta">
                   <span title="Screens"><Layers size={14} aria-hidden />{j.screens} screens</span>
-                  <span title="Channels">{j.channels.includes("mobile") ? <Smartphone size={14} aria-hidden /> : <Globe size={14} aria-hidden />}{j.channels.join(" + ")}</span>
-                  <span title="Languages"><Languages size={14} aria-hidden />{j.languages.map((l) => l.toUpperCase()).join(" · ")}</span>
+                  {j.channels.length !== 1 || j.channels[0] !== "mobile" ? <span title="Channels">{j.channels.join(" + ")}</span> : null}
+                  {j.languages.length > 1 ? <span title="Languages"><Languages size={14} aria-hidden />{j.languages.map((l) => l.toUpperCase()).join(" · ")}</span> : null}
                   <span title="Last edited"><Clock size={14} aria-hidden /><Ago iso={j.updatedAt} /></span>
                   {j.issues ? <span style={{ color: "var(--warning)", fontWeight: 600 }}><CircleAlert size={14} aria-hidden />{j.issues} to fix</span> : null}
                 </div>

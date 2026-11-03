@@ -30,6 +30,7 @@ export default async function AgentsPage() {
         <div className="board" style={{ marginTop: 24 }}>
           {COLUMNS.map((status) => {
             const items = runs.filter((r) => r.status === status);
+            if (items.length === 0) return null;
             return (
               <section key={status} aria-label={STATUS[status].label}>
                 <div className="row" style={{ marginBottom: 10 }}><span className={STATUS[status].chip}>{STATUS[status].label}</span><span className="faint">{items.length}</span></div>
@@ -42,7 +43,6 @@ export default async function AgentsPage() {
                       {r.journeySlug ? <div><span className="chip">/{r.journeySlug}</span></div> : null}
                     </Link>
                   ))}
-                  {items.length === 0 ? <div className="faint">Nothing here</div> : null}
                 </div>
               </section>
             );
