@@ -115,7 +115,8 @@ export const BLOCKS: BlockDoc[] = [
     example: { type: "shortcuts", items: [{ id: "enroll", label: { en: "Enroll" }, icon: "user", actions: [{ type: "navigate", to: "enroll" }] }] },
   },
   {
-    type: "menu", purpose: "A list of rows that each run actions when tapped, with an optional icon and a line of help.", fields: { items: "[{ id, label: Loc, text?: Loc, icon?, actions }]" },
+    type: "menu", purpose: "A list of rows that each run actions when tapped, with an optional icon and a line of help.", fields: { items: "[{ id, label: Loc, text?: Loc, icon?, actions }] for fixed rows", source: "or a path to a saved list (e.g. loc.found) to get one row per entry", item: "with source: { label: Loc, text?: Loc, icon?, actions } where {{item.name}} etc. read that entry, in the texts and in the actions" },
+    notes: ["A row built from a list: { type: \"menu\", source: \"loc.found\", item: { label: \"{{item.name}}\", actions: [{ type: \"callApi\", integration: \"detail\", input: { id: \"{{item.id}}\" }, saveAs: \"loc.detail\" }, { type: \"navigate\", to: \"details\" }] } }. On a screen with navigation.rules, a navigate action with a target is overridden by a matching rule: guard the rules with a flag if another button must navigate freely."],
     example: { type: "menu", items: [{ id: "chat", label: { en: "Chat with us" }, text: { en: "Mon to Fri, 9 to 5" }, icon: "help", actions: [{ type: "navigate", to: "chat" }] }] },
   },
   {

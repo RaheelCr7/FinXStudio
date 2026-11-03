@@ -327,26 +327,36 @@ describe("Can't sign in", () => {
 });
 
 describe("Locate us", () => {
-  it("searches by kind and range and shows the details of one location", async () => {
+  it("opens on Branches, lists locations as rows, and a tapped row opens its details", async () => {
     const { r } = mk(cabLocateUs); await r.start();
     expect(r.get("loc.kind")).toBe("branch"); // the design opens on Branches
-    r.set("loc.kind", "all"); r.set("loc.range", "100"); await press(r, "Search");
+    await press(r, "Filters"); expect(r.current).toBe("filter");
+    r.set("loc.kind", "all"); r.set("loc.range", "100"); await press(r, "Apply");
     expect(r.current).toBe("results");
-    expect(r.view().blocks.find((b) => b.type === "text")!.text).toBe("5 location(s) found");
-    r.set("loc.selected", "loc_abdoun"); await press(r, "View details");
+    expect(r.view().title).toBe("All");
+    const rows = menuLabels(r);
+    expect(rows).toHaveLength(5);
+    expect(rows[0]).toBe("Abdoun Branch – Signature");
+    await tap(r, "Abdoun Branch – Signature");
     expect(r.current).toBe("details");
-    const rows = r.view().blocks.find((b) => b.type === "reviewSummary")!.rows;
-    expect(rows).toContainEqual({ label: "Status", value: "Open" });
-    expect(rows).toContainEqual({ label: "Distance", value: "2.2 km" });
+    const sum = r.view().blocks.find((b) => b.type === "reviewSummary")!.rows;
+    expect(sum).toContainEqual({ label: "Status", value: "Open" });
+    expect(sum).toContainEqual({ label: "Country", value: "Jordan" });
+    expect(sum).toContainEqual({ label: "Distance", value: "2.2 KM" });
+    expect(sum.some((x: any) => x.label === "Services")).toBe(false);
+    expect(r.view().blocks.filter((b) => b.type === "button").map((b) => b.label)).toEqual(["Call us"]); // one primary action
     await press(r, "Call us");
     expect(r.view().toast).toBe("Calling +962 6 5200 000…");
   });
-  it("filters to ATMs only and says so when nothing matches", async () => {
+  it("lists the branches from the list view, filters to ATMs only, and says so when nothing matches", async () => {
     const { r } = mk(cabLocateUs); await r.start();
-    r.set("loc.kind", "atm"); await press(r, "Search");
-    expect(r.view().blocks.find((b) => b.type === "text")!.text).toBe("1 location(s) found");
-    await press(r, "Change filters");
-    r.set("loc.query", "zzz"); await press(r, "Search");
+    await press(r, "List view");
+    expect(r.view().title).toBe("Branches");
+    await press(r, "Filters"); r.set("loc.kind", "atm"); await press(r, "Apply");
+    expect(r.view().title).toBe("ATM");
+    expect(menuLabels(r)).toHaveLength(1);
+    await press(r, "Filters"); expect(r.current).toBe("filter");
+    r.set("loc.query", "zzz"); await press(r, "Apply");
     expect(r.current).toBe("none");
   });
 });

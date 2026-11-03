@@ -236,7 +236,7 @@ export class CabSandbox {
       case "cab.locations.details": {
         const x = PLACES.find((l) => l.id === input.id);
         if (!x) throw new BankError("LOCATION_NOT_FOUND", "Location not found");
-        return { ...x, status: x.open ? "Open" : "Closed", type: x.kind === "atm" ? "ATM" : "Branch", distanceKm: x.km, services: x.services.join(", ") };
+        return { ...x, status: x.open ? "Open" : "Closed", type: x.kind === "atm" ? "ATM" : "Branch", distanceKm: x.km, country: "Jordan", services: x.services.join(", ") };
       }
 
       default: return undefined;
