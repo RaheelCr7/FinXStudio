@@ -6,6 +6,7 @@ import { bulkPayment } from "./fixtures/bulk-payment";
 import { payrollRun } from "./fixtures/payroll-run";
 import { withdrawPayment } from "./fixtures/withdraw-payment";
 import { convertCurrency } from "./fixtures/convert-currency";
+import { ownTransfer } from "./fixtures/own-transfer";
 import { addMoney, addCard, connectAccount, createBudget, invest, sellInvestment } from "./fixtures/bankworkx";
 import { cabJourneys } from "./fixtures/cab";
 
@@ -74,6 +75,11 @@ export const catalog: CatalogEntry[] = [
     id: addMoney.slug, category: "Accounts", madeFor: "bankworkx", journey: addMoney,
     summary: "Top up an account from a saved card, with quick amounts and a review step.",
     highlights: ["Quick amount chips", "Card picker", "Review and receipt"],
+  },
+  {
+    id: ownTransfer.slug, category: "Payments", madeFor: "bankworkx", journey: ownTransfer,
+    summary: "Move money between your own accounts: instant and free in the same currency; converted at the mid-market rate with a separate 0.20% fee and a rate held for 30 seconds in different currencies.",
+    highlights: ["Same-currency move with a note", "Mid-market rate, no margin", "Type what you send or what you get", "Rate that runs out and renews", "One-time code, locked after 3 wrong codes", "Timeout and unavailable screens"],
   },
   {
     id: connectAccount.slug, category: "Accounts", madeFor: "bankworkx", journey: connectAccount,

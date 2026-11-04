@@ -1,6 +1,6 @@
 import { instrumentOf, INSTRUMENTS, dayChange } from "./invest";
 import { alexFinance, BANKS, cardNetwork, luhnValid, type Finance } from "./finance";
-import { customerRate, midRate, priceQuote, fxSupports, FX_SPREAD, QUOTE_TTL_SECONDS, type Quote } from "./fx";
+import { customerRate, midRate, priceQuote, fxSupports, DEFAULT_FX, BANKWORKX_FX, QUOTE_TTL_SECONDS, type FxConfig, type Quote } from "./fx";
 import { currencyInfo, roundMoney } from "@finx/ui-kit";
 import { BankError } from "./errors";
 import { ACME, type CorpCompany, type CorpPayment, type Flaws } from "./corporate";
@@ -16,7 +16,7 @@ export { createCorporateProvider, MappedCorporateProvider, PROVIDERS, PROVIDER_I
 export { BankBApi, ApiError } from "./corporate-b";
 export { applyRule, build, mapError, type MappingSpec } from "./mapping";
 export { MAX_BULK_LINES, SALARY_CAP_FACTOR, type CorpEmployee, type BatchCheck, type BulkLineInput, type BulkLineResult, ACME, CorporateSandbox, type CorporateBankAdapter, type CorpCompany, type Flaws, type CorpPayment, type CorpUser, type CorpRole, type InitiateInput } from "./corporate";
-export { PER_USD, FX_SPREAD, FX_FEE_RATE, QUOTE_TTL_SECONDS, midRate, customerRate, type Quote } from "./fx";
+export { PER_USD, FX_SPREAD, FX_FEE_RATE, QUOTE_TTL_SECONDS, DEFAULT_FX, BANKWORKX_FX, midRate, customerRate, type FxConfig, type Quote } from "./fx";
 
 export type Account = { id: string; name: string; maskedNumber: string; iban: string; balance: number; currency: string; status: "active" | "frozen"; canDebit: boolean };
 export type Beneficiary = { id: string; displayName: string; bank: string; maskedNumber: string; addedAt: number };
@@ -79,6 +79,22 @@ export const personas: Record<string, Persona> = {
     ],
     beneficiaries: [],
     limits: { daily: 50000, usedToday: 0 },
+    finance: alexFinance(),
+    behaviour: { otpCode: "482100", kyc: "verified" },
+  },
+  // Alex with a Euro and a Dirham account too, for moving money between accounts in different currencies. A separate customer because
+  // the BankWorkx dashboards and tests count Alex's two accounts.
+  alexglobal: {
+    id: "alexglobal", brand: "bankworkx", name: "Alex Morgan (accounts in three currencies)", phone: "+1 415 555 0142",
+    accounts: [
+      { id: "acc_main", name: "Main", maskedNumber: "••4410", iban: "US00 BWX 0000 0000 4410", balance: 8720.76, currency: "USD", status: "active", canDebit: true },
+      { id: "acc_save", name: "Savings", maskedNumber: "••7731", iban: "US00 BWX 0000 0000 7731", balance: 15254.37, currency: "USD", status: "active", canDebit: true },
+      { id: "acc_eur", name: "EUR Travel", maskedNumber: "••5502", iban: "US00 BWX 0000 0000 5502", balance: 2400, currency: "EUR", status: "active", canDebit: true },
+      { id: "acc_aed", name: "AED Home", maskedNumber: "••8816", iban: "US00 BWX 0000 0000 8816", balance: 11000, currency: "AED", status: "active", canDebit: true },
+    ],
+    beneficiaries: [],
+    limits: { daily: 50000, usedToday: 0 },
+    limitsByCurrency: { EUR: { daily: 20000, usedToday: 0 }, AED: { daily: 100000, usedToday: 0 } },
     finance: alexFinance(),
     behaviour: { otpCode: "482100", kyc: "verified" },
   },
@@ -155,8 +171,29 @@ export function personasFor(brand: Persona["brand"], project?: string) {
  */
 export function defaultPersonaFor<T extends Persona>(people: T[], integrations: { adapter: string }[] = []): T {
   const uses = (prefix: string) => integrations.some((i) => i.adapter.startsWith(prefix));
-  return (uses("corp.") ? people.find((p) => p.corp) : uses("cab.") ? people.find((p) => p.cab) : undefined) ?? people[0]!;
+  // a conversion needs accounts in more than one currency
+  const manyCurrencies = (p: Persona) => new Set(p.accounts.map((a) => a.currency)).size > 1;
+  return (uses("corp.") ? people.find((p) => p.corp) : uses("cab.") ? people.find((p) => p.cab) : uses("bank.fx.") ? people.find(manyCurrencies) : undefined) ?? people[0]!;
 }
+
+/**
+ * Things a test can make go wrong in the sandbox, so a scenario can prove a journey's unhappy paths. Nothing in the apps sets these.
+ * A call that times out or is unavailable is not applied: no balance changes.
+ */
+export type SandboxConditions = {
+  /** Adapters that do not answer in time: they fail with TIMEOUT after `latencyMs`. */
+  timeout?: string[];
+  /** Adapters that answer SERVICE_UNAVAILABLE. */
+  unavailable?: string[];
+  /** How long the adapters in `timeout` take to answer, in milliseconds (10,000 by default). An answer as slow as the journey's limit counts as a timeout. */
+  latencyMs?: number;
+  /** Account ids that are frozen: they cannot send money, but can receive. */
+  frozen?: string[];
+  /** Every money-moving call fails with CORE_UNAVAILABLE after the code is accepted (as the persona flag transferFails does). */
+  transferFails?: boolean;
+};
+/** How long a journey waits for the bank before it treats the call as timed out. */
+export const ANSWER_LIMIT_MS = 10_000;
 
 export class MockBank {
   private p: Persona;
@@ -164,16 +201,26 @@ export class MockBank {
   private otpVerified = false;
   private seq = 0;
   private quotes = new Map<string, Quote & { used: boolean }>();
+  /** How many quotes were asked for each pair of accounts, so a renewed quote can show the market moving. */
+  private quoteCount = new Map<string, number>();
+  private fx: FxConfig;
+  private conditions: SandboxConditions;
+  private flaws: Flaws;
   /** The clock quotes expire by; tests replace it. */
   now: () => number = () => Date.now();
   private cab: CabSandbox;
   private corp?: CorporateProvider;
   /** `corpProvider` picks which corporate bank API stands behind the corp.* adapters; journeys do not change. */
-  constructor(personaId = "ayesha", options: { corpProvider?: ProviderId; /** rules switched off, for mutation checks only */ corpFlaws?: Flaws } = {}) {
+  constructor(personaId = "ayesha", options: { corpProvider?: ProviderId; /** rules switched off, for mutation checks only */ corpFlaws?: Flaws; /** things that go wrong on purpose, for scenarios */ conditions?: SandboxConditions } = {}) {
     assertSandboxAllowed(); // a production build must not run customers on the sandbox (policy.ts)
     const base = personas[personaId];
     if (!base) throw new Error(`Unknown persona ${personaId}`);
     this.p = structuredClone(base);
+    this.fx = this.p.brand === "bankworkx" ? BANKWORKX_FX : DEFAULT_FX;
+    this.conditions = options.conditions ?? {};
+    this.flaws = options.corpFlaws ?? {};
+    if (this.conditions.transferFails) this.p.behaviour.transferFails = true;
+    for (const a of this.p.accounts) if (this.conditions.frozen?.includes(a.id)) { a.status = "frozen"; a.canDebit = false; }
     if (this.p.corp) { this.corp = createCorporateProvider(options.corpProvider ?? "reference", this.p.corp, options.corpFlaws); this.corp.now = () => this.now(); }
     this.cab = new CabSandbox(this.p, { otpVerified: () => this.otpVerified, clearOtp: () => { this.otpVerified = false; } });
   }
@@ -252,6 +299,18 @@ export class MockBank {
 
   /** Single entry point used by journeys: adapter id + input -> result. */
   async call(adapter: string, input: Record<string, any> = {}): Promise<any> {
+    const c = this.conditions;
+    if (c.unavailable?.includes(adapter)) throw new BankError("SERVICE_UNAVAILABLE", "This service is not available right now");
+    if (c.timeout?.includes(adapter)) {
+      // the bank takes too long: the answer comes after the journey stopped waiting, and nothing is applied
+      const wait = c.latencyMs ?? ANSWER_LIMIT_MS;
+      if (wait >= ANSWER_LIMIT_MS) throw new BankError("TIMEOUT", "The bank did not answer in time");
+      const t = this.now(); this.now = () => t + wait; // a slow answer still arrives: time moves on
+    }
+    return this.dispatch(adapter, input);
+  }
+
+  private async dispatch(adapter: string, input: Record<string, any>): Promise<any> {
     if (this.cab.handles(adapter)) {
       const out = this.cab.call(adapter, input);
       if (out !== undefined) return out;
@@ -267,23 +326,31 @@ export class MockBank {
         return input.currency ? { ...this.limitFor(String(input.currency)), currency: String(input.currency) } : { ...this.p.limits };
       case "bank.fx.rate": {
         const from = String(input.from ?? ""), to = String(input.to ?? "");
-        if (!fxSupports(from) || !fxSupports(to)) throw new BankError("CURRENCY_NOT_SUPPORTED", "We do not convert that currency pair");
-        return { from, to, midRate: Math.round(midRate(from, to)! * 1e6) / 1e6, rate: customerRate(from, to), spreadPercent: FX_SPREAD * 100 };
+        if (!fxSupports(from, this.fx) || !fxSupports(to, this.fx)) throw new BankError("CURRENCY_NOT_SUPPORTED", "We do not convert that currency pair");
+        return { from, to, midRate: Math.round(midRate(from, to, this.fx)! * 1e6) / 1e6, rate: customerRate(from, to, this.fx), spreadPercent: this.fx.spread * 100 };
       }
       case "bank.fx.quote": {
         const from = this.p.accounts.find((a) => a.id === input.fromAccountId), to = this.p.accounts.find((a) => a.id === input.toAccountId);
         if (!from || !to) throw new BankError("ACCOUNT_NOT_FOUND", "Account not found");
         if (from.currency === to.currency) throw new BankError("SAME_CURRENCY", "Choose two accounts in different currencies");
-        if (!fxSupports(from.currency) || !fxSupports(to.currency)) throw new BankError("CURRENCY_NOT_SUPPORTED", "We do not convert that currency pair");
+        if (!from.canDebit && this.flaws.canDebit !== false) throw new BankError("ACCOUNT_CANNOT_DEBIT", "This account cannot send money right now");
+        if (!fxSupports(from.currency, this.fx) || !fxSupports(to.currency, this.fx)) throw new BankError("CURRENCY_NOT_SUPPORTED", "We do not convert that currency pair");
+        const get = input.direction === "get";
         const amount = Number(input.amount);
-        const digits = currencyInfo(from.currency).decimals;
-        if (!(amount > 0) || Math.abs(amount * 10 ** digits - Math.round(amount * 10 ** digits)) > 1e-6) throw new BankError("INVALID_AMOUNT", `Enter an amount in ${from.currency} with at most ${digits} decimal places`);
-        const price = priceQuote(from.currency, to.currency, amount);
-        if (price.total > from.balance) throw new BankError("INSUFFICIENT_FUNDS", "Insufficient funds");
+        // the amount is in the currency the person typed it in: what leaves (default) or what arrives
+        const entered = get ? to.currency : from.currency;
+        const digits = currencyInfo(entered).decimals;
+        if (!(amount > 0) || Math.abs(amount * 10 ** digits - Math.round(amount * 10 ** digits)) > 1e-6) throw new BankError("INVALID_AMOUNT", `Enter an amount in ${entered} with at most ${digits} decimal places`);
+        // the market moves a little between the first quote of a pair and a renewed one (fixed steps, so tests repeat)
+        const pair = `${from.id}>${to.id}`, n = this.quoteCount.get(pair) ?? 0;
+        this.quoteCount.set(pair, n + 1);
+        const drift = n === 0 ? 0 : (this.fx.drift?.[(n - 1) % (this.fx.drift?.length || 1)] ?? 0);
+        const price = priceQuote(from.currency, to.currency, amount, { cfg: this.fx, direction: get ? "get" : "send", drift, feeWaived: input.feeWaived === true });
+        if (price.total > from.balance && this.flaws.funds !== false) throw new BankError("INSUFFICIENT_FUNDS", "Insufficient funds");
         this.seq += 1;
         const q: Quote = {
           quoteId: `fxq_${this.seq}`, fromAccountId: from.id, toAccountId: to.id,
-          from: { currency: from.currency, amount }, to: { currency: to.currency, amount: price.receive },
+          from: { currency: from.currency, amount: price.send }, to: { currency: to.currency, amount: price.receive },
           midRate: price.midRate, rate: price.rate, fee: price.fee, feeCurrency: from.currency, total: price.total,
           expiresAt: new Date(this.now() + QUOTE_TTL_SECONDS * 1000).toISOString(), ttlSeconds: QUOTE_TTL_SECONDS,
         };
@@ -295,14 +362,31 @@ export class MockBank {
         if (this.p.behaviour.transferFails) throw new BankError("CORE_UNAVAILABLE", "Core banking unavailable");
         const q = this.quotes.get(String(input.quoteId));
         if (!q) throw new BankError("QUOTE_NOT_FOUND", "Quote not found");
-        if (q.used) throw new BankError("QUOTE_USED", "This quote has already been used");
-        if (this.now() > Date.parse(q.expiresAt)) throw new BankError("QUOTE_EXPIRED", "The rate has expired. Get a new one.");
+        if (q.used && this.flaws.quoteReplay !== false) throw new BankError("QUOTE_USED", "This quote has already been used");
+        if (this.now() > Date.parse(q.expiresAt) && this.flaws.quoteExpiry !== false) throw new BankError("QUOTE_EXPIRED", "The rate has expired. Get a new one.");
         const from = this.p.accounts.find((a) => a.id === q.fromAccountId)!, to = this.p.accounts.find((a) => a.id === q.toAccountId)!;
-        if (q.total > from.balance) throw new BankError("INSUFFICIENT_FUNDS", "Insufficient funds");
+        if (q.total > from.balance && this.flaws.funds !== false) throw new BankError("INSUFFICIENT_FUNDS", "Insufficient funds");
         from.balance = roundMoney(from.balance - q.total, from.currency);
         to.balance = roundMoney(to.balance + q.to.amount, to.currency);
         q.used = true; this.otpVerified = false; this.seq += 1;
         return { reference: `FX-20261102-${String(930 + this.seq).padStart(4, "0")}`, from: { currency: from.currency, newBalance: from.balance }, to: { currency: to.currency, newBalance: to.balance }, quoteId: q.quoteId };
+      }
+      case "bank.transfers.own": {
+        // money between a person's own accounts in the same currency: instant, free, and not counted against the daily limit
+        if (!this.otpVerified) throw new BankError("OTP_REQUIRED", "OTP not verified");
+        if (this.p.behaviour.transferFails) throw new BankError("CORE_UNAVAILABLE", "Core banking unavailable");
+        const from = this.p.accounts.find((a) => a.id === input.fromAccountId), to = this.p.accounts.find((a) => a.id === input.toAccountId);
+        if (!from || !to) throw new BankError("ACCOUNT_NOT_FOUND", "Account not found");
+        if (from.id === to.id && this.flaws.sameAccount !== false) throw new BankError("SAME_ACCOUNT", "Choose two different accounts");
+        if (!from.canDebit && this.flaws.canDebit !== false) throw new BankError("ACCOUNT_CANNOT_DEBIT", "This account cannot send money right now");
+        if (from.currency !== to.currency) throw new BankError("CURRENCY_MISMATCH", "These accounts use different currencies: convert instead");
+        const amount = Number(input.amount), digits = currencyInfo(from.currency).decimals;
+        if (!(amount > 0) || Math.abs(amount * 10 ** digits - Math.round(amount * 10 ** digits)) > 1e-6) throw new BankError("INVALID_AMOUNT", `Enter an amount in ${from.currency} with at most ${digits} decimal places`);
+        if (amount > from.balance && this.flaws.funds !== false) throw new BankError("INSUFFICIENT_FUNDS", "Insufficient funds");
+        from.balance = roundMoney(from.balance - amount, from.currency);
+        to.balance = roundMoney(to.balance + amount, to.currency);
+        this.otpVerified = false; this.seq += 1;
+        return { reference: `TRX-20261102-${String(930 + this.seq).padStart(4, "0")}`, from: { currency: from.currency, newBalance: from.balance }, to: { currency: to.currency, newBalance: to.balance } };
       }
       case "bank.accounts.totals": {
         // balances added up per currency, never across currencies; a record keyed by currency so it can feed a list

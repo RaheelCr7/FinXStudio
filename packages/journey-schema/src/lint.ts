@@ -1,7 +1,7 @@
 import type { Journey } from "./schema";
 
 /** The adapters that move money. A journey that calls one needs consent and a verified one-time code first. */
-export const MOVES_MONEY = /transfers\.create|payments\.create|bills\.pay|topup\.create|corp\.payments\.(initiate|approve)|corp\.(bulk|payroll)\.submit/;
+export const MOVES_MONEY = /transfers\.(create|own)|fx\.convert|payments\.create|bills\.pay|topup\.create|corp\.payments\.(initiate|approve)|corp\.(bulk|payroll)\.submit/;
 export type LintIssue = { code: string; message: string; screen?: string };
 
 /** Every action a block can run: a button's, a code's resend, and those of menu rows, shortcut icons and a heading's link. */
