@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { bulkPayment, catalog, corporateApproval, corporatePayment, Journey, withdrawPayment, payrollRun, ownTransfer, manageBeneficiary, personalTransfer, internalTransfer, payBillBankworkx } from "@finx/journey-schema";
+import { bulkPayment, catalog, corporateApproval, corporatePayment, Journey, withdrawPayment, payrollRun, ownTransfer, manageBeneficiary, personalTransfer, internalTransfer, payBillBankworkx, mobileTopup } from "@finx/journey-schema";
 import { lintAll } from "@finx/renderer-core";
 import { mutationCheck, runScenarios } from "./scenarios";
 
@@ -297,6 +297,46 @@ describe("pay-bill: Pay a bill", () => {
   it("sits beside the Meezan journey \"pay-a-bill\", which keeps its slug, its look and its billers", () => {
     expect(catalog.filter((c) => c.id === "pay-a-bill" || c.id === "pay-bill").map((c) => [c.id, c.madeFor])).toEqual([["pay-a-bill", "meezan"], ["pay-bill", "bankworkx"]]);
     expect(payBillBankworkx.apps).toEqual(["bankworkx"]);
+  });
+});
+
+/**
+ * Mobile top-up is a retail journey: it has no second bank API, so the "second API" run of the company journeys does not apply.
+ * Survivors of the mutation check are listed with the reason each cannot be reached from a screen.
+ */
+describe("mobile-topup: Mobile top-up", () => {
+  const j = Journey.parse(mobileTopup);
+  const MT_ACCEPTED: Record<string, string> = {
+    "no-error-path-51": "Resending the code is a button of the code field that a scenario cannot press; the first send has the same error path and is proved (T-33)",
+  };
+
+  it("is lint clean, every scenario passes and every acceptance criterion is proved", async () => {
+    expect(lintAll(j)).toEqual([]);
+    const r = await runScenarios(j);
+    expect(r.results.filter((x) => !x.ok).map((x) => `${x.id} ${x.name}: ${x.failures.join(" | ")}`)).toEqual([]);
+    expect(r.coverage.map((c) => [c.id, c.status])).toEqual((j.acceptance ?? []).map((a) => [a.id, "proved"]));
+    expect([r.passed, r.total, r.coverage.length]).toEqual([33, 33, 9]);
+    expect(r.ok).toBe(true);
+  });
+
+  it("the tests notice when the journey or the bank's rules are broken (mutation check)", async () => {
+    const m = await mutationCheck(j, MT_ACCEPTED);
+    expect(m.survived.map((s) => `${s.id}: ${s.what}`)).toEqual([]);
+    expect([m.total, m.killed, m.accepted.length]).toEqual([29, 28, 1]);
+    expect(m.ok).toBe(true);
+  }, 240_000);
+
+  it("every bank rule the journey leans on is checked by a mutant, and every one of them is caught by a screen", async () => {
+    const m = await mutationCheck(j, MT_ACCEPTED);
+    const bank = m.results.filter((x) => x.kind === "bank");
+    expect(bank.map((x) => x.id).sort()).toEqual(["bank-canDebit", "bank-dailyLimit", "bank-funds", "bank-topupAmount", "bank-topupLimit", "bank-topupNumber"]);
+    expect(bank.filter((x) => !x.killed)).toEqual([]);
+  }, 240_000);
+
+  it("is for BankWorkx only: the Meezan app and its carriers are not touched", () => {
+    expect(catalog.filter((c) => c.id === "mobile-topup").map((c) => [c.madeFor, c.category])).toEqual([["bankworkx", "Payments"]]);
+    expect(mobileTopup.apps).toEqual(["bankworkx"]);
+    expect(mobileTopup.channels).toEqual(["web", "mobile"]);
   });
 });
 

@@ -8,6 +8,7 @@ import { createCorporateProvider, type CorporateProvider, type ProviderId } from
 import { CabSandbox, CAB_PROFILES, type CabProfile } from "./cab";
 import { checkName, checkPayee, COOLING_OFF_HOURS, COOLING_OFF_USD, COUNTRY_RULES, findCustomer, hoursSince, MAX_PAYEES, sendTypeOf, type NameCheck, type PayeeDetails, type PayeeInput, type PayeeKind, type PayeeRegion } from "./payees";
 import { AUTOPAY_CATEGORIES, autopayPlan, BANKWORKX_BILLERS, BILL_CURRENCY, billOf, billCase, choicesOf, dayLabel, limitsOf, normaliseRef, RAISE_CENTS, validRef, type Biller } from "./bills";
+import { amountChoices, dayKey, marketOf, normaliseNumber, numberCase, OPERATORS, receiptDate, TOPUP_CURRENCY, TOPUP_NUMBER_DAILY, validNumber } from "./topup";
 import { ADDRESS_RULE_USD, businessDays, money, PAYMENT_QUOTE_SECONDS, PURPOSES, RELATIONSHIPS, REPEATS, SANCTIONS_NAME, SENDER_PAYS_ALL, speedsFor, speedText, type Offer, type SendType, type SpeedClass } from "./payments";
 export { RAILS, PURPOSES, RELATIONSHIPS, type SendType, type SpeedClass } from "./payments";
 export { CUSTOMERS, DIRECTORY, COOLING_OFF_HOURS, COOLING_OFF_USD, MAX_PAYEES, type PayeeKind, type PayeeRegion } from "./payees";
@@ -40,6 +41,8 @@ export type Beneficiary = {
 };
 /** A biller the customer saved to pay again: the biller and the reference, under a name of their own. */
 export type SavedBiller = { id: string; nickname: string; billerId: string; reference: string };
+/** A mobile number the customer saved to top up again: the operator, the number and a name of their own. */
+export type SavedNumber = { id: string; name: string; operatorId: string; number: string };
 /** A payment set up to repeat, so a payee that is used by one cannot be deleted. */
 export type Schedule = { id: string; beneficiaryId: string; name: string; text: string };
 /** The price of a payment to someone else, kept until it is paid or runs out. */
@@ -68,6 +71,8 @@ export type Persona = {
   schedules?: Schedule[];
   /** Billers saved to pay again (BankWorkx). */
   savedBillers?: SavedBiller[];
+  /** Mobile numbers saved to top up again (BankWorkx). */
+  savedNumbers?: SavedNumber[];
   limits: { daily: number; usedToday: number };
   /** Daily limits for accounts in other currencies, by currency code. `limits` applies to the currency of the first account. */
   limitsByCurrency?: Record<string, { daily: number; usedToday: number }>;
@@ -180,6 +185,21 @@ export const personas: Record<string, Persona> = {
     accounts: alexAccounts(),
     beneficiaries: [],
     savedBillers: [{ id: "sb_power", nickname: "Home electricity", billerId: "city_power", reference: "4400123456" }, { id: "sb_net", nickname: "Home internet", billerId: "skyline_broadband", reference: "5550012345" }],
+    limits: { daily: 50000, usedToday: 0 },
+    limitsByCurrency: { EUR: { daily: 20000, usedToday: 0 }, AED: { daily: 100000, usedToday: 0 } },
+    finance: alexFinance(),
+    behaviour: { otpCode: "482100", kyc: "verified" },
+  },
+  // Alex with the Payments cast's accounts and three saved mobile numbers, for topping up. Separate from the others because their tests count what they have.
+  alextopup: {
+    id: "alextopup", brand: "bankworkx", name: "Alex Morgan (saved numbers)", phone: "+1 415 555 0142",
+    accounts: alexAccounts(),
+    beneficiaries: [],
+    savedNumbers: [
+      { id: "sn_phone", name: "My phone", operatorId: "aster", number: "5550123456" },
+      { id: "sn_maya", name: "Maya", operatorId: "aster", number: "5550987654" },
+      { id: "sn_lena", name: "Lena", operatorId: "bright", number: "5550765432" },
+    ],
     limits: { daily: 50000, usedToday: 0 },
     limitsByCurrency: { EUR: { daily: 20000, usedToday: 0 }, AED: { daily: 100000, usedToday: 0 } },
     finance: alexFinance(),
@@ -305,6 +325,10 @@ export class MockBank {
   private billPaid = new Map<string, number>();
   private billRaised = new Set<string>();
   private savedBillers: SavedBiller[];
+  /** Mobile top-ups: what was sent to each number today (cents, by day and number), and the saved numbers. */
+  private topupSent = new Map<string, number>();
+  private savedNumbers: SavedNumber[];
+  private numSeq = 0;
   private billSeq = 0;
   private seeded = false;
   private benSeq = 0;
@@ -324,6 +348,7 @@ export class MockBank {
     this.p = structuredClone(base);
     this.schedules = this.p.schedules ?? [];
     this.savedBillers = this.p.savedBillers ?? [];
+    this.savedNumbers = this.p.savedNumbers ?? [];
     this.fx = this.p.brand === "bankworkx" ? BANKWORKX_FX : DEFAULT_FX;
     this.conditions = options.conditions ?? {};
     this.flaws = options.corpFlaws ?? {};
@@ -689,6 +714,79 @@ export class MockBank {
     }
   }
 
+  /* ------------------------------------------------------------------------------------------ mobile top-up (BankWorkx) */
+
+  private operator(id: unknown) {
+    const o = OPERATORS.find((x) => x.id === id);
+    if (!o) throw new BankError("OPERATOR_NOT_FOUND", "Choose an operator.");
+    return o;
+  }
+  private numberView(x: SavedNumber) { return { id: x.id, name: x.name, operatorId: x.operatorId, number: x.number, last4: x.number.slice(-4), sub: `\u2022\u2022\u2022\u2022 ${x.number.slice(-4)}` }; }
+  private isSavedNumber(operatorId: string, number: string) { return this.savedNumbers.some((x) => x.operatorId === operatorId && x.number === number); }
+  /**
+   * Checks a top-up in the order a person meets the rules: the operator, the amount (one of the operator's own), the number (its format,
+   * then the last four digits), the day's allowance of that number, the account and the money. Throws the first problem; nothing is changed.
+   */
+  private priceTopup(input: Record<string, any>) {
+    const f = this.flaws, op = this.operator(input.operatorId), amount = Number(input.amount);
+    if (!op.amounts.includes(amount) && f.topupAmount !== false) throw new BankError("INVALID_AMOUNT", "Choose an amount.");
+    const number = normaliseNumber(input.number);
+    if (!validNumber(input.market, number)) throw new BankError("NUMBER_INVALID", marketOf(input.market).message);
+    const kind = numberCase(number);
+    if (f.topupNumber !== false) {
+      if (kind === "notFound") throw new BankError("NUMBER_NOT_FOUND", "We can\u2019t top up this number. Check it and try again.");
+      if (kind === "unavailable") throw new BankError("OPERATOR_UNAVAILABLE", "The operator isn\u2019t available right now. Try again later.");
+    }
+    const key = `${dayKey(this.now())}:${number}`, sent = this.topupSent.get(key) ?? 0;
+    if (f.topupLimit !== false && sent + Math.round(amount * 100) > TOPUP_NUMBER_DAILY * 100) throw new BankError("TOPUP_LIMIT", "You\u2019ve reached today\u2019s top-up limit for this number.");
+    const from = this.p.accounts.find((a) => a.id === input.fromAccountId);
+    if (!from) throw new BankError("ACCOUNT_NOT_FOUND", "Choose an account to pay from.");
+    if (!from.canDebit && f.canDebit !== false) throw new BankError("ACCOUNT_CANNOT_DEBIT", "You can\u2019t pay from this account right now.");
+    if (from.currency !== TOPUP_CURRENCY) throw new BankError("CURRENCY_NOT_SUPPORTED", "Choose a dollar account.");
+    if (amount > from.balance && f.funds !== false) throw new BankError("INSUFFICIENT_FUNDS", "Not enough in this account.");
+    const limit = this.limitFor(from.currency);
+    if (limit.usedToday + amount > limit.daily && f.dailyLimit !== false) throw new BankError("LIMIT_EXCEEDED", "That is over your daily limit.");
+    return { op, amount, number, key, sent, from, limit };
+  }
+  private bankworkxTopup(adapter: string, input: Record<string, any>): any {
+    switch (adapter) {
+      case "bank.carriers.list":
+        return Object.fromEntries(OPERATORS.map((o) => [o.id, { id: o.id, name: o.name, amounts: amountChoices(o) }]));
+      case "bank.topup.amounts":
+        // the amounts one operator offers, one choice each (the amount screen)
+        return amountChoices(this.operator(input.operatorId));
+      case "bank.topup.numbers": {
+        // the saved numbers (of one operator, and only those whose format fits the home market); with a number and a name: saves it first
+        if (input.number) {
+          const op = this.operator(input.operatorId), n = normaliseNumber(input.number);
+          if (!validNumber(input.market, n)) throw new BankError("NUMBER_INVALID", marketOf(input.market).message);
+          if (!this.isSavedNumber(op.id, n)) this.savedNumbers.push({ id: `sn_new${++this.numSeq}`, name: String(input.name ?? "").trim() || op.name, operatorId: op.id, number: n });
+        }
+        return Object.fromEntries(this.savedNumbers.filter((x) => (!input.operatorId || x.operatorId === input.operatorId) && validNumber(input.market, x.number)).map((x) => [x.id, this.numberView(x)]));
+      }
+      case "bank.topup.check": {
+        const q = this.priceTopup(input);
+        return { ok: true, operatorName: q.op.name, last4: q.number.slice(-4), amount: q.amount, saved: this.isSavedNumber(q.op.id, q.number), left: Math.max(0, TOPUP_NUMBER_DAILY - q.sent / 100 - q.amount), currency: TOPUP_CURRENCY };
+      }
+      case "bank.topup.create": {
+        if (!this.otpVerified) throw new BankError("OTP_REQUIRED", "OTP not verified");
+        if (this.p.behaviour.transferFails) throw new BankError("CORE_UNAVAILABLE", "Core banking unavailable");
+        const q = this.priceTopup(input), cur = q.from.currency;
+        q.from.balance = roundMoney(q.from.balance - q.amount, cur);
+        q.limit.usedToday += q.amount;
+        this.topupSent.set(q.key, q.sent + Math.round(q.amount * 100));
+        this.otpVerified = false;
+        this.seq += 1;
+        let saved = false;
+        if (input.save === true && !this.isSavedNumber(q.op.id, q.number)) { this.savedNumbers.push({ id: `sn_new${++this.numSeq}`, name: String(input.name ?? "").trim() || q.op.name, operatorId: q.op.id, number: q.number }); saved = true; }
+        // the payment shows in Activity as a bill, under the operator's name
+        this.p.finance?.transactions.unshift({ id: `t_topup${this.seq}`, title: `${q.op.name} top-up`, category: "bills", amount: -q.amount, daysAgo: 0, time: "Now" });
+        return { reference: `TOP-20261102-${String(930 + this.seq).padStart(4, "0")}`, newBalance: q.from.balance, operatorName: q.op.name, last4: q.number.slice(-4), amount: q.amount, currency: cur, date: receiptDate(this.now()), saved };
+      }
+      default: return undefined;
+    }
+  }
+
   /** Single entry point used by journeys: adapter id + input -> result. */
   async call(adapter: string, input: Record<string, any> = {}): Promise<any> {
     const c = this.conditions;
@@ -710,6 +808,8 @@ export class MockBank {
     if (adapter.startsWith("corp.")) return this.corporate(adapter, input);
     // a BankWorkx customer pays bills from the bank's own directory (bills.ts); the Meezan customers keep the older billers below
     if (this.p.brand === "bankworkx" && /^bank\.bill(er)?s\./.test(adapter)) return this.bankworkxBills(adapter, input);
+    // a BankWorkx customer tops up from the bank's own operators (topup.ts); the Meezan customers keep the carriers and the 50 to 5,000 rule below
+    if (this.p.brand === "bankworkx" && /^bank\.(carriers\.list|topup\.)/.test(adapter)) return this.bankworkxTopup(adapter, input);
     switch (adapter) {
       case "bank.accounts.list": {
         // homeOnly: the accounts that can pay someone else (in the currency of the customer's main account)
@@ -947,6 +1047,15 @@ export class MockBank {
       case "bank.bills.saved":
       case "bank.bills.quote":
         throw new BankError("NOT_SUPPORTED", "Not available for this customer");
+      // the saved numbers and the check of a top-up are for BankWorkx customers (topup.ts)
+      case "bank.topup.amounts":
+      case "bank.topup.numbers":
+      case "bank.topup.check":
+        throw new BankError("NOT_SUPPORTED", "Not available for this customer");
+      case "bank.activity.list": {
+        const fin = this.p.finance; if (!fin) throw new BankError("NOT_SUPPORTED", "Not available for this customer");
+        return Object.fromEntries(fin.transactions.map((t) => [t.id, t]));
+      }
       case "bank.bills.pay":
       case "bank.topup.create": {
         const isBill = adapter === "bank.bills.pay";
