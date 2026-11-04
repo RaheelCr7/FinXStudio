@@ -3,6 +3,7 @@ export * from "./lint";
 export * from "./validate";
 export { localTransfer } from "./fixtures/local-transfer";
 export { convertCurrency } from "./fixtures/convert-currency";
+export { ownTransfer } from "./fixtures/own-transfer";
 export { payBill } from "./fixtures/pay-bill";
 export { corporatePayment, corporateApproval } from "./fixtures/corporate-payments";
 export { bulkPayment } from "./fixtures/bulk-payment";
