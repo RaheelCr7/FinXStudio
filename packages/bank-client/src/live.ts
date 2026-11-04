@@ -1,4 +1,4 @@
-import { Journey, bankworkxJourneys, localTransfer, payBill } from "@finx/journey-schema";
+import { Journey, bankworkxJourneys, localTransfer, payBill, verifyJourney } from "@finx/journey-schema";
 import { lintAll } from "@finx/renderer-core";
 
 export type Live = { journey: Journey; source: "studio" | "bundled" };
@@ -18,6 +18,11 @@ export type LiveOptions = {
   brand: string;
   /** How long to wait for Studio before using the bundled copies. */
   timeoutMs?: number;
+  /**
+   * The bank's public signing keys (hex). When there is at least one, a journey from Studio must carry a signature that one of
+   * them made, or it is refused and the bundled copy is used. With none (the demo), unsigned journeys are accepted as before.
+   */
+  trustedKeys?: string[];
   /** Replaces the global `fetch`, for tests and for servers. */
   fetch?: typeof fetch;
 };
@@ -51,7 +56,10 @@ export function createLive(opts: LiveOptions) {
 
   async function loadJourney(studio: string, slug: string): Promise<Live | null> {
     try {
-      const parsed = Journey.safeParse(await timedFetch(`${studio}/api/journeys/${slug}?env=published`));
+      const raw = await timedFetch(`${studio}/api/journeys/${slug}?env=published`);
+      // check the signature on exactly what arrived, before anything reads it
+      if (opts.trustedKeys?.length && !verifyJourney(raw, opts.trustedKeys).ok) throw new Error("journey is not signed by a trusted key");
+      const parsed = Journey.safeParse(raw);
       if (!parsed.success || lintAll(parsed.data).length) throw new Error("invalid journey");
       return { journey: parsed.data, source: "studio" };
     } catch {

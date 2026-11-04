@@ -333,6 +333,9 @@ importers:
 
   packages/journey-schema:
     dependencies:
+      '@noble/curves':
+        specifier: 1.9.7
+        version: 1.9.7
       zod:
         specifier: 4.6.7
         version: 4.6.7
@@ -1546,6 +1549,14 @@ packages:
     engines: {node: '>= 10'}
     cpu: [x64]
     os: [win32]
+
+  '@noble/curves@1.9.7':
+    resolution: {integrity: sha512-gbKGcRUYIjA3/zCCNaWDciTMFI0dCkvou3TL8Zmy5Nc7sJ47a0jtOeZoTaMxkuqRo9cRhjOdZJXegxYE5FN/xw==}
+    engines: {node: ^14.21.3 || >=16}
+
+  '@noble/hashes@1.8.0':
+    resolution: {integrity: sha512-jCs9ldd7NwzpgXDIf6P3+NrHh9/sD6CQdxHyjQI+h/6rDNo88ypBxxz45UDuZHz9r3tNz7N/VInSVoVdtXEI4A==}
+    engines: {node: ^14.21.3 || >=16}
 
   '@noxcturnal/noxcturnal-darwin-arm64@0.1.11':
     resolution: {integrity: sha512-tqvZOVmSoiJzm7QjQ+whPxCP45J2C1zCAZnzc1HhwmJrFIWw/qyA8o9Cup0aVqnjNVAN+as9GHX+DbAmkCbGlQ==}
@@ -5042,6 +5053,12 @@ snapshots:
   '@next/swc-win32-x64-msvc@16.4.4':
     optional: true
 
+  '@noble/curves@1.9.7':
+    dependencies:
+      '@noble/hashes': 1.8.0
+
+  '@noble/hashes@1.8.0': {}
+
   '@noxcturnal/noxcturnal-darwin-arm64@0.1.11':
     optional: true
 
@@ -5332,14 +5349,6 @@ snapshots:
       '@vitest/utils': 2.1.8
       chai: 5.3.3
       tinyrainbow: 1.2.0
-
-  '@vitest/mocker@2.1.8(vite@5.4.21(@types/node@22.20.5)(lightningcss@1.33.0)(terser@5.51.2))':
-    dependencies:
-      '@vitest/spy': 2.1.8
-      estree-walker: 3.0.3
-      magic-string: 0.30.21
-    optionalDependencies:
-      vite: 5.4.21(@types/node@22.20.5)(lightningcss@1.33.0)(terser@5.51.2)
 
   '@vitest/mocker@2.1.8(vite@5.4.21(@types/node@26.6.6)(lightningcss@1.33.0)(terser@5.51.2))':
     dependencies:
@@ -7436,7 +7445,7 @@ snapshots:
   vitest@2.1.8(@types/node@22.20.5)(happy-dom@20.0.2)(lightningcss@1.33.0)(terser@5.51.2):
     dependencies:
       '@vitest/expect': 2.1.8
-      '@vitest/mocker': 2.1.8(vite@5.4.21(@types/node@22.20.5)(lightningcss@1.33.0)(terser@5.51.2))
+      '@vitest/mocker': 2.1.8(vite@5.4.21(@types/node@26.6.6)(lightningcss@1.33.0)(terser@5.51.2))
       '@vitest/pretty-format': 2.1.9
       '@vitest/runner': 2.1.8
       '@vitest/snapshot': 2.1.8

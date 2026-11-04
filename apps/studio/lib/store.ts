@@ -1,6 +1,7 @@
 import { promises as fs } from "node:fs";
 import path from "node:path";
-import { localTransfer, validateJourney, type Journey, type LintIssue } from "@finx/journey-schema";
+import { localTransfer, signJourney, validateJourney, type Journey, type JourneySignature, type LintIssue } from "@finx/journey-schema";
+import { isProduction } from "./profile";
 import { lintAll } from "@finx/renderer-core";
 import { sameContent } from "./edit";
 import { shapeOf } from "./graph";
@@ -11,7 +12,7 @@ import { createHash } from "node:crypto";
 export type HistoryEntry = { version: number; publishedAt: string; by: string };
 /** Published copies kept for rolling back. Older versions than this are dropped. */
 export const KEEP_VERSIONS = 20;
-export type JourneyRecord = { slug: string; draft: Journey; published?: Journey; history: HistoryEntry[]; updatedAt: string; /** who last changed the draft, for the approval rule */ editedBy?: { id: string; name: string }; /** the published journey as it was at each version number */ versions?: Record<string, Journey> };
+export type JourneyRecord = { slug: string; draft: Journey; published?: Journey; /** the signature made when a person published it (when a signing key is set) */ publishedSignature?: JourneySignature; history: HistoryEntry[]; updatedAt: string; /** who last changed the draft, for the approval rule */ editedBy?: { id: string; name: string }; /** the published journey as it was at each version number */ versions?: Record<string, Journey> };
 export type RunStatus = "running" | "needs_review" | "done" | "failed";
 export type RunStep = { at: string; text: string };
 /** One piece of work an AI agent (a Claude Code skill) did, reported back through the FinX MCP server. */
@@ -113,10 +114,15 @@ export async function publish(slug: string, by = "studio") {
   if (!rec) throw new StoreError(404, "Journey not found");
   const issues = lintAll(rec.draft);
   if (issues.length) throw new StoreError(422, `Cannot publish: ${issues.length} lint issue(s)`, issues);
+  // production never serves an unsigned journey: refuse to publish without a key, before anything changes
+  const key = process.env.FINX_SIGNING_KEY?.trim();
+  if (!key && isProduction()) throw new StoreError(409, "Cannot publish: FINX_SIGNING_KEY is not set, so the journey could not be signed");
   const version = (rec.published?.version ?? 0) + 1;
   // the version being replaced may predate version copies: keep it now so it can still be restored
   if (rec.published && !rec.versions?.[String(rec.published.version)]) rec.versions = { ...(rec.versions ?? {}), [String(rec.published.version)]: structuredClone(rec.published) };
   rec.published = { ...structuredClone(rec.draft), version, status: "published" };
+  if (key) { try { rec.publishedSignature = signJourney(rec.published, key); } catch { throw new StoreError(409, "Cannot publish: FINX_SIGNING_KEY is not a valid key (64 hex characters)"); } }
+  else delete rec.publishedSignature;
   rec.draft = structuredClone(rec.published);
   rec.history.push({ version, publishedAt: new Date().toISOString(), by });
   rec.versions = { ...(rec.versions ?? {}), [String(version)]: structuredClone(rec.published) };
