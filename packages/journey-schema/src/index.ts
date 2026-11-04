@@ -7,6 +7,7 @@ export { ownTransfer } from "./fixtures/own-transfer";
 export { manageBeneficiary } from "./fixtures/manage-beneficiary";
 export { personalTransfer } from "./fixtures/personal-transfer";
 export { internalTransfer } from "./fixtures/internal-transfer";
+export { internationalTransfer } from "./fixtures/international-transfer";
 export { payBill } from "./fixtures/pay-bill";
 export { payBillBankworkx } from "./fixtures/pay-bill-bankworkx";
 export { mobileTopup } from "./fixtures/mobile-topup";
