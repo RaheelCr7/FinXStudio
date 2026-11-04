@@ -1,6 +1,6 @@
 import { fail, guardWrite, json, preflight } from "@/lib/http";
 import { actorOf, requireCan } from "@/lib/people";
-import { setPassword } from "@/lib/credentials";
+import { hasPassword, setPassword, verifyPassword } from "@/lib/credentials";
 import { appendAudit } from "@/lib/audit";
 import { isProduction } from "@/lib/profile";
 import { StoreError } from "@/lib/store";
@@ -8,7 +8,7 @@ import { StoreError } from "@/lib/store";
 export const dynamic = "force-dynamic";
 export const OPTIONS = preflight;
 
-/** Sets a password: your own, or anyone's if you may manage people. The password is never stored or returned in clear. */
+/** Sets a password: your own (you must give the current one), or anyone's if you may manage people. The password is never stored or returned in clear. */
 export async function PUT(req: Request, { params }: { params: Promise<{ id: string }> }) {
   const blocked = guardWrite(req); if (blocked) return blocked;
   try {
@@ -16,7 +16,12 @@ export async function PUT(req: Request, { params }: { params: Promise<{ id: stri
     const { id } = await params;
     const me = await actorOf(req);
     const who = me.id === id ? me : await requireCan(req, "people");
-    const body = await req.json().catch(() => ({})) as { password?: unknown };
+    const body = await req.json().catch(() => ({})) as { password?: unknown; current?: unknown };
+    // changing your own password proves you know the old one, so a borrowed session cannot lock you out
+    if (me.id === id && await hasPassword(id)) {
+      if (typeof body.current !== "string" || !(await verifyPassword(id, body.current))) throw new StoreError(403, "The current password is not right");
+      if (body.current === body.password) throw new StoreError(400, "Choose a password you have not used before");
+    }
     await setPassword(id, body.password);
     await appendAudit({ actor: who.id, action: "auth.password", target: id });
     return json(req, { ok: true });

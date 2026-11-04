@@ -31,3 +31,4 @@ export async function setPassword(personId: string, pw: unknown): Promise<void> 
 }
 export async function verifyPassword(personId: string, pw: string): Promise<boolean> { return checkHash(pw, (await read())[personId]); }
 export const hasAnyPassword = async () => Object.keys(await read()).length > 0;
+export const hasPassword = async (personId: string) => personId in (await read());
