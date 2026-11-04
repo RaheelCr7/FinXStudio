@@ -23,7 +23,7 @@ export const ALPHA: CorpCompany = {
   users: [
     { id: "alex", name: "Alex Morgan", roles: ["initiator"], dailyLimit: 250_000, usedToday: 0 },
     { id: "maria", name: "Maria Costa", roles: ["approver"], dailyLimit: 0, usedToday: 0 },
-    { id: "jon", name: "Jon Park", roles: ["approver"], dailyLimit: 0, usedToday: 0 },
+    { id: "jonas", name: "Jonas Weber", roles: ["approver"], dailyLimit: 0, usedToday: 0 },
   ],
   whitelist: [
     { id: "nordic", name: "Nordic Supplies AB", bank: "Nordea", maskedNumber: "••5510" },
@@ -33,11 +33,11 @@ export const ALPHA: CorpCompany = {
   ],
   employees: [
     { id: "emp_ines", name: "Ines Alvarez", bank: "BBVA", maskedNumber: "••1101", salary: 4_200 },
-    { id: "emp_kofi", name: "Kofi Mensah", bank: "Chase", maskedNumber: "••1102", salary: 3_800 },
+    { id: "emp_karim", name: "Karim Benali", bank: "Chase", maskedNumber: "••1102", salary: 3_800 },
     { id: "emp_lena", name: "Lena Novak", bank: "Citi", maskedNumber: "••1103", salary: 5_100 },
-    { id: "emp_raj", name: "Raj Malhotra", bank: "HSBC", maskedNumber: "••1104", salary: 4_700 },
+    { id: "emp_omar", name: "Omar Khalil", bank: "HSBC", maskedNumber: "••1104", salary: 4_700 },
     { id: "emp_tess", name: "Tess Holloway", bank: "Wells Fargo", maskedNumber: "••1105", salary: 3_300 },
-    { id: "emp_yuki", name: "Yuki Tanaka", bank: "Chase", maskedNumber: "••1106", salary: 4_000 },
+    { id: "emp_chloe", name: "Chloe Bennett", bank: "Chase", maskedNumber: "••1106", salary: 4_000 },
   ],
   companyDailyLimit: 500_000, companyUsedToday: 0, dualApprovalAbove: 100_000, cutoff: "16:00", holidays: [],
 };
@@ -51,7 +51,7 @@ export const BETA: CorpCompany = {
   ],
   users: [
     { id: "alex", name: "Alex Morgan", roles: ["approver"], dailyLimit: 0, usedToday: 0 },
-    { id: "priya", name: "Priya Nair", roles: ["initiator"], dailyLimit: 50_000, usedToday: 0 },
+    { id: "layla", name: "Layla Mansour", roles: ["initiator"], dailyLimit: 50_000, usedToday: 0 },
     { id: "tom", name: "Tom Becker", roles: ["approver"], dailyLimit: 0, usedToday: 0 },
   ],
   whitelist: [
@@ -64,11 +64,11 @@ export const BETA: CorpCompany = {
 
 /** The 12,400 payment needs two approvers and Tom has given one; the 2,150 one needs Alex alone. */
 export function seedBeta(p: CorporateProvider) {
-  const big = p.initiatePayment({ userId: "priya", fromAccountId: "beta_ops", beneficiaryId: "kestrel", amount: 12_400, reference: "INV-8841" });
+  const big = p.initiatePayment({ userId: "layla", fromAccountId: "beta_ops", beneficiaryId: "kestrel", amount: 12_400, reference: "INV-8841" });
   p.approvePayment({ userId: "tom", paymentId: big.id });
-  p.initiatePayment({ userId: "priya", fromAccountId: "beta_ops", beneficiaryId: "orbit", amount: 2_150, reference: "INV-8790" });
+  p.initiatePayment({ userId: "layla", fromAccountId: "beta_ops", beneficiaryId: "orbit", amount: 2_150, reference: "INV-8790" });
   // one that nobody has touched yet and that also needs two approvers
-  p.initiatePayment({ userId: "priya", fromAccountId: "beta_res", beneficiaryId: "pixel", amount: 18_900, reference: "PO-5521" });
+  p.initiatePayment({ userId: "layla", fromAccountId: "beta_res", beneficiaryId: "pixel", amount: 18_900, reference: "PO-5521" });
 }
 
 /** Alpha's past: one payment Maria released, one still waiting for her, one she rejected. */
@@ -88,7 +88,7 @@ export function seedAlpha(p: CorporateProvider) {
   const period = `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, "0")}`;
   const pay = p.initiatePayroll({ userId: "alex", fromAccountId: "alpha_pay", period, lines: ALPHA.employees!.map((e) => ({ beneficiaryId: e.id, amount: e.salary, reference: `Salary ${period}` })) });
   p.approvePayment({ userId: "maria", paymentId: pay.id });
-  p.approvePayment({ userId: "jon", paymentId: pay.id });
+  p.approvePayment({ userId: "jonas", paymentId: pay.id });
 }
 
 /** A company that is nearly out of room today: the daily limits and the balance push back on the next payment. */

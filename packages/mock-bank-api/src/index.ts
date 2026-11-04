@@ -83,7 +83,7 @@ export const personas: Record<string, Persona> = {
     ],
     beneficiaries: [
       { id: "ben_jl", displayName: "Jordan Lee", bank: "Chase", maskedNumber: "••2210", addedAt: Date.now() - 200 * day },
-      { id: "ben_mp", displayName: "Maya Patel", bank: "Wells Fargo", maskedNumber: "••7788", addedAt: Date.now() - 90 * day },
+      { id: "ben_mn", displayName: "Mariam Nasser", bank: "Wells Fargo", maskedNumber: "••7788", addedAt: Date.now() - 90 * day },
       { id: "ben_sr", displayName: "Sofia Rossi", bank: "Intesa", maskedNumber: "••4031", addedAt: Date.now() - 20 * day },
     ],
     limitsByCurrency: { EUR: { daily: 5000, usedToday: 0 }, AED: { daily: 20000, usedToday: 0 } },
@@ -92,11 +92,11 @@ export const personas: Record<string, Persona> = {
     contexts: [{ id: "alpha", company: ALPHA, userId: "alex", seed: "history" }, { id: "beta", company: BETA, userId: "alex", seed: "waiting-payments" }],
     behaviour: { otpCode: "482100", kyc: "verified" },
   },
-  priya: {
-    id: "priya", brand: "bankworkx", name: "Priya Nair (Maker at Beta only)", phone: "+1 415 555 0177",
+  layla: {
+    id: "layla", brand: "bankworkx", name: "Layla Mansour (Maker at Beta only)", phone: "+1 415 555 0177",
     accounts: [{ id: "acc_main", name: "Main", maskedNumber: "••5120", iban: "US00 BWX 0000 0000 5120", balance: 4310.2, currency: "USD", status: "active", canDebit: true }],
     beneficiaries: [], limits: { daily: 10000, usedToday: 0 }, finance: alexFinance(),
-    contexts: [{ id: "beta", company: BETA, userId: "priya" }],
+    contexts: [{ id: "beta", company: BETA, userId: "layla" }],
     behaviour: { otpCode: "482100", kyc: "verified" },
   },
   leo: {

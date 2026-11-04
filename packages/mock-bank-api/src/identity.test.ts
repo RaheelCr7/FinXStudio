@@ -96,8 +96,8 @@ describe("one login, several places to bank", () => {
 });
 
 describe("other people in the same companies", () => {
-  it("Priya makes payments at Beta and cannot approve them, even her own", async () => {
-    const b = new MockBank("priya");
+  it("Layla makes payments at Beta and cannot approve them, even her own", async () => {
+    const b = new MockBank("layla");
     await enter(b, "beta"); await verified(b);
     const p = await b.call("corp.payments.initiate", { fromAccountId: "beta_ops", beneficiaryId: "pixel", amount: 900, reference: "PO-1" });
     expect(p.status).toBe("pending_approval");
