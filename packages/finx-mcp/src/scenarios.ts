@@ -22,7 +22,7 @@ export async function runScenarios(journey: Journey, over: Overrides = {}): Prom
     const opts: SimOptions = {
       journey, persona: t.persona, lang: t.lang ?? journey.locale.default, steps: t.steps as unknown as Step[],
       provider: (over.provider ?? (t.provider as ProviderId | undefined)), now: t.now ? Date.parse(t.now) : undefined,
-      setup: t.setup as SimOptions["setup"], flaws: over.flaws,
+      setup: t.setup as SimOptions["setup"], flaws: over.flaws, conditions: t.conditions,
     };
     try {
       const r = await simulate(opts);
@@ -94,6 +94,7 @@ export function bankMutants(journey: Journey): Mutant[] {
   const calls = (name: string) => journey.integrations.some((i) => i.adapter === `corp.payments.${name}` || (name === "initiate" && /^corp\.(bulk|payroll)\.(check|submit)$/.test(i.adapter)));
   const bulk = journey.integrations.some((i) => /^corp\.(bulk|payroll)\./.test(i.adapter));
   const payroll = journey.integrations.some((i) => /^corp\.payroll\./.test(i.adapter));
+  const uses = (re: RegExp) => journey.integrations.some((i) => re.test(i.adapter));
   // only the rules this journey can reach: starting a payment, or approving and rejecting one
   const all: [keyof Flaws, string, boolean][] = [
     ["roles", "The bank ignores who may start and who may approve", calls("initiate") || calls("approve")],
@@ -106,6 +107,12 @@ export function bankMutants(journey: Journey): Mutant[] {
     ["lineChecks", "The bank accepts every row of a bulk file without checking it", bulk],
     ["employeeChecks", "The bank pays anyone, and any amount, on a payroll file", payroll],
     ["payrollPeriod", "The bank takes any pay period and lets a period be paid twice", payroll],
+    // a retail customer's own accounts: the rules of moving and converting money between them
+    ["sameAccount", "The bank lets money move from an account to itself", uses(/^bank\.transfers\.own$/)],
+    ["canDebit", "The bank lets an account that is frozen send money", uses(/^bank\.(transfers\.own|fx\.quote)$/)],
+    ["funds", "The bank lets an account send more than it has", uses(/^bank\.(transfers\.own|fx\.(quote|convert))$/)],
+    ["quoteExpiry", "The bank converts at a rate that has run out", uses(/^bank\.fx\.convert$/)],
+    ["quoteReplay", "The bank lets one rate be used twice", uses(/^bank\.fx\.convert$/)],
   ];
   const rules = all.filter(([, , reachable]) => reachable).map(([k, what]) => [k, what] as [keyof Flaws, string]);
   return rules.map(([k, what]) => ({ id: `bank-${k}`, what, kind: "bank" as const, flaws: { [k]: false } as Flaws }));

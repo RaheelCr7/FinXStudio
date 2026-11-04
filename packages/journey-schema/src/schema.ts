@@ -158,6 +158,14 @@ export const Journey = z.object({
     provider: z.string().optional(),
     /** The sandbox clock, as an ISO time, for rules that depend on it (a cut-off). */
     now: z.string().optional(),
+    /**
+     * Things that go wrong in the sandbox on purpose: adapters that time out or are unavailable, how slow the slow ones are,
+     * accounts that are frozen, a core that fails after the code. Nothing in the apps sets these.
+     */
+    conditions: z.object({
+      timeout: z.array(z.string()).optional(), unavailable: z.array(z.string()).optional(), latencyMs: z.number().int().nonnegative().optional(),
+      frozen: z.array(z.string()).optional(), transferFails: z.boolean().optional(),
+    }).optional(),
     /** Calls made on the bank before the walk starts, for example a payment waiting for approval. */
     setup: z.array(z.object({ adapter: z.string(), input: z.record(z.string(), z.unknown()).optional(), saveAs: z.string().regex(/^[a-zA-Z][a-zA-Z0-9]*$/).optional() })).optional(),
     steps: z.array(z.record(z.string(), z.unknown())).min(1),
