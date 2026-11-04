@@ -71,3 +71,15 @@ export function seedAlpha(p: CorporateProvider) {
   const no = p.initiatePayment({ userId: "alex", fromAccountId: "alpha_ops", beneficiaryId: "cedar", amount: 1_600, reference: "INV-2050" });
   p.rejectPayment({ userId: "maria", paymentId: no.id, reason: "Wrong invoice number" });
 }
+
+/** A company that is nearly out of room today: the daily limits and the balance push back on the next payment. */
+export const GAMMA: CorpCompany = {
+  id: "gamma", name: "Gamma Logistics Inc", currency: "USD", paymentPrefix: "gamma",
+  accounts: [{ id: "gamma_ops", name: "Operating", maskedNumber: "••4401", currency: "USD", balance: 21_500 }],
+  users: [
+    { id: "leo", name: "Leo Fischer", roles: ["initiator"], dailyLimit: 20_000, usedToday: 18_500 },
+    { id: "nina", name: "Nina Walsh", roles: ["approver"], dailyLimit: 0, usedToday: 0 },
+  ],
+  whitelist: [{ id: "dock", name: "Dockside Services", bank: "Citi", maskedNumber: "••1209" }, { id: "fleet", name: "FleetCare", bank: "Chase", maskedNumber: "••6620" }],
+  companyDailyLimit: 100_000, companyUsedToday: 95_000, dualApprovalAbove: 5_000, cutoff: "16:00", holidays: [],
+};

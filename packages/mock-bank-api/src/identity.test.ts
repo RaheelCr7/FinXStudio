@@ -83,3 +83,21 @@ describe("one login, several places to bank", () => {
     expect(await code(b.call("corp.company.get"))).toBe("NOT_SUPPORTED");
   });
 });
+
+describe("other people in the same companies", () => {
+  it("Priya makes payments at Beta and cannot approve them, even her own", async () => {
+    const b = new MockBank("priya");
+    await enter(b, "beta"); await verified(b);
+    const p = await b.call("corp.payments.initiate", { fromAccountId: "beta_ops", beneficiaryId: "pixel", amount: 900, reference: "PO-1" });
+    expect(p.status).toBe("pending_approval");
+    await verified(b);
+    expect(await code(b.call("corp.payments.approve", { paymentId: p.id }))).not.toBe("ok");
+  });
+  it("Leo's company is nearly out of room: a payment over what is left is refused", async () => {
+    const b = new MockBank("leo");
+    await enter(b, "gamma"); await verified(b);
+    expect(await code(b.call("corp.payments.initiate", { fromAccountId: "gamma_ops", beneficiaryId: "dock", amount: 3000, reference: "X" }))).toBe("LIMIT_USER_EXCEEDED");
+    await verified(b);
+    expect(await code(b.call("corp.payments.initiate", { fromAccountId: "gamma_ops", beneficiaryId: "dock", amount: 1000, reference: "Y" }))).toBe("ok");
+  });
+});

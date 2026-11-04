@@ -6,7 +6,7 @@ import { BankError } from "./errors";
 import { ACME, type CorpCompany, type CorpPayment, type Flaws } from "./corporate";
 import { createCorporateProvider, type CorporateProvider, type ProviderId } from "./corporate-provider";
 import { CabSandbox, CAB_PROFILES, type CabProfile } from "./cab";
-import { ALPHA, BETA, PERSONAL_PERMISSIONS, permissionsOf, seedAlpha, seedBeta, type PersonaContext } from "./identity";
+import { ALPHA, BETA, GAMMA, PERSONAL_PERMISSIONS, permissionsOf, seedAlpha, seedBeta, type PersonaContext } from "./identity";
 export { ALPHA, BETA, permissionsOf, PERSONAL_PERMISSIONS, type PersonaContext, type Permission } from "./identity";
 export * from "./finance";
 export { CAB_PROFILES, CAB_CURRENCY, PASSWORD_RULES, passwordProblems, type CabProfile } from "./cab";
@@ -90,6 +90,20 @@ export const personas: Record<string, Persona> = {
     limits: { daily: 50000, usedToday: 0 },
     finance: alexFinance(),
     contexts: [{ id: "alpha", company: ALPHA, userId: "alex", seed: "history" }, { id: "beta", company: BETA, userId: "alex", seed: "waiting-payments" }],
+    behaviour: { otpCode: "482100", kyc: "verified" },
+  },
+  priya: {
+    id: "priya", brand: "bankworkx", name: "Priya Nair (Maker at Beta only)", phone: "+1 415 555 0177",
+    accounts: [{ id: "acc_main", name: "Main", maskedNumber: "••5120", iban: "US00 BWX 0000 0000 5120", balance: 4310.2, currency: "USD", status: "active", canDebit: true }],
+    beneficiaries: [], limits: { daily: 10000, usedToday: 0 }, finance: alexFinance(),
+    contexts: [{ id: "beta", company: BETA, userId: "priya" }],
+    behaviour: { otpCode: "482100", kyc: "verified" },
+  },
+  leo: {
+    id: "leo", brand: "bankworkx", name: "Leo Fischer (company nearly at its limits)", phone: "+1 415 555 0188",
+    accounts: [{ id: "acc_main", name: "Main", maskedNumber: "••6130", iban: "US00 BWX 0000 0000 6130", balance: 12100, currency: "USD", status: "active", canDebit: true }],
+    beneficiaries: [], limits: { daily: 10000, usedToday: 0 }, finance: alexFinance(),
+    contexts: [{ id: "gamma", company: GAMMA, userId: "leo" }],
     behaviour: { otpCode: "482100", kyc: "verified" },
   },
   sam: {
