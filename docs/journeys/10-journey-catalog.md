@@ -24,27 +24,27 @@ A bank sets, besides the on/off switches and options:
 
 | Slug | Journey | Category | Status | Can a bank switch it off? | Options a bank can set |
 |---|---|---|---|---|---|
-| `loan-calculator` | Loan calculator | Public: before sign-in | Spec | Yes |  |
-| `deposit-calculator` | Deposit calculator | Public: before sign-in | Spec | Yes |  |
-| `find-branch-atm` | Find a branch or ATM | Public: before sign-in | Spec | Yes |  |
-| `contact-support` | Contact us | Public: before sign-in | Spec | Yes |  |
+| `loan-calculator` | Loan calculator | Public: before sign-in | Built | Yes | Include home loans; Show a Start application button |
+| `deposit-calculator` | Deposit calculator | Public: before sign-in | Built | Yes | Offer interest paid every month; Show a Start application button |
+| `find-branch-atm` | Find a branch or ATM | Public: before sign-in | Built | Yes | Include cash machines; Offer an “Open now” filter |
+| `contact-support` | Contact us | Public: before sign-in | Built | Yes | Offer chat; Offer a call; Offer secure messages to signed-in customers |
 | `open-account` | Open an account | Public: before sign-in | Built | Yes | Offer the savings account; Offer the Islamic account; Ask for a proof of address when the local rules need it; Allow save and resume; Send income over 1M to manual review |
-| `track-application` | Track my application | Public: before sign-in | Spec | Yes |  |
-| `register-digital-banking` | Register for digital banking | Public: before sign-in | Spec | Yes |  |
+| `track-application` | Track my application | Public: before sign-in | Built | Yes | Ask for a one-time code before showing the status |
+| `register-digital-banking` | Register for digital banking | Public: before sign-in | Built | Yes | Let people identify with a card number; Offer to trust this device |
 | `sign-in` | Sign in | Signing in and security | Built | No (core) | Offer one-time codes by text message (being phased out; app approval is safer); Offer Face ID / fingerprint quick sign-in; Offer passkeys; Offer a 6-digit quick PIN; Let people remember their username on this device; Passwords expire after 12 months (NIST advises against; some regulators expect it); Ask for a code when the sign-in looks unusual, even on a trusted device |
-| `setup-quick-login` | Set up quick sign in | Signing in and security | Spec | Yes |  |
-| `forgot-username` | Forgot username | Signing in and security | Spec | Yes |  |
-| `reset-password` | Reset password | Signing in and security | Spec | Yes |  |
-| `unlock-account` | Unlock account | Signing in and security | Spec | Yes |  |
-| `change-password` | Change password | Signing in and security | Spec | Yes |  |
-| `trusted-devices` | Trusted devices | Signing in and security | Spec | Yes |  |
-| `change-quick-pin` | Change quick PIN | Signing in and security | Spec | Yes |  |
+| `setup-quick-login` | Set up quick sign in | Signing in and security | Built | Yes | Offer Face ID / fingerprint; Offer passkeys; Offer a 6-digit quick PIN |
+| `forgot-username` | Forgot username | Signing in and security | Built | Yes | Let people identify with an email address |
+| `reset-password` | Reset password | Signing in and security | Built | Yes | Offer unlock without a new password |
+| `unlock-account` | Unlock account | Signing in and security | Built (alias of `reset-password`) | Yes |  |
+| `change-password` | Change password | Signing in and security | Built | Yes | Sign out other devices after a change |
+| `trusted-devices` | Trusted devices | Signing in and security | Built | Yes | Limit trusted devices to 5; Offer "Sign out other devices" |
+| `change-quick-pin` | Change quick PIN | Signing in and security | Built | Yes |  |
 | `accounts` | Accounts overview | Personal: Accounts | Built | Yes | Offer the hide-balance toggle; Show foreign currency accounts |
 | `account-details` | Account details | Personal: Accounts | Built | Yes | Offer Share for account numbers; Allow closure requests in the app; Offer Report a problem on transactions; Allow hiding an account |
 | `statement` | Account statement | Personal: Accounts | Built | Yes | Offer official stamped statements; Offer proof of address letters; Offer balance certificates; Charge a fee for official statements and balance certificates; Offer paperless statements; Offer OFX and QIF files |
 | `account-nickname` | Rename an account | Personal: Accounts | Spec | Yes |  |
-| `open-another-account` | Open another account | Personal: Accounts | Spec | Yes |  |
-| `create-budget` | Create a budget | Personal: Accounts | Spec | Yes |  |
+| `open-another-account` | Open another account | Personal: Accounts | Built | Yes | Offer the savings account; Offer currency accounts |
+| `create-budget` | Create a budget | Personal: Accounts | Built | Yes | Offer the 80% alert; Offer the 100% alert |
 | `transfer-types` | Ways to send money | Personal: Payments | Built | Yes |  |
 | `own-transfer` | Between my accounts | Personal: Payments | Built | Yes | Allow conversion between currencies; Charge the 0.20% conversion fee |
 | `internal-transfer` | To a BankWorkx customer | Personal: Payments | Built (alias of `personal-transfer`) | Yes |  |
@@ -52,7 +52,7 @@ A bank sets, besides the on/off switches and options:
 | `single-transfer` | Quick transfer | Personal: Payments | Built | Yes | Offer the Instant speed; Allow “Later” and repeating payments; Apply the 24-hour limit to new payees |
 | `international-transfer` | Abroad | Personal: Payments | Built (alias of `personal-transfer`) | Yes |  |
 | `pay-bill` | Pay a bill | Personal: Payments | Built | Yes | Look up the amount due from the biller (off: the person types the amount); Allow the minimum and other amounts where the biller accepts them; Allow paying a bill from an account in another currency; Offer to save the biller; Offer auto-pay after the payment |
-| `mobile-topup` | Mobile top-up | Personal: Payments | Spec | Yes |  |
+| `mobile-topup` | Mobile top-up | Personal: Payments | Built | Yes | Let people save numbers |
 | `manage-beneficiary` | Add, edit or delete a payee | Personal: Payments | Built | Yes | Run the name check where the market has one; Let a person cancel scheduled payments while deleting a payee; Offer payee labels (Family, Friend, Landlord…) |
 | `schedule-payment` | Schedule a payment | Personal: Payments | Built | Yes | Allow schedules between own accounts; Allow scheduling a saved bill (full bill or minimum due); Offer “skip only the next payment” when cancelling; If there is not enough money, retry once on the next business day (off: skip and notify); Send one reminder the day before each payment; Close changes at 09:00 the business day before (default 18:00) |
 | `cancel-standing-order` | Cancel a standing order | Personal: Payments | Built (alias of `schedule-payment`) | Yes |  |
@@ -60,22 +60,22 @@ A bank sets, besides the on/off switches and options:
 | `activate-card` | Activate card | Personal: Cards | Built | Yes | Ask for the 3-digit security code; Let the customer set the PIN during activation |
 | `card-controls` | Card limits and controls | Personal: Cards | Built | Yes | Offer trip dates when International is on |
 | `freeze-card` | Freeze card | Personal: Cards | Built (alias of `card-controls`) | Yes |  |
-| `virtual-card` | Virtual card | Personal: Cards | Spec | Yes |  |
-| `replace-card` | Replace card | Personal: Cards | Spec | Yes |  |
-| `card-pin` | Card PIN | Personal: Cards | Spec | Yes |  |
-| `dispute-transaction` | Dispute a transaction | Personal: Cards | Spec | Yes |  |
-| `add-card` | Add card | Personal: Cards | Spec | Yes |  |
-| `term-deposit` | Term deposit | Personal: Save & Borrow | Spec | Yes |  |
-| `savings-goal` | Savings goal | Personal: Save & Borrow | Spec | Yes |  |
-| `apply-loan` | Apply for a loan | Personal: Save & Borrow | Spec | Yes |  |
-| `repay-loan` | Repay a loan | Personal: Save & Borrow | Spec | Yes |  |
-| `invest` | Invest | Personal: Save & Borrow | Spec | Yes |  |
-| `sell-investment` | Sell investment | Personal: Save & Borrow | Spec | Yes |  |
-| `add-money` | Add money | Personal: Save & Borrow | Spec | Yes |  |
-| `update-profile` | Update profile | Personal: More | Spec | Yes |  |
-| `new-message` | New message | Personal: More | Spec | Yes |  |
-| `service-request` | Service request | Personal: More | Spec | Yes |  |
-| `connect-account` | Connect account | Personal: More | Spec | Yes |  |
+| `virtual-card` | Virtual card | Personal: Cards | Built | Yes | Offer a 3 year card as well as single use |
+| `replace-card` | Replace card | Personal: Cards | Built | Yes | Charge a fee for express delivery |
+| `card-pin` | Card PIN | Personal: Cards | Built | Yes | Refuse easy PINs (repeats and sequences) |
+| `dispute-transaction` | Dispute a transaction | Personal: Cards | Built | Yes | Let people add a receipt or screenshot; Offer to block the card when a payment isn’t recognised |
+| `add-card` | Add card | Personal: Cards | Built | Yes | Accept American Express; Let saved cards be used for paying as well as adding money |
+| `term-deposit` | Term deposit | Personal: Save & Borrow | Built | Yes | Offer interest paid monthly; Allow early closure (with a charge) |
+| `savings-goal` | Savings goal | Personal: Save & Borrow | Built | Yes | Offer automatic monthly top-ups; Allow taking money out of a goal |
+| `apply-loan` | Apply for a loan | Personal: Save & Borrow | Built | Yes | Send borderline applications to manual review; Charge a 1% arrangement fee |
+| `repay-loan` | Repay a loan | Personal: Save & Borrow | Built | Yes | Allow paying any amount; Allow settling in full; Charge a 1% early settlement fee |
+| `invest` | Invest | Personal: Save & Borrow | Built | Yes | Ask for risk acknowledgement on high-risk funds; Offer high-risk funds |
+| `sell-investment` | Sell investment | Personal: Save & Borrow | Built | Yes | Charge a 0.25% selling fee |
+| `add-money` | Add money | Personal: Save & Borrow | Built | Yes | Offer top-up from a card; Charge the 1.5% card fee; Offer bank transfer details |
+| `update-profile` | Update profile | Personal: More | Built | Yes | Send a code to the new mobile number too; Confirm a new email by link before it applies; Check an address change before it applies; Ask for proof of address |
+| `new-message` | New message | Personal: More | Built | Yes | Allow one attachment |
+| `service-request` | Service request | Personal: More | Built | Yes | Offer cheque book orders; Offer letters; Offer account type changes |
+| `connect-account` | Connect account | Personal: More | Built | Yes | Allow credit card accounts |
 
 ## SME (Release 1, 17 entries)
 
@@ -84,20 +84,20 @@ A bank sets, besides the on/off switches and options:
 | `business-accounts` | Business accounts | Business: Accounts | Built | Yes | Show account numbers for receiving money |
 | `business-statement` | Business statement | Business: Accounts | Built | Yes | Offer bank statement files (BAI2, MT940, camt.053); Allow intraday statements; Allow scheduled statements; Allow email to addresses outside the company |
 | `supplier-payment` | Pay a supplier | Business: Payments | Built | Yes |  |
-| `add-supplier` | Add a supplier | Business: Payments | Spec | Yes |  |
-| `payment-template` | Payment template | Business: Payments | Spec | Yes |  |
-| `schedule-business-payment` | Schedule a business payment | Business: Payments | Spec | Yes |  |
-| `withdraw-payment` | Withdraw a payment | Business: Payments | Spec | Yes |  |
+| `add-supplier` | Add a supplier | Business: Payments | Built | Yes | Allow suppliers with a bank in another country; Run the name check where the market has one; Cap payments to a supplier in its first 24 hours; Allow a supplier who is a person |
+| `payment-template` | Payment template | Business: Payments | Built | Yes | Allow a template without an amount |
+| `schedule-business-payment` | Schedule a business payment | Business: Payments | Built | Yes | Offer “Every 3 months”; Tell the Maker the day before each payment; Close changes at 09:00 the business day before (default 18:00) |
+| `withdraw-payment` | Withdraw a payment | Business: Payments | Built | Yes | Ask why the payment is withdrawn |
 | `bulk-payment` | Bulk payment | Business: Bulk and payroll | Built | Yes | Allow entering payments by hand; Also accept bank file formats; Offer the Same day speed; Offer the Instant speed |
 | `repair-bulk-lines` | Repair rejected lines | Business: Bulk and payroll | Spec | Yes |  |
 | `bulk-status` | Batch status | Business: Bulk and payroll | Built | Yes |  |
 | `payroll-run` | Payroll run | Business: Bulk and payroll | Built | Yes | Allow bonus lines; Allow deduction lines; Ask for a reason when the total changes by more than 20%; Offer to send payslips |
 | `approve-payments` | Approve payments | Business: Approvals | Built | Yes | Allow approving several at once; Ask for a code from 25,000.00; Allow passing a payment to another approver |
-| `manage-user` | Invite, edit or disable a user | Business: Admin | Spec | Yes |  |
-| `change-limits` | Change limits | Business: Admin | Spec | Yes |  |
-| `edit-signatory-group` | Edit a signatory group | Business: Admin | Spec | Yes |  |
-| `business-service-request` | Business service request | Business: More | Spec | Yes |  |
-| `kyb-onboarding` | KYB business onboarding (stretch) | Business: More | Spec | Yes |  |
+| `manage-user` | Invite, edit or disable a user | Business: Admin | Built | Yes | Second administrator approves new administrators; Ask for a reason when disabling |
+| `change-limits` | Change limits | Business: Admin | Built | Yes | Second administrator approves increases |
+| `edit-signatory-group` | Edit a signatory group | Business: Admin | Built | Yes | Second administrator approves group changes; Allow approvers in order |
+| `business-service-request` | Business service request | Business: More | Built | Yes | Offer cheque books |
+| `kyb-onboarding` | KYB business onboarding (stretch) | Business: More | Built | Yes | Ask for an ownership chart; Email each owner and director an ID check |
 
 ## Wealth (Release 2, 10 entries)
 
@@ -198,14 +198,24 @@ A bank sets, besides the on/off switches and options:
 
 ## Prototype entries without their own block in a module file
 
-None.
+These are screens or splits added while building the prototype. Each is its own catalog entry so a bank can switch it separately. Their blocks in the module files are still to be written.
 
-Catalog entries in the module files: 136. Built in the prototype: 26 (26 with a block in a module file). Aliases count as entries so a bank can switch each route separately.
+- `admin`: Admin (business, screen).
+- `budgets`: Budgets (personal, screen).
+- `business-requests`: Service requests (business, screen).
+- `business-schedules`: Scheduled supplier payments (business, screen).
+- `forgot-password`: Forgot password (public).
+- `messages`: Messages (personal, screen).
+- `my-requests`: My requests (personal, screen).
+- `payment-tracker`: Payment tracker (business, screen).
+- `save-borrow`: Save (personal, screen).
+- `templates`: Templates list (business, screen).
+
+Catalog entries in the module files: 136. Built in the prototype: 77 (67 with a block in a module file, 10 without). Aliases count as entries so a bank can switch each route separately. The module-file blocks for journeys built in the second round (security, profile, messages, save and borrow, card extras, public tools, business payments extras, admin) were written before the design rules and must be synced.
 
 ## Open questions
 
 1. Should a bank be able to rename an entry or reorder its menu group, or only switch it on or off?
 2. Should options be typed (switch, list of allowed values, a number such as a limit) so the catalog panel can validate them?
 3. Entries that move money and entries that only show information may need different approval before a bank can switch them on in production.
-4. Prototype permission names (`pay.create`, `pay.approve`, `accounts.view`) differ from the README vocabulary (`biz.*`, `payments.create`). One list must win before step 2.
-5. The prototype sign-in links to `forgot-password` and `register`, which are not built; the spec calls them `reset-password` and `register-digital-banking`. One naming must win.
+4. Prototype permission names (`pay.create`, `pay.approve`, `accounts.view`, `admin`) differ from the README vocabulary (`biz.*`, `payments.create`). One list must win before step 2.
