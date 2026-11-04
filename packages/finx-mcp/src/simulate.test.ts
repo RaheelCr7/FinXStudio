@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { localTransfer, payBill } from "@finx/journey-schema";
+import { localTransfer, manageBeneficiary, payBill } from "@finx/journey-schema";
 import { simulate, type Step } from "./simulate";
 
 const payHappy: Step[] = [
@@ -62,6 +62,16 @@ describe("simulate", () => {
     expect(r.failures[1]).toContain("Visible:");
   });
 
+  it("checks that a text is not on the screen, and sees the rows of a list", async () => {
+    const r = await simulate({ journey: payBill, persona: "ayesha", lang: "en", steps: [{ expectNoText: "nonsense" }, { expectNoText: "Find my bill" }, { expectNoText: "Bill paid" }] });
+    expect(r.failures).toHaveLength(1);
+    expect(r.failures[0]).toMatch(/expect no text "Find my bill": it is on screen "bill"/);
+    const rows = await simulate({
+      journey: manageBeneficiary, persona: "alexpayees", lang: "en", now: Date.parse("2026-11-02T09:31:00Z"),
+      steps: [{ set: { "ben.mode": "edit" } }, { press: "Continue" }, { expectText: "Another bank · ••5150 · New · 21 hours left" }, { expectNoText: "Nobody Known" }],
+    });
+    expect(rows.failures).toEqual([]);
+  });
   it("stops with the list of real buttons when a button does not exist", async () => {
     const r = await simulate({ journey: payBill, persona: "ayesha", lang: "en", steps: [{ press: "Submit" }, { expectScreen: "review" }] });
     expect(r.failures).toHaveLength(1);

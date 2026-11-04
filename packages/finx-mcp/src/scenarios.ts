@@ -113,6 +113,20 @@ export function bankMutants(journey: Journey): Mutant[] {
     ["funds", "The bank lets an account send more than it has", uses(/^bank\.(transfers\.own|fx\.(quote|convert))$/)],
     ["quoteExpiry", "The bank converts at a rate that has run out", uses(/^bank\.fx\.convert$/)],
     ["quoteReplay", "The bank lets one rate be used twice", uses(/^bank\.fx\.convert$/)],
+    // the payees a customer saves: what the bank checks about them
+    ["payeeLimit", "The bank lets a customer save more than 50 payees", uses(/^bank\.payees\.(validate|save)$/)],
+    ["payeeDuplicate", "The bank lets the same payee be saved twice", uses(/^bank\.payees\.(validate|save|update)$/)],
+    ["payeeInUse", "The bank deletes a payee that a scheduled payment uses", uses(/^bank\.payees\.delete$/)],
+    ["ibanChecksum", "The bank accepts an IBAN whose check digits are wrong", uses(/^bank\.payees\.validate$/)],
+    ["sepa", "The bank accepts an IBAN from outside the SEPA area as a European payee", uses(/^bank\.payees\.validate$/)],
+    ["countryMatch", "The bank accepts an IBAN from another country than the one chosen", uses(/^bank\.payees\.validate$/)],
+    ["routingChecksum", "The bank accepts a routing number whose checksum is wrong", uses(/^bank\.payees\.validate$/)],
+    ["sortCode", "The bank accepts a sort code that is not 6 digits", uses(/^bank\.payees\.validate$/)],
+    ["bic", "The bank accepts a SWIFT/BIC of the wrong length", uses(/^bank\.payees\.validate$/)],
+    ["nameCheck", "The name check says every name matches", uses(/^bank\.payees\.check$/)],
+    ["verifiedOnMatch", "The bank marks a payee Verified whether or not the name matched", uses(/^bank\.payees\.(save|update)$/)],
+    ["clockOnDetails", "Changing the bank details of a payee does not start its 24 hours again", uses(/^bank\.payees\.update$/)],
+    ["nameKeepsClock", "Changing only the name of a payee starts its 24 hours again", uses(/^bank\.payees\.update$/)],
   ];
   const rules = all.filter(([, , reachable]) => reachable).map(([k, what]) => [k, what] as [keyof Flaws, string]);
   return rules.map(([k, what]) => ({ id: `bank-${k}`, what, kind: "bank" as const, flaws: { [k]: false } as Flaws }));
