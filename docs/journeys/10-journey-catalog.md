@@ -14,6 +14,12 @@ Every journey in this spec is a **catalog entry**. A bank switches entries on or
 
 Status column: **Built** means the entry exists in the prototype with research in `research/<slug>.md`; **Spec** means it is specified in the module file only.
 
+## Bank configuration
+
+A bank sets, besides the on/off switches and options:
+- **Home market.** One setting that decides local identifiers and formats (account number labels, national ID format, proof of address). Journeys never name the country; they read the market.
+- **Speed mapping.** Which real payment rail serves each speed class (Standard, Same day, Instant) in the bank's market, with its fee, limit and cut-off.
+
 ## Retail (Release 1, 52 entries)
 
 | Slug | Journey | Category | Status | Can a bank switch it off? | Options a bank can set |

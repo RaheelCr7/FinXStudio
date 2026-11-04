@@ -26,6 +26,19 @@ Sources this spec is grounded in: the sandbox (`packages/mock-bank-api/src/`: `i
 
 ---
 
+## Journey design rules (decided at the first prototype review)
+
+These override anything heavier in the module files. They apply to every journey.
+
+1. **Looks like a shipped bank app.** One short title per screen and at most one short helper line. No explainer paragraphs, "why we ask" text, sandbox or demo notes, or scheme names (no ACH, SEPA, Faster Payments, CHAPS, SARIE, UETR and so on) in customer-facing text. A warning shows only when it applies. Customers see short plain messages; error codes stay in the sandbox and tests.
+2. **Country-neutral, standard journeys.** Journeys are defined by *type*, not by country. Country names never appear in headings, chips, hints or copy; a Country field is data only. The bank's **home market** is a configuration setting, not something the customer picks. It decides which local identifiers a form asks for (routing number and account number; sort code and account number; IBAN), the national ID format and whether proof of address is required.
+3. **Transfers have four types**, the same for every bank: between my accounts; to a BankWorkx® customer; to another bank (domestic); to another country (international). The customer picks a **speed class** (Standard, Same day, Instant), not a scheme. The bank maps each class to a real rail per market in configuration (see 09-payment-rails.md).
+4. **One standard onboarding** covers every market: Get started, About you, Address, Verify your identity (document and selfie), Work and money, Tax, Choose your account, Review and agree, Status. Market differences are configuration.
+5. **Everything is a catalog entry** (see 10-journey-catalog.md): a bank switches journeys on or off and sets options. Finer behaviour such as official statements, bank file formats, delegation and payslips are options, off or on by default as listed in each journey.
+6. **Demo helpers live outside the journeys.** Sample data is filled by one control in the prototype toolbar (Autofill step), never by buttons or notes inside a journey.
+
+**Status.** The prototype follows these rules for the core journeys. The journey blocks in 01-retail.md and 02-sme.md for these journeys (personal-transfer, single-transfer, transfer-types, open-account, accounts, account-details, statement, cards, card-controls, activate-card, pay-bill, schedule-payment, supplier-payment, bulk-payment, bulk-status, payroll-run, approve-payments, business-accounts, business-statement) were written from an earlier, heavier version and still name countries and schemes. They must be synced to the rules above before step 2.
+
 ## 1. Conventions
 
 ### 1.1 What is marked how
