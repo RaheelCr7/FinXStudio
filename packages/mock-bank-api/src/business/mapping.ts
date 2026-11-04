@@ -1,4 +1,4 @@
-import { BankError } from "./errors";
+import { BankError } from "../errors";
 
 /**
  * The mapping layer: a declarative file that turns the bank-neutral shapes a journey uses into one bank's API calls and back,

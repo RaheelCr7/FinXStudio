@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { BankError, MockBank, personasFor } from "./index";
+import { BankError, MockBank, personasFor } from "../index";
 import { passwordProblems, toIsoDate } from "./cab";
 
 const captcha = async (b: MockBank) => (await b.call("cab.captcha.generate")) as { serviceKey: string; text: string };

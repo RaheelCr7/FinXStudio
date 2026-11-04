@@ -121,3 +121,25 @@ describe("scenario setup can keep what the bank answered", () => {
     expect(r.results.map((x) => x.failures)).toEqual([[]]);
   });
 });
+
+describe("scenario conditions", () => {
+  const withConditions = (conditions: Record<string, unknown> | undefined, steps: unknown[], setup?: unknown[]) => {
+    const j = structuredClone(journeys[0]!) as any;
+    j.acceptance = [{ id: "AC-1", text: "x" }];
+    j.scenarios = [{ id: "T-1", name: "conditions", covers: ["AC-1"], persona: "acme", ...(conditions ? { conditions } : {}), ...(setup ? { setup } : {}), steps }];
+    return Journey.parse(j);
+  };
+  it("the journey runs normally without conditions", async () => {
+    const r = await runScenarios(withConditions(undefined, [{ expectScreen: "who" }]));
+    expect(r.results.map((x) => x.failures)).toEqual([[]]);
+  });
+  it.each([["unavailable"], ["timeout"]])("%s on the first adapter sends the journey down its error path", async (kind) => {
+    const r = await runScenarios(withConditions({ [kind]: ["corp.users.list"] }, [{ expectScreen: "unavailable" }]));
+    expect(r.results.map((x) => x.failures)).toEqual([[]]);
+  });
+  it("setup and expectBank reads are not affected by the conditions of the walk", async () => {
+    const r = await runScenarios(withConditions({ unavailable: ["corp.", "bank."] }, [{ expectScreen: "unavailable" }, { expectBank: { adapter: "corp.company.get", input: { userId: "sara" }, path: "id", equals: "acme" } }],
+      [{ adapter: "corp.company.get", input: { userId: "sara" } }]));
+    expect(r.results.map((x) => x.failures)).toEqual([[]]);
+  });
+});

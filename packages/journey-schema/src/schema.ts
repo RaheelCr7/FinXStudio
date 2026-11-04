@@ -158,6 +158,8 @@ export const Journey = z.object({
     provider: z.string().optional(),
     /** The sandbox clock, as an ISO time, for rules that depend on it (a cut-off). */
     now: z.string().optional(),
+    /** What goes wrong on the way to the bank during the walk: latency, adapters that time out or are unavailable (or `rail:<id>`), lists that come back empty. Names may be prefixes (`bank.`, `corp.`). */
+    conditions: z.object({ latencyMs: z.number().int().min(0).optional(), timeout: z.array(z.string()).optional(), unavailable: z.array(z.string()).optional(), empty: z.array(z.string()).optional() }).optional(),
     /** Calls made on the bank before the walk starts, for example a payment waiting for approval. */
     setup: z.array(z.object({ adapter: z.string(), input: z.record(z.string(), z.unknown()).optional(), saveAs: z.string().regex(/^[a-zA-Z][a-zA-Z0-9]*$/).optional() })).optional(),
     steps: z.array(z.record(z.string(), z.unknown())).min(1),

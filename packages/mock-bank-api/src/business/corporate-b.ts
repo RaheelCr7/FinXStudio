@@ -1,6 +1,6 @@
 import { currencyInfo } from "@finx/ui-kit";
 import { CorporateSandbox, MAX_BULK_LINES, type BatchCheck, type CorpCompany, type CorpPayment, type Flaws } from "./corporate";
-import { BankError } from "./errors";
+import { BankError } from "../errors";
 
 /**
  * "Bank B": a second simulated corporate bank API, with its own vocabulary, shapes and error codes (plan, Stage 1: the same

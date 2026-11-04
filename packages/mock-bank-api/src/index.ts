@@ -1,22 +1,38 @@
-import { instrumentOf, INSTRUMENTS, dayChange } from "./invest";
-import { alexFinance, BANKS, cardNetwork, luhnValid, type Finance } from "./finance";
-import { customerRate, midRate, priceQuote, fxSupports, FX_SPREAD, QUOTE_TTL_SECONDS, type Quote } from "./fx";
-import { currencyInfo, roundMoney } from "@finx/ui-kit";
 import { BankError } from "./errors";
-import { ACME, type CorpCompany, type CorpPayment, type Flaws } from "./corporate";
-import { createCorporateProvider, type CorporateProvider, type ProviderId } from "./corporate-provider";
-import { CabSandbox, CAB_PROFILES, type CabProfile } from "./cab";
-export * from "./finance";
-export { CAB_PROFILES, CAB_CURRENCY, PASSWORD_RULES, passwordProblems, type CabProfile } from "./cab";
+import { alexFinance, type Finance } from "./retail/finance";
+import { ACME, type CorpCompany, type Flaws } from "./business/corporate";
+import { ALPHA, BETA, seedPayments } from "./business/alpha-beta";
+import { createCorporateProvider, type CorporateProvider, type ProviderId } from "./business/corporate-provider";
+import { CAB_PROFILES, type CabProfile } from "./retail/cab";
+import { alexAccounts, alexPayees, alexRetail } from "./retail/alex";
+import type { RetailData } from "./retail/data";
+import { RetailSandbox, BILLERS, CARRIERS } from "./retail/retail";
+import type { OtpState } from "./retail/payments";
+import { BusinessSandbox, type Actor } from "./business/business";
+import { applyConditions, railIsDown, type Conditions } from "./conditions";
+import { DEFAULT_CONFIG, journeyEnabled, type BankConfig } from "./config";
+import { STEP_UP_SECONDS, contextsOf, type IdentityDef } from "./identity";
+export * from "./retail/finance";
+export { CAB_PROFILES, CAB_CURRENCY, PASSWORD_RULES, passwordProblems, type CabProfile } from "./retail/cab";
 export { BankError } from "./errors";
-export * from "./invest";
-export { createCorporateProvider, MappedCorporateProvider, PROVIDERS, PROVIDER_INFO, isProviderId, type CorporateProvider, type ProviderId } from "./corporate-provider";
-export { BankBApi, ApiError } from "./corporate-b";
-export { applyRule, build, mapError, type MappingSpec } from "./mapping";
-export { MAX_BULK_LINES, SALARY_CAP_FACTOR, type CorpEmployee, type BatchCheck, type BulkLineInput, type BulkLineResult, ACME, CorporateSandbox, type CorporateBankAdapter, type CorpCompany, type Flaws, type CorpPayment, type CorpUser, type CorpRole, type InitiateInput } from "./corporate";
-export { PER_USD, FX_SPREAD, FX_FEE_RATE, QUOTE_TTL_SECONDS, midRate, customerRate, type Quote } from "./fx";
+export * from "./retail/invest";
+export { createCorporateProvider, MappedCorporateProvider, PROVIDERS, PROVIDER_INFO, isProviderId, type CorporateProvider, type ProviderId } from "./business/corporate-provider";
+export { BankBApi, ApiError } from "./business/corporate-b";
+export { applyRule, build, mapError, type MappingSpec } from "./business/mapping";
+export { MAX_BULK_LINES, SALARY_CAP_FACTOR, type CorpEmployee, type BatchCheck, type BulkLineInput, type BulkLineResult, ACME, CorporateSandbox, type CorporateBankAdapter, type CorpCompany, type Flaws, type CorpPayment, type CorpUser, type CorpRole, type InitiateInput, type CorpBeneficiary, type CorpTemplate, type CorpSignatoryGroup, type CorpAuditEntry } from "./business/corporate";
+export { ALPHA, BETA } from "./business/alpha-beta";
+export { parseBulkFile } from "./business/business";
+export { PER_USD, FX_SPREAD, FX_FEE_RATE, QUOTE_TTL_SECONDS, midRate, customerRate, type Quote } from "./retail/fx";
+export { BILLERS, CARRIERS } from "./retail/retail";
+export * from "./retail/data";
+export * from "./rails";
+export { type Conditions } from "./conditions";
+export { DEFAULT_CONFIG, CORE_JOURNEYS, journeyEnabled, type BankConfig } from "./config";
+export { PERSONAL_PERMISSIONS, permissionsOf, ROLE_LABEL, STEP_UP_SECONDS, type ContextInfo, type IdentityDef } from "./identity";
 
-export type Account = { id: string; name: string; maskedNumber: string; iban: string; balance: number; currency: string; status: "active" | "frozen"; canDebit: boolean };
+export type Account = { id: string; name: string; maskedNumber: string; iban: string; balance: number; currency: string; status: "active" | "frozen"; canDebit: boolean;
+  /** What can be spent now: the balance less what is on hold. Absent: the whole balance. `balance` is the ledger balance. */
+  available?: number; nickname?: string; kind?: "current" | "savings" };
 export type Beneficiary = { id: string; displayName: string; bank: string; maskedNumber: string; addedAt: number };
 export type Persona = {
   id: string;
@@ -37,16 +53,15 @@ export type Persona = {
   limitsByCurrency?: Record<string, { daily: number; usedToday: number }>;
   /** Spending, budgets and cards, for the BankWorkx app. */
   finance?: Finance;
+  /** Everything else a retail customer has: payees, cards, deposits, loans, messages, applications. */
+  retail?: RetailData;
+  /** One login, several places to bank from: the companies this person acts for. Absent for a persona with a single place. */
+  identity?: IdentityDef;
   /** deterministic failure modes for testing unhappy paths */
   behaviour: { otpCode: string; transferFails?: boolean; kyc: "verified" | "pending" | "rejected" };
 };
 
 const day = 24 * 3600 * 1000;
-export const BILLERS = [
-  { id: "k_electric", name: "K-Electric", category: "Electricity" }, { id: "lesco", name: "LESCO", category: "Electricity" },
-  { id: "ssgc", name: "SSGC", category: "Gas" }, { id: "ptcl", name: "PTCL", category: "Internet" },
-];
-export const CARRIERS = [{ id: "jazz", name: "Jazz" }, { id: "zong", name: "Zong" }, { id: "telenor", name: "Telenor" }, { id: "ufone", name: "Ufone" }];
 
 export const personas: Record<string, Persona> = {
   ayesha: {
@@ -71,13 +86,12 @@ export const personas: Record<string, Persona> = {
   },
   alex: {
     id: "alex", brand: "bankworkx", name: "Alex Morgan", phone: "+1 415 555 0142",
-    accounts: [
-      { id: "acc_main", name: "Main", maskedNumber: "••4410", iban: "US00 BWX 0000 0000 4410", balance: 8720.76, currency: "USD", status: "active", canDebit: true },
-      { id: "acc_save", name: "Savings", maskedNumber: "••7731", iban: "US00 BWX 0000 0000 7731", balance: 15254.37, currency: "USD", status: "active", canDebit: true },
-    ],
-    beneficiaries: [],
+    accounts: alexAccounts(),
+    beneficiaries: alexPayees().map((p) => ({ id: p.id, displayName: p.name, bank: p.bank ?? "", maskedNumber: p.masked, addedAt: p.addedAt })),
     limits: { daily: 50000, usedToday: 0 },
     finance: alexFinance(),
+    retail: alexRetail(),
+    identity: { id: "alex", name: "Alex Morgan", password: "Bwx!Demo2026", business: [{ id: "alpha", company: ALPHA, userId: "alex" }, { id: "beta", company: BETA, userId: "alex" }] },
     behaviour: { otpCode: "482100", kyc: "verified" },
   },
   sam: {
@@ -156,367 +170,143 @@ export function defaultPersonaFor<T extends Persona>(people: T[], integrations: 
   return (uses("corp.") ? people.find((p) => p.corp) : uses("cab.") ? people.find((p) => p.cab) : undefined) ?? people[0]!;
 }
 
+export type MockBankOptions = {
+  /** Which bank API stands behind the corporate adapters of a company persona. */
+  corpProvider?: ProviderId;
+  /** Rules switched off, for mutation checks only. */
+  corpFlaws?: Flaws;
+  /** What goes wrong on the way to the bank: latency, timeouts, unavailable adapters or rails, empty lists. */
+  conditions?: Conditions;
+  /** The bank's own configuration: home market, journeys switched off, their options, the speed mapping. */
+  config?: Partial<BankConfig>;
+};
+
 export class MockBank {
   private p: Persona;
-  private otpAttempts = 0;
-  private otpVerified = false;
-  private seq = 0;
-  private quotes = new Map<string, Quote & { used: boolean }>();
+  private otp: OtpState = { attempts: 0, verified: false };
   /** The clock quotes expire by; tests replace it. */
   now: () => number = () => Date.now();
-  private cab: CabSandbox;
-  private corp?: CorporateProvider;
-  /** `corpProvider` picks which corporate bank API stands behind the corp.* adapters; journeys do not change. */
-  constructor(personaId = "ayesha", options: { corpProvider?: ProviderId; /** rules switched off, for mutation checks only */ corpFlaws?: Flaws } = {}) {
+  /** What goes wrong on the way to the bank; set from a scenario's `conditions` or a dev panel, and may be changed between calls. */
+  conditions: Conditions;
+  config: BankConfig;
+  private retail: RetailSandbox;
+  private business: BusinessSandbox;
+  private providers = new Map<string, CorporateProvider>();
+  /** The session, as a server would hold it: which context is active, whether a step-up is still valid, and whether it has ended. */
+  private session = { active: "personal", stepUpUntil: undefined as number | undefined, passwordOk: false, ended: false, audit: 0 };
+
+  constructor(personaId = "ayesha", options: MockBankOptions = {}) {
     const base = personas[personaId];
     if (!base) throw new Error(`Unknown persona ${personaId}`);
     this.p = structuredClone(base);
-    if (this.p.corp) { this.corp = createCorporateProvider(options.corpProvider ?? "reference", this.p.corp, options.corpFlaws); this.corp.now = () => this.now(); }
-    this.cab = new CabSandbox(this.p, { otpVerified: () => this.otpVerified, clearOtp: () => { this.otpVerified = false; } });
+    this.conditions = structuredClone(options.conditions ?? {});
+    this.config = { ...structuredClone(DEFAULT_CONFIG), ...structuredClone(options.config ?? {}) };
+    const clock = (c: CorporateProvider) => { c.now = () => this.now(); return c; };
+    if (this.p.identity) for (const b of this.p.identity.business) { const prov = clock(createCorporateProvider("reference", b.company, options.corpFlaws)); seedPayments(b.id, prov); this.providers.set(b.id, prov); }
+    else if (this.p.corp) this.providers.set(this.p.corp.id, clock(createCorporateProvider(options.corpProvider ?? "reference", this.p.corp, options.corpFlaws)));
+    const down = (id: string) => railIsDown(this.conditions, id);
+    this.retail = new RetailSandbox(this.p, { now: () => this.now(), otp: this.otp, config: () => this.config, down });
+    this.business = new BusinessSandbox({
+      now: () => this.now(), otp: this.otp, transferFails: () => !!this.p.behaviour.transferFails, down, config: () => this.config,
+      provider: () => this.activeProvider(), actor: () => this.actor(),
+    });
   }
   get persona() { return this.p; }
 
-  /** The daily limit that applies to an account in this currency. The first account's currency uses `limits`; another needs its own entry. */
-  private limitFor(currency: string) {
-    const base = this.p.accounts[0]?.currency;
-    if (!base || currency === base) return this.p.limits;
-    const own = this.p.limitsByCurrency?.[currency];
-    if (!own) throw new BankError("LIMIT_NOT_SET", `No daily limit is set for ${currency}`);
-    return own;
+  private activeProvider(): CorporateProvider | undefined {
+    if (this.p.identity) return this.providers.get(this.session.active);
+    return [...this.providers.values()][0];
+  }
+  /** Who is acting in a company: the signed-in person when the persona has an identity. */
+  private actor(): Actor | undefined {
+    const id = this.p.identity;
+    if (!id || this.session.active === "personal") return undefined;
+    const ctx = this.contexts().find((c) => c.id === this.session.active)!;
+    return { contextId: ctx.id, userId: id.business.find((b) => b.id === ctx.id)!.userId, permissions: ctx.permissions };
+  }
+  private contexts() {
+    const id = this.p.identity!;
+    return contextsOf(id, { name: this.p.name, limits: { ...this.p.limits, currency: this.p.accounts[0]?.currency ?? "USD" } }, Object.fromEntries([...this.providers].map(([k, v]) => [k, v.getCompany()])));
   }
 
-  /** The corporate payment adapters. Starting and approving a payment move money, so they need the one-time code first, like a transfer. */
-  private corporate(adapter: string, input: Record<string, any>) {
-    const corp = this.corp;
-    if (!corp) throw new BankError("NOT_SUPPORTED", "Not available for this customer");
-    const userId = String(input.userId ?? "");
-    switch (adapter) {
-      case "corp.users.list": return Object.fromEntries(corp.getCompany().users.map((u) => [u.id, { id: u.id, name: u.name, sub: u.roles.join(" and ") }]));
-      case "corp.company.get": {
-        const c = corp.getCompany();
-        const me = c.users.find((u) => u.id === userId);
-        return { id: c.id, name: c.name, currency: c.currency, accounts: Object.fromEntries(c.accounts.map((a) => [a.id, a])), beneficiaries: Object.fromEntries(c.whitelist.map((b) => [b.id, { ...b, displayName: b.name }])), employees: Object.fromEntries((c.employees ?? []).map((e) => [e.id, { id: e.id, name: e.name, bank: e.bank, maskedNumber: e.maskedNumber }])), users: c.users.map((u) => ({ id: u.id, name: u.name, roles: u.roles })), me: me ? { id: me.id, name: me.name, roles: me.roles, dailyLimit: me.dailyLimit, usedToday: me.usedToday, remainingToday: me.dailyLimit - me.usedToday } : undefined, companyDailyLimit: c.companyDailyLimit, companyUsedToday: c.companyUsedToday, dualApprovalAbove: c.dualApprovalAbove, cutoff: c.cutoff };
-      }
-      case "corp.bulk.check": {
-        const check = corp.checkBatch({ userId, fromAccountId: String(input.fromAccountId ?? ""), lines: parseBulkFile(String(input.file ?? "")) });
-        const c = corp.getCompany();
-        const name = (id: string) => c.whitelist.find((b) => b.id === id)?.name;
-        const lines = check.lines.map((l) => ({ ...l, payee: name(l.beneficiaryId) ?? l.beneficiaryId, ...(l.code ? { message: BULK_LINE_MESSAGE[l.code] } : {}) }));
-        return { ...check, lines: Object.fromEntries(lines.map((l) => [String(l.n), l])), problems: Object.fromEntries(lines.filter((l) => !l.ok).map((l) => [String(l.n), l])), requiredApprovers: check.total > c.dualApprovalAbove ? 2 : 1, currency: c.accounts.find((a) => a.id === input.fromAccountId)?.currency ?? c.currency };
-      }
-      case "corp.bulk.submit": {
-        if (!this.otpVerified) throw new BankError("OTP_REQUIRED", "OTP not verified");
-        if (this.p.behaviour.transferFails) throw new BankError("CORE_UNAVAILABLE", "Core banking unavailable");
-        const p = corp.initiateBulk({ userId, fromAccountId: String(input.fromAccountId ?? ""), lines: parseBulkFile(String(input.file ?? "")), reference: input.reference });
-        this.otpVerified = false;
-        return shown(p, corp.getCompany());
-      }
-      case "corp.payroll.check": {
-        const check = corp.checkPayroll({ userId, fromAccountId: String(input.fromAccountId ?? ""), period: String(input.period ?? ""), lines: parseBulkFile(String(input.file ?? "")) });
-        const c = corp.getCompany();
-        const name = (id: string) => c.employees?.find((e) => e.id === id)?.name;
-        const lines = check.lines.map((l) => ({ ...l, payee: name(l.beneficiaryId) ?? l.beneficiaryId, ...(l.code ? { message: ({ ...BULK_LINE_MESSAGE, DUPLICATE_LINE: "This employee is already on the file" } as Record<string, string>)[l.code] } : {}) }));
-        return { ...check, lines: Object.fromEntries(lines.map((l) => [String(l.n), l])), problems: Object.fromEntries(lines.filter((l) => !l.ok).map((l) => [String(l.n), l])), requiredApprovers: 2, period: String(input.period), currency: c.accounts.find((a) => a.id === input.fromAccountId)?.currency ?? c.currency };
-      }
-      case "corp.payroll.submit": {
-        if (!this.otpVerified) throw new BankError("OTP_REQUIRED", "OTP not verified");
-        if (this.p.behaviour.transferFails) throw new BankError("CORE_UNAVAILABLE", "Core banking unavailable");
-        const p = corp.initiatePayroll({ userId, fromAccountId: String(input.fromAccountId ?? ""), period: String(input.period ?? ""), lines: parseBulkFile(String(input.file ?? "")) });
-        this.otpVerified = false;
-        return shown(p, corp.getCompany());
-      }
-      case "corp.payments.initiate": {
-        if (!this.otpVerified) throw new BankError("OTP_REQUIRED", "OTP not verified");
-        if (this.p.behaviour.transferFails) throw new BankError("CORE_UNAVAILABLE", "Core banking unavailable");
-        const p = corp.initiatePayment({ userId, fromAccountId: String(input.fromAccountId ?? ""), beneficiaryId: String(input.beneficiaryId ?? ""), amount: Number(input.amount), reference: input.reference });
-        this.otpVerified = false;
-        return shown(p, corp.getCompany());
-      }
-      case "corp.payments.approve": {
-        if (!this.otpVerified) throw new BankError("OTP_REQUIRED", "OTP not verified");
-        if (this.p.behaviour.transferFails) throw new BankError("CORE_UNAVAILABLE", "Core banking unavailable");
-        const p = corp.approvePayment({ userId, paymentId: String(input.paymentId ?? "") });
-        this.otpVerified = false;
-        return shown(p, corp.getCompany());
-      }
-      case "corp.payments.withdraw": return shown(corp.withdrawPayment({ userId, paymentId: String(input.paymentId ?? "") }), corp.getCompany());
-      case "corp.payments.reject": return shown(corp.rejectPayment({ userId, paymentId: String(input.paymentId ?? ""), reason: input.reason }), corp.getCompany());
-      case "corp.payments.pending": return Object.fromEntries(corp.listPending({ userId, as: input.as === "initiator" ? "initiator" : input.as === "approver" ? "approver" : undefined }).map((p) => [p.id, shown(p, corp.getCompany())]));
-      case "corp.payments.get": return shown(corp.getPayment(String(input.paymentId ?? "")), corp.getCompany());
-      default: return undefined;
-    }
-  }
+  /** Ends the session, as an idle timeout would: every later call answers SESSION_EXPIRED until a new MockBank (a new sign-in) is made. */
+  expireSession() { this.session.ended = true; }
+  /** The id of the active context (`personal` for a persona without companies). */
+  get activeContextId() { return this.session.active; }
 
-  /** Single entry point used by journeys: adapter id + input -> result. */
-  async call(adapter: string, input: Record<string, any> = {}): Promise<any> {
-    if (this.cab.handles(adapter)) {
-      const out = this.cab.call(adapter, input);
-      if (out !== undefined) return out;
-    }
-    if (adapter.startsWith("corp.")) return this.corporate(adapter, input);
+  /**
+   * Single entry point used by journeys: adapter id + input -> result. `meta.journey` is the slug of the journey making the call;
+   * a journey the bank has switched off is refused before anything else happens.
+   */
+  async call(adapter: string, input: Record<string, any> = {}, meta: { journey?: string } = {}): Promise<any> {
+    if (meta.journey && !journeyEnabled(this.config, meta.journey)) throw new BankError("JOURNEY_DISABLED", "This isn't available at your bank.");
+    if (await applyConditions(this.conditions, adapter) === "empty") return {};
+    if (this.session.ended) throw new BankError("SESSION_EXPIRED", "You were signed out for your security. Sign in again to continue.");
+    if (adapter.startsWith("bank.session.")) return this.sessionCall(adapter, input);
     switch (adapter) {
-      case "bank.accounts.list":
-        return Object.fromEntries(this.p.accounts.map((a) => [a.id, a]));
-      case "bank.beneficiaries.list":
-        return Object.fromEntries(this.p.beneficiaries.map((b) => [b.id, { ...b, ageHours: Math.floor((Date.now() - b.addedAt) / 3600000) }]));
-      case "bank.limits.get":
-        // with a currency: the limit for accounts in that currency; without: the main one, as before
-        return input.currency ? { ...this.limitFor(String(input.currency)), currency: String(input.currency) } : { ...this.p.limits };
-      case "bank.fx.rate": {
-        const from = String(input.from ?? ""), to = String(input.to ?? "");
-        if (!fxSupports(from) || !fxSupports(to)) throw new BankError("CURRENCY_NOT_SUPPORTED", "We do not convert that currency pair");
-        return { from, to, midRate: Math.round(midRate(from, to)! * 1e6) / 1e6, rate: customerRate(from, to), spreadPercent: FX_SPREAD * 100 };
-      }
-      case "bank.fx.quote": {
-        const from = this.p.accounts.find((a) => a.id === input.fromAccountId), to = this.p.accounts.find((a) => a.id === input.toAccountId);
-        if (!from || !to) throw new BankError("ACCOUNT_NOT_FOUND", "Account not found");
-        if (from.currency === to.currency) throw new BankError("SAME_CURRENCY", "Choose two accounts in different currencies");
-        if (!fxSupports(from.currency) || !fxSupports(to.currency)) throw new BankError("CURRENCY_NOT_SUPPORTED", "We do not convert that currency pair");
-        const amount = Number(input.amount);
-        const digits = currencyInfo(from.currency).decimals;
-        if (!(amount > 0) || Math.abs(amount * 10 ** digits - Math.round(amount * 10 ** digits)) > 1e-6) throw new BankError("INVALID_AMOUNT", `Enter an amount in ${from.currency} with at most ${digits} decimal places`);
-        const price = priceQuote(from.currency, to.currency, amount);
-        if (price.total > from.balance) throw new BankError("INSUFFICIENT_FUNDS", "Insufficient funds");
-        this.seq += 1;
-        const q: Quote = {
-          quoteId: `fxq_${this.seq}`, fromAccountId: from.id, toAccountId: to.id,
-          from: { currency: from.currency, amount }, to: { currency: to.currency, amount: price.receive },
-          midRate: price.midRate, rate: price.rate, fee: price.fee, feeCurrency: from.currency, total: price.total,
-          expiresAt: new Date(this.now() + QUOTE_TTL_SECONDS * 1000).toISOString(), ttlSeconds: QUOTE_TTL_SECONDS,
-        };
-        this.quotes.set(q.quoteId, { ...q, used: false });
-        return q;
-      }
-      case "bank.fx.convert": {
-        if (!this.otpVerified) throw new BankError("OTP_REQUIRED", "OTP not verified");
-        if (this.p.behaviour.transferFails) throw new BankError("CORE_UNAVAILABLE", "Core banking unavailable");
-        const q = this.quotes.get(String(input.quoteId));
-        if (!q) throw new BankError("QUOTE_NOT_FOUND", "Quote not found");
-        if (q.used) throw new BankError("QUOTE_USED", "This quote has already been used");
-        if (this.now() > Date.parse(q.expiresAt)) throw new BankError("QUOTE_EXPIRED", "The rate has expired. Get a new one.");
-        const from = this.p.accounts.find((a) => a.id === q.fromAccountId)!, to = this.p.accounts.find((a) => a.id === q.toAccountId)!;
-        if (q.total > from.balance) throw new BankError("INSUFFICIENT_FUNDS", "Insufficient funds");
-        from.balance = roundMoney(from.balance - q.total, from.currency);
-        to.balance = roundMoney(to.balance + q.to.amount, to.currency);
-        q.used = true; this.otpVerified = false; this.seq += 1;
-        return { reference: `FX-20261102-${String(930 + this.seq).padStart(4, "0")}`, from: { currency: from.currency, newBalance: from.balance }, to: { currency: to.currency, newBalance: to.balance }, quoteId: q.quoteId };
-      }
-      case "bank.accounts.totals": {
-        // balances added up per currency, never across currencies; a record keyed by currency so it can feed a list
-        const out: Record<string, { id: string; currency: string; total: number; count: number }> = {};
-        for (const a of this.p.accounts) {
-          const t = out[a.currency] ?? (out[a.currency] = { id: a.currency, currency: a.currency, total: 0, count: 0 });
-          t.total = Math.round((t.total + a.balance) * 1000) / 1000; t.count += 1;
-        }
-        return out;
-      }
+      case "bank.app.config": return { homeMarket: this.config.homeMarket, disabled: [...this.config.disabled], options: structuredClone(this.config.options), speedMap: structuredClone(this.config.speedMap ?? {}) };
       case "bank.otp.send":
-        this.otpAttempts = 0;
-        this.otpVerified = false;
+        this.otp.attempts = 0;
+        this.otp.verified = false;
         return { sent: true, maskedPhone: this.p.phone.replace(/\d(?=\d{4})/g, "•"), channel: input.channel ?? "sms" };
       case "bank.otp.verify": {
-        this.otpAttempts += 1;
-        if (String(input.code) !== this.p.behaviour.otpCode && String(input.code) !== "000000") throw new BankError("OTP_INVALID", "Incorrect code", this.otpAttempts);
-        this.otpVerified = true;
+        this.otp.attempts += 1;
+        if (String(input.code) !== this.p.behaviour.otpCode && String(input.code) !== "000000") throw new BankError("OTP_INVALID", "Incorrect code", this.otp.attempts);
+        this.otp.verified = true;
         return { verified: true };
       }
-      case "bank.transfers.create": {
-        if (!this.otpVerified) throw new BankError("OTP_REQUIRED", "OTP not verified");
-        if (this.p.behaviour.transferFails) throw new BankError("CORE_UNAVAILABLE", "Core banking unavailable");
-        const amount = Number(input.amount);
-        const from = this.p.accounts.find((a) => a.id === input.fromAccountId);
-        if (!from) throw new BankError("ACCOUNT_NOT_FOUND", "Account not found");
-        if (amount > from.balance) throw new BankError("INSUFFICIENT_FUNDS", "Insufficient funds");
-        const limit = this.limitFor(from.currency);
-        if (limit.usedToday + amount > limit.daily) throw new BankError("LIMIT_EXCEEDED", "Daily limit exceeded");
-        from.balance = Math.round((from.balance - amount) * 1000) / 1000;
-        limit.usedToday += amount;
-        this.otpVerified = false;
-        this.seq += 1;
-        return { reference: `TRX-20261102-${String(930 + this.seq).padStart(4, "0")}`, newBalance: from.balance, currency: from.currency };
+    }
+    const business = adapter.startsWith("corp.");
+    // a persona with companies keeps each place apart: personal adapters work only in the personal context and company adapters only in a company
+    if (this.p.identity) {
+      const inCompany = this.session.active !== "personal";
+      if (business && !inCompany) throw new BankError("WRONG_CONTEXT", "This belongs to your business banking. Switch to your business to continue.");
+      if (!business && inCompany) throw new BankError("WRONG_CONTEXT", "This belongs to your personal banking. Switch to Personal to continue.");
+    }
+    if (business) {
+      const out = this.business.call(adapter, input);
+      if (out === undefined) throw new BankError("UNKNOWN_ADAPTER", `No sandbox handler for ${adapter}`);
+      return out;
+    }
+    return this.retail.call(adapter, input);
+  }
+
+  private sessionCall(adapter: string, input: Record<string, any>) {
+    const id = this.p.identity;
+    if (!id) throw new BankError("NOT_SUPPORTED", "Not available for this customer");
+    const now = this.now();
+    const stepUpValid = () => this.session.stepUpUntil !== undefined && now <= this.session.stepUpUntil;
+    switch (adapter) {
+      case "bank.session.get":
+        return { identity: { id: id.id, name: id.name }, activeContextId: this.session.active, contexts: this.contexts(), ...(stepUpValid() ? { stepUpUntil: new Date(this.session.stepUpUntil!).toISOString() } : {}), expiresAt: new Date(now + 30 * 60_000).toISOString() };
+      case "bank.session.switch": {
+        const ctx = this.contexts().find((c) => c.id === input.contextId);
+        if (!ctx) throw new BankError("PERMISSION_DENIED", "You don't have access to that.");
+        if (ctx.id === this.session.active) return { ...ctx, auditId: undefined };
+        // moving into a company needs a recent step-up; moving back to personal does not
+        if (ctx.workspace === "business" && !stepUpValid()) throw new BankError("STEP_UP_REQUIRED", "For your security, confirm it's you first.");
+        this.session.active = ctx.id;
+        // a code verified in one place is not valid in another
+        this.otp.verified = false; this.otp.attempts = 0;
+        return { ...ctx, auditId: `aud_${++this.session.audit}` };
       }
-      case "bank.billers.list":
-        return Object.fromEntries(BILLERS.map((b) => [b.id, b]));
-      case "bank.bills.lookup": {
-        const biller = BILLERS.find((b) => b.id === input.billerId);
-        const ref = String(input.reference ?? "").replace(/\s/g, "");
-        if (!biller) throw new BankError("BILLER_NOT_FOUND", "Unknown biller");
-        if (!/^[0-9]{10,14}$/.test(ref)) throw new BankError("BILL_NOT_FOUND", "No bill found for this reference");
-        const amount = 1000 + (parseInt(ref.slice(-4), 10) % 9000);
-        return { billerName: biller.name, reference: ref, payerName: this.p.name.split(" (")[0], amount, dueDate: "2026-11-12" };
+      case "bank.session.stepUp": {
+        const method = String(input.method ?? "password");
+        if (method !== "password" && method !== "biometric") throw new BankError("STEP_UP_FAILED", "That didn't work. Try again.");
+        if (method === "password" && input.secret !== undefined) {
+          // a wrong password stops here; the right one is remembered while the code is entered
+          this.session.passwordOk = String(input.secret) === id.password;
+          if (!this.session.passwordOk) throw new BankError("STEP_UP_FAILED", "That password isn't right.");
+        } else if (method === "biometric") this.session.passwordOk = true;
+        if (!this.session.passwordOk) throw new BankError("STEP_UP_FAILED", "That password isn't right.");
+        if (!this.otp.verified) throw new BankError("OTP_REQUIRED", "OTP not verified");
+        this.otp.verified = false; this.session.passwordOk = false;
+        this.session.stepUpUntil = now + STEP_UP_SECONDS * 1000;
+        return { stepUpUntil: new Date(this.session.stepUpUntil).toISOString() };
       }
-      case "bank.bills.pay":
-      case "bank.topup.create": {
-        const isBill = adapter === "bank.bills.pay";
-        if (!this.otpVerified) throw new BankError("OTP_REQUIRED", "OTP not verified");
-        if (this.p.behaviour.transferFails) throw new BankError("CORE_UNAVAILABLE", "Core banking unavailable");
-        const amount = Number(input.amount);
-        if (!isBill && !(amount >= 50 && amount <= 5000)) throw new BankError("INVALID_AMOUNT", "Top-up must be between 50 and 5,000");
-        const from = this.p.accounts.find((a) => a.id === input.fromAccountId);
-        if (!from) throw new BankError("ACCOUNT_NOT_FOUND", "Account not found");
-        if (amount > from.balance) throw new BankError("INSUFFICIENT_FUNDS", "Insufficient funds");
-        const limit = this.limitFor(from.currency);
-        if (limit.usedToday + amount > limit.daily) throw new BankError("LIMIT_EXCEEDED", "Daily limit exceeded");
-        from.balance = Math.round((from.balance - amount) * 1000) / 1000;
-        limit.usedToday += amount;
-        this.otpVerified = false;
-        this.seq += 1;
-        return { reference: `${isBill ? "BILL" : "TOP"}-20261102-${String(930 + this.seq).padStart(4, "0")}`, newBalance: from.balance };
-      }
-      case "bank.banks.list":
-        return Object.fromEntries(BANKS.map((b) => [b.id, { id: b.id, name: b.name, color: b.color }]));
-      case "bank.cards.list":
-        return Object.fromEntries((this.p.finance?.cards ?? []).map((c) => [c.id, { ...c, name: `${c.nickname} ••${c.last4}` }]));
-      case "bank.budgets.list":
-        return Object.fromEntries((this.p.finance?.budgets ?? []).map((b) => [b.id, b]));
-      case "bank.subscriptions.list":
-        return Object.fromEntries((this.p.finance?.subscriptions ?? []).map((x) => [x.id, x]));
-      case "bank.deposit.create": {
-        const fin = this.p.finance; if (!fin) throw new BankError("NOT_SUPPORTED", "Not available for this customer");
-        const to = this.p.accounts.find((a) => a.id === input.toAccountId);
-        if (!to) throw new BankError("ACCOUNT_NOT_FOUND", "Account not found");
-        const amount = Number(input.amount);
-        if (!(amount >= 1 && amount <= 50000)) throw new BankError("INVALID_AMOUNT", "Enter an amount from $1 to $50,000");
-        if (!fin.cards.some((c) => c.id === input.fromCardId)) throw new BankError("CARD_NOT_FOUND", "Choose a card to add money from");
-        to.balance = Math.round((to.balance + amount) * 100) / 100;
-        fin.transactions.unshift({ id: `t_dep${++this.seq}`, title: "Added money", category: "income", amount, daysAgo: 0, time: "Now" });
-        return { reference: `ADD-20261102-${String(930 + this.seq).padStart(4, "0")}`, newBalance: to.balance };
-      }
-      case "bank.cards.add": {
-        const fin = this.p.finance; if (!fin) throw new BankError("NOT_SUPPORTED", "Not available for this customer");
-        const num = String(input.number ?? "").replace(/\s/g, "");
-        if (!luhnValid(num)) throw new BankError("CARD_INVALID", "That card number is not valid");
-        const m = /^(0[1-9]|1[0-2])\/?([0-9]{2})$/.exec(String(input.expiry ?? "").replace(/\s/g, ""));
-        if (!m) throw new BankError("EXPIRY_INVALID", "Enter the expiry as MM/YY");
-        const exp = new Date(2000 + Number(m[2]), Number(m[1]), 0, 23, 59);
-        if (exp.getTime() < Date.UTC(2026, 10, 2)) throw new BankError("CARD_EXPIRED", "This card has expired");
-        if (!/^[0-9]{3,4}$/.test(String(input.cvv ?? ""))) throw new BankError("CVV_INVALID", "Enter the 3 or 4 digit security code");
-        if (fin.cards.some((c) => c.last4 === num.slice(-4))) throw new BankError("CARD_EXISTS", "This card is already added");
-        const makeDefault = input.makeDefault === true || fin.cards.length === 0;
-        if (makeDefault) fin.cards.forEach((c) => { c.isDefault = false; });
-        const card = { id: `c_${num.slice(-4)}`, network: cardNetwork(num), last4: num.slice(-4), holder: String(input.holder ?? this.p.name), expiry: `${m[1]}/${m[2]}`, nickname: String(input.nickname || "My card"), isDefault: makeDefault };
-        fin.cards.push(card);
-        return { cardId: card.id, last4: card.last4, network: card.network };
-      }
-      case "bank.accounts.connect": {
-        const fin = this.p.finance; if (!fin) throw new BankError("NOT_SUPPORTED", "Not available for this customer");
-        const bank = BANKS.find((b) => b.id === input.bankId);
-        if (!bank) throw new BankError("BANK_NOT_FOUND", "Choose a bank to connect");
-        if (!String(input.username ?? "").trim() || String(input.password ?? "").length < 6) throw new BankError("BANK_AUTH_FAILED", "Check your username and password");
-        if (String(input.password) === "invalid123") throw new BankError("BANK_AUTH_FAILED", `${bank.name} did not accept these details`);
-        if (fin.linked.some((l) => l.id === `l_${bank.id}`)) throw new BankError("ALREADY_CONNECTED", `${bank.name} is already connected`);
-        const kind = input.accountType === "credit" ? "Credit" : "Savings";
-        const linked = { id: `l_${bank.id}`, bank: bank.name, kind, maskedNumber: `••${String(1000 + (String(input.username).length * 977) % 9000).slice(-4)}`, balance: kind === "Credit" ? 1240.5 : 4210.25 } as const;
-        fin.linked.push(linked);
-        return { connectedId: linked.id, bank: bank.name, kind, maskedNumber: linked.maskedNumber, balance: linked.balance };
-      }
-      case "bank.budgets.create": {
-        const fin = this.p.finance; if (!fin) throw new BankError("NOT_SUPPORTED", "Not available for this customer");
-        const limit = Number(input.limit);
-        if (!(limit >= 10 && limit <= 100000)) throw new BankError("INVALID_AMOUNT", "A budget must be between $10 and $100,000");
-        const name = String(input.category ?? "").trim();
-        if (!name) throw new BankError("CATEGORY_REQUIRED", "Choose a category");
-        if (fin.budgets.some((b) => b.name.toLowerCase() === name.toLowerCase())) throw new BankError("BUDGET_EXISTS", `You already have a ${name} budget`);
-        const b = { id: `b_${name.toLowerCase().replace(/[^a-z]+/g, "_")}`, name, category: "shopping" as const, limit, spent: 0 };
-        fin.budgets.push(b);
-        return { budgetId: b.id, name, limit };
-      }
-      case "bank.subscriptions.pay": {
-        const fin = this.p.finance; if (!fin) throw new BankError("NOT_SUPPORTED", "Not available for this customer");
-        const sub = fin.subscriptions.find((x) => x.id === input.subscriptionId);
-        if (!sub) throw new BankError("SUBSCRIPTION_NOT_FOUND", "Subscription not found");
-        const from = this.p.accounts.find((a) => a.id === input.fromAccountId);
-        if (!from) throw new BankError("ACCOUNT_NOT_FOUND", "Account not found");
-        if (sub.amount > from.balance) throw new BankError("INSUFFICIENT_FUNDS", "Insufficient funds");
-        from.balance = Math.round((from.balance - sub.amount) * 100) / 100;
-        sub.nextInDays += 30;
-        fin.transactions.unshift({ id: `t_sub${++this.seq}`, title: sub.name, category: "entertainment", amount: -sub.amount, daysAgo: 0, time: "Now" });
-        return { reference: `SUB-20261102-${String(930 + this.seq).padStart(4, "0")}`, newBalance: from.balance };
-      }
-      case "bank.invest.instruments":
-        return Object.fromEntries(INSTRUMENTS.map((i) => [i.symbol, { id: i.symbol, symbol: i.symbol, kind: i.kind, sector: i.sector, price: i.price, changePct: dayChange(i).pct, name: `${i.name} (${i.symbol}) · $${i.price.toFixed(2)}` }]));
-      case "bank.invest.buy": {
-        const fin = this.p.finance; if (!fin) throw new BankError("NOT_SUPPORTED", "Not available for this customer");
-        const inst = instrumentOf(String(input.symbol));
-        if (!inst) throw new BankError("INSTRUMENT_NOT_FOUND", "Choose a stock or fund to buy");
-        const amount = Number(input.amount);
-        if (!(amount >= 1 && amount <= 50000)) throw new BankError("INVALID_AMOUNT", "Enter an amount from $1 to $50,000");
-        const from = this.p.accounts.find((a) => a.id === input.fromAccountId);
-        if (!from) throw new BankError("ACCOUNT_NOT_FOUND", "Account not found");
-        if (amount > from.balance) throw new BankError("INSUFFICIENT_FUNDS", "Insufficient funds");
-        const shares = Math.round((amount / inst.price) * 10000) / 10000;
-        const held = fin.invest.holdings.find((h) => h.symbol === inst.symbol);
-        if (held) { held.avgCost = (held.avgCost * held.shares + amount) / (held.shares + shares); held.shares = Math.round((held.shares + shares) * 10000) / 10000; }
-        else fin.invest.holdings.push({ symbol: inst.symbol, shares, avgCost: inst.price });
-        from.balance = Math.round((from.balance - amount) * 100) / 100;
-        fin.transactions.unshift({ id: `t_inv${++this.seq}`, title: `Bought ${inst.symbol}`, category: "investing", amount: -amount, daysAgo: 0, time: "Now" });
-        return { reference: `INV-20261102-${String(930 + this.seq).padStart(4, "0")}`, symbol: inst.symbol, name: inst.name, shares, price: inst.price, newBalance: from.balance };
-      }
-      case "bank.invest.holdings": {
-        const fin = this.p.finance; if (!fin) throw new BankError("NOT_SUPPORTED", "Not available for this customer");
-        return Object.fromEntries(fin.invest.holdings.map((h) => {
-          const i = instrumentOf(h.symbol)!, value = Math.round(h.shares * i.price * 100) / 100;
-          return [h.symbol, { id: h.symbol, symbol: h.symbol, shares: h.shares, value, name: `${i.name} (${h.symbol}) · $${value.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` }];
-        }));
-      }
-      case "bank.invest.sell": {
-        const fin = this.p.finance; if (!fin) throw new BankError("NOT_SUPPORTED", "Not available for this customer");
-        const inst = instrumentOf(String(input.symbol));
-        const held = fin.invest.holdings.find((h) => h.symbol === input.symbol);
-        if (!inst || !held) throw new BankError("NOT_HELD", "Choose something you own to sell");
-        const amount = Number(input.amount);
-        if (!(amount >= 1)) throw new BankError("INVALID_AMOUNT", "Enter an amount of at least $1");
-        const to = this.p.accounts.find((a) => a.id === input.toAccountId);
-        if (!to) throw new BankError("ACCOUNT_NOT_FOUND", "Account not found");
-        const value = held.shares * inst.price;
-        if (amount > value + 0.005) throw new BankError("INSUFFICIENT_HOLDING", `You only hold $${(Math.floor(value * 100) / 100).toFixed(2)} of ${inst.symbol}`);
-        // selling the whole value sells every share, so no rounding crumbs are left behind
-        const all = value - amount < 0.01;
-        const shares = all ? held.shares : Math.round((amount / inst.price) * 10000) / 10000;
-        const proceeds = all ? Math.round(value * 100) / 100 : amount;
-        if (all) fin.invest.holdings = fin.invest.holdings.filter((h) => h.symbol !== inst.symbol);
-        else held.shares = Math.round((held.shares - shares) * 10000) / 10000;
-        to.balance = Math.round((to.balance + proceeds) * 100) / 100;
-        fin.transactions.unshift({ id: `t_sell${++this.seq}`, title: `Sold ${inst.symbol}`, category: "investing", amount: proceeds, daysAgo: 0, time: "Now" });
-        return { reference: `SEL-20261102-${String(930 + this.seq).padStart(4, "0")}`, symbol: inst.symbol, name: inst.name, shares, price: inst.price, proceeds, newBalance: to.balance };
-      }
-      case "bank.invest.watch": {
-        const fin = this.p.finance; if (!fin) throw new BankError("NOT_SUPPORTED", "Not available for this customer");
-        if (!instrumentOf(String(input.symbol))) throw new BankError("INSTRUMENT_NOT_FOUND", "Unknown stock or fund");
-        const w = fin.invest.watchlist.filter((s) => s !== input.symbol);
-        fin.invest.watchlist = input.on === false ? w : [...w, String(input.symbol)];
-        return { watching: input.on !== false };
-      }
-      case "bank.carriers.list":
-        return Object.fromEntries(CARRIERS.map((c) => [c.id, c]));
-      default:
-        throw new BankError("UNKNOWN_ADAPTER", `No sandbox handler for ${adapter}`);
+      default: throw new BankError("UNKNOWN_ADAPTER", `No sandbox handler for ${adapter}`);
     }
   }
 }
 
 export * from "./catalog";
-
-
-/** What the person sees for who a payment goes to: the beneficiary's name, or how many payees a bulk payment has. */
-function shown(p: CorpPayment, company: CorpCompany): CorpPayment & { payee: string } {
-  return { ...p, payee: p.period ? `Payroll ${p.period} · ${p.lines?.length ?? 0} employee${p.lines?.length === 1 ? "" : "s"}` : p.lines ? `${p.lines.length} payment${p.lines.length === 1 ? "" : "s"}` : company.whitelist.find((b) => b.id === p.beneficiaryId)?.name ?? p.beneficiaryId };
-}
-
-const BULK_LINE_MESSAGE: Record<string, string> = {
-  BENEFICIARY_NOT_WHITELISTED: "Not on the company's approved list",
-  INVALID_AMOUNT: "The amount is not valid for this account's currency",
-  DUPLICATE_LINE: "Same payee, amount and reference as an earlier line",
-  NOT_AN_EMPLOYEE: "Not on the company's payroll register",
-  ABOVE_SALARY_CAP: "More than 1.5 times this employee's monthly salary",
-};
-
-/**
- * Rows of a bulk file as pasted or uploaded: `beneficiary,amount,reference` per line. An optional header row, blank rows and
- * spaces are ignored. A row that cannot be read keeps what it has and fails the bank's own checks (a missing amount is an invalid amount).
- */
-export function parseBulkFile(text: string): { beneficiaryId: string; amount: number; reference: string }[] {
-  const rows = text.split(/\r?\n/).map((r) => r.trim()).filter(Boolean);
-  if (rows.length && /^beneficiar|^payee|^employee/i.test(rows[0]!)) rows.shift();
-  return rows.map((r) => { const parts = r.split(","); const amount = (parts[1] ?? "").trim(); return { beneficiaryId: (parts[0] ?? "").trim(), amount: amount === "" ? NaN : Number(amount.replace(/_/g, "")), reference: parts.slice(2).join(",").trim() }; });
-}

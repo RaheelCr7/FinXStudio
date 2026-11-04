@@ -1,6 +1,6 @@
 import type { Journey } from "@finx/journey-schema";
 import { JourneyRunner, localize, type View } from "@finx/renderer-core";
-import { MockBank, personas, type Flaws, type ProviderId } from "@finx/mock-bank-api";
+import { MockBank, personas, type Conditions, type Flaws, type ProviderId } from "@finx/mock-bank-api";
 
 /** One scripted action or check. Actions change state; expectations only check it. */
 export type Step =
@@ -73,6 +73,8 @@ export type SimOptions = {
   setup?: { adapter: string; input?: Record<string, unknown>; saveAs?: string }[];
   /** Rules switched off in the sandbox, for mutation checks. */
   flaws?: Flaws;
+  /** What goes wrong on the way to the bank while the journey runs (timeouts, unavailable adapters, latency, empty lists). The setup calls and expectBank reads are not affected. */
+  conditions?: Conditions;
 };
 
 export async function simulate(opts: SimOptions): Promise<SimResult> {
@@ -100,6 +102,10 @@ export async function simulate(opts: SimOptions): Promise<SimResult> {
       if (call.saveAs) saved[call.saveAs] = answer;
     } catch (e) { setupFailures.push(`Setup ${k + 1} (${call.adapter}) failed: ${(e as Error).message}`); }
   }
+  // conditions apply to the walk, not to the setup that came before it or to the reads that check the bank afterwards
+  const conditions = structuredClone(opts.conditions ?? {});
+  bank.conditions = conditions;
+  const peek = async (adapter: string, input: Record<string, any>) => { bank.conditions = {}; try { return await bank.call(adapter, input); } finally { bank.conditions = conditions; } };
   const runner = new JourneyRunner(journey, { adapter: (id, input) => bank.call(id, input), lang });
   const frames: Frame[] = [];
   const failures: string[] = [...setupFailures];
@@ -169,7 +175,7 @@ export async function simulate(opts: SimOptions): Promise<SimResult> {
         try {
           // an input value that is exactly {{path}} is read from the journey's data (for example the id of the payment just chosen)
           const input = Object.fromEntries(Object.entries(e.input ?? {}).map(([k, v]) => [k, typeof v === "string" && /^\{\{\s*setup\./.test(v) ? resolve(v) : typeof v === "string" && /^\{\{[^}]+\}\}$/.test(v) ? runner.get(v.slice(2, -2).trim()) : v]));
-          const got = e.path.split(".").reduce((o: any, k: string) => o?.[k], await bank.call(e.adapter, input as Record<string, any>));
+          const got = e.path.split(".").reduce((o: any, k: string) => o?.[k], await peek(e.adapter, input as Record<string, any>));
           if (JSON.stringify(got) !== JSON.stringify(e.equals)) fail(n, `${did}: it is ${JSON.stringify(got)}`, view);
         } catch (err) { fail(n, `${did}: the bank call failed: ${(err as Error).message}`, view); }
       } else if ("expectToast" in step) {

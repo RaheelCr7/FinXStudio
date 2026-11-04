@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { ACME, ApiError, BankBApi, MockBank, PROVIDERS, applyRule, build, createCorporateProvider, mapError, type MappingSpec } from "./index";
+import { ACME, ApiError, BankBApi, MockBank, PROVIDERS, applyRule, build, createCorporateProvider, mapError, type MappingSpec } from "../index";
 import bankBSpec from "./mappings/bank-b.corporate.json";
 
 const T = Date.parse("2026-11-03T10:00:00Z");

@@ -82,15 +82,15 @@ export const ADAPTER_CATALOG: AdapterInfo[] = [
     returns: "The payment, 'released' (with releaseReference) or still 'pending_approval' when a second approver is needed. Errors: OTP_REQUIRED, NOT_AUTHORISED, SELF_APPROVAL, ALREADY_APPROVED, PAYMENT_NOT_PENDING, PAYMENT_NOT_FOUND, INSUFFICIENT_FUNDS, LIMIT_COMPANY_EXCEEDED.",
   },
   {
-    adapter: "corp.payments.reject", suggestedId: "rejectPayment", description: "An approver rejects a pending payment, with a reason. The initiator's daily limit is given back. (The person who started it uses corp.payments.withdraw.)",
-    input: { userId: "an approver other than the one who started it", paymentId: "from corp.payments.pending", reason: "optional text" }, returns: "The payment, 'rejected'. Errors: NOT_AUTHORISED, PAYMENT_NOT_PENDING, PAYMENT_NOT_FOUND.",
+    adapter: "corp.payments.reject", suggestedId: "rejectPayment", description: "An approver rejects a pending payment, with a reason. The initiator's daily limit is given back. The person who started the payment cannot reject it (NOT_AUTHORISED): they use corp.payments.withdraw.",
+    input: { userId: "an approver other than the one who started it", paymentId: "from corp.payments.pending", reason: "optional text" }, returns: "The payment, 'rejected'. Errors: NOT_AUTHORISED, PAYMENT_NOT_PENDING, PAYMENT_NOT_FOUND, PERMISSION_DENIED.",
   },
   {
     adapter: "corp.payments.withdraw", suggestedId: "withdrawPayment", description: "The person who started a payment takes it back while it waits for approval. Only them; their daily limit is given back. Moves no money.",
     input: { userId: "the initiator who started it", paymentId: "from corp.payments.pending with as: 'initiator'" }, returns: "The payment, 'rejected' with reason 'Withdrawn by the person who started it'. Errors: NOT_AUTHORISED (not theirs), PAYMENT_NOT_PENDING, PAYMENT_NOT_FOUND.",
   },
   {
-    adapter: "corp.payments.get", suggestedId: "getPayment", description: "One payment by id: status, amounts, who started it, who approved, value date, release reference or rejection reason.",
+    adapter: "corp.payments.get", suggestedId: "getPayment", description: "One payment by id: status, amounts, who started it, who approved, value date, release reference or rejection reason. With a session, the context must allow viewing accounts (PERMISSION_DENIED); with a userId, that user must work for the company (NOT_AUTHORISED).",
     input: { paymentId: "the payment's id" }, returns: "The payment. Error: PAYMENT_NOT_FOUND.",
   },
   {
@@ -199,6 +199,98 @@ export const ADAPTER_CATALOG: AdapterInfo[] = [
     adapter: "bank.invest.watch", suggestedId: "watch", description: "Adds a stock or fund to the watchlist, or removes it with on: false (BankWorkx).",
     input: { symbol: "instrument symbol", on: "boolean, default true" }, returns: "{ watching }", errors: ["INSTRUMENT_NOT_FOUND"],
   },
+  // ---- One login, several places: session and context (BankWorkx combined demo) ----
+  {
+    adapter: "bank.session.get", suggestedId: "session", description: "Who is signed in, the places they can bank from (their own accounts and each company they act for), what each place allows, and which one is active. Only for a customer who acts for companies.",
+    input: {}, returns: "{ identity: { id, name }, activeContextId, contexts: [{ id, label, workspace: 'personal'|'business', companyId?, roles, permissions (dotted names such as biz.payments.initiate), limits, access }], stepUpUntil? (ISO, while a step-up is valid), expiresAt }. Save as ctx.session.",
+    errors: ["SESSION_EXPIRED", "NOT_SUPPORTED"],
+  },
+  {
+    adapter: "bank.session.switch", suggestedId: "switchContext", description: "Makes another place the active one. Moving into a company needs a step-up in the last 5 minutes; moving back to personal does not. A one-time code verified in one place is not valid in another.",
+    input: { contextId: "personal, or a company context id such as alpha or beta" }, returns: "The new active context as in bank.session.get, plus auditId. Errors: STEP_UP_REQUIRED (run bank.session.stepUp, then switch again), PERMISSION_DENIED (unknown place or access removed), SESSION_EXPIRED.",
+    errors: ["STEP_UP_REQUIRED", "PERMISSION_DENIED", "SESSION_EXPIRED"],
+  },
+  {
+    adapter: "bank.session.stepUp", suggestedId: "stepUp", description: "Confirms it is the customer again before a sensitive step: their password (or biometrics), and the one-time code. Valid for 5 minutes. A right password is remembered while the code is entered, so the call can be made again without the secret.",
+    input: { method: "'password' or 'biometric'", secret: "the password, for method password" }, returns: "{ stepUpUntil } (ISO). Errors: STEP_UP_FAILED (wrong password), OTP_REQUIRED (run bank.otp.send and bank.otp.verify, then call again).",
+    requiresOtp: true, errors: ["STEP_UP_FAILED", "OTP_REQUIRED", "SESSION_EXPIRED"],
+  },
+  {
+    adapter: "bank.app.config", suggestedId: "appConfig", description: "How the bank has set the app up: its home market, the journeys it has switched off (a call made for one answers JOURNEY_DISABLED), the options of each journey, and the speed mapping.",
+    input: {}, returns: "{ homeMarket ('us','eu','uk','ae','sa','jo'), disabled: [journey slugs], options: { slug: { … } }, speedMap }. Save as ctx.config.",
+  },
+  // ---- The payment flow: check a payee, save it, price a payment, send it (docs/journeys/09-payment-rails.md) ----
+  {
+    adapter: "bank.payees.validate", suggestedId: "validatePayee", description: "Checks the identifiers a payee needs for its country (routing and account number, sort code and account number, IBAN, or SWIFT/BIC and account number) and says which fields are wrong. Moves nothing.",
+    input: { country: "two-letter country, optional: the bank's home market when absent", name: "name on the account", routingNumber: "…", accountNumber: "…", sortCode: "…", iban: "…", bic: "…" },
+    returns: "{ valid, market, country, currency, bank?, masked, errors: { field: { code, message } } }. Codes: PAYEE_NAME_REQUIRED, INVALID_ROUTING, INVALID_ACCOUNT, INVALID_SORT_CODE, INVALID_IBAN, NOT_SEPA, COUNTRY_MISMATCH, INVALID_BIC. Error COUNTRY_NOT_SUPPORTED for a country the bank does not serve.",
+    errors: ["COUNTRY_NOT_SUPPORTED"],
+  },
+  {
+    adapter: "bank.payees.check", suggestedId: "checkPayee", description: "Checks that the name matches the account holder. Moves nothing.",
+    input: { country: "optional", name: "name on the account", "…": "the identifiers, as bank.payees.validate" },
+    returns: "{ result: 'match'|'close'|'none'|'na', registeredName?, market, country }. close and none need the person to tick that they understand before going on; na means the bank cannot check this account.",
+    errors: ["COUNTRY_NOT_SUPPORTED", "PAYEE_NAME_REQUIRED", "INVALID_ROUTING", "INVALID_ACCOUNT", "INVALID_SORT_CODE", "INVALID_IBAN", "NOT_SEPA", "COUNTRY_MISMATCH", "INVALID_BIC"],
+  },
+  {
+    adapter: "bank.payees.save", suggestedId: "savePayee", description: "Saves a payee after validation and the name check. Unless the name matches, the person must have acknowledged the result.",
+    input: { country: "optional", name: "…", "…": "the identifiers", acknowledged: "true when the name check was not a match and the person ticked the box" },
+    returns: "{ payeeId, name, masked, check }. Errors: PAYEE_NOT_CHECKED, PAYEE_EXISTS, and the validation codes of bank.payees.validate.",
+    errors: ["PAYEE_NOT_CHECKED", "PAYEE_EXISTS", "COUNTRY_NOT_SUPPORTED", "PAYEE_NAME_REQUIRED", "INVALID_ROUTING", "INVALID_ACCOUNT", "INVALID_SORT_CODE", "INVALID_IBAN", "NOT_SEPA", "COUNTRY_MISMATCH", "INVALID_BIC"],
+  },
+  {
+    adapter: "bank.payments.quote", suggestedId: "quotePayment", description: "Prices a payment to a saved or a new payee and holds the price for 60 seconds. The amount is what the payee receives, in the payee's currency. The speed (standard, sameDay, instant) is mapped to a real payment rail by the bank's configuration; when no speed is given the region's default is used, moving to the next rail that fits the amount. Moves nothing.",
+    input: { fromAccountId: "a USD account", payeeId: "a saved payee (or payee: { country, name, … } for a new one)", amount: "what the payee receives", speed: "optional: 'standard'|'sameDay'|'instant'", charges: "SWIFT only: 'SHA' (default), 'OUR' (adds 15.00) or 'BEN'", purpose: "required for the Middle East and SWIFT payees", reference: "optional text", scheduleDate: "optional YYYY-MM-DD business day, tomorrow to 30 days ahead", acknowledged: "for a new payee whose name check was not a match", savePayee: "true to save a new payee when the payment is sent" },
+    returns: "{ quoteId, expiresAt, ttlSeconds, payee, receive: { amount, currency }, rate, converted, fee, total (what the customer pays, USD), speed, rail: { id, name, referenceLabel }, arrivesOn, afterCutoff, scheduled, options: [one per speed class: speed, railName, fee, max, available, reason?, arrivesOn] }. Save as ctx.quote.",
+    errors: ["ACCOUNT_NOT_FOUND", "CURRENCY_NOT_SUPPORTED", "PAYEE_NOT_FOUND", "PAYEE_NOT_CHECKED", "INVALID_AMOUNT", "PURPOSE_REQUIRED", "REFERENCE_TOO_LONG", "INVALID_REFERENCE", "RAIL_LIMIT", "RAIL_NOT_AVAILABLE", "INSUFFICIENT_FUNDS", "DAILY_LIMIT_EXCEEDED", "BENEFICIARY_COOLING_OFF", "INVALID_DATE", "COUNTRY_NOT_SUPPORTED"],
+  },
+  {
+    adapter: "bank.payments.create", suggestedId: "createPayment", description: "Sends the payment a quote priced, after the one-time code. A payee named 'Test Sanctions' is held for review. A scheduled quote takes nothing from the balance until its date.",
+    input: { quoteId: "from bank.payments.quote" },
+    returns: "{ paymentId, reference (BWX-nnnnnn), status ('sent'|'scheduled'|'held'; held also carries code PAYMENT_HELD and a message), rail, railReference, speed, receive, youPay, fee, rate, arrivesOn, newBalance (ledger), availableBalance, payeeCheck, acknowledged }.",
+    moneyMoving: true, requiresOtp: true,
+    errors: ["OTP_REQUIRED", "STEP_UP_FAILED", "CORE_UNAVAILABLE", "QUOTE_NOT_FOUND", "QUOTE_USED", "QUOTE_EXPIRED", "RAIL_NOT_AVAILABLE", "INSUFFICIENT_FUNDS", "DAILY_LIMIT_EXCEEDED", "TIMEOUT", "SERVICE_UNAVAILABLE"],
+  },
+  {
+    adapter: "corp.payments.quote", suggestedId: "quoteSupplierPayment", description: "Prices a payment to an approved supplier in the supplier's currency, from a company account in the company's currency: conversion, fee, speed, how many approvers it will need and whether a confirmation code is asked (from the company's threshold). Purpose and reference (an invoice or PO number) are always required. Moves nothing.",
+    input: { fromAccountId: "company account", beneficiaryId: "an approved supplier", amount: "what the supplier receives, in its currency", speed: "optional: 'standard'|'sameDay'|'instant'", charges: "SWIFT only", purpose: "required", reference: "required" },
+    returns: "{ quoteId, expiresAt, ttlSeconds, payee, receive, rate, converted, fee, total, currency, speed, rail, arrivesOn, afterCutoff, requiredApprovers (1 or 2), codeRequired, options }. Save as ctx.quote.",
+    errors: ["PERMISSION_DENIED", "USER_NOT_FOUND", "ACCOUNT_NOT_FOUND", "BENEFICIARY_NOT_WHITELISTED", "CURRENCY_NOT_SUPPORTED", "INVALID_AMOUNT", "PURPOSE_REQUIRED", "REFERENCE_REQUIRED", "REFERENCE_TOO_LONG", "INVALID_REFERENCE", "RAIL_LIMIT", "RAIL_NOT_AVAILABLE", "INSUFFICIENT_FUNDS", "LIMIT_USER_EXCEEDED", "LIMIT_COMPANY_EXCEEDED"],
+  },
+  {
+    adapter: "corp.payments.create", suggestedId: "createSupplierPayment", description: "Starts the payment a quote priced. It waits for approval (the money moves when the last approver approves). A one-time code is asked only from the company's threshold (25,000 for Alpha and Beta).",
+    input: { quoteId: "from corp.payments.quote" }, returns: "The payment: { id, status 'pending_approval', required, approvals, rail, speed, receive, rate, fee, purpose, arrivesOn, railReference, … }.",
+    moneyMoving: true, requiresOtp: true,
+    errors: ["PERMISSION_DENIED", "QUOTE_NOT_FOUND", "QUOTE_USED", "QUOTE_EXPIRED", "RAIL_NOT_AVAILABLE", "OTP_REQUIRED", "STEP_UP_FAILED", "CORE_UNAVAILABLE", "LIMIT_USER_EXCEEDED", "LIMIT_COMPANY_EXCEEDED", "INSUFFICIENT_FUNDS", "TIMEOUT", "SERVICE_UNAVAILABLE"],
+  },
+  { adapter: "corp.suppliers.list", suggestedId: "suppliers", description: "The company's approved suppliers (the whitelist), with where each is paid.", input: {}, returns: "Object map keyed by supplier id: { id, name, displayName, bank, maskedNumber, country?, currency? }.", errors: ["PERMISSION_DENIED"] },
+  { adapter: "corp.templates.list", suggestedId: "templates", description: "The company's saved payment templates.", input: {}, returns: "Object map keyed by template id: { id, name, beneficiaryId, amount?, reference, purpose }.", errors: ["PERMISSION_DENIED"] },
+  { adapter: "corp.signatories.list", suggestedId: "signatories", description: "The company's signatory groups: who approves, in what order (sequential) or in any order (parallel), and above which amount.", input: {}, returns: "Object map keyed by group id: { id, name, mode, members, required, above }.", errors: ["PERMISSION_DENIED"] },
+  { adapter: "corp.audit.list", suggestedId: "audit", description: "The company's audit trail, newest first, including what this session has done and what it was refused.", input: {}, returns: "Object map keyed by position: { id, at, userId, action, outcome 'Done'|'Refused' }.", errors: ["PERMISSION_DENIED"] },
+  // ---- A retail customer's records (BankWorkx): read adapters, plus nickname and application save ----
+  { adapter: "bank.accounts.get", suggestedId: "account", description: "One account with its ledger balance (balance), available balance (available) and nickname.", input: { accountId: "account id" }, returns: "The account.", errors: ["ACCOUNT_NOT_FOUND"] },
+  { adapter: "bank.accounts.rename", suggestedId: "renameAccount", description: "Gives an account a nickname of 1 to 30 characters.", input: { accountId: "account id", nickname: "text" }, returns: "{ accountId, nickname }", errors: ["ACCOUNT_NOT_FOUND", "INVALID_NICKNAME"] },
+  {
+    adapter: "bank.transactions.list", suggestedId: "transactions", description: "Transactions, newest first, with filters. A pending item lowers the available balance but not yet the ledger balance.",
+    input: { accountId: "optional", from: "optional YYYY-MM-DD", to: "optional YYYY-MM-DD", direction: "optional 'in'|'out'", category: "optional", status: "optional 'posted'|'pending'", q: "optional text in the title", minAmount: "optional", maxAmount: "optional", limit: "optional" },
+    returns: "Object map keyed by id: { id, accountId, date, title, category, amount (negative is out), currency, status, reference? }. Save as ctx.transactions.", errors: ["ACCOUNT_NOT_FOUND", "NOT_SUPPORTED"],
+  },
+  { adapter: "bank.statements.get", suggestedId: "statement", description: "A statement for one account and a period: opening and closing ledger balance, totals in and out, and the posted transactions.", input: { accountId: "account id", from: "YYYY-MM-DD", to: "YYYY-MM-DD" }, returns: "{ accountId, currency, from, to, opening, credits, debits, closing, count, transactions }", errors: ["ACCOUNT_NOT_FOUND", "INVALID_DATE", "NOT_SUPPORTED"] },
+  { adapter: "bank.payees.list", suggestedId: "payees", description: "Saved payees with their country, currency, masked details and the result of their name check.", input: {}, returns: "Object map keyed by payee id: { id, name, country, market, currency, bank?, masked, fields, addedAt, check }.", errors: ["NOT_SUPPORTED"] },
+  { adapter: "bank.cards.issued", suggestedId: "issuedCards", description: "The debit and credit cards the bank issued (not the saved cards of bank.cards.list): status, limits, controls.", input: {}, returns: "Object map keyed by card id: { id, kind, network, last4, nickname, status 'inactive'|'active'|'frozen'|'blocked', accountId?, virtual, pinSet, limits, controls, creditLimit?, outstanding? }.", errors: ["NOT_SUPPORTED"] },
+  { adapter: "bank.cards.get", suggestedId: "issuedCard", description: "One issued card.", input: { cardId: "card id" }, returns: "The card.", errors: ["CARD_NOT_FOUND", "NOT_SUPPORTED"] },
+  { adapter: "bank.deposits.list", suggestedId: "deposits", description: "Term deposits.", input: {}, returns: "Object map keyed by id: { id, name, principal, currency, ratePercent, termMonths, openedOn, maturesOn, status 'active'|'matured'|'closed', autoRenew, accountId }.", errors: ["NOT_SUPPORTED"] },
+  { adapter: "bank.goals.list", suggestedId: "goals", description: "Savings goals.", input: {}, returns: "Object map keyed by id: { id, name, target, saved, currency, targetDate, accountId }.", errors: ["NOT_SUPPORTED"] },
+  { adapter: "bank.loans.list", suggestedId: "loans", description: "Loans, without their schedule.", input: {}, returns: "Object map keyed by id: { id, name, principal, outstanding, currency, ratePercent, monthlyPayment, nextDue }.", errors: ["NOT_SUPPORTED"] },
+  { adapter: "bank.loans.get", suggestedId: "loan", description: "One loan with its repayment schedule.", input: { loanId: "loan id" }, returns: "{ …loan, schedule: [{ n, due, principal, interest, balance }] }", errors: ["LOAN_NOT_FOUND", "NOT_SUPPORTED"] },
+  { adapter: "bank.schedules.list", suggestedId: "schedules", description: "Scheduled and recurring payments that are still active.", input: {}, returns: "Object map keyed by id: { id, kind, payeeName, amount, currency, frequency, nextDate, fromAccountId, reference, status }.", errors: ["NOT_SUPPORTED"] },
+  { adapter: "bank.messages.list", suggestedId: "messages", description: "Secure messages.", input: {}, returns: "Object map keyed by id: { id, subject, from, at, read, body }.", errors: ["NOT_SUPPORTED"] },
+  { adapter: "bank.notifications.list", suggestedId: "notifications", description: "Notifications, each tagged with the place it belongs to (personal, or a company id such as beta).", input: { context: "optional: only this place" }, returns: "Object map keyed by id: { id, context, text, at, read }.", errors: ["NOT_SUPPORTED"] },
+  { adapter: "bank.requests.list", suggestedId: "requests", description: "Service requests and their status.", input: {}, returns: "Object map keyed by id: { id, type, summary, status, openedAt }.", errors: ["NOT_SUPPORTED"] },
+  { adapter: "bank.profile.get", suggestedId: "profile", description: "The customer's profile.", input: {}, returns: "{ name, email, phone, dateOfBirth, customerSince, language, address }", errors: ["NOT_SUPPORTED"] },
+  { adapter: "bank.applications.list", suggestedId: "applications", description: "Account applications (onboarding), drafts included.", input: {}, returns: "Object map keyed by id: { id, type, status 'draft'|'submitted'|'in review'|'approved'|'declined'|'active', step, data, updatedAt, productId? }.", errors: ["NOT_SUPPORTED"] },
+  { adapter: "bank.applications.get", suggestedId: "application", description: "One application, to resume where the person left off.", input: { applicationId: "id" }, returns: "The application.", errors: ["APPLICATION_NOT_FOUND", "NOT_SUPPORTED"] },
+  { adapter: "bank.applications.save", suggestedId: "saveApplication", description: "Saves an application as a draft to resume later, or sends it with submit: true. A sent application cannot be changed.", input: { applicationId: "optional: a new one is made when absent", step: "the screen to resume on", data: "the answers so far", productId: "optional", submit: "optional true" }, returns: "{ applicationId, status, step, updatedAt }", errors: ["APPLICATION_NOT_FOUND", "APPLICATION_LOCKED", "NOT_SUPPORTED"] },
   // ---- Cairo Amman Bank access journeys: outcomes come back as data ({ ok, code }) so a journey can route on them ----
   { adapter: "cab.legalEntities.list", suggestedId: "legalEntities", description: "The legal entities a customer can choose from.", input: {}, returns: "Object map keyed by id: { id, name }. Save as legal.list and use with select source." },
   { adapter: "cab.captcha.generate", suggestedId: "captcha", description: "A picture-code challenge. The sandbox returns its text so a journey can show it.", input: {}, returns: "{ serviceKey, text }. Save as captcha; send serviceKey and what the customer typed to a call that checks it." },
@@ -256,6 +348,7 @@ export function describePersonas() {
     accounts: p.accounts.map((a) => `${a.id}: ${a.name} ${a.maskedNumber}, ${a.currency} ${a.balance.toLocaleString("en-US")}`),
     beneficiaries: p.beneficiaries.map((b) => `${b.id}: ${b.displayName}`),
     limits: p.limits,
+    ...(p.identity ? { contexts: ["personal", ...p.identity.business.map((b) => `${b.id}: ${b.company.name} as ${b.company.users.find((u) => u.id === b.userId)?.roles.join(" and ")}`)], note: "One login: call bank.session.switch to move between places (a company needs bank.session.stepUp first)." } : {}),
     behaviour: p.behaviour.transferFails ? "Money-moving calls fail with CORE_UNAVAILABLE after a correct OTP." : p.behaviour.kyc === "rejected" ? "KYC rejected: no accounts, so money-moving journeys cannot start." : "Everything works.",
   }));
 }

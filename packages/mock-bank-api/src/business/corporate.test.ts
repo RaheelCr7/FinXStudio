@@ -159,3 +159,28 @@ describe("rejecting and listing", () => {
     expect(two.all()).toEqual([]); expect(ACME.users[0]!.usedToday).toBe(0);
   });
 });
+
+describe("fixes found while building the combined demo", () => {
+  it("the person who started a payment cannot reject it, even holding both roles: they withdraw it", () => {
+    const { s } = make();
+    const p = s.initiatePayment(pay({ userId: "nadia", amount: 10_000 }));
+    expect(code(() => s.rejectPayment({ userId: "nadia", paymentId: p.id }))).toBe("NOT_AUTHORISED");
+    expect(s.getPayment(p.id).status).toBe("pending_approval");
+    expect(s.withdrawPayment({ userId: "nadia", paymentId: p.id }).status).toBe("rejected");
+  });
+  it("another approver can still reject what nadia started", () => {
+    const { s } = make();
+    const p = s.initiatePayment(pay({ userId: "nadia", amount: 10_000 }));
+    expect(s.rejectPayment({ userId: "layla", paymentId: p.id, reason: "No" }).status).toBe("rejected");
+  });
+  it("release enforces the company's daily limit, and honours the flaw that switches it off", () => {
+    const small = { ...ACME, companyDailyLimit: 150_000, dualApprovalAbove: 10_000_000 };
+    for (const [flaws, outcome] of [[{}, "LIMIT_COMPANY_EXCEEDED"], [{ companyLimit: false as const }, "no error"]] as const) {
+      const s = new CorporateSandbox(small, flaws);
+      s.now = () => T;
+      const a = s.initiatePayment(pay({ amount: 100_000 })), b = s.initiatePayment(pay({ amount: 100_000, reference: "INV-2" }));
+      s.approvePayment({ userId: "hassan", paymentId: a.id });
+      expect(code(() => s.approvePayment({ userId: "hassan", paymentId: b.id })), JSON.stringify(flaws)).toBe(outcome);
+    }
+  });
+});

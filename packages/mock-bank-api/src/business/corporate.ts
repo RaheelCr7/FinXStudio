@@ -1,5 +1,5 @@
 import { currencyInfo, roundMoney } from "@finx/ui-kit";
-import { BankError } from "./errors";
+import { BankError } from "../errors";
 
 /**
  * Sandbox for corporate payments with maker-checker approval (plan, Stage 1). A company has accounts, users with roles,
@@ -7,11 +7,18 @@ import { BankError } from "./errors";
  * answers with a named error so a journey can say what went wrong. Pure logic: the clock is injectable and nothing here
  * knows about screens. A real bank's API sits behind the same `CorporateBankAdapter` contract.
  */
-export type CorpRole = "initiator" | "approver";
-/** A person may hold both roles (a finance manager who also starts payments): the four-eyes rule still stops them approving their own. */
+export type CorpRole = "initiator" | "approver" | "admin";
+/** A person may hold both roles (a finance manager who also starts payments): the four-eyes rule still stops them approving their own. An admin manages people and limits and moves no money. */
 export type CorpUser = { id: string; name: string; roles: CorpRole[]; /** most this person may send in a day, in the company's currency */ dailyLimit: number; usedToday: number };
 export type CorpAccount = { id: string; name: string; maskedNumber: string; currency: string; balance: number };
-export type CorpBeneficiary = { id: string; name: string; bank: string; maskedNumber: string };
+export type CorpBeneficiary = { id: string; name: string; bank: string; maskedNumber: string;
+  /** Where the supplier is paid, for the payment adapters: the country (see rails.ts) and the currency it receives. Absent for a supplier paid in the company's currency. */
+  country?: string; currency?: string };
+/** A saved payment a Maker can reuse; `amount` is empty for "ask me each time". */
+export type CorpTemplate = { id: string; name: string; beneficiaryId: string; amount?: number; reference: string; purpose: string };
+/** Who must approve, in what order. `sequential`: members approve one after another; `parallel`: any of them, in any order, until `required` have. */
+export type CorpSignatoryGroup = { id: string; name: string; mode: "sequential" | "parallel"; members: string[]; required: number; /** applies to payments above this, in the company's currency */ above: number };
+export type CorpAuditEntry = { at: string; userId: string; action: string; outcome: "Done" | "Refused" };
 /** A person on the company's payroll register. `salary` is their monthly pay; a payroll line may not exceed it by more than half again. */
 export type CorpEmployee = { id: string; name: string; bank: string; maskedNumber: string; salary: number };
 export type CorpCompany = {
@@ -28,6 +35,11 @@ export type CorpCompany = {
   dualApprovalAbove: number;
   /** HH:MM (UTC) after which a payment is value-dated the next working day. */
   cutoff: string;
+  /** From this amount (in the company's currency) the person starting or approving a payment confirms it with a one-time code. Absent: always. */
+  codeAbove?: number;
+  /** Payment ids run PREFIX-n from n = start; absent: pay_1, pay_2 … */
+  paymentSeq?: { prefix: string; start: number };
+  templates?: CorpTemplate[]; signatoryGroups?: CorpSignatoryGroup[]; audit?: CorpAuditEntry[];
   /** YYYY-MM-DD days the bank is closed, besides weekends. */
   holidays: string[];
 };
@@ -96,7 +108,13 @@ export class CorporateSandbox implements CorporateBankAdapter {
   now: () => number = () => Date.now();
   private company: CorpCompany;
 
-  constructor(company: CorpCompany, private flaws: Flaws = {}) { this.company = structuredClone(company); }
+  constructor(company: CorpCompany, private flaws: Flaws = {}) {
+    this.company = structuredClone(company);
+    if (company.paymentSeq) this.seq = company.paymentSeq.start - 1;
+  }
+
+  /** Puts a payment that already happened (or is waiting) into the books without running the rules, for seed data. Only the reference sandbox has this. */
+  seedPayment(p: CorpPayment) { this.payments.set(p.id, structuredClone(p)); }
 
   get summary() { return structuredClone(this.company); }
   all() { return structuredClone([...this.payments.values()]); }
@@ -163,7 +181,7 @@ export class CorporateSandbox implements CorporateBankAdapter {
     this.seq += 1;
     const { valueDate, afterCutoff } = this.valueDate();
     const p: CorpPayment = {
-      id: `pay_${this.seq}`, companyId: c.id, fromAccountId: from.id, beneficiaryId, amount, currency: from.currency, reference, ...(lines ? { lines } : {}), ...(payroll ? { period: payroll.period } : {}),
+      id: this.company.paymentSeq ? `${this.company.paymentSeq.prefix}-${this.seq}` : `pay_${this.seq}`, companyId: c.id, fromAccountId: from.id, beneficiaryId, amount, currency: from.currency, reference, ...(lines ? { lines } : {}), ...(payroll ? { period: payroll.period } : {}),
       status: "pending_approval", initiatedBy: user.id, initiatedAt: new Date(this.now()).toISOString(), valueDate, afterCutoff,
       required: this.flaws.dualApproval !== false && (payroll || amount > c.dualApprovalAbove) ? 2 : 1, approvals: [],
     };
@@ -257,10 +275,10 @@ export class CorporateSandbox implements CorporateBankAdapter {
     const c = this.company;
     const from = this.account(p.fromAccountId);
     if (p.amount > from.balance) { p.approvals.pop(); throw new BankError("INSUFFICIENT_FUNDS", "Insufficient funds"); }
-    if (c.companyUsedToday + p.amount > c.companyDailyLimit) { p.approvals.pop(); throw new BankError("LIMIT_COMPANY_EXCEEDED", "This is above the company's daily limit"); }
+    if (this.flaws.companyLimit !== false && c.companyUsedToday + p.amount > c.companyDailyLimit) { p.approvals.pop(); throw new BankError("LIMIT_COMPANY_EXCEEDED", "This is above the company's daily limit"); }
     from.balance = roundMoney(from.balance - p.amount, from.currency);
     c.companyUsedToday = roundMoney(c.companyUsedToday + p.amount, c.currency);
-    p.status = "released"; p.releasedAt = new Date(this.now()).toISOString(); p.releaseReference = `CORP-${p.valueDate.replace(/-/g, "")}-${String(p.id.split("_")[1]).padStart(4, "0")}`;
+    p.status = "released"; p.releasedAt = new Date(this.now()).toISOString(); p.releaseReference = `CORP-${p.valueDate.replace(/-/g, "")}-${p.id.replace(/\D/g, "").padStart(4, "0")}`;
   }
 
   rejectPayment(input: { userId: string; paymentId: string; reason?: string }): CorpPayment {
@@ -268,6 +286,8 @@ export class CorporateSandbox implements CorporateBankAdapter {
     const p = this.payment(input.paymentId);
     if (p.status !== "pending_approval") throw new BankError("PAYMENT_NOT_PENDING", `This payment is already ${p.status.replace("_", " ")}`);
     if (!user.roles.includes("approver")) throw new BankError("NOT_AUTHORISED", `${user.name} is not allowed to reject payments`);
+    // the person who started a payment takes it back with withdraw; rejecting is the approvers' call
+    if (p.initiatedBy === user.id) throw new BankError("NOT_AUTHORISED", `${user.name} started this payment: withdraw it instead of rejecting it`);
     p.status = "rejected"; p.rejectedBy = user.id; p.rejectedAt = new Date(this.now()).toISOString();
     p.rejectReason = (input.reason ?? "").trim();
     // the payment will not happen, so what it used of the person's day is given back

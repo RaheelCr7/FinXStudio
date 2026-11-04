@@ -8,8 +8,9 @@ export const firstName = (persona: Pick<Persona, "name">) => persona.name.split(
 export const initials = (persona: Pick<Persona, "name">) => persona.name.split(" ").map((x) => x[0]).slice(0, 2).join("");
 
 /** Everything the customer has: own accounts plus linked banks, leaving out credit lines. */
-export function totalBalance(persona: Pick<Persona, "accounts">, fin: Pick<Finance, "linked">): number {
-  return persona.accounts.reduce((s, x) => s + x.balance, 0) + fin.linked.reduce((s, x) => s + (x.kind === "Credit" ? 0 : x.balance), 0);
+export function totalBalance(persona: Pick<Persona, "accounts">, fin: Pick<Finance, "linked" | "currency">): number {
+  // balances are added up in the app's currency only: an account in another currency is never added to them
+  return persona.accounts.filter((x) => x.currency === fin.currency).reduce((s, x) => s + x.balance, 0) + fin.linked.reduce((s, x) => s + (x.kind === "Credit" ? 0 : x.balance), 0);
 }
 export const hasAccounts = (persona: Pick<Persona, "accounts">, fin: Pick<Finance, "linked">) => persona.accounts.length + fin.linked.length > 0;
 

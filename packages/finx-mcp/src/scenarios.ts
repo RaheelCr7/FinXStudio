@@ -22,7 +22,7 @@ export async function runScenarios(journey: Journey, over: Overrides = {}): Prom
     const opts: SimOptions = {
       journey, persona: t.persona, lang: t.lang ?? journey.locale.default, steps: t.steps as unknown as Step[],
       provider: (over.provider ?? (t.provider as ProviderId | undefined)), now: t.now ? Date.parse(t.now) : undefined,
-      setup: t.setup as SimOptions["setup"], flaws: over.flaws,
+      setup: t.setup as SimOptions["setup"], flaws: over.flaws, conditions: t.conditions,
     };
     try {
       const r = await simulate(opts);

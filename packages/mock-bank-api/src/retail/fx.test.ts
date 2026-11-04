@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { MockBank, customerRate, midRate, FX_SPREAD } from "./index";
+import { MockBank, customerRate, midRate, FX_SPREAD } from "../index";
 
 const verified = async (clock?: () => number) => {
   const b = new MockBank("hina"); if (clock) b.now = clock;
