@@ -178,4 +178,20 @@ describe("projects", () => {
     await expect(projects.createProject({ name: "Odd Look", preset: "meezan", accent: "#0F6E56", currency: "USD", look: "nope" })).rejects.toThrow(/library/);
     await expect(projects.createProject({ name: "Odd Radius", preset: "meezan", accent: "#0F6E56", currency: "USD", radius: { md: 99 } })).rejects.toThrow(/0 to 40/);
   });
+
+  it("sets which bank API a project runs against, stores nothing for the default, and can go back", async () => {
+    expect((await projects.getProject("meezan"))!.bankApi).toBeUndefined();
+    const r = await projects.updateProjectBankApi("meezan", { bankApi: "bank-b" });
+    expect(r.previous).toBe("reference"); expect(r.project.bankApi).toBe("bank-b");
+    expect(r.project.brand.bankApi).toBe("bank-b"); // the apps read it from the resolved brand
+    expect(JSON.parse(readFileSync(file, "utf8")).meezan.bankApi).toBe("bank-b");
+    const back = await projects.updateProjectBankApi("meezan", { bankApi: "reference" });
+    expect(back.previous).toBe("bank-b");
+    expect("bankApi" in JSON.parse(readFileSync(file, "utf8")).meezan).toBe(false); // the default is stored as nothing
+  });
+  it("refuses a bank API it does not know, and a project that does not exist", async () => {
+    await expect(projects.updateProjectBankApi("meezan", { bankApi: "bank-z" })).rejects.toThrow(/Choose one of: reference, bank-b/);
+    await expect(projects.updateProjectBankApi("meezan", null)).rejects.toThrow(/Choose one of/);
+    await expect(projects.updateProjectBankApi("nope", { bankApi: "bank-b" })).rejects.toThrow(/No project/);
+  });
 });

@@ -16,7 +16,7 @@ import { Card, Sheet, TabBar, tab } from "./ui";
 export function BankWorkxShell() {
   const { c, r } = useTheme();
   // Everything that is not drawing (who is signed in, screens, Studio, journeys, payments, notices) lives in @finx/bank-client, shared with the web app.
-  const [app] = useState(() => new BankApp({ preset: BRAND_INFO.preset, live, studioUrl: DEFAULT_STUDIO_URL }));
+  const [app] = useState(() => new BankApp({ preset: BRAND_INFO.preset, bankApi: BRAND_INFO.bankApi, live, studioUrl: DEFAULT_STUDIO_URL }));
   const s = useBankApp(app);
   const [editingServer, setEditingServer] = useState(false);
   const loginScroller = useRef<React.ComponentRef<typeof ScrollView>>(null);

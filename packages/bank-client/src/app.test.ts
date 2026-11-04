@@ -143,3 +143,21 @@ describe("payments and notices", () => {
     a.dispose();
   });
 });
+
+describe("the project's bank API", () => {
+  it("a corporate customer's company sits behind the API the project runs against", async () => {
+    const ids: Record<string, string> = {};
+    for (const bankApi of [undefined, "reference", "bank-b"] as const) {
+      const app = make("meezan", down, { defaultPersona: "acme", bankApi });
+      await app.bank.call("bank.otp.send"); await app.bank.call("bank.otp.verify", { code: "482100" });
+      const p = await app.adapter("corp.payments.initiate", { userId: "sara", fromAccountId: "acme_ops", beneficiaryId: "sup_textile", amount: 1000 });
+      ids[String(bankApi)] = p.id;
+    }
+    expect(ids["undefined"]).toBe("pay_1"); expect(ids["reference"]).toBe("pay_1");
+    expect(ids["bank-b"]).toBe("TXN-000001"); // Bank B numbers its own transactions
+  });
+  it("ignores a bank API it does not know instead of breaking", () => {
+    const app = make("meezan", down, { defaultPersona: "acme", bankApi: "bank-z" });
+    expect(app.persona.id).toBe("acme");
+  });
+});

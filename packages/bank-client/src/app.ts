@@ -1,4 +1,4 @@
-import { MockBank, personasFor, type Persona } from "@finx/mock-bank-api";
+import { MockBank, isProviderId, personasFor, type Persona } from "@finx/mock-bank-api";
 import type { Preset } from "@finx/ui-kit";
 import { slugIs, type CatalogResult, type Live, type createLive } from "./live";
 import { usd } from "./format";
@@ -38,6 +38,8 @@ export type BankAppDeps = {
   projectId?: string;
   live: ReturnType<typeof createLive>;
   studioUrl: string;
+  /** The bank API of the project (a corporate customer's company sits behind it). Unset: the reference sandbox. */
+  bankApi?: string;
   /** The customer selected on the sign-in screen at first. Defaults to the first one for this bank. */
   defaultPersona?: string;
   money?: (n: number) => string;
@@ -59,7 +61,7 @@ export class BankApp {
 
   constructor(private deps: BankAppDeps) {
     const personaId = deps.defaultPersona ?? personasFor(deps.preset, deps.projectId)[0]?.id ?? "ayesha";
-    this.current = new MockBank(personaId);
+    this.current = this.newBank(personaId);
     this.state = {
       screen: "login", personaId, lang: "en", tab: "dashboard", budgetId: null, investView: null, sheet: null, subId: null, paying: false, toast: null, tick: 0,
       catalog: { entries: deps.live.bundledEntries(), source: "bundled" }, active: null, opening: null, studioUrl: deps.studioUrl,
@@ -81,7 +83,8 @@ export class BankApp {
   money = (n: number) => (this.deps.money ?? usd)(n);
 
   private set(patch: Partial<AppState>) { this.state = { ...this.state, ...patch }; for (const l of [...this.listeners]) l(); }
-  private freshBank() { this.current = new MockBank(this.state.personaId); }
+  private newBank(personaId: string) { return new MockBank(personaId, { corpProvider: isProviderId(this.deps.bankApi) ? this.deps.bankApi : undefined }); }
+  private freshBank() { this.current = this.newBank(this.state.personaId); }
 
   // ---- signing in and out ------------------------------------------------------------------------------------------
   selectPersona(id: string) { this.set({ personaId: id }); this.freshBank(); this.set({ tick: this.state.tick + 1 }); }
