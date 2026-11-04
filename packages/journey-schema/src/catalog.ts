@@ -7,6 +7,7 @@ import { payrollRun } from "./fixtures/payroll-run";
 import { withdrawPayment } from "./fixtures/withdraw-payment";
 import { convertCurrency } from "./fixtures/convert-currency";
 import { ownTransfer } from "./fixtures/own-transfer";
+import { manageBeneficiary } from "./fixtures/manage-beneficiary";
 import { addMoney, addCard, connectAccount, createBudget, invest, sellInvestment } from "./fixtures/bankworkx";
 import { cabJourneys } from "./fixtures/cab";
 
@@ -80,6 +81,11 @@ export const catalog: CatalogEntry[] = [
     id: ownTransfer.slug, category: "Payments", madeFor: "bankworkx", journey: ownTransfer,
     summary: "Move money between your own accounts: instant and free in the same currency; converted at the mid-market rate with a separate 0.20% fee and a rate held for 30 seconds in different currencies.",
     highlights: ["Same-currency move with a note", "Mid-market rate, no margin", "Type what you send or what you get", "Rate that runs out and renews", "One-time code, locked after 3 wrong codes", "Timeout and unavailable screens"],
+  },
+  {
+    id: manageBeneficiary.slug, category: "Payments", madeFor: "bankworkx", journey: manageBeneficiary,
+    summary: "Save a person or company to pay, change their details, or remove them. The bank checks the details and the name; a new or changed payee is limited to 500.00 USD for 24 hours.",
+    highlights: ["Add a BankWorkx customer, a payee at a US, European, UK or Middle East bank, or abroad", "Name check with Use for a close match", "One-time code to add or change the name or account", "Nickname and label changes need no code", "Delete with or without the scheduled payments that use the payee", "Timeout and unavailable screens"],
   },
   {
     id: connectAccount.slug, category: "Accounts", madeFor: "bankworkx", journey: connectAccount,
