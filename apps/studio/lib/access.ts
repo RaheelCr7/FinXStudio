@@ -1,6 +1,7 @@
 import { promises as fs } from "node:fs";
 import path from "node:path";
 import { StoreError } from "./store";
+import { isProduction } from "./profile";
 import { ACTIONS, BUILTIN_ROLES, DEFAULT_SELF_PUBLISH, SELF_PUBLISH, isAction, type Action, type RoleDef, type SelfPublish } from "./roles";
 
 const dir = () => process.env.FINX_DATA_DIR ?? path.join(process.cwd(), ".data");
@@ -83,6 +84,7 @@ export async function setPolicy(projectId: string, selfPublish: unknown): Promis
 export async function selfPublishFor(projectIds: string[]): Promise<SelfPublish> {
   const p = await listPolicies();
   const order: SelfPublish[] = ["never", "admin", "anyone"];
-  const rules = projectIds.map((id) => p[id] ?? DEFAULT_SELF_PUBLISH);
+  // production: a project nobody has configured defaults to four-eyes (a change must be published by someone else)
+  const rules = projectIds.map((id) => p[id] ?? (isProduction() ? "never" : DEFAULT_SELF_PUBLISH));
   return order.find((r) => rules.includes(r)) ?? DEFAULT_SELF_PUBLISH;
 }

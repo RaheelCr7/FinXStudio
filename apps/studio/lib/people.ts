@@ -3,6 +3,8 @@ import path from "node:path";
 import { StoreError } from "./store";
 import { listRoles } from "./access";
 import { listProjects } from "./projects";
+import { isProduction, COOKIE_SESSION } from "./profile";
+import { cookieValue, isServiceRequest, verifySession } from "./session";
 import { canDo, COOKIE_USER, roleLabel, type Access, type Action, type Role, type RoleDef } from "./roles";
 
 export type Person = { id: string; name: string; /** the main role: applies everywhere unless a project below says otherwise */ role: Role; /** a different role in some projects, by project id */ access?: Access };
@@ -103,7 +105,21 @@ export async function actorFromId(id: string | undefined): Promise<Person> {
   const people = await listPeople();
   return people.find((p) => p.id === id) ?? people.find((p) => p.role === "admin") ?? people[0]!;
 }
+export { isServiceRequest };
+
 export async function actorOf(req: Request): Promise<Person> {
+  if (isProduction()) {
+    const people = await listPeople();
+    if (isServiceRequest(req)) {
+      const who = people.find((p) => p.id === process.env.FINX_SERVICE_PERSON);
+      if (!who) throw new StoreError(401, "The service token has no person to act as (FINX_SERVICE_PERSON)");
+      return who;
+    }
+    const id = verifySession(cookieValue(req.headers.get("cookie"), COOKIE_SESSION));
+    const who = id ? people.find((p) => p.id === id) : undefined;
+    if (!who) throw new StoreError(401, "Sign in to use Studio");
+    return who;
+  }
   const jar = req.headers.get("cookie") ?? "";
   const id = jar.split(/;\s*/).find((c) => c.startsWith(`${COOKIE_USER}=`))?.slice(COOKIE_USER.length + 1);
   return actorFromId(id ? decodeURIComponent(id) : undefined);
@@ -116,6 +132,7 @@ export async function actorOf(req: Request): Promise<Person> {
 export async function requireCan(req: Request, action: Action, projects?: string[]): Promise<Person> {
   const who = await actorOf(req);
   const defs = await listRoles();
+  if (action === "publish" && isProduction() && isServiceRequest(req)) throw new StoreError(403, "Agents never publish. A person publishes in Studio.");
   if (!canDo(who, action, projects, defs)) {
     const names = projects?.length && !["people", "projects"].includes(action) ? ` in ${projects.join(" and ")}` : "";
     const have = roleLabel(projects?.length && who.access?.[projects[0]!] ? who.access[projects[0]!]! : who.role, defs);
