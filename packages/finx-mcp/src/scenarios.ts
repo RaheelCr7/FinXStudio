@@ -108,15 +108,15 @@ export function bankMutants(journey: Journey): Mutant[] {
     ["employeeChecks", "The bank pays anyone, and any amount, on a payroll file", payroll],
     ["payrollPeriod", "The bank takes any pay period and lets a period be paid twice", payroll],
     // a retail customer's own accounts: the rules of moving and converting money between them
-    ["sameAccount", "The bank lets money move from an account to itself", uses(/^bank\.transfers\.own$/)],
-    ["canDebit", "The bank lets an account that is frozen send money", uses(/^bank\.(transfers\.own|fx\.quote|payments\.(quote|create)|bills\.(quote|pay)|topup\.(check|create))$/)],
+    ["sameAccount", "The bank lets money move from an account to itself", uses(/^bank\.(transfers\.own|schedules\.(check|create))$/)],
+    ["canDebit", "The bank lets an account that is frozen send money", uses(/^bank\.(transfers\.own|fx\.quote|payments\.(quote|create)|bills\.(quote|pay)|topup\.(check|create)|schedules\.(check|create))$/)],
     ["funds", "The bank lets an account send more than it has", uses(/^bank\.(transfers\.own|fx\.(quote|convert)|payments\.(quote|create)|bills\.(quote|pay)|topup\.(check|create))$/)],
     ["quoteExpiry", "The bank converts at a rate that has run out", uses(/^bank\.(fx\.convert|payments\.create)$/)],
     ["quoteReplay", "The bank lets one rate be used twice", uses(/^bank\.(fx\.convert|payments\.create)$/)],
     // sending money to someone else: the speeds and their limits, the daily limit, the new-payee allowance, screening, purpose and address
     ["railLimit", "The bank sends a payment that is over the limit of its speed", uses(/^bank\.payments\.quote$/)],
-    ["dailyLimit", "The bank ignores the customer's daily limit", uses(/^bank\.(payments\.(quote|create)|bills\.(quote|pay)|topup\.(check|create))$/)],
-    ["coolingOff", "The bank ignores the allowance of a payee added in the last 24 hours", uses(/^bank\.payments\.(quote|create)$/)],
+    ["dailyLimit", "The bank ignores the customer's daily limit", uses(/^bank\.(payments\.(quote|create)|bills\.(quote|pay)|topup\.(check|create)|schedules\.(check|create))$/)],
+    ["coolingOff", "The bank ignores the allowance of a payee added in the last 24 hours", uses(/^bank\.(payments\.(quote|create)|schedules\.(check|create))$/)],
     ["sanctions", "The bank sends a payment to a payee that screening holds", uses(/^bank\.payments\.create$/)],
     ["purposeRule", "The bank takes a payment abroad without a purpose", uses(/^bank\.payments\.quote$/)],
     ["addressRule", "The bank takes a payment abroad without the payee's address when the rules ask for it", uses(/^bank\.payments\.quote$/)],
@@ -127,6 +127,12 @@ export function bankMutants(journey: Journey): Mutant[] {
     ["billMemory", "The bank forgets what was already paid on a bill", uses(/^bank\.bills\.(lookup|quote|pay)$/)],
     ["billChanged", "The bank pays a bill whose amount due changed since the person saw it", uses(/^bank\.bills\.pay$/)],
     ["billCurrency", "The bank pays a bill from an account in another currency when that is switched off", uses(/^bank\.bills\.(quote|pay)$/)],
+    // scheduled payments: how many, the first date, the end, and when a payment can still be changed
+    ["scheduleLimit", "The bank lets a customer have more than 20 scheduled payments", uses(/^bank\.schedules\.(check|create)$/)],
+    ["scheduleDates", "The bank takes a first date that is today, more than 12 months away or not a business day", uses(/^bank\.schedules\.(check|create|update)$/)],
+    ["scheduleEnd", "The bank takes an end date before the start, one off the list, or a number of payments out of range", uses(/^bank\.schedules\.(check|create|update)$/)],
+    ["scheduleCutoff", "The bank changes or cancels a payment after changes closed", uses(/^bank\.schedules\.(get|check|update|cancel)$/)],
+    ["scheduleRunning", "The bank changes or cancels a payment on the day it runs", uses(/^bank\.schedules\.(get|check|update|cancel)$/)],
     // topping up a mobile number: the operator's own amounts, the numbers the operator cannot top up, and the day's allowance of one number
     ["topupAmount", "The bank tops up an amount that is not one the operator offers", uses(/^bank\.topup\.(check|create)$/)],
     ["topupNumber", "The bank tops up a number the operator cannot top up or cannot reach", uses(/^bank\.topup\.(check|create)$/)],

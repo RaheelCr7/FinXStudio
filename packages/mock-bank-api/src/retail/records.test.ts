@@ -68,7 +68,7 @@ describe("the rest of Alex's relationship", () => {
     expect((await alex().call("bank.cards.get", { cardId: "card_credit" })).creditLimit).toBe(12_000);
     expect(await code(alex().call("bank.cards.get", { cardId: "x" }))).toBe("CARD_NOT_FOUND");
   });
-  it("deposits, goals, loans with a schedule that pays off, schedules, profile, messages, notifications, requests", async () => {
+  it("deposits, goals, loans with a schedule that pays off, profile, messages, notifications, requests", async () => {
     const b = alex();
     expect(Object.values(await b.call("bank.deposits.list")).map((d: any) => d.status)).toEqual(["active", "matured"]);
     expect(Object.values(await b.call("bank.goals.list")).map((g: any) => g.name)).toEqual(["Holiday", "Emergency fund"]);
@@ -79,7 +79,6 @@ describe("the rest of Alex's relationship", () => {
     expect(loan.schedule.at(-1).balance).toBe(0);
     expect(loan.schedule.reduce((s: number, x: any) => s + x.principal, 0)).toBeCloseTo(7480, 2);
     expect(await code(b.call("bank.loans.get", { loanId: "x" }))).toBe("LOAN_NOT_FOUND");
-    expect(Object.keys(await b.call("bank.schedules.list"))).toEqual(["sch_rent"]);
     expect(await b.call("bank.profile.get")).toMatchObject({ name: "Alex Morgan", email: "alex.morgan@example.com" });
     expect(Object.keys(await b.call("bank.messages.list"))).toHaveLength(3);
     expect(Object.values(await b.call("bank.notifications.list", { context: "beta" })).map((n: any) => n.id)).toEqual(["n_1"]);

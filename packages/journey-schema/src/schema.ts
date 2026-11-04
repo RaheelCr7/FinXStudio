@@ -164,7 +164,7 @@ export const Journey = z.object({
      */
     conditions: z.object({
       timeout: z.array(z.string()).optional(), unavailable: z.array(z.string()).optional(), latencyMs: z.number().int().nonnegative().optional(),
-      empty: z.array(z.string()).optional(), frozen: z.array(z.string()).optional(), transferFails: z.boolean().optional(), limitUsed: z.number().nonnegative().optional(),
+      empty: z.array(z.string()).optional(), frozen: z.array(z.string()).optional(), transferFails: z.boolean().optional(), limitUsed: z.number().nonnegative().optional(), closedDays: z.array(z.string().regex(/^\d{4}-\d{2}-\d{2}$/)).optional(),
     }).optional(),
     /** Calls made on the bank before the walk starts, for example a payment waiting for approval. */
     setup: z.array(z.object({ adapter: z.string(), input: z.record(z.string(), z.unknown()).optional(), saveAs: z.string().regex(/^[a-zA-Z][a-zA-Z0-9]*$/).optional() })).optional(),

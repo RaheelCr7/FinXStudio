@@ -12,6 +12,7 @@ import { hit, isListAdapter } from "./conditions";
 import { DEFAULT_CONFIG, journeyEnabled, type BankConfig } from "./config";
 import { STEP_UP_SECONDS, contextsOf, type IdentityDef } from "./identity";
 import { assertSandboxAllowed } from "./policy";
+import { addDays, addMonths, scheduleLine, type AmountMode, type Freq, type ScheduleDetail, type ScheduleKind } from "./retail/schedules";
 import { hoursSince, MAX_PAYEES, type NameCheck, type PayeeKind, type PayeeRegion } from "./retail/payees";
 export { RAILS, PURPOSES, RELATIONSHIPS, type SendType, type SpeedClass } from "./retail/payments";
 export { CUSTOMERS, DIRECTORY, COOLING_OFF_HOURS, COOLING_OFF_USD, MAX_PAYEES, type PayeeKind, type PayeeRegion } from "./retail/payees";
@@ -54,7 +55,7 @@ export type SavedBiller = { id: string; nickname: string; billerId: string; refe
 /** A mobile number the customer saved to top up again: the operator, the number and a name of their own. */
 export type SavedNumber = { id: string; name: string; operatorId: string; number: string };
 /** A payment set up to repeat, so a payee that is used by one cannot be deleted. */
-export type Schedule = { id: string; beneficiaryId: string; name: string; text: string };
+export type Schedule = { id: string; beneficiaryId: string; name: string; text: string } & Partial<ScheduleDetail>;
 export type Persona = {
   id: string;
   /** Which bank app this sandbox customer belongs to. */
@@ -106,6 +107,41 @@ const alexPayees = (): Beneficiary[] => [
   { id: "ben_lena", displayName: "Lena Fischer", bank: "Bank (IBAN DE)", maskedNumber: "••4931", addedAt: 0, addedAgoMs: 30 * day, kind: "domestic", region: "eu", country: "DE", currency: "EUR", iban: "DE44500105175407324931", key: "iban:DE44500105175407324931", label: "Friend", verified: true, nameCheck: "match" },
   { id: "ben_james", displayName: "James Whitfield", bank: "UK bank (sort code 20-00-00)", maskedNumber: "••9911", addedAt: 0, addedAgoMs: 120 * day, kind: "domestic", region: "uk", country: "GB", currency: "GBP", sortCode: "20-00-00", accountNumber: "55779911", key: "uk:200000:55779911", label: "Landlord", verified: true, nameCheck: "match" },
 ];
+/** Payees for the scheduled payments: four more people and companies the schedules pay (all at US banks, added long ago). */
+const alexSchedPayees = (): Beneficiary[] => {
+  const us = (id: string, displayName: string, bank: string, routing: string, account: string): Beneficiary => ({ id, displayName, bank, maskedNumber: `••${account.slice(-4)}`, addedAt: 0, addedAgoMs: 80 * day, kind: "domestic", region: "us", country: "US", currency: "USD", routing, accountNumber: account, accountType: "checking", key: `us:${routing}:${account}`, verified: false, nameCheck: "na" });
+  return [
+    ...alexPayees(),
+    us("ben_harbor", "Harbor Estates", "Harbor Trust", "121000248", "300008841"),
+    us("ben_maya", "Maya Chen", "Northwind Bank", "031201360", "100004417"),
+    us("ben_omar", "Omar Haddad", "Summit Federal", "021000021", "400007302"),
+    us("ben_peak", "Peak Fitness", "Apex Credit Union", "011000015", "500002290"),
+  ];
+};
+/**
+ * A schedule of the Payments cast. `done` payments were dealt with before today, so the anchor is worked back from the next date
+ * (the sandbox clock of the demo is Tue 3 Nov 2026; a scenario fixes it there).
+ */
+const seedSchedule = (id: string, name: string, d: { kind: ScheduleKind; targetId: string; amount: number | null; mode?: AmountMode; frequency: Freq; next: string; done: number; paid?: number; endsOn?: string; endCount?: number; status?: ScheduleDetail["status"]; endedOn?: string; retry?: boolean; from?: string }): Schedule => {
+  const mode = d.mode ?? "fixed", back: Record<Freq, string> = { once: d.next, weekly: addDays(d.next, -7 * d.done), biweekly: addDays(d.next, -14 * d.done), monthly: addMonths(d.next, -d.done), quarterly: addMonths(d.next, -3 * d.done) };
+  return {
+    id, beneficiaryId: d.kind === "payee" ? d.targetId : "", name, text: scheduleLine(name, d.frequency, d.next, mode, d.amount, "USD"),
+    kind: d.kind, targetId: d.targetId, fromAccountId: d.from ?? "acc_main", amountMode: mode, amount: d.amount, currency: "USD", frequency: d.frequency, anchor: back[d.frequency],
+    done: d.done, paid: d.paid ?? d.done, nextRunOn: d.next, endsOn: d.endsOn ?? null, endCount: d.endCount ?? null, status: d.status ?? "active", reminder: true, retry: d.retry ?? false, fails: 0, ...(d.endedOn ? { endedOn: d.endedOn } : {}),
+  };
+};
+/** The eight schedules of the Payments cast, and one that ended. */
+const alexSchedules = (): Schedule[] => [
+  seedSchedule("SCH-1001", "Rent", { kind: "payee", targetId: "ben_harbor", amount: 1450, frequency: "monthly", next: "2026-12-01", done: 11 }),
+  seedSchedule("SCH-1002", "Savings top-up", { kind: "own", targetId: "acc_save", amount: 100, frequency: "weekly", next: "2026-11-06", done: 40 }),
+  seedSchedule("SCH-1003", "Harbor Insurance", { kind: "bill", targetId: "sb_harbor", amount: 400, mode: "full", frequency: "quarterly", next: "2026-11-04", done: 4 }),
+  seedSchedule("SCH-1004", "Peak Fitness", { kind: "payee", targetId: "ben_peak", amount: 39.99, frequency: "monthly", next: "2026-11-03", done: 10 }),
+  seedSchedule("SCH-1005", "Lena Fischer", { kind: "payee", targetId: "ben_lena", amount: 200, frequency: "monthly", next: "2026-11-16", done: 5, endCount: 12 }),
+  seedSchedule("SCH-1006", "Maya Chen", { kind: "payee", targetId: "ben_maya", amount: 250, frequency: "once", next: "2026-11-12", done: 0 }),
+  seedSchedule("SCH-1007", "James Whitfield", { kind: "payee", targetId: "ben_james", amount: 100, frequency: "biweekly", next: "2026-11-13", done: 12, endsOn: "2027-03-26" }),
+  seedSchedule("SCH-1008", "Omar Haddad", { kind: "payee", targetId: "ben_omar", amount: 500, frequency: "monthly", next: "2026-11-20", done: 3, status: "paused" }),
+  seedSchedule("SCH-0900", "Old gym", { kind: "payee", targetId: "ben_peak", amount: 30, frequency: "monthly", next: "2026-08-03", done: 8, status: "completed", endedOn: "2026-08-03" }),
+];
 export const personas: Record<string, Persona> = {
   ayesha: {
     id: "ayesha", brand: "meezan", name: "Ayesha Rahman", phone: "+92 300 1234471",
@@ -133,7 +169,6 @@ export const personas: Record<string, Persona> = {
     id: "alex", brand: "bankworkx", name: "Alex Morgan", phone: "+1 415 555 0142",
     accounts: alexAccounts().map((a) => ({ ...a, kind: a.id === "acc_save" ? "savings" as const : "current" as const, available: a.id === "acc_main" ? 8602.36 : a.balance })),
     beneficiaries: alexPayees(),
-    schedules: [{ id: "sch_rent", beneficiaryId: "ben_james", name: "Rent", text: "Rent · Monthly, 1 Dec, $1,450.00" }],
     limits: { daily: 50000, usedToday: 0 },
     limitsByCurrency: { EUR: { daily: 20000, usedToday: 0 }, AED: { daily: 100000, usedToday: 0 } },
     finance: alexFinance(),
@@ -162,7 +197,10 @@ export const personas: Record<string, Persona> = {
     id: "alexpayees", brand: "bankworkx", name: "Alex Morgan (saved payees)", phone: "+1 415 555 0142",
     accounts: alexAccounts(),
     beneficiaries: alexPayees(),
-    schedules: [{ id: "sch_rent", beneficiaryId: "ben_james", name: "Rent", text: "Rent · Monthly, 1 Dec, $1,450.00" }],
+    schedules: [{
+      // the older entry, also described the way the Payments journeys read a schedule, so it can be changed or cancelled (its id and text stay as they were)
+      ...seedSchedule("SCH-RENT", "Rent", { kind: "payee", targetId: "ben_james", amount: 1450, frequency: "monthly", next: "2026-12-01", done: 11 }), id: "sch_rent", text: "Rent · Monthly, 1 Dec, $1,450.00",
+    }],
     limits: { daily: 50000, usedToday: 0 },
     limitsByCurrency: { EUR: { daily: 20000, usedToday: 0 }, AED: { daily: 100000, usedToday: 0 } },
     finance: alexFinance(),
@@ -202,6 +240,23 @@ export const personas: Record<string, Persona> = {
       { id: "sn_maya", name: "Maya", operatorId: "aster", number: "5550987654" },
       { id: "sn_lena", name: "Lena", operatorId: "bright", number: "5550765432" },
     ],
+    limits: { daily: 50000, usedToday: 0 },
+    limitsByCurrency: { EUR: { daily: 20000, usedToday: 0 }, AED: { daily: 100000, usedToday: 0 } },
+    finance: alexFinance(),
+    behaviour: { otpCode: "482100", kyc: "verified" },
+  },
+  // Alex with the Payments cast's accounts, ten saved payees, three saved billers and eight scheduled payments (and one that ended), for scheduling,
+  // changing and cancelling payments. Separate from the others because their tests count what they have.
+  alexsched: {
+    id: "alexsched", brand: "bankworkx", name: "Alex Morgan (scheduled payments)", phone: "+1 415 555 0142",
+    accounts: alexAccounts(),
+    beneficiaries: alexSchedPayees(),
+    savedBillers: [
+      { id: "sb_harbor", nickname: "Harbor Insurance", billerId: "harbor_insurance", reference: "HI12345678" },
+      { id: "sb_card", nickname: "Northwind Card", billerId: "northwind_card", reference: "1234567890123456" },
+      { id: "sb_power", nickname: "Home electricity", billerId: "city_power", reference: "4400123456" },
+    ],
+    schedules: alexSchedules(),
     limits: { daily: 50000, usedToday: 0 },
     limitsByCurrency: { EUR: { daily: 20000, usedToday: 0 }, AED: { daily: 100000, usedToday: 0 } },
     finance: alexFinance(),
@@ -306,6 +361,8 @@ export type SandboxConditions = {
   transferFails?: boolean;
   /** Money already sent today, against the daily limit of the customer's main currency (to reach the limit without sending it). */
   limitUsed?: number;
+  /** Dates (YYYY-MM-DD) the bank is closed on top of Saturdays and Sundays: no scheduled payment is made, or can start, on them. */
+  closedDays?: string[];
 };
 /** How long a journey waits for the bank before it treats the call as timed out. */
 export const ANSWER_LIMIT_MS = 10_000;
@@ -341,7 +398,7 @@ export class MockBank {
     const clock = (prov: CorporateProvider) => { prov.now = () => this.now(); return prov; };
     if (this.p.identity) for (const b of this.p.identity.business) { const prov = clock(createCorporateProvider("reference", b.company, options.corpFlaws)); seedPayments(b.id, prov); this.providers.set(b.id, prov); }
     else if (this.p.corp) this.providers.set(this.p.corp.id, clock(createCorporateProvider(options.corpProvider ?? "reference", this.p.corp, options.corpFlaws)));
-    this.retail = new RetailSandbox(this.p, { now: () => this.now(), otp: this.otp, conditions: () => this.conditions, flaws: options.corpFlaws ?? {}, config: () => this.config });
+    this.retail = new RetailSandbox(this.p, { now: () => this.now(), otp: this.otp, conditions: () => this.conditions, flaws: options.corpFlaws ?? {}, config: () => this.config, setNow: (fn) => { this.now = fn; } });
     this.business = new BusinessSandbox({
       now: () => this.now(), otp: this.otp, transferFails: () => !!this.p.behaviour.transferFails, config: () => this.config, conditions: () => this.conditions,
       provider: () => this.activeProvider(), actor: () => this.actor(),

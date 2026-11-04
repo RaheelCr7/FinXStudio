@@ -8,7 +8,8 @@ import { BANKS, cardNetwork, luhnValid } from "./finance";
 import { customerRate, midRate, priceQuote, fxSupports, DEFAULT_FX, BANKWORKX_FX, QUOTE_TTL_SECONDS, type FxConfig, type Quote } from "./fx";
 import { CabSandbox } from "./cab";
 import { checkName, checkPayee, COOLING_OFF_HOURS, COOLING_OFF_USD, COUNTRY_RULES, findCustomer, hoursSince, MAX_PAYEES, sendTypeOf, type NameCheck, type PayeeDetails, type PayeeInput, type PayeeKind, type PayeeRegion } from "./payees";
-import { AUTOPAY_CATEGORIES, autopayPlan, BANKWORKX_BILLERS, BILL_CURRENCY, billOf, billCase, choicesOf, dayLabel, limitsOf, normaliseRef, RAISE_CENTS, validRef, type Biller } from "./bills";
+import { AUTOPAY_CATEGORIES, autopayPlan, BANKWORKX_BILLERS, BILL_CURRENCY, billOf, billCase, choicesOf, dayLabel, limitsOf, minimumCents, normaliseRef, RAISE_CENTS, validRef, type Biller } from "./bills";
+import { AHEAD_MONTHS, amountText, addDays, addMonths, changeState, dayName, END_DATES, FREQUENCIES, isFreq, isOpen, isoOf, isWeekday, MAX_ACTIVE, msOf, nextOpen, nominal, remaining, runDate, scheduleLine, upcoming, validIso, type AmountMode, type Freq, type ScheduleDetail, type ScheduleKind } from "./schedules";
 import { amountChoices, dayKey, marketOf, normaliseNumber, numberCase, OPERATORS, receiptDate, TOPUP_CURRENCY, TOPUP_NUMBER_DAILY, validNumber } from "./topup";
 import { ADDRESS_RULE_USD, businessDays, money, PAYMENT_QUOTE_SECONDS, PURPOSES, RELATIONSHIPS, REPEATS, SANCTIONS_NAME, SENDER_PAYS_ALL, speedsFor, speedText, railsFor, type Offer, type SendType, type SpeedClass } from "./payments";
 import { credit, debit, spendable } from "./money";
@@ -31,7 +32,7 @@ type PayQuote = {
   receive: number; rate: number | null; pay: number; fee: number; total: number; currency: string; expiresAt: string;
   coolingOff: boolean; speedName: string; arrives: string;
 };
-export type RetailHost = { now: () => number; otp: OtpState; conditions: () => SandboxConditions; flaws: Flaws; config: () => BankConfig };
+export type RetailHost = { now: () => number; otp: OtpState; conditions: () => SandboxConditions; flaws: Flaws; config: () => BankConfig; /** moves the sandbox clock on (a scheduler run, a slow answer) */ setNow: (fn: () => number) => void };
 
 /**
  * The personal adapters (`bank.*` apart from the session, the one-time code and the bank's configuration): accounts, moving money,
@@ -108,7 +109,7 @@ export class RetailSandbox {
   private payeeView(b: Beneficiary) {
     const { addedAgoMs: _seed, ...saved } = b;
     const now = this.now(), isNew = this.isNew(b), until = b.addedAt + COOLING_OFF_HOURS * hour;
-    const uses = this.schedules.filter((x) => x.beneficiaryId === b.id);
+    const uses = this.schedules.filter((x) => x.beneficiaryId === b.id && this.isLive(x));
     return {
       ...saved, sendType: sendTypeOf(b.region), ageHours: hoursSince(b.addedAt, now),
       coolingOffUntil: isNew ? new Date(until).toISOString() : null, coolingOffHoursLeft: isNew ? Math.max(1, Math.ceil((until - now) / hour)) : 0,
@@ -244,7 +245,7 @@ export class RetailSandbox {
   }
   private savedView(x: SavedBiller) {
     const b = this.biller(x.billerId);
-    return { id: x.id, nickname: x.nickname, billerId: b.id, billerName: b.name, category: b.category, label: b.label, format: b.format, accepts: b.accepts, fee: b.fee, reference: x.reference, last4: x.reference.slice(-4) };
+    return { id: x.id, nickname: x.nickname, name: x.nickname, sub: `${b.name} \u2022\u2022\u2022\u2022 ${x.reference.slice(-4)}`, billerId: b.id, billerName: b.name, category: b.category, label: b.label, format: b.format, accepts: b.accepts, fee: b.fee, reference: x.reference, last4: x.reference.slice(-4) };
   }
   private isSavedBiller(b: Biller, ref: string) { return this.savedBillers.some((x) => x.billerId === b.id && x.reference === ref); }
   /**
@@ -442,6 +443,285 @@ export class RetailSandbox {
     }
   }
 
+  /* ------------------------------------------------------------------------------------------ scheduled payments (BankWorkx) */
+
+  /** A schedule that is still going (active or paused). The older entries have no status and count as active. */
+  private isLive(x: Schedule) { return !x.status || x.status === "active" || x.status === "paused"; }
+  private closedDays() { return this.conditions.closedDays ?? []; }
+  private scheduleOf(id: unknown) {
+    const x = this.schedules.find((s) => s.id === id);
+    if (!x || !x.kind) throw new BankError("SCHEDULE_NOT_FOUND", "We can’t find that payment.");
+    return x as Schedule & ScheduleDetail;
+  }
+  /** Who a schedule pays, as its name and as a line with the account. */
+  private targetOf(x: { kind: ScheduleKind; targetId: string; name: string }) {
+    if (x.kind === "payee") { const b = this.payees().find((y) => y.id === x.targetId); return { name: b?.displayName ?? x.name, text: b ? `${b.displayName} ${b.maskedNumber}` : x.name }; }
+    if (x.kind === "own") { const a = this.p.accounts.find((y) => y.id === x.targetId); return { name: a ? `${a.name} ${a.maskedNumber}` : x.name, text: a ? `${a.name} ${a.maskedNumber}` : x.name }; }
+    const v = this.savedBillers.find((y) => y.id === x.targetId);
+    return { name: v?.nickname ?? x.name, text: v ? `${v.nickname} •••• ${v.reference.slice(-4)}` : x.name };
+  }
+  private endTypeOf(x: ScheduleDetail) { return x.frequency === "once" || (x.endsOn === null && x.endCount === null) ? "never" : x.endsOn !== null ? "date" : "count"; }
+  private endsText(freq: Freq, type: string, on: string | null, count: number | null) {
+    return freq === "once" ? "Doesn’t repeat" : type === "date" ? dayName(on!, true) : type === "count" ? `After ${count} payments` : "Never";
+  }
+  /** What a list and a card say about a schedule. An older entry (a later payment, a bill paid automatically) keeps what it had. */
+  private scheduleView(x: Schedule, strict = false) {
+    const status = x.status ?? "active";
+    if (!x.kind) return { ...x, status };
+    const d = x as Schedule & ScheduleDetail, closed = this.closedDays(), left = remaining(d, closed), type = this.endTypeOf(d);
+    const state = status === "active" ? changeState(d.nextRunOn, this.now(), strict, closed) : "ok";
+    const note = status === "paused" ? "Paused" : state === "running" ? "Running now" : "";
+    const a = this.p.accounts.find((y) => y.id === d.fromAccountId), amt = amountText(d.amountMode, d.amount, d.currency);
+    return {
+      ...d, status, payee: d.name, toText: this.targetOf(d).text, fromText: a ? `${a.name} ${a.maskedNumber}` : "", frequencyName: FREQUENCIES[d.frequency].name,
+      amountText: amt, nextText: dayName(d.nextRunOn), nextLong: dayName(d.nextRunOn, true), endsText: this.endsText(d.frequency, type, d.endsOn, d.endCount), remainingRuns: left,
+      running: state === "running", cutoffPassed: state === "cutoff", note, sub: `${FREQUENCIES[d.frequency].name} · ${dayName(d.nextRunOn)} · ${amt}${note ? ` · ${note}` : ""}`,
+    };
+  }
+  /** What stops a schedule being changed or cancelled now, in the order a person meets it. A paused schedule is not about to run, so it can always be changed. */
+  private checkChangeable(x: Schedule & ScheduleDetail, strict: boolean) {
+    if (x.status !== "active" && x.status !== "paused") throw new BankError("SCHEDULE_NOT_ACTIVE", "This payment has already ended or been cancelled.");
+    if (x.status === "paused") return;
+    const state = changeState(x.nextRunOn, this.now(), strict, this.closedDays());
+    if (state === "running" && this.flaws.scheduleRunning !== false) throw new BankError("SCHEDULE_RUNNING", "This payment is being processed. Try again later.");
+    if (state === "cutoff" && this.flaws.scheduleCutoff !== false) throw new BankError("SCHEDULE_CUTOFF_PASSED", "This payment can’t be changed any more. Change it after it runs.");
+  }
+  private nextScheduleNo() {
+    return Math.max(1000, ...this.schedules.map((x) => Number(/^SCH-(\d+)$/.exec(x.id)?.[1] ?? 0))) + 1;
+  }
+  /**
+   * Checks a new schedule (or a change to one) in the order a person meets the rules: what and from where, who, the amount, the daily limit,
+   * how often, the first date, the end, the new-payee wait, the number of schedules. Throws the first problem; nothing is changed.
+   * Nothing is taken when a schedule is made, so the balance is not checked here; each run checks it.
+   */
+  private planSchedule(input: Record<string, any>, existing?: Schedule & ScheduleDetail) {
+    const f = this.flaws, closed = this.closedDays(), today = isoOf(this.now());
+    const kind = (existing ? existing.kind : input.kind) as ScheduleKind;
+    if (!["payee", "own", "bill"].includes(kind)) throw new BankError("NOT_SUPPORTED", "This payment can’t be scheduled.");
+    const from = this.p.accounts.find((a) => a.id === (existing ? existing.fromAccountId : input.from));
+    if (!from) throw new BankError("ACCOUNT_NOT_FOUND", "Choose an account to pay from.");
+    if (!existing && !from.canDebit && f.canDebit !== false) throw new BankError("ACCOUNT_CANNOT_DEBIT", "You can’t send money from this account right now.");
+    const targetId = String(existing ? existing.targetId : input.target ?? ""), home = this.p.accounts[0]!.currency;
+    let name: string, payee: Beneficiary | undefined, biller: Biller | undefined;
+    if (kind === "payee") {
+      payee = this.payees().find((b) => b.id === targetId);
+      if (!payee) throw new BankError("BENEFICIARY_NOT_FOUND", "We can’t find that payee. Choose another.");
+      if (from.currency !== home) throw new BankError("ACCOUNT_CANNOT_DEBIT", "You can’t send money from this account right now.");
+      name = payee.displayName;
+    } else if (kind === "own") {
+      const to = this.p.accounts.find((a) => a.id === targetId);
+      if (!to) throw new BankError("ACCOUNT_NOT_FOUND", "Choose an account to pay.");
+      if (to.id === from.id && f.sameAccount !== false) throw new BankError("SAME_ACCOUNT", "Choose two different accounts.");
+      if (to.currency !== from.currency) throw new BankError("CURRENCY_MISMATCH", "Choose two accounts in the same currency.");
+      name = `${to.name} ${to.maskedNumber}`;
+    } else {
+      const saved = this.savedBillers.find((x) => x.id === targetId);
+      if (!saved) throw new BankError("BILLER_NOT_FOUND", "Choose a biller.");
+      biller = this.biller(saved.billerId);
+      if (from.currency !== BILL_CURRENCY) throw new BankError("BILL_CURRENCY_MISMATCH", "Choose an account in the same currency as the bill.");
+      name = saved.nickname;
+    }
+    // the amount: a fixed one, or (a bill) the bill each time, or its minimum
+    const mode = String(existing ? existing.amountMode : kind === "bill" ? input.amountMode ?? "fixed" : "fixed") as AmountMode;
+    if (!["fixed", "full", "minimum"].includes(mode) || (kind !== "bill" && mode !== "fixed")) throw new BankError("INVALID_AMOUNT", "Choose how much to pay.");
+    if (mode === "minimum" && biller?.accepts !== "minimum") throw new BankError("INVALID_AMOUNT", "This biller has no minimum due.");
+    let amount: number | null = existing ? existing.amount : null;
+    if (mode === "fixed") {
+      if (input.amount !== undefined && input.amount !== null && input.amount !== "") amount = Number(input.amount);
+      const digits = currencyInfo(from.currency).decimals;
+      if (!(Number(amount) > 0)) throw new BankError("INVALID_AMOUNT", "Enter an amount above zero.");
+      if (Math.abs(amount! * 10 ** digits - Math.round(amount! * 10 ** digits)) > 1e-6) throw new BankError("INVALID_AMOUNT", digits === 0 ? "Enter a whole number." : `Enter an amount with at most ${digits} decimal places.`);
+      if (amount! > this.limitFor(from.currency).daily && f.dailyLimit !== false) throw new BankError("DAILY_LIMIT_EXCEEDED", "That is over your daily limit.");
+    }
+    const freq = (existing ? existing.frequency : input.frequency) as Freq;
+    if (!isFreq(freq)) throw new BankError("NOT_SUPPORTED", "This payment can’t be scheduled.");
+    // the first date: from tomorrow, within 12 months, a business day
+    const first = String(input.first ?? existing?.nextRunOn ?? "");
+    if (!validIso(first)) throw new BankError("INVALID_DATE", "Choose a date.");
+    // a change that keeps the date it already has was valid when it was made
+    const moved = !existing || existing.status !== "active" || first !== existing.nextRunOn;
+    if (moved && f.scheduleDates !== false) {
+      if (first <= today) throw new BankError("DATE_TOO_SOON", "Choose a date from tomorrow.");
+      if (first > addMonths(today, AHEAD_MONTHS)) throw new BankError("DATE_TOO_FAR", "Choose a date within the next 12 months.");
+      if (!isWeekday(first)) throw new BankError("DATE_NOT_WEEKDAY", "Choose a weekday.");
+      if (!isOpen(first, closed)) throw new BankError("DATE_CLOSED", "The bank is closed on that day. Choose another date.");
+    }
+    // a change that keeps the date and the end keeps the series; any other change starts it again from the date
+    const sameEnd = (type: string, on: string | null, count: number | null) => !existing || (input.endType === undefined) || (type === this.endTypeOf(existing) && (type === "never" || (type === "date" ? on === existing.endsOn : count === remaining(existing, closed))));
+    let endType = freq === "once" ? "never" : String(input.endType ?? (existing ? this.endTypeOf(existing) : "never")), endOn: string | null = null, endCount: number | null = null;
+    if (freq !== "once") {
+      if (endType === "date") endOn = String(input.endOn ?? ""); else if (endType === "count") endCount = Number(input.endCount);
+      else if (endType !== "never") throw new BankError("NOT_SUPPORTED", "This payment can’t be scheduled.");
+    }
+    const keep = !!existing && existing.status === "active" && first === existing.nextRunOn && sameEnd(endType, endOn, endCount);
+    // the same date and end: nothing about the series changes, whatever the end screen showed
+    if (keep) { endType = this.endTypeOf(existing!); endOn = existing!.endsOn; endCount = existing!.endCount; }
+    const series = keep ? { anchor: existing!.anchor, done: existing!.done } : { anchor: first, done: 0 };
+    const later = Array.from({ length: END_DATES }, (_, i) => runDate(series.anchor, freq, series.done + 1 + i, closed));
+    if (!keep && f.scheduleEnd !== false) {
+      if (endType === "date" && (!validIso(endOn) || endOn <= first)) throw new BankError("END_BEFORE_START", "Choose an end date after the start.");
+      if (endType === "date" && !later.includes(endOn!)) throw new BankError("INVALID_END_DATE", "Choose a date from the list.");
+      if (endType === "count" && (!Number.isInteger(endCount) || endCount! < 2 || endCount! > FREQUENCIES[freq].max)) throw new BankError("INVALID_COUNT", "Enter a valid number of payments.");
+    }
+    // a payee added in the last 24 hours: the first payment waits until the 24 hours are over
+    if (payee && !keep && f.coolingOff !== false) {
+      const until = payee.addedAt + COOLING_OFF_HOURS * hour;
+      if (msOf(first) < until) {
+        const hours = hoursSince(payee.addedAt, this.now()), soonest = nextOpen(addDays(isoOf(until - 1), 1), closed);
+        throw new BankError("BENEFICIARY_COOLING_OFF", `${payee.displayName} was added ${hours} ${hours === 1 ? "hour" : "hours"} ago. For your security the first payment to a new beneficiary must be on or after ${dayName(soonest, true)}.`);
+      }
+    }
+    if (!existing && f.scheduleLimit !== false && this.schedules.filter((x) => x.kind && this.isLive(x)).length >= MAX_ACTIVE) throw new BankError("SCHEDULE_LIMIT", "You can have up to 20 scheduled payments. Cancel one to add another.");
+    const asSeries = { ...series, frequency: freq, endsOn: endOn, endCount };
+    const dates = upcoming(asSeries, series.done, 3, closed), a = amountText(mode, amount, from.currency);
+    return {
+      kind, targetId, name, mode, amount, currency: from.currency, freq, first, endType, endOn, endCount, series, keep, reminder: existing ? existing.reminder : input.reminder !== false, retry: existing ? existing.retry : input.retry === true,
+      from: from.id,
+      view: {
+        targetName: name, toText: this.targetOf({ kind, targetId, name }).text, fromText: `${from.name} ${from.maskedNumber}`, amountText: a, authAmount: mode === "fixed" ? a : mode === "full" ? "the full bill" : "the minimum due", frequency: freq, frequencyName: FREQUENCIES[freq].name, adverb: FREQUENCIES[freq].adverb,
+        firstText: dayName(first), startText: dayName(first, true), endType, endsText: this.endsText(freq, endType, endOn, endCount), nextDates: dates.map((d) => dayName(d)).join(" · "), reminder: existing ? existing.reminder : input.reminder !== false,
+        // the payments after the first that "On a date" can end on
+        dates: Object.fromEntries(later.map((d) => [d, { id: d, name: dayName(d, true) }])),
+        maxCount: FREQUENCIES[freq].max, text: scheduleLine(name, freq, first, mode, amount, from.currency),
+      },
+    };
+  }
+  private schedulesApi(adapter: string, input: Record<string, any>): any {
+    const closed = this.closedDays(), strict = input.strictCutoff === true;
+    switch (adapter) {
+      case "bank.schedules.list": {
+        // without a status: every entry, as before. With one (active, paused, live, completed, cancelled or history): the Payments schedules of that kind, soonest first
+        const st = input.status ? String(input.status) : "";
+        const keep = (x: Schedule) => !st || (!!x.kind && (st === "live" ? this.isLive(x) : st === "history" ? !this.isLive(x) : (x.status ?? "active") === st));
+        const list = this.schedules.filter(keep);
+        if (st) list.sort((a, b) => ((a as any).nextRunOn ?? "").localeCompare((b as any).nextRunOn ?? "") || a.id.localeCompare(b.id));
+        return Object.fromEntries(list.map((x) => [x.id, this.scheduleView(x, strict)]));
+      }
+      case "bank.schedules.get": {
+        const x = this.scheduleOf(input.scheduleId);
+        // for: "change" or "cancel" also says why it cannot be done now
+        if (input.for === "change" || input.for === "cancel") this.checkChangeable(x, strict);
+        const left = remaining(x, closed), type = this.endTypeOf(x);
+        return {
+          ...this.scheduleView(x, strict), endType: type, endOn: x.endsOn ?? "", endLeft: left ?? "",
+          canSkip: x.frequency !== "once" && (left === null || left > 1) && this.isLive(x),
+          afterText: dayName(runDate(x.anchor, x.frequency, x.done + 1, closed)),
+        };
+      }
+      case "bank.schedules.check": {
+        // the review before the code: the rules, the dates and the words; changes nothing
+        const x = input.scheduleId ? this.scheduleOf(input.scheduleId) : undefined;
+        if (x) this.checkChangeable(x, strict);
+        const p = this.planSchedule(input, x);
+        return { ok: true, ...p.view, existing: !!x };
+      }
+      case "bank.schedules.create":
+      case "bank.schedules.update": {
+        const isNew = adapter === "bank.schedules.create";
+        if (!this.otp.verified) throw new BankError("OTP_REQUIRED", "OTP not verified");
+        if (this.p.behaviour.transferFails) throw new BankError("CORE_UNAVAILABLE", "Core banking unavailable");
+        const x = isNew ? undefined : this.scheduleOf(input.scheduleId);
+        if (x) this.checkChangeable(x, strict);
+        const p = this.planSchedule(input, x);
+        const detail: ScheduleDetail = {
+          kind: p.kind, targetId: p.targetId, fromAccountId: p.from, amountMode: p.mode, amount: p.amount, currency: p.currency, frequency: p.freq, anchor: p.series.anchor, done: p.series.done,
+          paid: x?.paid ?? 0, nextRunOn: p.keep ? x!.nextRunOn : p.first, endsOn: p.endType === "date" ? p.endOn : null, endCount: p.endType === "count" ? p.endCount : null,
+          status: "active", reminder: p.reminder, retry: p.retry, fails: 0,
+        };
+        if (isNew) {
+          const id = `SCH-${this.nextScheduleNo()}`;
+          this.schedules.push({ id, beneficiaryId: p.kind === "payee" ? p.targetId : "", name: p.name, text: p.view.text, ...detail });
+          this.otp.verified = false;
+          return { scheduleId: id, next: p.view.firstText, nextOn: p.first, ...p.view };
+        }
+        // an older end that is kept stays as it was
+        Object.assign(x!, detail, { text: p.view.text });
+        this.otp.verified = false;
+        return { scheduleId: x!.id, next: p.view.firstText, nextOn: detail.nextRunOn, ...p.view };
+      }
+      case "bank.schedules.cancel": {
+        const x = this.scheduleOf(input.scheduleId);
+        this.checkChangeable(x, strict);
+        const left = remaining(x, closed), name = this.targetOf(x).name, base = { scheduleId: x.id, name, amountText: amountText(x.amountMode, x.amount, x.currency), frequencyName: FREQUENCIES[x.frequency].name };
+        if (input.scope === "next") {
+          if (x.frequency === "once" || (left !== null && left < 2)) throw new BankError("NOT_SUPPORTED", "Only the next payment can be skipped, and only when the payment repeats.");
+          const skipped = x.nextRunOn;
+          x.done += 1; x.nextRunOn = runDate(x.anchor, x.frequency, x.done, closed); x.text = scheduleLine(x.name, x.frequency, x.nextRunOn, x.amountMode, x.amount, x.currency);
+          return { ...base, status: "skipped", skippedOn: dayName(skipped, true), next: dayName(x.nextRunOn, true), nextOn: x.nextRunOn };
+        }
+        x.status = "cancelled"; x.endedOn = isoOf(this.now());
+        return { ...base, status: "cancelled", cancelledOn: dayName(x.endedOn, true) };
+      }
+      default: return this.runDue(input);
+    }
+  }
+  /**
+   * The scheduler, for scenarios and tests: moves the sandbox clock to the middle of `date` (if that is later) and makes every payment that is due
+   * on or before it, in date order. A payment checks the account, the payee, the daily limit and the new-payee allowance again; if there is not
+   * enough money it is tried once more the next business day when the schedule asks (`retry`), otherwise skipped. Two in a row that do not go pause
+   * the schedule. Answers one entry per payment dealt with.
+   */
+  private runDue(input: Record<string, any>) {
+    const date = validIso(input.date) ? input.date : isoOf(this.now()), closed = this.closedDays(), noon = 12 * hour;
+    const runs: { id: string; scheduleId: string; name: string; on: string; status: "paid" | "skipped" | "retry"; amount: number | null; reason: string; notice: string; paused: boolean }[] = [];
+    const spent = new Map<string, number>();
+    const dueOf = (x: Schedule & ScheduleDetail) => x.retryOn ?? x.nextRunOn;
+    for (let guard = 0; guard < 600; guard++) {
+      const due = (this.schedules.filter((x) => x.kind && x.status === "active" && dueOf(x as Schedule & ScheduleDetail) <= date) as (Schedule & ScheduleDetail)[]).sort((a, b) => dueOf(a).localeCompare(dueOf(b)) || a.id.localeCompare(b.id))[0];
+      if (!due) break;
+      const on = dueOf(due), at = msOf(on) + noon;
+      if (at > this.now()) this.host.setNow(() => at);
+      const r = this.runOne(due, on, spent), id = `${due.id}-${on}`, run = { id, scheduleId: due.id, name: due.name, on, amount: r.amount, reason: r.ok ? "" : r.code, paused: false };
+      if (!r.ok && r.shortfall && due.retry && !due.retryOn) {
+        due.retryOn = nextOpen(addDays(on, 1), closed);
+        runs.push({ ...run, status: "retry", notice: `Payment postponed, not enough money. We’ll try again on ${dayName(due.retryOn)}.` });
+        continue;
+      }
+      due.done += 1; due.retryOn = undefined;
+      if (r.ok) { due.paid += 1; due.fails = 0; runs.push({ ...run, status: "paid", notice: "Payment sent" }); }
+      else {
+        due.fails += 1;
+        const paused = due.fails >= 2;
+        runs.push({ ...run, status: "skipped", paused, notice: `${r.shortfall ? "Payment skipped, not enough money" : "Payment skipped"}${paused ? ". Schedule paused" : ""}` });
+        if (paused) due.status = "paused";
+      }
+      if (remaining(due, closed) === 0) { due.status = "completed"; due.endedOn = on; }
+      else due.nextRunOn = runDate(due.anchor, due.frequency, due.done, closed);
+      due.text = scheduleLine(due.name, due.frequency, due.nextRunOn, due.amountMode, due.amount, due.currency);
+    }
+    const end = msOf(date) + noon;
+    if (end > this.now()) this.host.setNow(() => end);
+    return Object.fromEntries(runs.map((r) => [r.id, r]));
+  }
+  /** One payment of a schedule on a day: checks everything again and, if it can go, moves the money. */
+  private runOne(x: Schedule & ScheduleDetail, on: string, spent: Map<string, number>): { ok: true; amount: number } | { ok: false; code: string; amount: number | null; shortfall?: boolean } {
+    const f = this.flaws, no = (code: string, amount: number | null = null, shortfall = false) => ({ ok: false as const, code, amount, shortfall });
+    const from = this.p.accounts.find((a) => a.id === x.fromAccountId);
+    if (!from || !from.canDebit) return no("ACCOUNT_CANNOT_DEBIT");
+    let amount = x.amount ?? 0, to: Account | undefined, payee: Beneficiary | undefined;
+    if (x.kind === "payee") { payee = this.payees().find((b) => b.id === x.targetId); if (!payee) return no("BENEFICIARY_NOT_FOUND"); }
+    else if (x.kind === "own") { to = this.p.accounts.find((a) => a.id === x.targetId); if (!to) return no("ACCOUNT_NOT_FOUND"); }
+    else {
+      const saved = this.savedBillers.find((b) => b.id === x.targetId);
+      if (!saved) return no("BILLER_NOT_FOUND");
+      const due = billOf(saved.reference, msOf(on)).dueCents;
+      amount = x.amountMode === "minimum" ? minimumCents(due) / 100 : x.amountMode === "full" ? due / 100 : amount;
+      // a full bill is paid only up to the most the person agreed to
+      if (x.amountMode === "full" && x.amount !== null && amount > x.amount) return no("ABOVE_CAP", amount);
+    }
+    if (amount > spendable(from) && f.funds !== false) return no("INSUFFICIENT_FUNDS", amount, true);
+    const limit = this.limitFor(from.currency), key = `${on}:${from.currency}`, used = spent.get(key) ?? 0;
+    if (used + amount > limit.daily && f.dailyLimit !== false) return no("DAILY_LIMIT_EXCEEDED", amount);
+    const usd = this.toUsd(amount, from.currency);
+    if (payee && f.coolingOff !== false) { try { this.coolingOff(payee, usd); } catch (e) { return no((e as BankError).code, amount); } }
+    debit(from, amount);
+    if (to) credit(to, amount);
+    spent.set(key, used + amount);
+    if (payee && this.isNew(payee)) this.sent.set(payee.id, [...(this.sent.get(payee.id) ?? []), { at: this.now(), usd }]);
+    if (x.kind === "bill") { this.seq += 1; this.p.finance?.transactions.unshift({ id: `t_sch${this.seq}`, title: x.name, category: "bills", amount: -amount, daysAgo: 0, time: "Now" }); }
+    return { ok: true, amount };
+  }
+
   async call(adapter: string, input: Record<string, any> = {}): Promise<any> {
     if (this.cab.handles(adapter)) {
       const out = this.cab.call(adapter, input);
@@ -461,7 +741,13 @@ export class RetailSandbox {
         // sendType: only the payees of one kind of payment (internal, domestic, international)
         return Object.fromEntries(this.payees().map((b) => this.payeeView(b)).filter((v) => !input.sendType || v.sendType === input.sendType).map((v) => [v.id, v]));
       case "bank.schedules.list":
-        return Object.fromEntries(this.schedules.map((x) => [x.id, x]));
+      case "bank.schedules.get":
+      case "bank.schedules.check":
+      case "bank.schedules.create":
+      case "bank.schedules.update":
+      case "bank.schedules.cancel":
+      case "bank.schedules.runDue":
+        return this.schedulesApi(adapter, input);
       case "bank.payees.lookup": {
         const c = findCustomer(String(input.by ?? ""), String(input.value ?? ""));
         if (!c) throw new BankError("CUSTOMER_NOT_FOUND", "We can’t find a BankWorkx® customer with those details. Check them and try again.");
@@ -562,10 +848,10 @@ export class RetailSandbox {
       case "bank.payees.delete": {
         const list = this.payees(), i = list.findIndex((b) => b.id === input.payeeId);
         if (i < 0) throw new BankError("BENEFICIARY_NOT_FOUND", "We can't find that payee.");
-        const gone = list[i]!, uses = this.schedules.filter((x) => x.beneficiaryId === gone.id);
+        const gone = list[i]!, uses = this.schedules.filter((x) => x.beneficiaryId === gone.id && this.isLive(x));
         if (uses.length && input.cancelSchedules !== true && this.flaws.payeeInUse !== false) throw new BankError("BENEFICIARY_IN_USE", `${gone.displayName} is used by ${uses.length} scheduled ${uses.length === 1 ? "payment" : "payments"}. Cancel ${uses.length === 1 ? "it" : "them"} first.`);
         list.splice(i, 1);
-        this.schedules = this.schedules.filter((x) => x.beneficiaryId !== gone.id);
+        this.schedules = this.schedules.filter((x) => !(x.beneficiaryId === gone.id && this.isLive(x)));
         return { removed: true, schedulesCancelled: uses.length, displayName: gone.displayName, bank: gone.bank, maskedNumber: gone.maskedNumber };
       }
       case "bank.limits.get":

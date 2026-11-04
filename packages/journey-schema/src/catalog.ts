@@ -3,6 +3,8 @@ import { localTransfer } from "./fixtures/local-transfer";
 import { payBill } from "./fixtures/pay-bill";
 import { payBillBankworkx } from "./fixtures/pay-bill-bankworkx";
 import { mobileTopup } from "./fixtures/mobile-topup";
+import { schedulePayment } from "./fixtures/schedule-payment";
+import { cancelStandingOrder } from "./fixtures/cancel-standing-order";
 import { corporatePayment, corporateApproval } from "./fixtures/corporate-payments";
 import { bulkPayment } from "./fixtures/bulk-payment";
 import { payrollRun } from "./fixtures/payroll-run";
@@ -12,6 +14,7 @@ import { ownTransfer } from "./fixtures/own-transfer";
 import { manageBeneficiary } from "./fixtures/manage-beneficiary";
 import { personalTransfer } from "./fixtures/personal-transfer";
 import { internalTransfer } from "./fixtures/internal-transfer";
+import { internationalTransfer } from "./fixtures/international-transfer";
 import { addMoney, addCard, connectAccount, createBudget, invest, sellInvestment } from "./fixtures/bankworkx";
 import { cabJourneys } from "./fixtures/cab";
 
@@ -107,9 +110,24 @@ export const catalog: CatalogEntry[] = [
     highlights: ["Operators with fixed amounts", "Number rule of the home market", "Saved numbers, saved from the review", "Up to 300.00 a day to one number", "Timeout and unavailable screens"],
   },
   {
+    id: schedulePayment.slug, category: "Payments", madeFor: "bankworkx", journey: schedulePayment,
+    summary: "Pay a payee, one of your own accounts or a saved bill on a future date or on a repeat (once, weekly, every 2 weeks, monthly, every 3 months), with an end and a reminder; change a schedule later. Nothing is taken until each date.",
+    highlights: ["Payee, own account or saved bill", "Weekdays, month ends and closed days handled", "Ends never, on a date or after a number of payments", "Changes close the business day before", "20 schedules at most", "Timeout and unavailable screens"],
+  },
+  {
+    id: cancelStandingOrder.slug, category: "Payments", madeFor: "bankworkx", journey: cancelStandingOrder,
+    summary: "End a scheduled or recurring payment for good, or skip only the next one, from the list of what is scheduled. No code is asked, because it can only reduce what leaves the account. The cancel mode of Schedule a payment, as a journey of its own.",
+    highlights: ["All future payments or only the next one", "Refused while running or after changes close", "No code needed", "Timeout and unavailable screens"],
+  },
+  {
     id: internalTransfer.slug, category: "Payments", madeFor: "bankworkx", journey: internalTransfer,
     summary: "Send money to a BankWorkx customer: found by mobile number, email or BankWorkx ID, free and instant, up to 25,000.00. The same flow as Send money, opened at this type; kept so that links to the old name open the right place.",
     highlights: ["Alias of Send money for one type", "Free and instant", "Switched off with the same option", "One-time code"],
+  },
+  {
+    id: internationalTransfer.slug, category: "Payments", madeFor: "bankworkx", journey: internationalTransfer,
+    summary: "Send money abroad: country, name, IBAN or account, SWIFT/BIC, purpose; the rate held 60 seconds. Send money opened at this type, so old links open the right place.",
+    highlights: ["Alias of Send money for one type", "Standard and Priority speeds", "Switched off with the same option", "One-time code"],
   },
   {
     id: connectAccount.slug, category: "Accounts", madeFor: "bankworkx", journey: connectAccount,
