@@ -23,6 +23,18 @@ export const ME_COUNTRIES: Record<string, string> = { AE: "United Arab Emirates"
 export const WORLD_COUNTRIES: Record<string, { name: string; currency: string }> = {
   DE: { name: "Germany", currency: "EUR" }, CA: { name: "Canada", currency: "CAD" }, IN: { name: "India", currency: "INR" }, JP: { name: "Japan", currency: "JPY" }, AU: { name: "Australia", currency: "AUD" },
   CH: { name: "Switzerland", currency: "CHF" }, SG: { name: "Singapore", currency: "SGD" }, MX: { name: "Mexico", currency: "MXN" },
+  // the rest of the countries a payment can go to (Send money): the same checks apply
+  FR: { name: "France", currency: "EUR" }, ES: { name: "Spain", currency: "EUR" }, IT: { name: "Italy", currency: "EUR" }, IE: { name: "Ireland", currency: "EUR" }, NL: { name: "Netherlands", currency: "EUR" },
+  GB: { name: "United Kingdom", currency: "GBP" }, JO: { name: "Jordan", currency: "JOD" }, SA: { name: "Saudi Arabia", currency: "SAR" }, AE: { name: "United Arab Emirates", currency: "AED" },
+};
+/**
+ * What a payment to a country needs, for the strict checks of Send money: an IBAN or an account number, an extra bank code, and
+ * whether the country's rules ask for the payee's address. A country that is not here has only the plain checks.
+ */
+export type CountryRule = { iban?: boolean; code?: "transit" | "ifsc" | "bsb"; digits18?: boolean; address?: boolean };
+export const COUNTRY_RULES: Record<string, CountryRule> = {
+  AU: { code: "bsb" }, CA: { code: "transit" }, CH: { iban: true }, DE: { iban: true }, FR: { iban: true }, ES: { iban: true }, IT: { iban: true }, IE: { iban: true }, NL: { iban: true },
+  GB: { iban: true }, JO: { iban: true }, SA: { iban: true }, AE: { iban: true }, IN: { code: "ifsc", address: true }, JP: { address: true }, MX: { digits18: true, address: true }, SG: {},
 };
 
 /** IBAN lengths by country. A country that is not here has no IBAN the sandbox knows. */
@@ -34,8 +46,22 @@ const IBAN_LENGTH: Record<string, number> = {
 const SEPA = new Set(["AD", "AT", "BE", "BG", "CH", "CY", "CZ", "DE", "DK", "EE", "ES", "FI", "FR", "GR", "HR", "HU", "IE", "IS", "IT", "LI", "LT", "LU", "LV", "MC", "MT", "NL", "NO", "PL", "PT", "RO", "SE", "SI", "SK", "SM"]);
 const US_BANKS: Record<string, string> = { "021000021": "JPMorgan Chase", "026009593": "Bank of America", "121000248": "Wells Fargo", "011401533": "Citizens Bank", "031201360": "Capital One" };
 
-/** Other BankWorkx customers a person can add by account number. */
-export const CUSTOMERS: Record<string, string> = { "3301123308": "Taylor Brooks", "3301554412": "Jordan Keller" };
+/** The BankWorkx customers a person can find by mobile number, email or BankWorkx ID, or add by account number. */
+export const DIRECTORY = [
+  { customerNumber: "3301123308", name: "Taylor Brooks", mobile: "+1 202 555 0142", email: "taylor.brooks@example.com", id: "taylorb" },
+  { customerNumber: "3301554412", name: "Jordan Keller", mobile: "+1 202 555 0177", email: "jordan.keller@example.com", id: "jkeller" },
+];
+export const CUSTOMERS: Record<string, string> = Object.fromEntries(DIRECTORY.map((d) => [d.customerNumber, d.name]));
+/** Finds a customer by mobile number (spaces, brackets and dashes ignored), email (any case) or BankWorkx ID. */
+export function findCustomer(by: string, value: string) {
+  const v = String(value ?? "").trim();
+  if (by === "mobile") return v ? DIRECTORY.find((d) => digits(d.mobile) === digits(v)) : undefined;
+  if (by === "email") return v ? DIRECTORY.find((d) => d.email === v.toLowerCase()) : undefined;
+  if (by === "id") return v ? DIRECTORY.find((d) => d.id === v.toLowerCase()) : undefined;
+  return undefined;
+}
+/** What a payment calls the kind of payee: a BankWorkx customer, someone at a bank of the home market, or someone abroad. */
+export const sendTypeOf = (region?: string): "internal" | "domestic" | "international" => (region === "bw" ? "internal" : region === "world" || region === "eu" || region === "uk" || region === "me" ? "international" : "domestic");
 
 /** Who owns an account, as the name check sees it (Verification of Payee, Confirmation of Payee). An account that is not here cannot be checked. */
 const NAME_REGISTRY: Record<string, string> = {
@@ -67,6 +93,8 @@ export const abaValid = (r: string): boolean => {
 export type PayeeInput = {
   kind?: string; region?: string; country?: string; name?: string; nickname?: string; label?: string;
   customerNo?: string; routing?: string; account?: string; accountType?: string; iban?: string; sort?: string; swift?: string;
+  /** Send money: the transit, IFSC or BSB code a country asks for, and the stricter checks of its rules. */
+  bankCode?: string; strict?: boolean;
 };
 /** The details of a payee after the checks: what the sandbox keeps. */
 export type PayeeDetails = {
@@ -85,6 +113,27 @@ const ibanOf = (raw: string, flaws: Flaws): string => {
   return iban;
 };
 const last4 = (s: string) => `••${s.slice(-4)}`;
+
+/** A payment abroad, checked field by field in the order of the form: the account or IBAN of the country, its bank code, then the SWIFT/BIC. */
+function strictWorld(base: { kind: PayeeKind; region: PayeeRegion; nickname: string; label: string; displayName: string; country: string; currency?: string }, input: PayeeInput, rule: CountryRule, flaws: Flaws): PayeeDetails {
+  const account = clean(input.account), bare = account.replace(/[\s-]/g, "").toUpperCase();
+  if (rule.iban) {
+    const len = IBAN_LENGTH[base.country];
+    if (!/^[A-Z]{2}[0-9]{2}[A-Z0-9]+$/.test(bare) || bare.slice(0, 2) !== base.country || bare.length !== len || (flaws.ibanChecksum !== false && !ibanValid(bare))) return fail("INVALID_IBAN", "That IBAN doesn’t look right. Check each character.");
+  } else if (rule.digits18) {
+    if (!/^[0-9]{18}$/.test(bare)) return fail("INVALID_ACCOUNT", "An account number has 18 digits.");
+  } else if (!/^[A-Za-z0-9 -]+$/.test(account) || bare.length < 6 || bare.length > 34) return fail("INVALID_ACCOUNT", "That account number looks too short or too long.");
+  const code = clean(input.bankCode);
+  if (rule.code && flaws.bankCode !== false) {
+    const ok = { transit: /^[0-9]{5}-?[0-9]{3}$/, ifsc: /^[A-Za-z]{4}0[A-Za-z0-9]{6}$/, bsb: /^[0-9]{3}-?[0-9]{3}$/ }[rule.code];
+    const words = { transit: "Use the 5-digit transit number and 3-digit institution number, like 00012-003.", ifsc: "An IFSC has 11 characters: 4 letters, a zero, then 6 letters or numbers.", bsb: "A BSB has 6 digits, like 062-000." }[rule.code];
+    if (!ok.test(code)) return fail("INVALID_BANK_CODE", words);
+  }
+  const swift = compact(input.swift);
+  if (!/^[A-Z]{4}[A-Z]{2}[A-Z0-9]{2}([A-Z0-9]{3})?$/.test(swift)) return fail("INVALID_BIC", "A SWIFT/BIC has 8 or 11 letters and numbers.");
+  if (flaws.bic !== false && swift.slice(4, 6) !== base.country) return fail("INVALID_BIC", "That bank code doesn’t match the country.");
+  return { ...base, bank: `SWIFT ${swift}`, maskedNumber: last4(bare), swift, accountNumber: bare, key: `swift:${swift}:${bare}` };
+}
 
 /** Checks what was typed for a payee of a region and returns it cleaned. Throws the first problem, in the order of the form. */
 export function checkPayee(input: PayeeInput, flaws: Flaws = {}): PayeeDetails {
@@ -145,6 +194,7 @@ export function checkPayee(input: PayeeInput, flaws: Flaws = {}): PayeeDetails {
       return { ...base, displayName, country: region === "eu" ? cc : country, currency: region === "eu" ? "EUR" : undefined, bank: `Bank (IBAN ${cc})`, maskedNumber: last4(iban), iban, key: `iban:${iban}` };
     }
     default: {
+      if (input.strict === true && country && COUNTRY_RULES[country]) return strictWorld({ ...base, displayName, country, currency }, input, COUNTRY_RULES[country]!, flaws);
       const swift = compact(input.swift);
       if (!swift) return fail("INVALID_BIC", "Enter the SWIFT/BIC code.");
       if (flaws.bic !== false && !/^[A-Z0-9]{8}([A-Z0-9]{3})?$/.test(swift)) return fail("INVALID_BIC", "A SWIFT/BIC has 8 or 11 letters and numbers.");
