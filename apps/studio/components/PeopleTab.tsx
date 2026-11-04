@@ -127,7 +127,7 @@ function AddPerson({ busy, onCancel, onAdd }: { busy: boolean; onCancel: () => v
 
 /** One person: their main role, their role in each project, what that lets them do there, and what they did lately. */
 function ManagePanel({ person, manage, busy, call, activity, onClose }: { person: PersonInfo; manage: boolean; busy: boolean; call: Call; activity: Activity[]; onClose: () => void }) {
-  const { roles, roleName } = useWho();
+  const { roles, roleName, you, production } = useWho();
   const { projects } = useProjects();
   useEffect(() => { const k = (e: KeyboardEvent) => { if (e.key === "Escape") onClose(); }; document.addEventListener("keydown", k); return () => document.removeEventListener("keydown", k); }, [onClose]);
   const options = roles.map((r) => <option key={r.id} value={r.id}>{r.label}</option>);
@@ -160,6 +160,8 @@ function ManagePanel({ person, manage, busy, call, activity, onClose }: { person
           <div className="faint">A project role replaces the main role in that project. Creating projects and managing people follow the main role.</div>
         </section>
 
+        {production && (manage || person.id === you.id) ? <PasswordForm person={person} own={person.id === you.id} busy={busy} call={call} /> : null}
+
         <section className="stack" style={{ gap: 8 }}>
           <div className="label-section">What they can do</div>
           <div className="card" style={{ padding: 0, overflow: "auto" }}>
@@ -184,5 +186,31 @@ function ManagePanel({ person, manage, busy, call, activity, onClose }: { person
         </section>
       </aside>
     </div>
+  );
+}
+
+/** Production sign-in: set or change a password. You give your current one for your own; a manager can set anyone's. */
+function PasswordForm({ person, own, busy, call }: { person: PersonInfo; own: boolean; busy: boolean; call: Call }) {
+  const [current, setCurrent] = useState(""), [pw, setPw] = useState(""), [again, setAgain] = useState("");
+  const [done, setDone] = useState(false);
+  const tooShort = pw.length > 0 && pw.length < 12, mismatch = again.length > 0 && again !== pw;
+  const ready = pw.length >= 12 && pw === again && (!own || current.length > 0);
+  return (
+    <form className="stack" style={{ gap: 8 }} aria-label={`Password for ${person.name}`} onSubmit={async (e) => {
+      e.preventDefault(); setDone(false);
+      if (await call("PUT", `/api/people/${person.id}/password`, own ? { current, password: pw } : { password: pw })) { setDone(true); setCurrent(""); setPw(""); setAgain(""); }
+    }}>
+      <div className="label-section">{own ? "Your password" : `Password for ${person.name}`}</div>
+      {own ? <label className="field">Current password<input className="input" type="password" autoComplete="current-password" value={current} onChange={(e) => { setCurrent(e.target.value); setDone(false); }} /></label> : null}
+      <label className="field">New password <span className="faint">(at least 12 characters)</span><input className="input" type="password" autoComplete="new-password" value={pw} onChange={(e) => { setPw(e.target.value); setDone(false); }} aria-invalid={tooShort} /></label>
+      <label className="field">Type it again<input className="input" type="password" autoComplete="new-password" value={again} onChange={(e) => { setAgain(e.target.value); setDone(false); }} aria-invalid={mismatch} /></label>
+      {tooShort ? <div className="faint" role="status">Use at least 12 characters. A few random words work well.</div> : null}
+      {mismatch ? <div className="faint" role="status">The two passwords are different.</div> : null}
+      <div className="row" style={{ gap: 8 }}>
+        <button className="btn primary" disabled={busy || !ready}>{own ? "Change my password" : "Set password"}</button>
+        {done ? <span role="status" className="ok">Password saved.</span> : null}
+      </div>
+      {!own ? <div className="faint">They can change it themselves after signing in. The old password stops working at once.</div> : null}
+    </form>
   );
 }

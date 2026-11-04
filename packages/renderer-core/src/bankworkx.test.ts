@@ -42,7 +42,7 @@ describe("Add money", () => {
   it("shows the customer's accounts and saved cards, and one-tap amounts", async () => {
     const { r } = mk(addMoney); await r.start();
     const blocks = r.view().blocks;
-    expect(blocks.find((b) => b.type === "accountPicker")!.items.map((a: any) => a.id)).toEqual(["acc_main", "acc_save", "acc_eur", "acc_gbp"]);
+    expect(blocks.find((b) => b.type === "accountPicker")!.items.map((a: any) => a.id)).toEqual(["acc_main", "acc_save", "acc_eur", "acc_aed"]);
     expect(blocks.find((b) => b.type === "select")!.items[0]).toMatchObject({ id: "c_5832", name: "Everyday ••5832" });
     expect(blocks.find((b) => b.type === "amountInput")!.quickAmounts).toEqual([50, 100, 150, 200]);
   });

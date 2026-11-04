@@ -1,19 +1,8 @@
 import { roundMoney } from "@finx/ui-kit";
-import { checkName, maskPayee, validatePayee, type PayeeFields } from "../rails";
-import type { Account } from "../index";
-import type { AccountTxn, Application, IssuedCard, Loan, LoanInstalment, Payee, RetailData } from "./data";
+import type { AccountTxn, Application, IssuedCard, Loan, LoanInstalment, RetailData } from "./data";
 
 /** Alex Morgan, the personal side of the combined demo (docs/journeys/README.md 1.7). Dates are fixed so tests read the same every day; "today" in the prototype is 3 November 2026. */
 export const ALEX_TODAY = "2026-11-03";
-const day = 24 * 3600 * 1000;
-
-/** Four accounts with a ledger balance (`balance`) and an available balance (ledger less what is on hold). */
-export const alexAccounts = (): Account[] => [
-  { id: "acc_main", name: "Main", maskedNumber: "••4410", iban: "US00 BWX 0000 0000 4410", balance: 8720.76, available: 8602.36, currency: "USD", status: "active", canDebit: true, kind: "current" },
-  { id: "acc_save", name: "Savings", maskedNumber: "••7731", iban: "US00 BWX 0000 0000 7731", balance: 15254.37, available: 15254.37, currency: "USD", status: "active", canDebit: true, kind: "savings" },
-  { id: "acc_eur", name: "Travel", maskedNumber: "••5502", iban: "US00 BWX 0000 0000 5502", balance: 2150.4, available: 2150.4, currency: "EUR", status: "active", canDebit: true, kind: "current" },
-  { id: "acc_gbp", name: "London", maskedNumber: "••8816", iban: "US00 BWX 0000 0000 8816", balance: 1820.15, available: 1820.15, currency: "GBP", status: "active", canDebit: true, kind: "current" },
-];
 
 const tx = (id: number, accountId: string, date: string, title: string, category: string, amount: number, currency = "USD", status: AccountTxn["status"] = "posted"): AccountTxn =>
   ({ id: `tx_${id}`, accountId, date, title, category, amount, currency, status });
@@ -42,22 +31,11 @@ const transactions = (): AccountTxn[] => [
   tx(21, "acc_eur", "2026-10-20", "Café Central, Vienna", "Food", -24.5, "EUR"),
   tx(22, "acc_eur", "2026-10-18", "Rail ticket", "Travel", -89, "EUR"),
   tx(23, "acc_eur", "2026-10-02", "From Main", "Transfer", 1000, "EUR"),
-  tx(24, "acc_gbp", "2026-10-24", "Bookshop, Charing Cross", "Shopping", -42.8, "GBP"),
-  tx(25, "acc_gbp", "2026-10-10", "Lena Fischer", "Transfer", -120, "GBP"),
-  tx(26, "acc_gbp", "2026-10-02", "From Main", "Transfer", 800, "GBP"),
+  tx(24, "acc_aed", "2026-10-24", "Souk Market", "Shopping", -42.8, "AED"),
+  tx(25, "acc_aed", "2026-10-10", "Omar Haddad", "Transfer", -120, "AED"),
+  tx(26, "acc_aed", "2026-10-02", "From Main", "Transfer", 800, "AED"),
 ];
 
-const payee = (id: string, f: PayeeFields, ageDays: number): Payee => {
-  const v = validatePayee(f);
-  return { id, name: String(f.name), country: v.country, market: v.market, currency: v.currency, bank: v.bank, masked: maskPayee(v.market, f), fields: f, addedAt: Date.now() - ageDays * day, check: checkName(v.market, f).result };
-};
-/** The four sample payees of docs/journeys/09-payment-rails.md section 14 that are saved for Alex. */
-export const alexPayees = (): Payee[] => [
-  payee("pay_maya", { country: "US", name: "Maya Chen", routingNumber: "021000021", accountNumber: "123456789", accountType: "Checking" }, 90),
-  payee("pay_lena", { country: "DE", name: "Lena Fischer", iban: "DE89 3704 0044 0532 0130 00" }, 60),
-  payee("pay_james", { country: "GB", name: "James Whitfield", sortCode: "20-00-00", accountNumber: "55779911" }, 40),
-  payee("pay_omar", { country: "AE", name: "Omar Haddad", iban: "AE07 0331 2345 6789 0123 456" }, 20),
-];
 
 const card = (c: Partial<IssuedCard> & Pick<IssuedCard, "id" | "kind" | "last4" | "nickname">): IssuedCard => ({
   network: c.kind === "credit" ? "mastercard" : "visa", holder: "Alex Morgan", expiry: "11/29", status: "active", virtual: false, pinSet: true,
@@ -97,7 +75,6 @@ const applications = (): Application[] => [
 export const alexRetail = (): RetailData => ({
   profile: { name: "Alex Morgan", email: "alex.morgan@example.com", phone: "+1 415 555 0142", dateOfBirth: "1988-04-17", customerSince: "2019-03-12", language: "en", address: { line1: "12 Harbour Road", city: "Springfield", region: "IL", postalCode: "10001", country: "US" } },
   transactions: transactions(),
-  payees: alexPayees(),
   cards: cards(),
   deposits: [
     { id: "td_1", name: "12-month deposit", principal: 5000, currency: "USD", ratePercent: 4.1, termMonths: 12, openedOn: "2026-03-03", maturesOn: "2027-03-03", status: "active", autoRenew: false, accountId: "acc_save" },
@@ -108,10 +85,6 @@ export const alexRetail = (): RetailData => ({
     { id: "goal_reserve", name: "Emergency fund", target: 10000, saved: 6400, currency: "USD", targetDate: "2027-12-31", accountId: "acc_save" },
   ],
   loans: loans(),
-  schedules: [
-    { id: "sch_rent", kind: "standing order", payeeName: "Rent", amount: 1450, currency: "USD", frequency: "monthly", nextDate: "2026-12-01", fromAccountId: "acc_main", reference: "Rent", status: "active" },
-    { id: "sch_save", kind: "standing order", payeeName: "Savings top-up", amount: 100, currency: "USD", frequency: "weekly", nextDate: "2026-11-06", fromAccountId: "acc_main", reference: "Top-up", status: "active" },
-  ],
   messages: [
     { id: "msg_1", subject: "Your statement is ready", from: "BankWorkx", at: "2026-11-01T06:00:00Z", read: false, body: "Your October statement for Main is ready to download." },
     { id: "msg_2", subject: "Your deposit has matured", from: "BankWorkx", at: "2026-11-02T06:00:00Z", read: false, body: "Your 6-month deposit has matured. Renew it or move the money." },
@@ -124,5 +97,4 @@ export const alexRetail = (): RetailData => ({
   ],
   requests: [{ id: "REQ-5001", type: "Card", summary: "Replacement card sent", status: "in progress", openedAt: "2026-10-29T10:00:00Z" }],
   applications: applications(),
-  payments: [],
 });

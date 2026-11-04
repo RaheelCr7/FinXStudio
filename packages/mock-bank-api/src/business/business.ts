@@ -1,15 +1,17 @@
 import { BankError } from "../errors";
-import type { BankConfig } from "../config";
-import { buildQuote } from "../quote";
-import { marketOf, currencyOfCountry, railReference, railOf, QUOTE_HOLD_SECONDS, type SpeedClass } from "../rails";
+import type { BankConfig, HomeMarket } from "../config";
+import type { SandboxConditions } from "../index";
+import { BANKWORKX_FX, priceQuote } from "../retail/fx";
+import { PAYMENT_QUOTE_SECONDS, PURPOSES, SENDER_PAYS_ALL, money, railsFor, speedsFor, type Offer, type SendType, type SpeedClass } from "../retail/payments";
 import type { CorpAuditEntry, CorpCompany, CorpPayment } from "./corporate";
 import type { CorporateProvider } from "./corporate-provider";
-import type { OtpState } from "../retail/payments";
+import type { OtpState } from "../retail/retail";
+import { currencyInfo, roundMoney } from "@finx/ui-kit";
 
 /** The acting person, when the sandbox knows who signed in: set by the session for an identity with several contexts, absent for a company persona whose journey picks the user itself. */
 export type Actor = { contextId: string; userId: string; permissions: string[] };
 export type BusinessHost = {
-  now: () => number; otp: OtpState; transferFails: () => boolean; down: (railId: string) => boolean; config: () => BankConfig;
+  now: () => number; otp: OtpState; transferFails: () => boolean; config: () => BankConfig; conditions: () => SandboxConditions;
   provider: () => CorporateProvider | undefined; actor: () => Actor | undefined;
 };
 
@@ -23,7 +25,7 @@ const NEEDS: Record<string, string> = {
   "corp.signatories.list": "biz.audit.view", "corp.audit.list": "biz.audit.view",
 };
 
-export type PaymentMeta = { speed: SpeedClass; rail: { id: string; name: string; referenceLabel: string }; railReference: string; receive: { amount: number; currency: string }; rate: number; fee: number; purpose: string; arrivesOn: string };
+export type PaymentMeta = { speed: SpeedClass; rail: { id: string; name: string }; railReference: string; receive: { amount: number; currency: string }; rate: number | null; fee: number; purpose: string; arrives: string };
 type HeldQuote = { id: string; used: boolean; expiresAt: number; userId: string; fromAccountId: string; beneficiaryId: string; total: number; reference: string; meta: Omit<PaymentMeta, "railReference"> };
 
 export class BusinessSandbox {
@@ -140,7 +142,11 @@ export class BusinessSandbox {
     }
   }
 
-  /** Prices a payment to a supplier in the supplier's currency: the conversion to the company's currency, the fee, the speed, how many approvers it needs and whether it asks for a code. Moves nothing. */
+  /**
+   * Prices a payment to an approved supplier in the supplier's currency: the conversion to the company's currency, the fee, the speed
+   * (rails come from the bank's home market, as for a person), how many approvers it needs and whether a confirmation code is asked
+   * (from the company's threshold). Purpose and reference (an invoice or PO number) are always required. Moves nothing.
+   */
   private quote(corp: CorporateProvider, userId: string, input: Record<string, any>) {
     const co = corp.getCompany(), now = this.host.now();
     const user = co.users.find((u) => u.id === userId);
@@ -150,20 +156,44 @@ export class BusinessSandbox {
     const sup = co.whitelist.find((b) => b.id === input.beneficiaryId);
     if (!sup) throw new BankError("BENEFICIARY_NOT_WHITELISTED", "This beneficiary is not on the company's approved list");
     if (from.currency !== co.currency) throw new BankError("CURRENCY_NOT_SUPPORTED", `Payments are limited in ${co.currency}: choose a ${co.currency} account`);
-    const country = sup.country ?? "US";
-    const currency = sup.currency ?? currencyOfCountry(country);
-    const q = buildQuote({ payee: { name: sup.name, market: marketOf(country), country, currency }, receive: Number(input.amount), speed: input.speed, charges: input.charges, purpose: input.purpose, reference: input.reference, company: true, now, down: this.host.down, speedMap: this.host.config().speedMap });
+    const cur = sup.currency ?? co.currency, digits = currencyInfo(cur).decimals, receive = Number(input.amount);
+    if (!(receive > 0) || Math.abs(receive * 10 ** digits - Math.round(receive * 10 ** digits)) > 1e-6) throw new BankError("INVALID_AMOUNT", `Enter an amount in ${cur} with at most ${digits} decimal places`);
+    if (!PURPOSES.includes(String(input.purpose ?? ""))) throw new BankError("PURPOSE_REQUIRED", "Choose a purpose for this payment.");
+    const reference = String(input.reference ?? "").trim();
+    if (!reference) throw new BankError("REFERENCE_REQUIRED", "Enter an invoice or PO number.");
+    if (reference.length > 140) throw new BankError("REFERENCE_TOO_LONG", "A reference can have up to 140 characters.");
+
+    // the speeds the bank offers for this supplier: domestic when it is paid over the home market's own rails
+    const home = this.host.config().homeMarket;
+    const type: SendType = sup.country && DOMESTIC[home].includes(sup.country) ? "domestic" : "international";
+    const offer: Offer = { standard: true, sameDay: true, instant: true, priority: false };
+    const down = (this.host.conditions().unavailable ?? []).filter((x) => x.startsWith("rail:")).map((x) => x.slice(5));
+    const speeds = speedsFor(type, receive, offer, down, false, railsFor(home));
+    const chosen = input.speed ? speeds.find((x) => x.speed === input.speed) : speeds.find((x) => x.available && x.fits);
+    if (input.speed && (!chosen || !chosen.available)) throw new BankError("RAIL_NOT_AVAILABLE", "Sending isn't available right now. Try again later.");
+    if (input.speed && chosen && !chosen.fits) throw new BankError("RAIL_LIMIT", `That speed is limited to ${money(chosen.limit!, cur)} a payment. Choose another speed or send less.`);
+    if (!chosen) throw new BankError(speeds.some((x) => x.available) ? "RAIL_LIMIT" : "RAIL_NOT_AVAILABLE", speeds.some((x) => x.available) ? "That is over the limit for this payment. Try a smaller amount." : "Sending isn't available right now. Try again later.");
+    const fee = chosen.fee + (type === "international" && input.chargeBearer === "ours" ? SENDER_PAYS_ALL : 0);
+
+    // what it costs in the company's currency; another currency uses the rate, held for 60 seconds
+    let rate: number | null = null, pay = receive;
+    if (cur !== co.currency) {
+      const price = priceQuote(co.currency, cur, receive, { cfg: BANKWORKX_FX, direction: "get", feeWaived: true });
+      rate = price.rate; pay = price.send;
+    }
+    const total = roundMoney(pay + fee, co.currency);
     // the same rules a payment meets when it starts, checked now so the screen can say so before the person confirms
-    if (q.total > from.balance) throw new BankError("INSUFFICIENT_FUNDS", `There isn't enough money in ${from.name}. Available: ${from.balance.toFixed(2)}. You need ${q.total.toFixed(2)}.`);
-    if (user.usedToday + q.total > user.dailyLimit) throw new BankError("LIMIT_USER_EXCEEDED", `That is over your limit of ${user.dailyLimit.toLocaleString("en-US")} a day.`);
-    if (co.companyUsedToday + q.total > co.companyDailyLimit) throw new BankError("LIMIT_COMPANY_EXCEEDED", "This is above the company's daily limit");
-    const id = `corpq_${++this.seq}`, expiresAt = now + QUOTE_HOLD_SECONDS * 1000;
-    const meta: HeldQuote["meta"] = { speed: q.option.speed, rail: { id: q.rail.id, name: q.rail.name, referenceLabel: q.rail.refLabel }, receive: { amount: Number(input.amount), currency }, rate: q.rate, fee: q.fee, purpose: String(input.purpose), arrivesOn: q.option.arrivesOn };
-    this.quotes.set(id, { id, used: false, expiresAt, userId, fromAccountId: from.id, beneficiaryId: sup.id, total: q.total, reference: q.reference, meta });
+    if (total > from.balance) throw new BankError("INSUFFICIENT_FUNDS", `There isn't enough money in ${from.name}. Available: ${money(from.balance, co.currency)}. You need ${money(total, co.currency)}.`);
+    if (user.usedToday + total > user.dailyLimit) throw new BankError("LIMIT_USER_EXCEEDED", `That is over your limit of ${money(user.dailyLimit, co.currency)} a day.`);
+    if (co.companyUsedToday + total > co.companyDailyLimit) throw new BankError("LIMIT_COMPANY_EXCEEDED", "This is above the company's daily limit");
+    const id = `corpq_${++this.seq}`, expiresAt = now + PAYMENT_QUOTE_SECONDS * 1000;
+    const meta: HeldQuote["meta"] = { speed: chosen.speed, rail: { id: chosen.id, name: chosen.name }, receive: { amount: receive, currency: cur }, rate, fee, purpose: String(input.purpose), arrives: chosen.arrives };
+    this.quotes.set(id, { id, used: false, expiresAt, userId, fromAccountId: from.id, beneficiaryId: sup.id, total, reference, meta });
     return {
-      quoteId: id, expiresAt: new Date(expiresAt).toISOString(), ttlSeconds: QUOTE_HOLD_SECONDS, fromAccountId: from.id, payee: { id: sup.id, name: sup.name, masked: sup.maskedNumber },
-      receive: meta.receive, rate: q.rate, converted: q.converted, fee: q.fee, total: q.total, currency: co.currency, charges: q.charges, speed: q.option.speed, rail: meta.rail, arrivesOn: q.option.arrivesOn, afterCutoff: q.option.afterCutoff,
-      requiredApprovers: q.total > co.dualApprovalAbove ? 2 : 1, codeRequired: this.needsCode(co, () => q.total), options: q.options,
+      quoteId: id, expiresAt: new Date(expiresAt).toISOString(), ttlSeconds: PAYMENT_QUOTE_SECONDS, fromAccountId: from.id, payee: { id: sup.id, name: sup.name, masked: sup.maskedNumber },
+      type, speed: chosen.speed, speedName: chosen.name, arrives: chosen.arrives, receive: meta.receive, rate, converted: cur !== co.currency, pay, fee, total, currency: co.currency,
+      speeds: Object.fromEntries(speeds.map((x) => [x.speed, { id: x.speed, name: x.name, arrives: x.arrives, fee: x.fee, usable: x.available && x.fits, ...(x.reason ? { reason: x.reason } : {}) }])),
+      requiredApprovers: total > co.dualApprovalAbove ? 2 : 1, codeRequired: this.needsCode(co, () => total),
     };
   }
 
@@ -174,16 +204,18 @@ export class BusinessSandbox {
     if (q.used) throw new BankError("QUOTE_USED", "This quote has already been used");
     if (q.userId !== userId) throw new BankError("PERMISSION_DENIED", `Your role doesn't allow this. Ask an administrator at ${corp.getCompany().name}.`);
     if (this.host.now() > q.expiresAt) throw new BankError("QUOTE_EXPIRED", "The exchange rate changed. Check the new amount.");
-    if (this.host.down(q.meta.rail.id)) throw new BankError("RAIL_NOT_AVAILABLE", `${q.meta.rail.name} isn't available right now. Choose another way to send it.`);
+    if ((this.host.conditions().unavailable ?? []).includes(`rail:${q.meta.rail.id}`)) throw new BankError("RAIL_NOT_AVAILABLE", "Sending isn't available right now. Try again later.");
     this.requireCode(corp.getCompany(), () => q.total);
     const p = corp.initiatePayment({ userId, fromAccountId: q.fromAccountId, beneficiaryId: q.beneficiaryId, amount: q.total, reference: q.reference });
     q.used = true; this.host.otp.verified = false;
-    const rail = railOf(q.meta.rail.id)!;
-    this.meta.set(`${corp.getCompany().id}:${p.id}`, { ...q.meta, railReference: railReference(rail, Number(p.id.replace(/\D/g, "")) || ++this.seq) });
+    this.meta.set(`${corp.getCompany().id}:${p.id}`, { ...q.meta, railReference: `${q.meta.rail.id.toUpperCase()}-${String(Number(p.id.replace(/\D/g, "")) || this.seq).padStart(8, "0")}` });
     this.log(corp, userId, `Started payment ${p.id}`);
     return this.shown(p, corp.getCompany());
   }
 }
+
+/** The countries a supplier can be in for the bank's home-market rails to serve the payment. */
+const DOMESTIC: Record<HomeMarket, string[]> = { us: ["US"], uk: ["GB"], eu: ["DE", "FR", "ES", "IT", "NL", "IE", "BE", "AT", "PT", "FI", "LU", "GR"], ae: ["AE"], sa: ["SA"], jo: ["JO"] };
 
 /** What the person sees for who a payment goes to: the beneficiary's name, or how many payees a bulk payment has. */
 export function shown(p: CorpPayment, company: CorpCompany): CorpPayment & { payee: string } {

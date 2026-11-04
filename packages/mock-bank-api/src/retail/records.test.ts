@@ -6,10 +6,10 @@ const code = async (p: Promise<unknown>) => p.then(() => "no error", (e) => e.co
 const alex = () => { const b = new MockBank("alex"); b.now = () => Date.parse("2026-11-04T10:00:00Z"); return b; };
 
 describe("Alex's accounts", () => {
-  it("has USD current and savings, EUR and GBP, each with a ledger balance and an available balance", async () => {
+  it("has USD current and savings, EUR and AED, each with a ledger balance and an available balance", async () => {
     const accs = Object.values(await alex().call("bank.accounts.list")) as any[];
     expect(accs.map((a) => [a.id, a.currency, a.balance, a.available])).toEqual([
-      ["acc_main", "USD", 8720.76, 8602.36], ["acc_save", "USD", 15254.37, 15254.37], ["acc_eur", "EUR", 2150.4, 2150.4], ["acc_gbp", "GBP", 1820.15, 1820.15],
+      ["acc_main", "USD", 8720.76, 8602.36], ["acc_save", "USD", 15254.37, 15254.37], ["acc_eur", "EUR", 2400, 2400], ["acc_aed", "AED", 11000, 11000],
     ]);
     expect(accs.map((a) => a.kind)).toEqual(["current", "savings", "current", "current"]);
   });
@@ -79,7 +79,7 @@ describe("the rest of Alex's relationship", () => {
     expect(loan.schedule.at(-1).balance).toBe(0);
     expect(loan.schedule.reduce((s: number, x: any) => s + x.principal, 0)).toBeCloseTo(7480, 2);
     expect(await code(b.call("bank.loans.get", { loanId: "x" }))).toBe("LOAN_NOT_FOUND");
-    expect(Object.keys(await b.call("bank.schedules.list"))).toEqual(["sch_rent", "sch_save"]);
+    expect(Object.keys(await b.call("bank.schedules.list"))).toEqual(["sch_rent"]);
     expect(await b.call("bank.profile.get")).toMatchObject({ name: "Alex Morgan", email: "alex.morgan@example.com" });
     expect(Object.keys(await b.call("bank.messages.list"))).toHaveLength(3);
     expect(Object.values(await b.call("bank.notifications.list", { context: "beta" })).map((n: any) => n.id)).toEqual(["n_1"]);

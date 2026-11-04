@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { localTransfer } from "@finx/journey-schema";
+import { generateKeyPair, localTransfer, signJourney } from "@finx/journey-schema";
 import { createLive, forBrand, slugIs } from "./live";
 import { resolveBrandId } from "./brand";
 
@@ -41,5 +41,22 @@ describe("journeys over the air", () => {
     expect(resolveBrandId("unknown")).toBe("meezan");
     expect(resolveBrandId(undefined)).toBe("meezan");
     for (const odd of ["constructor", "__proto__", "toString", "hasOwnProperty"]) expect(resolveBrandId(odd), odd).toBe("meezan");
+  });
+});
+
+describe("signed journeys", () => {
+  const bank = generateKeyPair(), other = generateKeyPair();
+  const signed = (key = bank.privateKey, j: any = localTransfer) => ({ ...j, signature: signJourney(j, key) });
+  const load = (body: unknown, keys = [bank.publicKey]) => createLive({ brand: "meezan", fetch: json(body), trustedKeys: keys }).loadJourney("http://x", "fund-transfer-local");
+  it("shows a journey signed by a trusted key", async () => expect((await load(signed()))!.source).toBe("studio"));
+  it("falls back to the bundled copy when the journey is unsigned, signed by someone else, or changed", async () => {
+    expect((await load(localTransfer))!.source).toBe("bundled");
+    expect((await load(signed(other.privateKey)))!.source).toBe("bundled");
+    const tampered: any = structuredClone(signed()); tampered.screens[0].title = "Tampered";
+    expect((await load(tampered))!.source).toBe("bundled");
+  });
+  it("accepts unsigned journeys when the app has no trusted keys (the demo)", async () => {
+    expect((await load(localTransfer, []))!.source).toBe("studio");
+    expect((await load(signed(), []))!.source).toBe("studio");
   });
 });

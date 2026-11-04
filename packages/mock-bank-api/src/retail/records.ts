@@ -49,7 +49,6 @@ export function retailRecords(p: Persona, adapter: string, input: Record<string,
       const debits = roundMoney(rows.filter((t) => t.amount < 0).reduce((s, t) => s + t.amount, 0), a.currency);
       return { accountId: a.id, currency: a.currency, from, to, opening: roundMoney(closing - credits - debits, a.currency), credits, debits, closing, count: rows.length, transactions: keyed(rows) };
     }
-    case "bank.payees.list": return keyed(needData(p).payees);
     case "bank.cards.issued": return keyed(needData(p).cards);
     case "bank.cards.get": {
       const c = needData(p).cards.find((x) => x.id === input.cardId);
@@ -64,7 +63,6 @@ export function retailRecords(p: Persona, adapter: string, input: Record<string,
       if (!l) throw new BankError("LOAN_NOT_FOUND", "We can't find that loan.");
       return l;
     }
-    case "bank.schedules.list": return keyed(needData(p).schedules.filter((s) => s.status === "active"));
     case "bank.messages.list": return keyed(needData(p).messages);
     case "bank.notifications.list": return keyed(needData(p).notifications.filter((n) => !input.context || n.context === input.context));
     case "bank.requests.list": return keyed(needData(p).requests);

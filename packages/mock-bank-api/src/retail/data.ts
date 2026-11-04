@@ -1,4 +1,3 @@
-import type { NameCheck, PayeeFields, Market, SpeedClass } from "../rails";
 
 /** The rest of a retail customer's relationship besides the accounts and BankWorkx spending data: what the retail journeys read and change. */
 export type AccountTxn = {
@@ -6,10 +5,6 @@ export type AccountTxn = {
   /** signed, in the account's currency: negative is money out */ amount: number; currency: string;
   /** a pending item is on hold: it lowers the available balance but not yet the ledger balance */
   status: "posted" | "pending"; reference?: string;
-};
-export type Payee = {
-  id: string; name: string; country: string; market: Market; currency: string; bank?: string; masked: string; fields: PayeeFields; addedAt: number;
-  /** how the name check ended when the payee was saved */ check: NameCheck["result"];
 };
 export type IssuedCard = {
   id: string; kind: "debit" | "credit"; network: "visa" | "mastercard"; last4: string; holder: string; expiry: string; nickname: string;
@@ -22,10 +17,6 @@ export type TermDeposit = { id: string; name: string; principal: number; currenc
 export type SavingsGoal = { id: string; name: string; target: number; saved: number; currency: string; targetDate: string; accountId: string };
 export type LoanInstalment = { n: number; due: string; principal: number; interest: number; balance: number };
 export type Loan = { id: string; name: string; principal: number; outstanding: number; currency: string; ratePercent: number; monthlyPayment: number; nextDue: string; schedule: LoanInstalment[] };
-export type Schedule = {
-  id: string; kind: "payment" | "standing order"; payeeName: string; amount: number; currency: string; frequency: "once" | "weekly" | "monthly";
-  nextDate: string; fromAccountId: string; reference: string; status: "active" | "cancelled";
-};
 export type Message = { id: string; subject: string; from: string; at: string; read: boolean; body: string };
 export type Notification = { id: string; /** which place it belongs to */ context: string; text: string; at: string; read: boolean };
 export type ServiceRequest = { id: string; type: string; summary: string; status: "open" | "in progress" | "closed"; openedAt: string };
@@ -37,12 +28,8 @@ export type Profile = {
   name: string; email: string; phone: string; dateOfBirth: string; customerSince: string; language: string;
   address: { line1: string; city: string; region: string; postalCode: string; country: string };
 };
-export type SentPayment = {
-  id: string; reference: string; status: "sent" | "scheduled" | "held"; payeeName: string; fromAccountId: string; rail: string; speed: SpeedClass; railReference: string;
-  receive: { amount: number; currency: string }; youPay: number; fee: number; arrivesOn: string; createdAt: string; purpose?: string; note?: string; acknowledged?: boolean; payeeCheck?: NameCheck["result"];
-};
 
 export type RetailData = {
-  profile: Profile; transactions: AccountTxn[]; payees: Payee[]; cards: IssuedCard[]; deposits: TermDeposit[]; goals: SavingsGoal[]; loans: Loan[];
-  schedules: Schedule[]; messages: Message[]; notifications: Notification[]; requests: ServiceRequest[]; applications: Application[]; payments: SentPayment[];
+  profile: Profile; transactions: AccountTxn[]; cards: IssuedCard[]; deposits: TermDeposit[]; goals: SavingsGoal[]; loans: Loan[];
+  messages: Message[]; notifications: Notification[]; requests: ServiceRequest[]; applications: Application[];
 };

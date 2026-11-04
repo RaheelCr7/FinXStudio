@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { bulkPayment, catalog, corporateApproval, corporatePayment, Journey, withdrawPayment, payrollRun } from "@finx/journey-schema";
+import { bulkPayment, catalog, corporateApproval, corporatePayment, Journey, withdrawPayment, payrollRun, ownTransfer, manageBeneficiary, personalTransfer, internalTransfer, payBillBankworkx, mobileTopup } from "@finx/journey-schema";
 import { lintAll } from "@finx/renderer-core";
 import { mutationCheck, runScenarios } from "./scenarios";
 
@@ -104,6 +104,242 @@ describe("the tests that travel with a journey", () => {
   }, 120_000);
 });
 
+/**
+ * Between my accounts is a retail journey: it has no second bank API, so the "second API" run of the company journeys does not apply.
+ * Survivors of the mutation check are listed with the reason each cannot be reached from a screen.
+ */
+describe("own-transfer: Between my accounts", () => {
+  const j = Journey.parse(ownTransfer);
+  const OWN_ACCEPTED: Record<string, string> = {
+    "no-error-path-28": "'Get a new rate' fails only if the rate service fails on the second request after answering the first; the same error path is proved on the first request (T-10)",
+    "no-error-path-47": "The renewal after a rate ran out fails only if the rate service fails on the second request after answering the first; the same error path is proved on the first request (T-10)",
+    "no-error-path-34": "Resending the code is a button of the code field that a scenario cannot press; the first send has the same error path and is proved (T-19)",
+    "bank-sameAccount": OTHER_LAYER("The journey's own rule on the accounts screen already refuses the same account twice (T-6)"),
+    "bank-canDebit": OTHER_LAYER("The journey's own rule on the accounts screen already refuses an account that cannot send (T-6)"),
+    "bank-quoteReplay": "A rate can only be used once because the journey never offers the same rate twice; the bank's unit test replays one (QUOTE_USED, QUOTE_NOT_FOUND), a screen cannot",
+  };
+
+  it("is lint clean, every scenario passes and every acceptance criterion is proved", async () => {
+    expect(lintAll(j)).toEqual([]);
+    const r = await runScenarios(j);
+    expect(r.results.filter((x) => !x.ok).map((x) => `${x.id} ${x.name}: ${x.failures.join(" | ")}`)).toEqual([]);
+    expect(r.coverage.map((c) => [c.id, c.status])).toEqual((j.acceptance ?? []).map((a) => [a.id, "proved"]));
+    expect([r.passed, r.total, r.coverage.length]).toEqual([21, 21, 10]);
+    expect(r.ok).toBe(true);
+  });
+
+  it("the tests notice when the journey or the bank's rules are broken (mutation check)", async () => {
+    const m = await mutationCheck(j, OWN_ACCEPTED);
+    expect(m.survived.map((s) => `${s.id}: ${s.what}`)).toEqual([]);
+    expect([m.total, m.killed, m.accepted.length]).toEqual([33, 27, 6]);
+    expect(m.ok).toBe(true);
+  }, 120_000);
+
+  it("the bank rules the journey leans on are each checked by a mutant", async () => {
+    const m = await mutationCheck(j, OWN_ACCEPTED);
+    const bank = m.results.filter((x) => x.kind === "bank");
+    expect(bank.map((x) => x.id).sort()).toEqual(["bank-canDebit", "bank-funds", "bank-quoteExpiry", "bank-quoteReplay", "bank-sameAccount"]);
+    expect(bank.filter((x) => x.killed).map((x) => x.id).sort()).toEqual(["bank-funds", "bank-quoteExpiry"]);
+  }, 120_000);
+});
+
+/**
+ * Add, edit or delete a payee is a retail journey: it has no second bank API, so the "second API" run of the company journeys does not apply.
+ * Survivors of the mutation check are listed with the reason each cannot be reached from a screen.
+ */
+describe("manage-beneficiary: Add, edit or delete a payee", () => {
+  const j = Journey.parse(manageBeneficiary);
+  const BEN_ACCEPTED: Record<string, string> = {
+    "no-error-path-69": "Resending the code is a button of the code field that a scenario cannot press; the first send has the same error path and is proved (T-30)",
+  };
+
+  it("is lint clean, every scenario passes and every acceptance criterion is proved", async () => {
+    expect(lintAll(j)).toEqual([]);
+    const r = await runScenarios(j);
+    expect(r.results.filter((x) => !x.ok).map((x) => `${x.id} ${x.name}: ${x.failures.join(" | ")}`)).toEqual([]);
+    expect(r.coverage.map((c) => [c.id, c.status])).toEqual((j.acceptance ?? []).map((a) => [a.id, "proved"]));
+    expect([r.passed, r.total, r.coverage.length]).toEqual([35, 35, 10]);
+    expect(r.ok).toBe(true);
+  });
+
+  it("the tests notice when the journey or the bank's rules are broken (mutation check)", async () => {
+    const m = await mutationCheck(j, BEN_ACCEPTED);
+    expect(m.survived.map((s) => `${s.id}: ${s.what}`)).toEqual([]);
+    expect([m.total, m.killed, m.accepted.length]).toEqual([47, 46, 1]);
+    expect(m.ok).toBe(true);
+  }, 240_000);
+
+  it("the bank rules the journey leans on are each checked by a mutant, and each is caught", async () => {
+    const m = await mutationCheck(j, BEN_ACCEPTED);
+    const bank = m.results.filter((x) => x.kind === "bank");
+    expect(bank.map((x) => x.id).sort()).toEqual(["bank-bic", "bank-clockOnDetails", "bank-countryMatch", "bank-ibanChecksum", "bank-nameCheck", "bank-nameKeepsClock", "bank-payeeDuplicate", "bank-payeeInUse", "bank-payeeLimit", "bank-routingChecksum", "bank-sepa", "bank-sortCode", "bank-verifiedOnMatch"]);
+    expect(bank.filter((x) => !x.killed)).toEqual([]);
+  }, 240_000);
+
+  it("keeps the scenarios of a payee journey off the clock of the machine: the same walk at another time gives the same answers", async () => {
+    const later = Journey.parse({ ...manageBeneficiary, scenarios: manageBeneficiary.scenarios!.map((t) => ({ ...t, now: "2027-03-15T22:05:00Z" })) });
+    const r = await runScenarios(later);
+    expect(r.results.filter((x) => !x.ok).map((x) => `${x.id}: ${x.failures.join(" | ")}`)).toEqual([]);
+  });
+});
+
+/**
+ * Send money is a retail journey: it has no second bank API, so the "second API" run of the company journeys does not apply.
+ * Survivors of the mutation check are listed with the reason each cannot be reached from a screen.
+ */
+describe("personal-transfer: Send money", () => {
+  const j = Journey.parse(personalTransfer);
+  const PT_ACCEPTED: Record<string, string> = {
+    "no-error-path-107": "The address step asks for the price a second time, with the same answer the first time had; the same error path is proved on the first price (T-42, T-43)",
+    "no-error-path-136": "The new price after a rate ran out is asked a second time; the same error path is proved on the first price (T-42, T-43)",
+    "no-error-path-123": "Resending the code is a button of the code field that a scenario cannot press; the first send has the same error path and is proved (T-47)",
+    "bank-quoteReplay": "A price can only be used once because the journey never offers the same price twice; the bank's unit test replays one (QUOTE_USED), a screen cannot",
+    "bank-bankCode": OTHER_LAYER("The journey's own pattern on the field already refuses a transit number, IFSC or BSB in the wrong format (T-12)"),
+    "bank-sepa": "The journey adds payees at the home bank or abroad only; the Europe region of the payee checks is not offered here (manage-beneficiary proves it)",
+    "bank-countryMatch": "The journey adds payees at the home bank or abroad only; the Middle East region of the payee checks is not offered here (manage-beneficiary proves it)",
+    "bank-sortCode": "The journey adds payees at the home bank or abroad only; the United Kingdom region of the payee checks is not offered here (manage-beneficiary proves it)",
+  };
+
+  it("is lint clean, every scenario passes and every acceptance criterion is proved", async () => {
+    expect(lintAll(j)).toEqual([]);
+    const r = await runScenarios(j);
+    expect(r.results.filter((x) => !x.ok).map((x) => `${x.id} ${x.name}: ${x.failures.join(" | ")}`)).toEqual([]);
+    expect(r.coverage.map((c) => [c.id, c.status])).toEqual((j.acceptance ?? []).map((a) => [a.id, "proved"]));
+    expect([r.passed, r.total, r.coverage.length]).toEqual([49, 49, 13]);
+    expect(r.ok).toBe(true);
+  });
+
+  it("the tests notice when the journey or the bank's rules are broken (mutation check)", async () => {
+    const m = await mutationCheck(j, PT_ACCEPTED);
+    expect(m.survived.map((s) => `${s.id}: ${s.what}`)).toEqual([]);
+    expect([m.total, m.killed, m.accepted.length]).toEqual([58, 50, 8]);
+    expect(m.ok).toBe(true);
+  }, 240_000);
+
+  it("the bank rules the journey leans on are each checked by a mutant, and the ones a screen can reach are caught", async () => {
+    const m = await mutationCheck(j, PT_ACCEPTED);
+    const bank = m.results.filter((x) => x.kind === "bank");
+    expect(bank.map((x) => x.id).sort()).toEqual([
+      "bank-addressRule", "bank-bankCode", "bank-bic", "bank-canDebit", "bank-coolingOff", "bank-countryMatch", "bank-dailyLimit", "bank-funds", "bank-ibanChecksum", "bank-payeeDuplicate", "bank-payeeLimit",
+      "bank-purposeRule", "bank-quoteExpiry", "bank-quoteReplay", "bank-railLimit", "bank-routingChecksum", "bank-sanctions", "bank-sepa", "bank-sortCode",
+    ]);
+    expect(bank.filter((x) => !x.killed).map((x) => x.id).sort()).toEqual(["bank-bankCode", "bank-countryMatch", "bank-quoteReplay", "bank-sepa", "bank-sortCode"]);
+  }, 240_000);
+
+  it("keeps the scenarios off the clock of the machine: the same walk at another time gives the same answers", async () => {
+    const later = Journey.parse({ ...personalTransfer, scenarios: personalTransfer.scenarios!.map((t) => ({ ...t, now: "2027-03-15T22:05:00Z" })).filter((t) => !["T-21", "T-27", "T-49"].includes(t.id)) });
+    const r = await runScenarios(later);
+    // T-21 (the date the allowance ends), T-27 and T-49 (the business days offered) name dates on purpose; every other one follows the clock it is given
+    expect(r.results.filter((x) => !x.ok).map((x) => `${x.id}: ${x.failures.join(" | ")}`)).toEqual([]);
+  });
+});
+
+/**
+ * To a BankWorkx customer is Send money opened at its first step (the engine cannot open one journey from another with a value), so the
+ * rules and their mutants are those of Send money; here the alias is proved to open where it says and to keep the rules of its type.
+ */
+describe("internal-transfer: To a BankWorkx customer (alias of Send money)", () => {
+  const j = Journey.parse(internalTransfer);
+  it("is lint clean, every scenario passes and every acceptance criterion is proved", async () => {
+    expect(lintAll(j)).toEqual([]);
+    const r = await runScenarios(j);
+    expect(r.results.filter((x) => !x.ok).map((x) => `${x.id} ${x.name}: ${x.failures.join(" | ")}`)).toEqual([]);
+    expect(r.coverage.map((c) => [c.id, c.status])).toEqual((j.acceptance ?? []).map((a) => [a.id, "proved"]));
+    expect([r.passed, r.total, r.coverage.length]).toEqual([7, 7, 2]);
+    expect(r.ok).toBe(true);
+  });
+
+  it("is the same flow as Send money: the same bank calls, and no screen of its own other than the empty state of the type", () => {
+    expect(j.integrations).toEqual(personalTransfer.integrations);
+    expect(j.screens.map((s) => s.id)).toEqual(personalTransfer.screens.map((s) => s.id));
+    expect(j.slug).not.toBe(personalTransfer.slug);
+  });
+});
+
+/**
+ * Pay a bill is a retail journey: it has no second bank API, so the "second API" run of the company journeys does not apply.
+ * Survivors of the mutation check are listed with the reason each cannot be reached from a screen.
+ */
+describe("pay-bill: Pay a bill", () => {
+  const j = Journey.parse(payBillBankworkx);
+  const PB_ACCEPTED: Record<string, string> = {
+    "no-error-path-67": "Resending the code is a button of the code field that a scenario cannot press; the first send has the same error path and is proved (T-40)",
+    "no-error-path-76": "The new amount after the amount due changed at the bank is asked a second time; the same error path is proved on the first price (T-39)",
+    "no-rule-route-3": "The amount due changes between the review and the payment only if the bank changes it a second time; the sandbox changes it once, at the review (T-18, T-19), so no screen reaches the screen for it (the bank's unit test proves BILL_CHANGED)",
+    "bank-billChanged": "The sandbox changes the amount due once, when the price is asked, so the amount the person confirms is always the one the bank has at payment (the bank's unit test pays an old amount and is refused)",
+    "bank-billMinimum": OTHER_LAYER("The journey's own minimum on the amount field already refuses an amount below the minimum (T-8, T-9)"),
+    "bank-billMaximum": OTHER_LAYER("The journey's own maximum on the amount field already refuses an amount above the amount due or above 1.8 times it for a card (T-8, T-10)"),
+  };
+
+  it("is lint clean, every scenario passes and every acceptance criterion is proved", async () => {
+    expect(lintAll(j)).toEqual([]);
+    const r = await runScenarios(j);
+    expect(r.results.filter((x) => !x.ok).map((x) => `${x.id} ${x.name}: ${x.failures.join(" | ")}`)).toEqual([]);
+    expect(r.coverage.map((c) => [c.id, c.status])).toEqual((j.acceptance ?? []).map((a) => [a.id, "proved"]));
+    expect([r.passed, r.total, r.coverage.length]).toEqual([40, 40, 12]);
+    expect(r.ok).toBe(true);
+  });
+
+  it("the tests notice when the journey or the bank's rules are broken (mutation check)", async () => {
+    const m = await mutationCheck(j, PB_ACCEPTED);
+    expect(m.survived.map((s) => `${s.id}: ${s.what}`)).toEqual([]);
+    expect([m.total, m.killed, m.accepted.length]).toEqual([37, 31, 6]);
+    expect(m.ok).toBe(true);
+  }, 240_000);
+
+  it("the bank rules the journey leans on are each checked by a mutant, and the ones a screen can reach are caught", async () => {
+    const m = await mutationCheck(j, PB_ACCEPTED);
+    const bank = m.results.filter((x) => x.kind === "bank");
+    expect(bank.map((x) => x.id).sort()).toEqual(["bank-billChanged", "bank-billCurrency", "bank-billMaximum", "bank-billMemory", "bank-billMinimum", "bank-canDebit", "bank-dailyLimit", "bank-funds"]);
+    expect(bank.filter((x) => !x.killed).map((x) => x.id).sort()).toEqual(["bank-billChanged", "bank-billMaximum", "bank-billMinimum"]);
+  }, 240_000);
+
+  it("sits beside the Meezan journey \"pay-a-bill\", which keeps its slug, its look and its billers", () => {
+    expect(catalog.filter((c) => c.id === "pay-a-bill" || c.id === "pay-bill").map((c) => [c.id, c.madeFor])).toEqual([["pay-a-bill", "meezan"], ["pay-bill", "bankworkx"]]);
+    expect(payBillBankworkx.apps).toEqual(["bankworkx"]);
+  });
+});
+
+/**
+ * Mobile top-up is a retail journey: it has no second bank API, so the "second API" run of the company journeys does not apply.
+ * Survivors of the mutation check are listed with the reason each cannot be reached from a screen.
+ */
+describe("mobile-topup: Mobile top-up", () => {
+  const j = Journey.parse(mobileTopup);
+  const MT_ACCEPTED: Record<string, string> = {
+    "no-error-path-51": "Resending the code is a button of the code field that a scenario cannot press; the first send has the same error path and is proved (T-33)",
+  };
+
+  it("is lint clean, every scenario passes and every acceptance criterion is proved", async () => {
+    expect(lintAll(j)).toEqual([]);
+    const r = await runScenarios(j);
+    expect(r.results.filter((x) => !x.ok).map((x) => `${x.id} ${x.name}: ${x.failures.join(" | ")}`)).toEqual([]);
+    expect(r.coverage.map((c) => [c.id, c.status])).toEqual((j.acceptance ?? []).map((a) => [a.id, "proved"]));
+    expect([r.passed, r.total, r.coverage.length]).toEqual([33, 33, 9]);
+    expect(r.ok).toBe(true);
+  });
+
+  it("the tests notice when the journey or the bank's rules are broken (mutation check)", async () => {
+    const m = await mutationCheck(j, MT_ACCEPTED);
+    expect(m.survived.map((s) => `${s.id}: ${s.what}`)).toEqual([]);
+    expect([m.total, m.killed, m.accepted.length]).toEqual([29, 28, 1]);
+    expect(m.ok).toBe(true);
+  }, 240_000);
+
+  it("every bank rule the journey leans on is checked by a mutant, and every one of them is caught by a screen", async () => {
+    const m = await mutationCheck(j, MT_ACCEPTED);
+    const bank = m.results.filter((x) => x.kind === "bank");
+    expect(bank.map((x) => x.id).sort()).toEqual(["bank-canDebit", "bank-dailyLimit", "bank-funds", "bank-topupAmount", "bank-topupLimit", "bank-topupNumber"]);
+    expect(bank.filter((x) => !x.killed)).toEqual([]);
+  }, 240_000);
+
+  it("is for BankWorkx only: the Meezan app and its carriers are not touched", () => {
+    expect(catalog.filter((c) => c.id === "mobile-topup").map((c) => [c.madeFor, c.category])).toEqual([["bankworkx", "Payments"]]);
+    expect(mobileTopup.apps).toEqual(["bankworkx"]);
+    expect(mobileTopup.channels).toEqual(["web", "mobile"]);
+  });
+});
+
 describe("scenario setup can keep what the bank answered", () => {
   it.each(["reference", "bank-b"] as const)("a later step reads the id of a payment made in setup, on the %s API", async (provider) => {
     const j = structuredClone(journeys[1]!) as any;
@@ -122,24 +358,12 @@ describe("scenario setup can keep what the bank answered", () => {
   });
 });
 
-describe("scenario conditions", () => {
-  const withConditions = (conditions: Record<string, unknown> | undefined, steps: unknown[], setup?: unknown[]) => {
+describe("scenario conditions: empty lists", () => {
+  it("a list that comes back empty is an empty list for the journey", async () => {
     const j = structuredClone(journeys[0]!) as any;
     j.acceptance = [{ id: "AC-1", text: "x" }];
-    j.scenarios = [{ id: "T-1", name: "conditions", covers: ["AC-1"], persona: "acme", ...(conditions ? { conditions } : {}), ...(setup ? { setup } : {}), steps }];
-    return Journey.parse(j);
-  };
-  it("the journey runs normally without conditions", async () => {
-    const r = await runScenarios(withConditions(undefined, [{ expectScreen: "who" }]));
-    expect(r.results.map((x) => x.failures)).toEqual([[]]);
-  });
-  it.each([["unavailable"], ["timeout"]])("%s on the first adapter sends the journey down its error path", async (kind) => {
-    const r = await runScenarios(withConditions({ [kind]: ["corp.users.list"] }, [{ expectScreen: "unavailable" }]));
-    expect(r.results.map((x) => x.failures)).toEqual([[]]);
-  });
-  it("setup and expectBank reads are not affected by the conditions of the walk", async () => {
-    const r = await runScenarios(withConditions({ unavailable: ["corp.", "bank."] }, [{ expectScreen: "unavailable" }, { expectBank: { adapter: "corp.company.get", input: { userId: "sara" }, path: "id", equals: "acme" } }],
-      [{ adapter: "corp.company.get", input: { userId: "sara" } }]));
+    j.scenarios = [{ id: "T-1", name: "nobody to choose", covers: ["AC-1"], persona: "acme", conditions: { empty: ["corp.users.list"] }, steps: [{ expectScreen: "who" }, { expectNoText: "Sara Qureshi" }] }];
+    const r = await runScenarios(Journey.parse(j));
     expect(r.results.map((x) => x.failures)).toEqual([[]]);
   });
 });

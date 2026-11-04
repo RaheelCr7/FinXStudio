@@ -1,13 +1,20 @@
 import { currencyInfo, roundMoney } from "@finx/ui-kit";
 import { BankError } from "../errors";
-import type { Persona } from "../index";
+import type { Account, Beneficiary, Persona, SandboxConditions, SavedBiller, SavedNumber, Schedule } from "../index";
+import type { Flaws } from "../business/corporate";
+import type { BankConfig } from "../config";
 import { instrumentOf, INSTRUMENTS, dayChange } from "./invest";
 import { BANKS, cardNetwork, luhnValid } from "./finance";
-import { customerRate, midRate, priceQuote, fxSupports, FX_SPREAD, QUOTE_TTL_SECONDS, type Quote } from "./fx";
+import { customerRate, midRate, priceQuote, fxSupports, DEFAULT_FX, BANKWORKX_FX, QUOTE_TTL_SECONDS, type FxConfig, type Quote } from "./fx";
 import { CabSandbox } from "./cab";
-import { RetailPayments, type OtpState, type RetailHost } from "./payments";
-import { retailRecords } from "./records";
+import { checkName, checkPayee, COOLING_OFF_HOURS, COOLING_OFF_USD, COUNTRY_RULES, findCustomer, hoursSince, MAX_PAYEES, sendTypeOf, type NameCheck, type PayeeDetails, type PayeeInput, type PayeeKind, type PayeeRegion } from "./payees";
+import { AUTOPAY_CATEGORIES, autopayPlan, BANKWORKX_BILLERS, BILL_CURRENCY, billOf, billCase, choicesOf, dayLabel, limitsOf, normaliseRef, RAISE_CENTS, validRef, type Biller } from "./bills";
+import { amountChoices, dayKey, marketOf, normaliseNumber, numberCase, OPERATORS, receiptDate, TOPUP_CURRENCY, TOPUP_NUMBER_DAILY, validNumber } from "./topup";
+import { ADDRESS_RULE_USD, businessDays, money, PAYMENT_QUOTE_SECONDS, PURPOSES, RELATIONSHIPS, REPEATS, SANCTIONS_NAME, SENDER_PAYS_ALL, speedsFor, speedText, railsFor, type Offer, type SendType, type SpeedClass } from "./payments";
 import { credit, debit, spendable } from "./money";
+import { retailRecords } from "./records";
+
+const hour = 3600 * 1000;
 
 export const BILLERS = [
   { id: "k_electric", name: "K-Electric", category: "Electricity" }, { id: "lesco", name: "LESCO", category: "Electricity" },
@@ -15,18 +22,60 @@ export const BILLERS = [
 ];
 export const CARRIERS = [{ id: "jazz", name: "Jazz" }, { id: "zong", name: "Zong" }, { id: "telenor", name: "Telenor" }, { id: "ufone", name: "Ufone" }];
 
-/** The personal adapters (`bank.*` apart from the session, the one-time code and the bank's configuration): accounts, money movement, cards, spending, investing and the payment flow. */
+/** The one-time code state a customer shares across personal and company adapters. */
+export type OtpState = { attempts: number; verified: boolean };
+type PayQuote = {
+  quoteId: string; fromAccountId: string; type: SendType; speed: SpeedClass; railId: string;
+  /** Who is paid: a saved payee (id), or one typed in the payment (the account key, not saved yet). */
+  payee: { id?: string; key: string; name: string; country?: string; currency: string };
+  receive: number; rate: number | null; pay: number; fee: number; total: number; currency: string; expiresAt: string;
+  coolingOff: boolean; speedName: string; arrives: string;
+};
+export type RetailHost = { now: () => number; otp: OtpState; conditions: () => SandboxConditions; flaws: Flaws; config: () => BankConfig };
+
+/**
+ * The personal adapters (`bank.*` apart from the session, the one-time code and the bank's configuration): accounts, moving money,
+ * payees and payments to others, bills, top-ups, cards, spending and investing. Moved here from MockBank without changes in behaviour.
+ */
 export class RetailSandbox {
   private seq = 0;
   private quotes = new Map<string, Quote & { used: boolean }>();
-  private payments: RetailPayments;
+  /** How many quotes were asked for each pair of accounts, so a renewed quote can show the market moving. */
+  private quoteCount = new Map<string, number>();
+  /** What was sent to each payee (by its id, or by its account key while it is not saved), so a new payee is kept to its allowance for its first 24 hours. */
+  private sent = new Map<string, { at: number; usd: number }[]>();
+  /** Prices of payments to someone else, each used once. */
+  private payQuotes = new Map<string, PayQuote & { used: boolean }>();
+  /** The rate of a currency for payments: held for 60 seconds, then the market moves a little (see fx.ts). */
+  private rateSlots = new Map<string, { n: number; until: number }>();
+  private schSeq = 0;
+  /** Bills: what was paid on each reference (cents), the references whose amount due has gone up, and the saved billers. */
+  private billPaid = new Map<string, number>();
+  private billRaised = new Set<string>();
+  private savedBillers: SavedBiller[];
+  /** Mobile top-ups: what was sent to each number today (cents, by day and number), and the saved numbers. */
+  private topupSent = new Map<string, number>();
+  private savedNumbers: SavedNumber[];
+  private numSeq = 0;
+  private billSeq = 0;
+  private seeded = false;
+  private benSeq = 0;
+  private schedules: Schedule[];
+  private fx: FxConfig;
+  private flaws: Flaws;
   readonly cab: CabSandbox;
-  constructor(private p: Persona, private host: Omit<RetailHost, "nextSeq" | "limitFor">) {
-    this.payments = new RetailPayments(p, { ...host, nextSeq: () => ++this.seq, limitFor: (c) => this.limitFor(c) });
+  constructor(private p: Persona, private host: RetailHost) {
+    this.schedules = p.schedules ?? [];
+    this.savedBillers = p.savedBillers ?? [];
+    this.savedNumbers = p.savedNumbers ?? [];
+    this.fx = p.brand === "bankworkx" ? BANKWORKX_FX : DEFAULT_FX;
+    this.flaws = host.flaws;
     this.cab = new CabSandbox(p, { otpVerified: () => host.otp.verified, clearOtp: () => { host.otp.verified = false; } });
   }
   private get otp(): OtpState { return this.host.otp; }
-  private now() { return this.host.now(); }
+  private get conditions(): SandboxConditions { return this.host.conditions(); }
+  /** The clock the bank runs on (tests move it). */
+  private now = () => this.host.now();
 
   /** The daily limit that applies to an account in this currency. The first account's currency uses `limits`; another needs its own entry. */
   private limitFor(currency: string) {
@@ -37,38 +86,518 @@ export class RetailSandbox {
     return own;
   }
 
+  /** The saved payees. Seeded ones get their date from the clock the bank runs on the first time they are read, so a test's clock decides how old they are. */
+  private payees(): Beneficiary[] {
+    if (!this.seeded) {
+      this.seeded = true;
+      for (const b of this.p.beneficiaries) if (b.addedAgoMs !== undefined) { b.addedAt = this.now() - b.addedAgoMs; delete b.addedAgoMs; }
+    }
+    return this.p.beneficiaries;
+  }
+  /** A payee is new for its first 24 hours: the age in whole hours is under 24. */
+  private isNew(b: Beneficiary) { return hoursSince(b.addedAt, this.now()) < COOLING_OFF_HOURS; }
+  /** What a new payee may still be sent in its first 24 hours, in US dollars. */
+  private allowanceLeft(b: Beneficiary): number { return this.allowanceOf(b.id); }
+  private allowanceOf(sentKey: string): number {
+    const since = this.now() - COOLING_OFF_HOURS * hour;
+    const used = (this.sent.get(sentKey) ?? []).filter((x) => x.at > since).reduce((sum, x) => sum + x.usd, 0);
+    return Math.max(0, Math.round((COOLING_OFF_USD - used) * 100) / 100);
+  }
+  private toUsd(amount: number, currency: string) { return Math.round((amount / (this.fx.perUsd[currency] ?? 1)) * 100) / 100; }
+  /** A saved payee as the list shows it: what was saved, how old it is, and the cooling-off state. */
+  private payeeView(b: Beneficiary) {
+    const { addedAgoMs: _seed, ...saved } = b;
+    const now = this.now(), isNew = this.isNew(b), until = b.addedAt + COOLING_OFF_HOURS * hour;
+    const uses = this.schedules.filter((x) => x.beneficiaryId === b.id);
+    return {
+      ...saved, sendType: sendTypeOf(b.region), ageHours: hoursSince(b.addedAt, now),
+      coolingOffUntil: isNew ? new Date(until).toISOString() : null, coolingOffHoursLeft: isNew ? Math.max(1, Math.ceil((until - now) / hour)) : 0,
+      allowanceLeft: isNew ? this.allowanceLeft(b) : null,
+      scheduledCount: uses.length, scheduledText: uses.map((x) => x.text).join("; "),
+    };
+  }
+  /** Checks the details of a payee being added (no payeeId) or changed, and that it is not a second copy of one already saved. */
+  private examinePayee(input: Record<string, any>, payeeId?: string) {
+    const list = this.payees();
+    const current = payeeId ? list.find((b) => b.id === payeeId) : undefined;
+    if (payeeId && !current) throw new BankError("BENEFICIARY_NOT_FOUND", "We can't find that payee.");
+    // the kind and the region of a payee cannot change
+    const d = checkPayee(current ? { ...input, kind: current.kind, region: current.region } : input, this.flaws);
+    if (!current && list.length >= MAX_PAYEES && this.flaws.payeeLimit !== false) throw new BankError("BENEFICIARY_LIMIT", "You can save up to 50 payees. Delete one to add another.");
+    if (this.flaws.payeeDuplicate !== false && list.some((b) => b.id !== payeeId && b.key === d.key)) throw new BankError("BENEFICIARY_EXISTS", "You already saved this payee with these details.");
+    return { d, current };
+  }
+  /** What a change to a saved payee touches: the name, or the bank details (the account, the country, the type of account). */
+  private payeeChange(d: PayeeDetails, cur: Beneficiary) {
+    return { nameChanged: d.displayName !== cur.displayName, detailsChanged: d.key !== cur.key || d.country !== cur.country || (d.accountType ?? "") !== (cur.accountType ?? "") };
+  }
+  /** Changing the bank details starts the 24 hours again; changing only the name or the nickname does not. */
+  private restartsClock(c: { nameChanged: boolean; detailsChanged: boolean }) {
+    return c.detailsChanged ? this.flaws.clockOnDetails !== false : c.nameChanged && this.flaws.nameKeepsClock === false;
+  }
+  /** Refuses a payment to a new payee that is more than its allowance for the first 24 hours. */
+  private coolingOff(b: Beneficiary, usd: number) {
+    if (!this.isNew(b)) return;
+    this.coolingOffFor({ sentKey: b.id, displayName: b.displayName, addedAt: b.addedAt }, usd);
+  }
+  /** The same rule for a payee that is not saved yet (one typed in a payment): it is new, added just now. */
+  private coolingOffFor(b: { sentKey: string; displayName: string; addedAt: number }, usd: number) {
+    const left = this.allowanceOf(b.sentKey);
+    if (usd <= left) return;
+    const at = new Date(b.addedAt + COOLING_OFF_HOURS * hour), pad = (n: number) => String(n).padStart(2, "0");
+    const when = `${at.getUTCDate()} ${["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"][at.getUTCMonth()]} ${at.getUTCFullYear()} ${pad(at.getUTCHours())}:${pad(at.getUTCMinutes())} UTC`;
+    const hours = hoursSince(b.addedAt, this.now());
+    const head = `${b.displayName} was added ${hours} ${hours === 1 ? "hour" : "hours"} ago. For your security you can send up to $${COOLING_OFF_USD.toFixed(2)} to a new beneficiary in the first ${COOLING_OFF_HOURS} hours.`;
+    throw new BankError("BENEFICIARY_COOLING_OFF", left > 0 ? `${head} You can send up to $${left.toFixed(2)} more now, or the full amount after ${when}.` : `${head} You can send more after ${when}.`);
+  }
+
+  /**
+   * Prices a payment to someone else and checks it, in the order a person meets the rules: the account, the amount, the speed,
+   * the money, the daily limit, the new-payee allowance, the purpose, the address. Throws the first problem; nothing is changed.
+   */
+  private priceTransfer(input: Record<string, any>) {
+    const f = this.flaws;
+    const from = this.p.accounts.find((a) => a.id === input.fromAccountId);
+    if (!from) throw new BankError("ACCOUNT_NOT_FOUND", "We can’t find that account.");
+    const home = this.p.accounts[0]!.currency;
+    // only an account in the home currency can pay someone else
+    if ((!from.canDebit && f.canDebit !== false) || from.currency !== home) throw new BankError("ACCOUNT_CANNOT_DEBIT", "You can’t send money from this account right now.");
+    const saved = input.payeeId ? this.payees().find((b) => b.id === input.payeeId) : undefined;
+    if (input.payeeId && !saved) throw new BankError("BENEFICIARY_NOT_FOUND", "We can’t find that payee.");
+    const type = (saved ? sendTypeOf(saved.region) : String(input.sendType ?? "")) as SendType;
+    if (!["internal", "domestic", "international"].includes(type) || (!saved && !String(input.payeeKey ?? ""))) throw new BankError("PAYEE_NOT_CHECKED", "Check the payee before you continue.");
+    const payee = saved
+      ? { id: saved.id, key: saved.id, name: saved.displayName, country: saved.country, currency: saved.currency ?? home }
+      : { key: String(input.payeeKey), name: String(input.payeeName ?? ""), country: input.country ? String(input.country) : undefined, currency: type === "international" ? String(input.currency ?? "") : home };
+    const cur = payee.currency, digits = currencyInfo(cur).decimals, receive = Number(input.receiveAmount);
+    if (!(receive > 0)) throw new BankError("INVALID_AMOUNT", "Enter an amount above zero.");
+    if (Math.abs(receive * 10 ** digits - Math.round(receive * 10 ** digits)) > 1e-6) throw new BankError("INVALID_AMOUNT", digits === 0 ? "Enter a whole number." : `Enter an amount with at most ${digits} decimal places.`);
+
+    // the speeds the bank offers for this kind of payment and this amount
+    const offer: Offer = { standard: input.standard !== false, sameDay: input.sameDay !== false, instant: input.instant !== false, priority: input.priority === true };
+    const down = (this.conditions.unavailable ?? []).filter((x) => x.startsWith("rail:")).map((x) => x.slice(5));
+    const speeds = speedsFor(type, receive, offer, down, f.railLimit === false, railsFor(this.host.config().homeMarket));
+    const extra = type === "international" && input.chargeChoice === true && input.chargeBearer === "ours" ? SENDER_PAYS_ALL : 0;
+    let chosen = input.speed ? speeds.find((x) => x.speed === input.speed) : speeds.find((x) => x.available && x.fits);
+    if (input.speed && (!chosen || !chosen.available)) throw new BankError("RAIL_NOT_AVAILABLE", "Sending isn’t available right now. Try again later.");
+    if (input.speed && chosen && !chosen.fits) throw new BankError("RAIL_LIMIT", type === "internal" ? `You can send up to ${money(chosen.limit!, cur)} at a time.` : `That speed is limited to ${money(chosen.limit!, cur)} a payment. Choose another speed or send less.`);
+    if (!chosen) {
+      if (!speeds.some((x) => x.available)) throw new BankError("RAIL_NOT_AVAILABLE", "Sending isn’t available right now. Try again later.");
+      const largest = Math.max(...speeds.filter((x) => x.available).map((x) => x.limit ?? 0));
+      throw new BankError("RAIL_LIMIT", type === "internal" ? `You can send up to ${money(largest, cur)} at a time.` : `That is over the limit of ${money(largest, cur)}. Try a smaller amount.`);
+    }
+    const fee = chosen.fee + extra;
+
+    // what it costs in the sender's currency; a payment in another currency uses the rate, held for 60 seconds
+    let rate: number | null = null, pay = receive, until = this.now() + PAYMENT_QUOTE_SECONDS * 1000;
+    if (cur !== home) {
+      if (!fxSupports(home, this.fx) || !fxSupports(cur, this.fx)) throw new BankError("CURRENCY_NOT_SUPPORTED", "We can’t send to that currency yet.");
+      const slot = `${from.id}>${cur}`, held = this.rateSlots.get(slot);
+      const n = !held ? 0 : this.now() > held.until ? held.n + 1 : held.n;
+      if (held && this.now() <= held.until) until = held.until;
+      this.rateSlots.set(slot, { n, until });
+      const price = priceQuote(home, cur, receive, { cfg: this.fx, direction: "get", drift: n === 0 ? 0 : (this.fx.drift?.[(n - 1) % (this.fx.drift?.length || 1)] ?? 0), feeWaived: true });
+      rate = price.rate; pay = price.send;
+    }
+    const total = roundMoney(pay + fee, home);
+    const usd = this.toUsd(pay, home);
+    const person = { id: saved?.id, sentKey: saved?.id ?? payee.key, name: payee.name, addedAt: saved?.addedAt ?? this.now(), isNew: saved ? this.isNew(saved) : true };
+    this.checkMoney(from, home, pay, total, usd, person, input.coolingOff !== false);
+
+    if (type === "international" && f.purposeRule !== false && !PURPOSES.includes(String(input.purpose ?? ""))) throw new BankError("PURPOSE_REQUIRED", "Choose a purpose for this payment.");
+    const addressRule = type === "international" && ((payee.country && COUNTRY_RULES[payee.country]?.address) || usd >= ADDRESS_RULE_USD);
+    if (addressRule && f.addressRule !== false && (!String(input.street ?? "").trim() || !String(input.city ?? "").trim() || !RELATIONSHIPS.includes(String(input.relationship ?? "")))) throw new BankError("ADDRESS_REQUIRED", "We need the payee’s address for this payment.");
+
+    this.seq += 1;
+    const q: PayQuote = {
+      quoteId: `payq_${this.seq}`, fromAccountId: from.id, type, speed: chosen.speed, railId: chosen.id, payee, receive, rate, pay, fee, total, currency: home,
+      expiresAt: new Date(until).toISOString(), coolingOff: input.coolingOff !== false, speedName: chosen.name, arrives: chosen.arrives,
+    };
+    this.payQuotes.set(q.quoteId, { ...q, used: false });
+    return {
+      quoteId: q.quoteId, type, speed: q.speed, speedName: q.speedName, arrives: q.arrives,
+      speeds: Object.fromEntries(speeds.map((x) => [x.speed, { id: x.speed, name: x.name, sub: speedText(x, cur, home, extra), usable: x.available && x.fits }])),
+      receive: { currency: cur, amount: receive }, rate, converted: cur !== home, pay, fee, feeText: fee === 0 ? "Free" : money(fee, home), total, currency: home,
+      expiresAt: q.expiresAt, ttlSeconds: PAYMENT_QUOTE_SECONDS, sendDates: businessDays(this.now()),
+    };
+  }
+  /** The money rules of a payment: enough in the account, within the daily limit, and within the allowance of a new payee. */
+  private checkMoney(from: Account, home: string, pay: number, total: number, usd: number, person: { sentKey: string; name: string; addedAt: number; isNew: boolean }, coolingOff: boolean) {
+    const f = this.flaws;
+    if (total > spendable(from) && f.funds !== false) throw new BankError("INSUFFICIENT_FUNDS", `Not enough in the account: you’d pay ${money(total, home)} but ${money(spendable(from), home)} is available.`);
+    const limit = this.limitFor(home), left = Math.max(0, roundMoney(limit.daily - limit.usedToday, home));
+    if (pay > left && f.dailyLimit !== false) throw new BankError("DAILY_LIMIT_EXCEEDED", `That is over your remaining daily limit of ${money(left, home)}.`);
+    if (coolingOff && f.coolingOff !== false && person.isNew) this.coolingOffFor({ sentKey: person.sentKey, displayName: person.name, addedAt: person.addedAt }, usd);
+  }
+
+  /* ------------------------------------------------------------------------------------------ bills (BankWorkx) */
+
+  private biller(id: unknown): Biller {
+    const b = BANKWORKX_BILLERS.find((x) => x.id === id);
+    if (!b) throw new BankError("BILLER_NOT_FOUND", "Choose a biller.");
+    return b;
+  }
+  /** Billers and saved billers that match a search (name or category) and a category ("All" or nothing: every one). */
+  private billMatches(name: string, category: string, input: Record<string, any>) {
+    const q = String(input.q ?? "").trim().toLowerCase(), cat = String(input.category ?? "");
+    return (!cat || cat.toLowerCase() === "all" || cat === category) && (!q || name.toLowerCase().includes(q) || category.toLowerCase().includes(q));
+  }
+  private savedView(x: SavedBiller) {
+    const b = this.biller(x.billerId);
+    return { id: x.id, nickname: x.nickname, billerId: b.id, billerName: b.name, category: b.category, label: b.label, format: b.format, accepts: b.accepts, fee: b.fee, reference: x.reference, last4: x.reference.slice(-4) };
+  }
+  private isSavedBiller(b: Biller, ref: string) { return this.savedBillers.some((x) => x.billerId === b.id && x.reference === ref); }
+  /**
+   * What is left to pay on a bill, in cents, or the reason there is nothing to pay. The last four digits of the reference choose the
+   * outcome (bills.ts). With `raise`, a reference ending 3333 goes up by 12.00, once (the review checks the amount again).
+   */
+  private openBill(biller: Biller, rawRef: unknown, raise = false) {
+    const ref = normaliseRef(rawRef);
+    if (!validRef(biller, ref)) throw new BankError("INVALID_REFERENCE", "Check the reference.");
+    const kind = billCase(ref);
+    if (kind === "unavailable") throw new BankError("BILLER_UNAVAILABLE", "Biller unavailable. Try again later.");
+    if (kind === "notFound") throw new BankError("BILL_NOT_FOUND", "No bill found. Check the reference and try again.");
+    if (kind === "paid") throw new BankError("BILL_ALREADY_PAID", "This bill is already paid.");
+    if (kind === "none") throw new BankError("NO_AMOUNT_DUE", "No bill due.");
+    const key = `${biller.id}:${ref}`, bill = billOf(ref, this.now());
+    let changed = false;
+    if (kind === "changing" && raise && !this.billRaised.has(key)) { this.billRaised.add(key); changed = true; }
+    const paid = this.flaws.billMemory === false ? 0 : this.billPaid.get(key) ?? 0;
+    const left = bill.dueCents + (this.billRaised.has(key) ? RAISE_CENTS : 0) - paid;
+    if (left <= 0) throw new BankError("BILL_ALREADY_PAID", "This bill is already paid.");
+    return { ...bill, ref, key, dueCents: left, changed };
+  }
+  /** Prices a bill payment and checks it, in the order a person meets the rules: the bill, the amount, the account, the money, the daily limit. Nothing is changed. */
+  private priceBill(input: Record<string, any>, forPay: boolean) {
+    const f = this.flaws, biller = this.biller(input.billerId), fetched = input.fetched !== false;
+    const ref = normaliseRef(input.reference);
+    const bill = fetched ? this.openBill(biller, ref, !forPay) : undefined;
+    if (!bill && !validRef(biller, ref)) throw new BankError("INVALID_REFERENCE", "Check the reference.");
+    // the amount: the full bill, the minimum, or what the person typed
+    let cents: number;
+    if (bill && !forPay && input.choice === "full") cents = bill.dueCents;
+    else if (bill && !forPay && input.choice === "min") {
+      if (biller.accepts !== "minimum") throw new BankError("INVALID_AMOUNT", "This biller does not take a minimum.");
+      cents = limitsOf(biller, bill.dueCents).min;
+    } else {
+      const n = Number(input.amount);
+      if (!(n > 0)) throw new BankError("INVALID_AMOUNT", "Enter an amount above zero.");
+      if (Math.abs(n * 100 - Math.round(n * 100)) > 1e-6) throw new BankError("INVALID_AMOUNT", "Enter an amount with at most 2 decimal places.");
+      cents = Math.round(n * 100);
+    }
+    if (bill) {
+      const lim = limitsOf(biller, bill.dueCents);
+      if (cents < lim.min && f.billMinimum !== false) throw new BankError("AMOUNT_BELOW_MINIMUM", "That is below the minimum.");
+      if (cents > lim.max && f.billMaximum !== false) throw new BankError("AMOUNT_ABOVE_DUE", "That is more than the amount due.");
+      // the amount due the person saw is not the one the bank has now
+      if (forPay && input.due !== undefined && Math.round(Number(input.due) * 100) !== bill.dueCents && f.billChanged !== false) throw new BankError("BILL_CHANGED", "The amount due changed. Check it and confirm again.");
+    }
+    const from = this.p.accounts.find((a) => a.id === input.fromAccountId);
+    if (!from) throw new BankError("ACCOUNT_NOT_FOUND", "Choose an account to pay from.");
+    if (!from.canDebit && f.canDebit !== false) throw new BankError("ACCOUNT_CANNOT_DEBIT", "You can’t pay from this account right now.");
+    // a bill is in the bank's home currency; another currency adds one rate line and is a bank option
+    if (from.currency !== BILL_CURRENCY && input.allowCrossCurrency === false && f.billCurrency !== false) throw new BankError("BILL_CURRENCY_MISMATCH", "Choose an account in the same currency as the bill.");
+    const feeCents = Math.round(biller.fee * 100), totalCents = cents + feeCents;
+    let rate: number | null = null, youPay = totalCents / 100;
+    if (from.currency !== BILL_CURRENCY) {
+      if (!fxSupports(from.currency, this.fx)) throw new BankError("CURRENCY_NOT_SUPPORTED", "We can’t pay from that currency yet.");
+      rate = Math.round(midRate(BILL_CURRENCY, from.currency, this.fx)! * 1e6) / 1e6;
+      const d = currencyInfo(from.currency).decimals;
+      youPay = Math.ceil(Math.round((totalCents / 100) * rate * 10 ** d * 1e6) / 1e6) / 10 ** d;
+    }
+    if (youPay > spendable(from) && f.funds !== false) throw new BankError("INSUFFICIENT_FUNDS", "Not enough in this account.");
+    const limit = this.limitFor(from.currency), left = Math.max(0, roundMoney(limit.daily - limit.usedToday, from.currency));
+    if (youPay > left && f.dailyLimit !== false) throw new BankError("DAILY_LIMIT_EXCEEDED", "That is over your daily limit.");
+    return { biller, ref, bill, from, cents, feeCents, rate, youPay, limit };
+  }
+  private bankworkxBills(adapter: string, input: Record<string, any>): any {
+    switch (adapter) {
+      case "bank.billers.list":
+        return Object.fromEntries(BANKWORKX_BILLERS.filter((b) => this.billMatches(b.name, b.category, input)).map((b) => [b.id, { id: b.id, name: b.name, category: b.category, label: b.label, format: b.format, accepts: b.accepts, fee: b.fee }]));
+      case "bank.bills.saved": {
+        if (input.billerId) {
+          const b = this.biller(input.billerId), ref = normaliseRef(input.reference);
+          if (!validRef(b, ref)) throw new BankError("INVALID_REFERENCE", "Check the reference.");
+          if (!this.isSavedBiller(b, ref)) this.savedBillers.push({ id: `sb_new${++this.billSeq}`, nickname: String(input.nickname ?? "").trim() || b.name, billerId: b.id, reference: ref });
+        }
+        return Object.fromEntries(this.savedBillers.map((x) => this.savedView(x)).filter((v) => this.billMatches(`${v.nickname} ${v.billerName}`, v.category, input)).map((v) => [v.id, v]));
+      }
+      case "bank.bills.lookup": {
+        const biller = this.biller(input.billerId), bill = this.openBill(biller, input.reference);
+        const lim = limitsOf(biller, bill.dueCents);
+        return {
+          billerName: biller.name, category: biller.category, label: biller.label, reference: bill.ref, holder: this.p.name.split(" (")[0],
+          due: bill.dueCents / 100, min: lim.min / 100, max: lim.max / 100, fee: biller.fee, currency: BILL_CURRENCY,
+          date: new Date(bill.dueDate).toISOString().slice(0, 10), dateText: dayLabel(bill.dueDate), late: bill.late, lateFee: bill.lateFeeCents / 100,
+          choices: choicesOf(biller, bill.dueCents, input.allowPartial !== false),
+        };
+      }
+      case "bank.bills.quote": {
+        const q = this.priceBill(input, false);
+        return {
+          billerName: q.biller.name, reference: q.ref, amount: q.cents / 100, fee: q.biller.fee, rate: q.rate, youPay: q.youPay, currency: q.from.currency, billCurrency: BILL_CURRENCY,
+          due: q.bill ? q.bill.dueCents / 100 : null, changed: q.bill?.changed ?? false, late: q.bill?.late ?? false,
+          // the late fee is part of a full payment only
+          lateFee: q.bill?.late && q.cents === q.bill.dueCents ? q.bill.lateFeeCents / 100 : 0,
+          autopayOk: !!q.bill && AUTOPAY_CATEGORIES.includes(q.biller.category), saved: this.isSavedBiller(q.biller, q.ref),
+        };
+      }
+      case "bank.bills.pay": {
+        if (!this.otp.verified) throw new BankError("OTP_REQUIRED", "OTP not verified");
+        if (this.p.behaviour.transferFails) throw new BankError("CORE_UNAVAILABLE", "Core banking unavailable");
+        const q = this.priceBill(input, true), cur = q.from.currency, key = `${q.biller.id}:${q.ref}`;
+        debit(q.from, q.youPay);
+        q.limit.usedToday += q.youPay;
+        this.billPaid.set(key, (this.billPaid.get(key) ?? 0) + q.cents);
+        this.otp.verified = false;
+        this.seq += 1;
+        // what the person asked to keep: the biller, and a monthly payment of the full bill
+        let saved = false, next: ReturnType<typeof autopayPlan> | undefined;
+        if (input.save === true && !this.isSavedBiller(q.biller, q.ref)) { this.savedBillers.push({ id: `sb_new${++this.billSeq}`, nickname: q.biller.name, billerId: q.biller.id, reference: q.ref }); saved = true; }
+        if (input.autopay === true && q.bill && AUTOPAY_CATEGORIES.includes(q.biller.category)) {
+          next = autopayPlan(q.bill.dueDate, q.bill.dueCents);
+          this.schedules.push({ id: `sch_bill${++this.schSeq}`, beneficiaryId: "", name: q.biller.name, text: `${q.biller.name} · Monthly, ${next.firstText}, full bill, up to ${money(next.cap, BILL_CURRENCY)}` });
+        }
+        // the payment shows in Activity under the biller's name, as a bill
+        this.p.finance?.transactions.unshift({ id: `t_bill${this.seq}`, title: q.biller.name, category: "bills", amount: -(q.cents + q.feeCents) / 100, daysAgo: 0, time: "Now" });
+        return {
+          reference: `BILL-20261102-${String(930 + this.seq).padStart(4, "0")}`, paid: q.cents / 100, left: Math.max(0, (q.bill?.dueCents ?? q.cents) - q.cents) / 100, fee: q.biller.fee, rate: q.rate, youPay: q.youPay, currency: cur,
+          newBalance: q.from.balance, saved, nextAutopay: next?.firstText ?? null,
+        };
+      }
+      default: return undefined;
+    }
+  }
+
+  /* ------------------------------------------------------------------------------------------ mobile top-up (BankWorkx) */
+
+  private operator(id: unknown) {
+    const o = OPERATORS.find((x) => x.id === id);
+    if (!o) throw new BankError("OPERATOR_NOT_FOUND", "Choose an operator.");
+    return o;
+  }
+  private numberView(x: SavedNumber) { return { id: x.id, name: x.name, operatorId: x.operatorId, number: x.number, last4: x.number.slice(-4), sub: `\u2022\u2022\u2022\u2022 ${x.number.slice(-4)}` }; }
+  private isSavedNumber(operatorId: string, number: string) { return this.savedNumbers.some((x) => x.operatorId === operatorId && x.number === number); }
+  /**
+   * Checks a top-up in the order a person meets the rules: the operator, the amount (one of the operator's own), the number (its format,
+   * then the last four digits), the day's allowance of that number, the account and the money. Throws the first problem; nothing is changed.
+   */
+  private priceTopup(input: Record<string, any>) {
+    const f = this.flaws, op = this.operator(input.operatorId), amount = Number(input.amount);
+    if (!op.amounts.includes(amount) && f.topupAmount !== false) throw new BankError("INVALID_AMOUNT", "Choose an amount.");
+    const number = normaliseNumber(input.number);
+    if (!validNumber(input.market, number)) throw new BankError("NUMBER_INVALID", marketOf(input.market).message);
+    const kind = numberCase(number);
+    if (f.topupNumber !== false) {
+      if (kind === "notFound") throw new BankError("NUMBER_NOT_FOUND", "We can\u2019t top up this number. Check it and try again.");
+      if (kind === "unavailable") throw new BankError("OPERATOR_UNAVAILABLE", "The operator isn\u2019t available right now. Try again later.");
+    }
+    const key = `${dayKey(this.now())}:${number}`, sent = this.topupSent.get(key) ?? 0;
+    if (f.topupLimit !== false && sent + Math.round(amount * 100) > TOPUP_NUMBER_DAILY * 100) throw new BankError("TOPUP_LIMIT", "You\u2019ve reached today\u2019s top-up limit for this number.");
+    const from = this.p.accounts.find((a) => a.id === input.fromAccountId);
+    if (!from) throw new BankError("ACCOUNT_NOT_FOUND", "Choose an account to pay from.");
+    if (!from.canDebit && f.canDebit !== false) throw new BankError("ACCOUNT_CANNOT_DEBIT", "You can\u2019t pay from this account right now.");
+    if (from.currency !== TOPUP_CURRENCY) throw new BankError("CURRENCY_NOT_SUPPORTED", "Choose a dollar account.");
+    if (amount > spendable(from) && f.funds !== false) throw new BankError("INSUFFICIENT_FUNDS", "Not enough in this account.");
+    const limit = this.limitFor(from.currency);
+    if (limit.usedToday + amount > limit.daily && f.dailyLimit !== false) throw new BankError("LIMIT_EXCEEDED", "That is over your daily limit.");
+    return { op, amount, number, key, sent, from, limit };
+  }
+  private bankworkxTopup(adapter: string, input: Record<string, any>): any {
+    switch (adapter) {
+      case "bank.carriers.list":
+        return Object.fromEntries(OPERATORS.map((o) => [o.id, { id: o.id, name: o.name, amounts: amountChoices(o) }]));
+      case "bank.topup.amounts":
+        // the amounts one operator offers, one choice each (the amount screen)
+        return amountChoices(this.operator(input.operatorId));
+      case "bank.topup.numbers": {
+        // the saved numbers (of one operator, and only those whose format fits the home market); with a number and a name: saves it first
+        if (input.number) {
+          const op = this.operator(input.operatorId), n = normaliseNumber(input.number);
+          if (!validNumber(input.market, n)) throw new BankError("NUMBER_INVALID", marketOf(input.market).message);
+          if (!this.isSavedNumber(op.id, n)) this.savedNumbers.push({ id: `sn_new${++this.numSeq}`, name: String(input.name ?? "").trim() || op.name, operatorId: op.id, number: n });
+        }
+        return Object.fromEntries(this.savedNumbers.filter((x) => (!input.operatorId || x.operatorId === input.operatorId) && validNumber(input.market, x.number)).map((x) => [x.id, this.numberView(x)]));
+      }
+      case "bank.topup.check": {
+        const q = this.priceTopup(input);
+        return { ok: true, operatorName: q.op.name, last4: q.number.slice(-4), amount: q.amount, saved: this.isSavedNumber(q.op.id, q.number), left: Math.max(0, TOPUP_NUMBER_DAILY - q.sent / 100 - q.amount), currency: TOPUP_CURRENCY };
+      }
+      case "bank.topup.create": {
+        if (!this.otp.verified) throw new BankError("OTP_REQUIRED", "OTP not verified");
+        if (this.p.behaviour.transferFails) throw new BankError("CORE_UNAVAILABLE", "Core banking unavailable");
+        const q = this.priceTopup(input), cur = q.from.currency;
+        debit(q.from, q.amount);
+        q.limit.usedToday += q.amount;
+        this.topupSent.set(q.key, q.sent + Math.round(q.amount * 100));
+        this.otp.verified = false;
+        this.seq += 1;
+        let saved = false;
+        if (input.save === true && !this.isSavedNumber(q.op.id, q.number)) { this.savedNumbers.push({ id: `sn_new${++this.numSeq}`, name: String(input.name ?? "").trim() || q.op.name, operatorId: q.op.id, number: q.number }); saved = true; }
+        // the payment shows in Activity as a bill, under the operator's name
+        this.p.finance?.transactions.unshift({ id: `t_topup${this.seq}`, title: `${q.op.name} top-up`, category: "bills", amount: -q.amount, daysAgo: 0, time: "Now" });
+        return { reference: `TOP-20261102-${String(930 + this.seq).padStart(4, "0")}`, newBalance: q.from.balance, operatorName: q.op.name, last4: q.number.slice(-4), amount: q.amount, currency: cur, date: receiptDate(this.now()), saved };
+      }
+      default: return undefined;
+    }
+  }
+
   async call(adapter: string, input: Record<string, any> = {}): Promise<any> {
     if (this.cab.handles(adapter)) {
       const out = this.cab.call(adapter, input);
       if (out !== undefined) return out;
     }
+    // a BankWorkx customer pays bills from the bank's own directory (bills.ts); the Meezan customers keep the older billers below
+    if (this.p.brand === "bankworkx" && /^bank\.bill(er)?s\./.test(adapter)) return this.bankworkxBills(adapter, input);
+    // a BankWorkx customer tops up from the bank's own operators (topup.ts); the Meezan customers keep the carriers and the 50 to 5,000 rule below
+    if (this.p.brand === "bankworkx" && /^bank\.(carriers\.list|topup\.)/.test(adapter)) return this.bankworkxTopup(adapter, input);
     switch (adapter) {
-      case "bank.accounts.list":
-        return Object.fromEntries(this.p.accounts.map((a) => [a.id, a]));
+      case "bank.accounts.list": {
+        // homeOnly: the accounts that can pay someone else (in the currency of the customer's main account)
+        const home = this.p.accounts[0]?.currency;
+        return Object.fromEntries(this.p.accounts.filter((a) => input.homeOnly !== true || a.currency === home).map((a) => [a.id, a]));
+      }
       case "bank.beneficiaries.list":
-        return Object.fromEntries(this.p.beneficiaries.map((b) => [b.id, { ...b, ageHours: Math.floor((Date.now() - b.addedAt) / 3600000) }]));
+        // sendType: only the payees of one kind of payment (internal, domestic, international)
+        return Object.fromEntries(this.payees().map((b) => this.payeeView(b)).filter((v) => !input.sendType || v.sendType === input.sendType).map((v) => [v.id, v]));
+      case "bank.schedules.list":
+        return Object.fromEntries(this.schedules.map((x) => [x.id, x]));
+      case "bank.payees.lookup": {
+        const c = findCustomer(String(input.by ?? ""), String(input.value ?? ""));
+        if (!c) throw new BankError("CUSTOMER_NOT_FOUND", "We can’t find a BankWorkx® customer with those details. Check them and try again.");
+        const key = `bw:${c.customerNumber}`;
+        if (this.flaws.payeeDuplicate !== false && this.payees().some((b) => b.key === key)) throw new BankError("BENEFICIARY_EXISTS", "You’ve already saved this payee. Choose them from your saved payees.");
+        return { name: c.name, customerNumber: c.customerNumber, maskedAccount: `••${c.customerNumber.slice(-4)}`, currency: "USD", key };
+      }
+      case "bank.payments.quote":
+        return this.priceTransfer(input);
+      case "bank.payments.create": {
+        if (!this.otp.verified) throw new BankError("OTP_REQUIRED", "OTP not verified");
+        if (this.p.behaviour.transferFails) throw new BankError("CORE_UNAVAILABLE", "Core banking unavailable");
+        const f = this.flaws, q = this.payQuotes.get(String(input.quoteId));
+        if (!q) throw new BankError("QUOTE_NOT_FOUND", "Quote not found");
+        if (q.used && f.quoteReplay !== false) throw new BankError("QUOTE_USED", "This quote has already been used");
+        // a payment in another currency is priced for 60 seconds
+        if (q.rate !== null && this.now() > Date.parse(q.expiresAt) && f.quoteExpiry !== false) throw new BankError("QUOTE_EXPIRED", "The exchange rate changed. Check the new amount and confirm again.");
+        const from = this.p.accounts.find((a) => a.id === q.fromAccountId)!, home = q.currency;
+        if (!from.canDebit && f.canDebit !== false) throw new BankError("ACCOUNT_CANNOT_DEBIT", "You can’t send money from this account right now.");
+        // the money rules again: the balance, the limit and the allowance may have changed since the price was given
+        const saved = q.payee.id ? this.payees().find((b) => b.id === q.payee.id) : undefined;
+        const usd = this.toUsd(q.pay, home);
+        this.checkMoney(from, home, q.pay, q.total, usd, { sentKey: saved?.id ?? q.payee.key, name: q.payee.name, addedAt: saved?.addedAt ?? this.now(), isNew: saved ? this.isNew(saved) : true }, q.coolingOff);
+        const later = input.when === "later", days = businessDays(this.now());
+        if (later && !days[String(input.sendOn)]) throw new BankError("INVALID_DATE", "Choose a date from the list.");
+        const held = f.sanctions !== false && q.payee.name.toLowerCase().includes(SANCTIONS_NAME);
+        // saving the payee is checked before any money moves (a copy of one already saved, the limit of 50)
+        let payeeId = q.payee.id, details: PayeeDetails | undefined;
+        if (input.save === true && !payeeId && !held) details = this.examinePayee(input).d;
+        this.seq += 1;
+        const reference = `TRX-20261102-${String(930 + this.seq).padStart(4, "0")}`, railReference = `RR-${String(7100 + this.seq)}`;
+        q.used = true; this.otp.verified = false;
+        if (details) {
+          const b: Beneficiary = { ...details, id: `ben_new${++this.benSeq}`, addedAt: this.now(), verified: false, nameCheck: "na" };
+          this.payees().push(b); payeeId = b.id;
+          // what was sent to this account before it was saved still counts against its allowance
+          const before = this.sent.get(q.payee.key);
+          if (before) { this.sent.set(b.id, before); this.sent.delete(q.payee.key); }
+        }
+        const base = { reference, railReference, speed: q.speed, speedName: q.speedName, arrives: q.arrives, receive: { currency: q.payee.currency, amount: q.receive }, rate: q.rate, pay: q.pay, fee: q.fee, total: q.total, currency: home, payeeId: payeeId ?? null, payeeName: q.payee.name };
+        if (held) return { ...base, status: "held" };
+        if (later) {
+          const repeat = REPEATS.includes(String(input.repeat)) ? String(input.repeat) : "none";
+          const words = { none: "Once", weekly: "Every week", monthly: "Every month" }[repeat as "none"];
+          this.schedules.push({ id: `sch_new${++this.schSeq}`, beneficiaryId: payeeId ?? "", name: q.payee.name, text: `${q.payee.name} · ${words}, ${days[String(input.sendOn)]!.name}, ${money(q.pay, home)}` });
+          return { ...base, status: "scheduled", sendOn: String(input.sendOn), repeat };
+        }
+        const limit = this.limitFor(home);
+        debit(from, q.total);
+        limit.usedToday += q.pay;
+        const isNew = saved ? this.isNew(saved) : true;
+        if (isNew) { const key = payeeId ?? q.payee.key; this.sent.set(key, [...(this.sent.get(key) ?? []), { at: this.now(), usd }]); }
+        return { ...base, status: q.speed === "instant" ? "settled" : "processing", newBalance: from.balance };
+      }
+      case "bank.payees.validate": {
+        const { d, current } = this.examinePayee(input, input.payeeId ? String(input.payeeId) : undefined);
+        const change = current ? this.payeeChange(d, current) : { nameChanged: false, detailsChanged: false };
+        const [first = "", ...rest] = d.displayName.split(" ");
+        return {
+          ok: true, bankName: d.bank, maskedNumber: d.maskedNumber, key: d.key, currency: d.currency ?? this.p.accounts[0]?.currency, country: d.country, sendType: sendTypeOf(d.region),
+          ...(d.region === "bw" ? { registeredName: d.displayName, found: `${first} ${rest.pop()?.[0] ?? ""}. · ${d.maskedNumber}` } : {}),
+          // for a change: does it need the name check and the code, and does it start the 24 hours again?
+          sensitive: change.nameChanged || change.detailsChanged, restartsClock: this.restartsClock(change),
+        };
+      }
+      case "bank.payees.check": {
+        const d = checkPayee(input, this.flaws);
+        return checkName(d, d.displayName, { skip: input.skip === true, flaws: this.flaws });
+      }
+      case "bank.payees.save": {
+        if (!this.otp.verified) throw new BankError("OTP_REQUIRED", "OTP not verified");
+        const { d } = this.examinePayee(input);
+        const chk = checkName(d, d.displayName, { skip: input.skip === true, flaws: this.flaws });
+        if (chk.result !== "match" && input.acknowledged !== true) throw new BankError("PAYEE_NOT_CHECKED", "Check the payee before you continue.");
+        const b: Beneficiary = { ...d, id: `ben_new${++this.benSeq}`, addedAt: this.now(), verified: this.flaws.verifiedOnMatch === false ? true : chk.result === "match", nameCheck: chk.result };
+        this.payees().push(b);
+        this.otp.verified = false;
+        return { payeeId: b.id, addedAt: b.addedAt, coolingOffUntil: new Date(b.addedAt + COOLING_OFF_HOURS * hour).toISOString(), displayName: b.displayName, bank: b.bank, maskedNumber: b.maskedNumber, verified: b.verified, nameCheck: chk.result, allowanceUsd: COOLING_OFF_USD };
+      }
+      case "bank.payees.update": {
+        const { d, current } = this.examinePayee(input, String(input.payeeId ?? ""));
+        const cur = current!, change = this.payeeChange(d, cur);
+        const sensitive = change.nameChanged || change.detailsChanged;
+        let chk: NameCheck | undefined;
+        // the name or the account changed: check the name again, and ask for the code. A nickname or a label alone needs neither.
+        if (sensitive) {
+          if (!this.otp.verified) throw new BankError("OTP_REQUIRED", "OTP not verified");
+          chk = checkName(d, d.displayName, { skip: input.skip === true, flaws: this.flaws });
+          if (chk.result !== "match" && input.acknowledged !== true) throw new BankError("PAYEE_NOT_CHECKED", "Check the payee before you continue.");
+        }
+        Object.assign(cur, d);
+        if (chk) { cur.verified = this.flaws.verifiedOnMatch === false ? true : chk.result === "match"; cur.nameCheck = chk.result; }
+        const restarted = this.restartsClock(change);
+        if (restarted) cur.addedAt = this.now();
+        if (sensitive) this.otp.verified = false;
+        return { payeeId: cur.id, addedAt: cur.addedAt, coolingOffUntil: this.isNew(cur) ? new Date(cur.addedAt + COOLING_OFF_HOURS * hour).toISOString() : null, displayName: cur.displayName, bank: cur.bank, maskedNumber: cur.maskedNumber, verified: cur.verified === true, nameCheck: cur.nameCheck ?? "na", sensitive, restarted, allowanceUsd: COOLING_OFF_USD };
+      }
+      case "bank.payees.delete": {
+        const list = this.payees(), i = list.findIndex((b) => b.id === input.payeeId);
+        if (i < 0) throw new BankError("BENEFICIARY_NOT_FOUND", "We can't find that payee.");
+        const gone = list[i]!, uses = this.schedules.filter((x) => x.beneficiaryId === gone.id);
+        if (uses.length && input.cancelSchedules !== true && this.flaws.payeeInUse !== false) throw new BankError("BENEFICIARY_IN_USE", `${gone.displayName} is used by ${uses.length} scheduled ${uses.length === 1 ? "payment" : "payments"}. Cancel ${uses.length === 1 ? "it" : "them"} first.`);
+        list.splice(i, 1);
+        this.schedules = this.schedules.filter((x) => x.beneficiaryId !== gone.id);
+        return { removed: true, schedulesCancelled: uses.length, displayName: gone.displayName, bank: gone.bank, maskedNumber: gone.maskedNumber };
+      }
       case "bank.limits.get":
         // with a currency: the limit for accounts in that currency; without: the main one, as before
         return input.currency ? { ...this.limitFor(String(input.currency)), currency: String(input.currency) } : { ...this.p.limits };
       case "bank.fx.rate": {
         const from = String(input.from ?? ""), to = String(input.to ?? "");
-        if (!fxSupports(from) || !fxSupports(to)) throw new BankError("CURRENCY_NOT_SUPPORTED", "We do not convert that currency pair");
-        return { from, to, midRate: Math.round(midRate(from, to)! * 1e6) / 1e6, rate: customerRate(from, to), spreadPercent: FX_SPREAD * 100 };
+        if (!fxSupports(from, this.fx) || !fxSupports(to, this.fx)) throw new BankError("CURRENCY_NOT_SUPPORTED", "We do not convert that currency pair");
+        return { from, to, midRate: Math.round(midRate(from, to, this.fx)! * 1e6) / 1e6, rate: customerRate(from, to, this.fx), spreadPercent: this.fx.spread * 100 };
       }
       case "bank.fx.quote": {
         const from = this.p.accounts.find((a) => a.id === input.fromAccountId), to = this.p.accounts.find((a) => a.id === input.toAccountId);
         if (!from || !to) throw new BankError("ACCOUNT_NOT_FOUND", "Account not found");
         if (from.currency === to.currency) throw new BankError("SAME_CURRENCY", "Choose two accounts in different currencies");
-        if (!fxSupports(from.currency) || !fxSupports(to.currency)) throw new BankError("CURRENCY_NOT_SUPPORTED", "We do not convert that currency pair");
+        if (!from.canDebit && this.flaws.canDebit !== false) throw new BankError("ACCOUNT_CANNOT_DEBIT", "This account cannot send money right now");
+        if (!fxSupports(from.currency, this.fx) || !fxSupports(to.currency, this.fx)) throw new BankError("CURRENCY_NOT_SUPPORTED", "We do not convert that currency pair");
+        const get = input.direction === "get";
         const amount = Number(input.amount);
-        const digits = currencyInfo(from.currency).decimals;
-        if (!(amount > 0) || Math.abs(amount * 10 ** digits - Math.round(amount * 10 ** digits)) > 1e-6) throw new BankError("INVALID_AMOUNT", `Enter an amount in ${from.currency} with at most ${digits} decimal places`);
-        const price = priceQuote(from.currency, to.currency, amount);
-        if (price.total > spendable(from)) throw new BankError("INSUFFICIENT_FUNDS", "Insufficient funds");
+        // the amount is in the currency the person typed it in: what leaves (default) or what arrives
+        const entered = get ? to.currency : from.currency;
+        const digits = currencyInfo(entered).decimals;
+        if (!(amount > 0) || Math.abs(amount * 10 ** digits - Math.round(amount * 10 ** digits)) > 1e-6) throw new BankError("INVALID_AMOUNT", `Enter an amount in ${entered} with at most ${digits} decimal places`);
+        // the market moves a little between the first quote of a pair and a renewed one (fixed steps, so tests repeat)
+        const pair = `${from.id}>${to.id}`, n = this.quoteCount.get(pair) ?? 0;
+        this.quoteCount.set(pair, n + 1);
+        const drift = n === 0 ? 0 : (this.fx.drift?.[(n - 1) % (this.fx.drift?.length || 1)] ?? 0);
+        const price = priceQuote(from.currency, to.currency, amount, { cfg: this.fx, direction: get ? "get" : "send", drift, feeWaived: input.feeWaived === true });
+        if (price.total > spendable(from) && this.flaws.funds !== false) throw new BankError("INSUFFICIENT_FUNDS", "Insufficient funds");
         this.seq += 1;
         const q: Quote = {
           quoteId: `fxq_${this.seq}`, fromAccountId: from.id, toAccountId: to.id,
-          from: { currency: from.currency, amount }, to: { currency: to.currency, amount: price.receive },
+          from: { currency: from.currency, amount: price.send }, to: { currency: to.currency, amount: price.receive },
           midRate: price.midRate, rate: price.rate, fee: price.fee, feeCurrency: from.currency, total: price.total,
           expiresAt: new Date(this.now() + QUOTE_TTL_SECONDS * 1000).toISOString(), ttlSeconds: QUOTE_TTL_SECONDS,
         };
@@ -80,14 +609,31 @@ export class RetailSandbox {
         if (this.p.behaviour.transferFails) throw new BankError("CORE_UNAVAILABLE", "Core banking unavailable");
         const q = this.quotes.get(String(input.quoteId));
         if (!q) throw new BankError("QUOTE_NOT_FOUND", "Quote not found");
-        if (q.used) throw new BankError("QUOTE_USED", "This quote has already been used");
-        if (this.now() > Date.parse(q.expiresAt)) throw new BankError("QUOTE_EXPIRED", "The rate has expired. Get a new one.");
+        if (q.used && this.flaws.quoteReplay !== false) throw new BankError("QUOTE_USED", "This quote has already been used");
+        if (this.now() > Date.parse(q.expiresAt) && this.flaws.quoteExpiry !== false) throw new BankError("QUOTE_EXPIRED", "The rate has expired. Get a new one.");
         const from = this.p.accounts.find((a) => a.id === q.fromAccountId)!, to = this.p.accounts.find((a) => a.id === q.toAccountId)!;
-        if (q.total > spendable(from)) throw new BankError("INSUFFICIENT_FUNDS", "Insufficient funds");
+        if (q.total > spendable(from) && this.flaws.funds !== false) throw new BankError("INSUFFICIENT_FUNDS", "Insufficient funds");
         debit(from, q.total);
         credit(to, q.to.amount);
         q.used = true; this.otp.verified = false; this.seq += 1;
         return { reference: `FX-20261102-${String(930 + this.seq).padStart(4, "0")}`, from: { currency: from.currency, newBalance: from.balance }, to: { currency: to.currency, newBalance: to.balance }, quoteId: q.quoteId };
+      }
+      case "bank.transfers.own": {
+        // money between a person's own accounts in the same currency: instant, free, and not counted against the daily limit
+        if (!this.otp.verified) throw new BankError("OTP_REQUIRED", "OTP not verified");
+        if (this.p.behaviour.transferFails) throw new BankError("CORE_UNAVAILABLE", "Core banking unavailable");
+        const from = this.p.accounts.find((a) => a.id === input.fromAccountId), to = this.p.accounts.find((a) => a.id === input.toAccountId);
+        if (!from || !to) throw new BankError("ACCOUNT_NOT_FOUND", "Account not found");
+        if (from.id === to.id && this.flaws.sameAccount !== false) throw new BankError("SAME_ACCOUNT", "Choose two different accounts");
+        if (!from.canDebit && this.flaws.canDebit !== false) throw new BankError("ACCOUNT_CANNOT_DEBIT", "This account cannot send money right now");
+        if (from.currency !== to.currency) throw new BankError("CURRENCY_MISMATCH", "These accounts use different currencies: convert instead");
+        const amount = Number(input.amount), digits = currencyInfo(from.currency).decimals;
+        if (!(amount > 0) || Math.abs(amount * 10 ** digits - Math.round(amount * 10 ** digits)) > 1e-6) throw new BankError("INVALID_AMOUNT", `Enter an amount in ${from.currency} with at most ${digits} decimal places`);
+        if (amount > spendable(from) && this.flaws.funds !== false) throw new BankError("INSUFFICIENT_FUNDS", "Insufficient funds");
+        debit(from, amount);
+        credit(to, amount);
+        this.otp.verified = false; this.seq += 1;
+        return { reference: `TRX-20261102-${String(930 + this.seq).padStart(4, "0")}`, from: { currency: from.currency, newBalance: from.balance }, to: { currency: to.currency, newBalance: to.balance } };
       }
       case "bank.accounts.totals": {
         // balances added up per currency, never across currencies; a record keyed by currency so it can feed a list
@@ -107,8 +653,13 @@ export class RetailSandbox {
         if (amount > spendable(from)) throw new BankError("INSUFFICIENT_FUNDS", "Insufficient funds");
         const limit = this.limitFor(from.currency);
         if (limit.usedToday + amount > limit.daily) throw new BankError("LIMIT_EXCEEDED", "Daily limit exceeded");
+        // a payee added in the last 24 hours may only be sent a small amount (a payee the bank does not know is not held to it)
+        const payee = input.beneficiaryId ? this.payees().find((b) => b.id === input.beneficiaryId) : undefined;
+        const usd = this.toUsd(amount, from.currency);
+        if (payee) this.coolingOff(payee, usd);
         debit(from, amount);
         limit.usedToday += amount;
+        if (payee && this.isNew(payee)) this.sent.set(payee.id, [...(this.sent.get(payee.id) ?? []), { at: this.now(), usd }]);
         this.otp.verified = false;
         this.seq += 1;
         return { reference: `TRX-20261102-${String(930 + this.seq).padStart(4, "0")}`, newBalance: from.balance, currency: from.currency };
@@ -122,6 +673,19 @@ export class RetailSandbox {
         if (!/^[0-9]{10,14}$/.test(ref)) throw new BankError("BILL_NOT_FOUND", "No bill found for this reference");
         const amount = 1000 + (parseInt(ref.slice(-4), 10) % 9000);
         return { billerName: biller.name, reference: ref, payerName: this.p.name.split(" (")[0], amount, dueDate: "2026-11-12" };
+      }
+      // the saved billers and the price of a bill are for BankWorkx customers (bills.ts)
+      case "bank.bills.saved":
+      case "bank.bills.quote":
+        throw new BankError("NOT_SUPPORTED", "Not available for this customer");
+      // the saved numbers and the check of a top-up are for BankWorkx customers (topup.ts)
+      case "bank.topup.amounts":
+      case "bank.topup.numbers":
+      case "bank.topup.check":
+        throw new BankError("NOT_SUPPORTED", "Not available for this customer");
+      case "bank.activity.list": {
+        const fin = this.p.finance; if (!fin) throw new BankError("NOT_SUPPORTED", "Not available for this customer");
+        return Object.fromEntries(fin.transactions.map((t) => [t.id, t]));
       }
       case "bank.bills.pay":
       case "bank.topup.create": {
@@ -267,11 +831,6 @@ export class RetailSandbox {
       }
       case "bank.carriers.list":
         return Object.fromEntries(CARRIERS.map((c) => [c.id, c]));
-      case "bank.payees.validate": return this.payments.validate(input);
-      case "bank.payees.check": return this.payments.check(input);
-      case "bank.payees.save": return this.payments.save(input);
-      case "bank.payments.quote": return this.payments.quote(input);
-      case "bank.payments.create": return this.payments.create(input);
       default: {
         const out = retailRecords(this.p, adapter, input, this.now());
         if (out !== undefined) return out;

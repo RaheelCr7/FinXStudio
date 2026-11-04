@@ -37,6 +37,6 @@ describe("catalog stays in sync with the real schema and lint", () => {
   it("sections return only what was asked for, and the whole catalog stays within a sensible size", () => {
     for (const s of SECTIONS.filter((x) => x !== "all")) expect(Object.keys(getCatalog(s))).toEqual([s]);
     const size = JSON.stringify(getCatalog("all")).length;
-    expect(size).toBeLessThan(80_000); // agents read it by section; the whole is rarely asked for (it grew with corporate payments, bulk, payroll and the pop-up, map and date blocks, then the session, payment-flow and retail-record adapters)
+    expect(size).toBeLessThan(78_000); // agents read it by section; the whole is rarely asked for (it grew with corporate payments, bulk, payroll, the pop-up, map and date blocks, the payee adapters, the quote and pay adapters of Send money, the saved-billers and quote adapters of Pay a bill, and the amounts, numbers and check adapters of Mobile top-up; trimmed first, raised by 1,300 because four adapters cannot be described in less; then the session, company-quote and retail-record adapters of the combined demo, 31 adapters in about 9,600, trimmed to one line each)
   });
 });

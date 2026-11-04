@@ -45,6 +45,7 @@ export function categoryStyle(c: Colors, cat: Category): { icon: IconName; fg: s
       case "health": return { icon: "shield", fg: c.chart6 };
       case "vehicle": case "transport": return { icon: "trend", fg: c.chart1 };
       case "entertainment": return { icon: "repeat", fg: c.chart6 };
+      case "bills": return { icon: "home", fg: c.chart1 };
     }
   };
   const { icon, fg } = pick();

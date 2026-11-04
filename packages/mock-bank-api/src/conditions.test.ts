@@ -29,15 +29,19 @@ describe("sandbox conditions", () => {
     expect(await b.call("bank.transactions.list")).toEqual({});
     expect(await b.call("bank.accounts.list")).toEqual({});
     expect(Object.keys(await b.call("bank.limits.get"))).toContain("daily");
+    expect(await new MockBank("alex", { conditions: { empty: ["corp."] } }).call("bank.cards.issued")).not.toEqual({});
   });
-  it("latency slows every call, and a timeout comes after it", async () => {
-    const b = new MockBank("ayesha", { conditions: { latencyMs: 40, timeout: ["bank.limits.get"] } });
-    const t0 = Date.now();
-    await b.call("bank.accounts.list");
-    expect(Date.now() - t0).toBeGreaterThanOrEqual(35);
-    const t1 = Date.now();
+  it("a timeout without latency answers TIMEOUT; with a short latency the slow answer still arrives and the clock moves on", async () => {
+    const b = new MockBank("ayesha", { conditions: { timeout: ["bank.limits.get"] } });
     expect(await code(b.call("bank.limits.get"))).toBe("TIMEOUT");
-    expect(Date.now() - t1).toBeGreaterThanOrEqual(35);
+    const slow = new MockBank("ayesha", { conditions: { timeout: ["bank.limits.get"], latencyMs: 3000 } });
+    const t = 1_000_000; slow.now = () => t;
+    expect((await slow.call("bank.limits.get")).daily).toBe(50000);
+    expect(slow.now()).toBe(t + 3000);
+  });
+  it("a payment rail is taken down with rail:<id>, not by an adapter name", async () => {
+    const b = new MockBank("alex", { conditions: { unavailable: ["rail:rtp"] } });
+    expect(await code(b.call("bank.accounts.list"))).toBe("no error");
   });
   it("conditions apply to the session adapters too", async () => {
     const b = new MockBank("alex", { conditions: { timeout: ["bank.session.switch"] } });
