@@ -16,7 +16,7 @@ describe("catalog stays in sync with the real schema and lint", () => {
     for (const b of BLOCKS) expect(() => Block.parse(b.example), b.type).not.toThrow();
   });
   it("documents every action type, and every example is valid", () => {
-    const schemaTypes = ((Action as any).schema.options as any[]).map((o) => o.shape.type.value).sort();
+    const schemaTypes = ((Action as any)._zod.def.getter().options as any[]).map((o) => o.shape.type.value).sort();
     expect(ACTIONS.map((a) => a.type).sort()).toEqual(schemaTypes);
     for (const a of ACTIONS) expect(() => Action.parse(a.example), a.type).not.toThrow();
   });
