@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { bulkPayment, catalog, corporateApproval, corporatePayment, Journey, withdrawPayment, payrollRun, ownTransfer, manageBeneficiary, personalTransfer, internalTransfer } from "@finx/journey-schema";
+import { bulkPayment, catalog, corporateApproval, corporatePayment, Journey, withdrawPayment, payrollRun, ownTransfer, manageBeneficiary, personalTransfer, internalTransfer, payBillBankworkx } from "@finx/journey-schema";
 import { lintAll } from "@finx/renderer-core";
 import { mutationCheck, runScenarios } from "./scenarios";
 
@@ -253,6 +253,50 @@ describe("internal-transfer: To a BankWorkx customer (alias of Send money)", () 
     expect(j.integrations).toEqual(personalTransfer.integrations);
     expect(j.screens.map((s) => s.id)).toEqual(personalTransfer.screens.map((s) => s.id));
     expect(j.slug).not.toBe(personalTransfer.slug);
+  });
+});
+
+/**
+ * Pay a bill is a retail journey: it has no second bank API, so the "second API" run of the company journeys does not apply.
+ * Survivors of the mutation check are listed with the reason each cannot be reached from a screen.
+ */
+describe("pay-bill: Pay a bill", () => {
+  const j = Journey.parse(payBillBankworkx);
+  const PB_ACCEPTED: Record<string, string> = {
+    "no-error-path-67": "Resending the code is a button of the code field that a scenario cannot press; the first send has the same error path and is proved (T-40)",
+    "no-error-path-76": "The new amount after the amount due changed at the bank is asked a second time; the same error path is proved on the first price (T-39)",
+    "no-rule-route-3": "The amount due changes between the review and the payment only if the bank changes it a second time; the sandbox changes it once, at the review (T-18, T-19), so no screen reaches the screen for it (the bank's unit test proves BILL_CHANGED)",
+    "bank-billChanged": "The sandbox changes the amount due once, when the price is asked, so the amount the person confirms is always the one the bank has at payment (the bank's unit test pays an old amount and is refused)",
+    "bank-billMinimum": OTHER_LAYER("The journey's own minimum on the amount field already refuses an amount below the minimum (T-8, T-9)"),
+    "bank-billMaximum": OTHER_LAYER("The journey's own maximum on the amount field already refuses an amount above the amount due or above 1.8 times it for a card (T-8, T-10)"),
+  };
+
+  it("is lint clean, every scenario passes and every acceptance criterion is proved", async () => {
+    expect(lintAll(j)).toEqual([]);
+    const r = await runScenarios(j);
+    expect(r.results.filter((x) => !x.ok).map((x) => `${x.id} ${x.name}: ${x.failures.join(" | ")}`)).toEqual([]);
+    expect(r.coverage.map((c) => [c.id, c.status])).toEqual((j.acceptance ?? []).map((a) => [a.id, "proved"]));
+    expect([r.passed, r.total, r.coverage.length]).toEqual([40, 40, 12]);
+    expect(r.ok).toBe(true);
+  });
+
+  it("the tests notice when the journey or the bank's rules are broken (mutation check)", async () => {
+    const m = await mutationCheck(j, PB_ACCEPTED);
+    expect(m.survived.map((s) => `${s.id}: ${s.what}`)).toEqual([]);
+    expect([m.total, m.killed, m.accepted.length]).toEqual([37, 31, 6]);
+    expect(m.ok).toBe(true);
+  }, 240_000);
+
+  it("the bank rules the journey leans on are each checked by a mutant, and the ones a screen can reach are caught", async () => {
+    const m = await mutationCheck(j, PB_ACCEPTED);
+    const bank = m.results.filter((x) => x.kind === "bank");
+    expect(bank.map((x) => x.id).sort()).toEqual(["bank-billChanged", "bank-billCurrency", "bank-billMaximum", "bank-billMemory", "bank-billMinimum", "bank-canDebit", "bank-dailyLimit", "bank-funds"]);
+    expect(bank.filter((x) => !x.killed).map((x) => x.id).sort()).toEqual(["bank-billChanged", "bank-billMaximum", "bank-billMinimum"]);
+  }, 240_000);
+
+  it("sits beside the Meezan journey \"pay-a-bill\", which keeps its slug, its look and its billers", () => {
+    expect(catalog.filter((c) => c.id === "pay-a-bill" || c.id === "pay-bill").map((c) => [c.id, c.madeFor])).toEqual([["pay-a-bill", "meezan"], ["pay-bill", "bankworkx"]]);
+    expect(payBillBankworkx.apps).toEqual(["bankworkx"]);
   });
 });
 

@@ -169,19 +169,29 @@ export const ADAPTER_CATALOG: AdapterInfo[] = [
     errors: ["OTP_REQUIRED", "CORE_UNAVAILABLE", "ACCOUNT_NOT_FOUND", "INSUFFICIENT_FUNDS", "LIMIT_EXCEEDED", "BENEFICIARY_COOLING_OFF"],
   },
   {
-    adapter: "bank.billers.list", suggestedId: "billers", description: "Billers the customer can pay (utilities, internet).",
-    input: {}, returns: "Object map keyed by biller id: { id, name, category }. Save as ctx.billers and use with a select block (source).",
+    adapter: "bank.billers.list", suggestedId: "billers", description: "Billers the customer can pay. BankWorkx: the bank's directory.",
+    input: { category: "BankWorkx", q: "BankWorkx" }, returns: "Object map keyed by biller id: { id, name, category } (BankWorkx adds label, format, accepts, fee). Save as ctx.billers; use as a block source.",
+  },
+  {
+    adapter: "bank.bills.saved", suggestedId: "savedBillers", description: "BankWorkx: saved billers; billerId and reference save one.",
+    input: { q: "optional", category: "optional", billerId: "save", reference: "save" }, returns: "Map by id: { id, nickname, billerId, billerName, category, label, format, accepts, fee, reference, last4 }",
+  },
+  {
+    adapter: "bank.bills.quote", suggestedId: "billQuote", description: "BankWorkx: prices and checks a bill payment. Pays nothing.",
+    input: { billerId: "biller id", reference: "as typed", choice: "full | min | other", amount: "for other", fromAccountId: "account id", fetched: "false: no lookup", allowCrossCurrency: "false: same currency only" },
+    returns: "{ amount, fee, rate, youPay, due, changed, lateFee, autopayOk, saved }",
+    errors: ["BILL_ALREADY_PAID", "AMOUNT_BELOW_MINIMUM", "AMOUNT_ABOVE_DUE", "INSUFFICIENT_FUNDS", "DAILY_LIMIT_EXCEEDED", "BILL_CURRENCY_MISMATCH"],
   },
   {
     adapter: "bank.bills.lookup", suggestedId: "billLookup", description: "Finds a bill by biller and consumer number.",
     input: { billerId: "biller id", reference: "consumer number, 10 to 14 digits" },
-    returns: "{ billerName, reference, payerName, amount, dueDate }", errors: ["BILL_NOT_FOUND", "BILLER_NOT_FOUND"],
+    returns: "{ billerName, reference, payerName, amount, dueDate }; BankWorkx: { billerName, label, due, min, max, dateText, late, lateFee, choices }", errors: ["BILL_NOT_FOUND", "BILLER_NOT_FOUND", "BILL_ALREADY_PAID", "NO_AMOUNT_DUE", "BILLER_UNAVAILABLE"],
   },
   {
     adapter: "bank.bills.pay", suggestedId: "billPay", description: "Pays a bill from an account.",
-    input: { fromAccountId: "account id", amount: "number (PKR)", billerId: "optional", reference: "optional" },
-    returns: "{ reference, newBalance }", moneyMoving: true, requiresOtp: true,
-    errors: ["OTP_REQUIRED", "CORE_UNAVAILABLE", "ACCOUNT_NOT_FOUND", "INSUFFICIENT_FUNDS", "LIMIT_EXCEEDED"],
+    input: { fromAccountId: "account id", amount: "number (PKR)", billerId: "optional", reference: "optional", due: "BankWorkx: amount due seen", save: "BankWorkx", autopay: "BankWorkx" },
+    returns: "{ reference, newBalance }; BankWorkx adds paid, left, youPay, nextAutopay", moneyMoving: true, requiresOtp: true,
+    errors: ["OTP_REQUIRED", "CORE_UNAVAILABLE", "ACCOUNT_NOT_FOUND", "INSUFFICIENT_FUNDS", "LIMIT_EXCEEDED", "BILL_CHANGED"],
   },
   {
     adapter: "bank.carriers.list", suggestedId: "carriers", description: "Mobile carriers (Jazz, Zong, Telenor, Ufone).",
@@ -304,15 +314,24 @@ export const ADAPTER_CATALOG: AdapterInfo[] = [
 
 /** Sandbox customers for testing. The OTP codes are sandbox-only test values. */
 export function describePersonas() {
-  return Object.values(personas).map((p) => ({
+  const seen: { id: string; accounts: string[] }[] = [];
+  return Object.values(personas).map((p) => {
+    const accounts = p.accounts.map((a) => `${a.id}: ${a.name} ${a.maskedNumber}, ${a.currency} ${a.balance.toLocaleString("en-US")}`);
+    // customers that start with the same accounts say so, to keep the catalog short
+    const twin = accounts.length > 2 ? seen.find((x) => x.accounts.join("|") === accounts.join("|")) : undefined;
+    seen.push({ id: p.id, accounts });
+    return { ...describe(p), accounts: twin ? [`Same accounts as ${twin.id}`] : accounts };
+  });
+}
+function describe(p: (typeof personas)[string]) {
+  return {
     id: p.id,
     brand: p.brand,
     name: p.name,
     otpCode: p.behaviour.otpCode,
-    accounts: p.accounts.map((a) => `${a.id}: ${a.name} ${a.maskedNumber}, ${a.currency} ${a.balance.toLocaleString("en-US")}`),
     // a customer with the most payees the bank allows is described, not listed
     beneficiaries: p.beneficiaries.length > 10 ? [`${p.beneficiaries.length} saved payees (${p.beneficiaries[0]!.id} to ${p.beneficiaries.at(-1)!.id})`] : p.beneficiaries.map((b) => `${b.id}: ${b.displayName}`),
     limits: p.limits,
     behaviour: p.behaviour.transferFails ? "Money-moving calls fail with CORE_UNAVAILABLE after a correct OTP." : p.behaviour.kyc === "rejected" ? "KYC rejected: no accounts, so money-moving journeys cannot start." : "Everything works.",
-  }));
+  };
 }

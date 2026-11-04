@@ -7,6 +7,7 @@ import { ACME, type CorpCompany, type CorpPayment, type Flaws } from "./corporat
 import { createCorporateProvider, type CorporateProvider, type ProviderId } from "./corporate-provider";
 import { CabSandbox, CAB_PROFILES, type CabProfile } from "./cab";
 import { checkName, checkPayee, COOLING_OFF_HOURS, COOLING_OFF_USD, COUNTRY_RULES, findCustomer, hoursSince, MAX_PAYEES, sendTypeOf, type NameCheck, type PayeeDetails, type PayeeInput, type PayeeKind, type PayeeRegion } from "./payees";
+import { AUTOPAY_CATEGORIES, autopayPlan, BANKWORKX_BILLERS, BILL_CURRENCY, billOf, billCase, choicesOf, dayLabel, limitsOf, normaliseRef, RAISE_CENTS, validRef, type Biller } from "./bills";
 import { ADDRESS_RULE_USD, businessDays, money, PAYMENT_QUOTE_SECONDS, PURPOSES, RELATIONSHIPS, REPEATS, SANCTIONS_NAME, SENDER_PAYS_ALL, speedsFor, speedText, type Offer, type SendType, type SpeedClass } from "./payments";
 export { RAILS, PURPOSES, RELATIONSHIPS, type SendType, type SpeedClass } from "./payments";
 export { CUSTOMERS, DIRECTORY, COOLING_OFF_HOURS, COOLING_OFF_USD, MAX_PAYEES, type PayeeKind, type PayeeRegion } from "./payees";
@@ -37,6 +38,8 @@ export type Beneficiary = {
   /** Seed only: how long before the sandbox clock this payee was added. Turned into addedAt the first time the list is read, so a scenario's clock decides. */
   addedAgoMs?: number;
 };
+/** A biller the customer saved to pay again: the biller and the reference, under a name of their own. */
+export type SavedBiller = { id: string; nickname: string; billerId: string; reference: string };
 /** A payment set up to repeat, so a payee that is used by one cannot be deleted. */
 export type Schedule = { id: string; beneficiaryId: string; name: string; text: string };
 /** The price of a payment to someone else, kept until it is paid or runs out. */
@@ -63,6 +66,8 @@ export type Persona = {
   beneficiaries: Beneficiary[];
   /** Payments set up to repeat; each names the payee it pays. */
   schedules?: Schedule[];
+  /** Billers saved to pay again (BankWorkx). */
+  savedBillers?: SavedBiller[];
   limits: { daily: number; usedToday: number };
   /** Daily limits for accounts in other currencies, by currency code. `limits` applies to the currency of the first account. */
   limitsByCurrency?: Record<string, { daily: number; usedToday: number }>;
@@ -164,6 +169,17 @@ export const personas: Record<string, Persona> = {
       const n = String(i + 1).padStart(2, "0"), account = String(1000000 + i + 1);
       return { id: `ben_full${n}`, displayName: `Payee ${n}`, bank: "JPMorgan Chase", maskedNumber: `••${account.slice(-4)}`, addedAt: 0, addedAgoMs: 60 * day, kind: "domestic" as const, region: "us" as const, country: "US", currency: "USD", routing: "021000021", accountNumber: account, accountType: "checking", key: `us:021000021:${account}`, verified: false, nameCheck: "na" as const };
     }),
+    limits: { daily: 50000, usedToday: 0 },
+    limitsByCurrency: { EUR: { daily: 20000, usedToday: 0 }, AED: { daily: 100000, usedToday: 0 } },
+    finance: alexFinance(),
+    behaviour: { otpCode: "482100", kyc: "verified" },
+  },
+  // Alex with the Payments cast's accounts and two saved billers, for paying bills. Separate from the others because their tests count what they have.
+  alexbills: {
+    id: "alexbills", brand: "bankworkx", name: "Alex Morgan (saved billers)", phone: "+1 415 555 0142",
+    accounts: alexAccounts(),
+    beneficiaries: [],
+    savedBillers: [{ id: "sb_power", nickname: "Home electricity", billerId: "city_power", reference: "4400123456" }, { id: "sb_net", nickname: "Home internet", billerId: "skyline_broadband", reference: "5550012345" }],
     limits: { daily: 50000, usedToday: 0 },
     limitsByCurrency: { EUR: { daily: 20000, usedToday: 0 }, AED: { daily: 100000, usedToday: 0 } },
     finance: alexFinance(),
@@ -285,6 +301,11 @@ export class MockBank {
   /** The rate of a currency for payments: held for 60 seconds, then the market moves a little (see fx.ts). */
   private rateSlots = new Map<string, { n: number; until: number }>();
   private schSeq = 0;
+  /** Bills: what was paid on each reference (cents), the references whose amount due has gone up, and the saved billers. */
+  private billPaid = new Map<string, number>();
+  private billRaised = new Set<string>();
+  private savedBillers: SavedBiller[];
+  private billSeq = 0;
   private seeded = false;
   private benSeq = 0;
   private schedules: Schedule[];
@@ -302,6 +323,7 @@ export class MockBank {
     if (!base) throw new Error(`Unknown persona ${personaId}`);
     this.p = structuredClone(base);
     this.schedules = this.p.schedules ?? [];
+    this.savedBillers = this.p.savedBillers ?? [];
     this.fx = this.p.brand === "bankworkx" ? BANKWORKX_FX : DEFAULT_FX;
     this.conditions = options.conditions ?? {};
     this.flaws = options.corpFlaws ?? {};
@@ -528,6 +550,145 @@ export class MockBank {
     }
   }
 
+  /* ------------------------------------------------------------------------------------------ bills (BankWorkx) */
+
+  private biller(id: unknown): Biller {
+    const b = BANKWORKX_BILLERS.find((x) => x.id === id);
+    if (!b) throw new BankError("BILLER_NOT_FOUND", "Choose a biller.");
+    return b;
+  }
+  /** Billers and saved billers that match a search (name or category) and a category ("All" or nothing: every one). */
+  private billMatches(name: string, category: string, input: Record<string, any>) {
+    const q = String(input.q ?? "").trim().toLowerCase(), cat = String(input.category ?? "");
+    return (!cat || cat.toLowerCase() === "all" || cat === category) && (!q || name.toLowerCase().includes(q) || category.toLowerCase().includes(q));
+  }
+  private savedView(x: SavedBiller) {
+    const b = this.biller(x.billerId);
+    return { id: x.id, nickname: x.nickname, billerId: b.id, billerName: b.name, category: b.category, label: b.label, format: b.format, accepts: b.accepts, fee: b.fee, reference: x.reference, last4: x.reference.slice(-4) };
+  }
+  private isSavedBiller(b: Biller, ref: string) { return this.savedBillers.some((x) => x.billerId === b.id && x.reference === ref); }
+  /**
+   * What is left to pay on a bill, in cents, or the reason there is nothing to pay. The last four digits of the reference choose the
+   * outcome (bills.ts). With `raise`, a reference ending 3333 goes up by 12.00, once (the review checks the amount again).
+   */
+  private openBill(biller: Biller, rawRef: unknown, raise = false) {
+    const ref = normaliseRef(rawRef);
+    if (!validRef(biller, ref)) throw new BankError("INVALID_REFERENCE", "Check the reference.");
+    const kind = billCase(ref);
+    if (kind === "unavailable") throw new BankError("BILLER_UNAVAILABLE", "Biller unavailable. Try again later.");
+    if (kind === "notFound") throw new BankError("BILL_NOT_FOUND", "No bill found. Check the reference and try again.");
+    if (kind === "paid") throw new BankError("BILL_ALREADY_PAID", "This bill is already paid.");
+    if (kind === "none") throw new BankError("NO_AMOUNT_DUE", "No bill due.");
+    const key = `${biller.id}:${ref}`, bill = billOf(ref, this.now());
+    let changed = false;
+    if (kind === "changing" && raise && !this.billRaised.has(key)) { this.billRaised.add(key); changed = true; }
+    const paid = this.flaws.billMemory === false ? 0 : this.billPaid.get(key) ?? 0;
+    const left = bill.dueCents + (this.billRaised.has(key) ? RAISE_CENTS : 0) - paid;
+    if (left <= 0) throw new BankError("BILL_ALREADY_PAID", "This bill is already paid.");
+    return { ...bill, ref, key, dueCents: left, changed };
+  }
+  /** Prices a bill payment and checks it, in the order a person meets the rules: the bill, the amount, the account, the money, the daily limit. Nothing is changed. */
+  private priceBill(input: Record<string, any>, forPay: boolean) {
+    const f = this.flaws, biller = this.biller(input.billerId), fetched = input.fetched !== false;
+    const ref = normaliseRef(input.reference);
+    const bill = fetched ? this.openBill(biller, ref, !forPay) : undefined;
+    if (!bill && !validRef(biller, ref)) throw new BankError("INVALID_REFERENCE", "Check the reference.");
+    // the amount: the full bill, the minimum, or what the person typed
+    let cents: number;
+    if (bill && !forPay && input.choice === "full") cents = bill.dueCents;
+    else if (bill && !forPay && input.choice === "min") {
+      if (biller.accepts !== "minimum") throw new BankError("INVALID_AMOUNT", "This biller does not take a minimum.");
+      cents = limitsOf(biller, bill.dueCents).min;
+    } else {
+      const n = Number(input.amount);
+      if (!(n > 0)) throw new BankError("INVALID_AMOUNT", "Enter an amount above zero.");
+      if (Math.abs(n * 100 - Math.round(n * 100)) > 1e-6) throw new BankError("INVALID_AMOUNT", "Enter an amount with at most 2 decimal places.");
+      cents = Math.round(n * 100);
+    }
+    if (bill) {
+      const lim = limitsOf(biller, bill.dueCents);
+      if (cents < lim.min && f.billMinimum !== false) throw new BankError("AMOUNT_BELOW_MINIMUM", "That is below the minimum.");
+      if (cents > lim.max && f.billMaximum !== false) throw new BankError("AMOUNT_ABOVE_DUE", "That is more than the amount due.");
+      // the amount due the person saw is not the one the bank has now
+      if (forPay && input.due !== undefined && Math.round(Number(input.due) * 100) !== bill.dueCents && f.billChanged !== false) throw new BankError("BILL_CHANGED", "The amount due changed. Check it and confirm again.");
+    }
+    const from = this.p.accounts.find((a) => a.id === input.fromAccountId);
+    if (!from) throw new BankError("ACCOUNT_NOT_FOUND", "Choose an account to pay from.");
+    if (!from.canDebit && f.canDebit !== false) throw new BankError("ACCOUNT_CANNOT_DEBIT", "You can’t pay from this account right now.");
+    // a bill is in the bank's home currency; another currency adds one rate line and is a bank option
+    if (from.currency !== BILL_CURRENCY && input.allowCrossCurrency === false && f.billCurrency !== false) throw new BankError("BILL_CURRENCY_MISMATCH", "Choose an account in the same currency as the bill.");
+    const feeCents = Math.round(biller.fee * 100), totalCents = cents + feeCents;
+    let rate: number | null = null, youPay = totalCents / 100;
+    if (from.currency !== BILL_CURRENCY) {
+      if (!fxSupports(from.currency, this.fx)) throw new BankError("CURRENCY_NOT_SUPPORTED", "We can’t pay from that currency yet.");
+      rate = Math.round(midRate(BILL_CURRENCY, from.currency, this.fx)! * 1e6) / 1e6;
+      const d = currencyInfo(from.currency).decimals;
+      youPay = Math.ceil(Math.round((totalCents / 100) * rate * 10 ** d * 1e6) / 1e6) / 10 ** d;
+    }
+    if (youPay > from.balance && f.funds !== false) throw new BankError("INSUFFICIENT_FUNDS", "Not enough in this account.");
+    const limit = this.limitFor(from.currency), left = Math.max(0, roundMoney(limit.daily - limit.usedToday, from.currency));
+    if (youPay > left && f.dailyLimit !== false) throw new BankError("DAILY_LIMIT_EXCEEDED", "That is over your daily limit.");
+    return { biller, ref, bill, from, cents, feeCents, rate, youPay, limit };
+  }
+  private bankworkxBills(adapter: string, input: Record<string, any>): any {
+    switch (adapter) {
+      case "bank.billers.list":
+        return Object.fromEntries(BANKWORKX_BILLERS.filter((b) => this.billMatches(b.name, b.category, input)).map((b) => [b.id, { id: b.id, name: b.name, category: b.category, label: b.label, format: b.format, accepts: b.accepts, fee: b.fee }]));
+      case "bank.bills.saved": {
+        if (input.billerId) {
+          const b = this.biller(input.billerId), ref = normaliseRef(input.reference);
+          if (!validRef(b, ref)) throw new BankError("INVALID_REFERENCE", "Check the reference.");
+          if (!this.isSavedBiller(b, ref)) this.savedBillers.push({ id: `sb_new${++this.billSeq}`, nickname: String(input.nickname ?? "").trim() || b.name, billerId: b.id, reference: ref });
+        }
+        return Object.fromEntries(this.savedBillers.map((x) => this.savedView(x)).filter((v) => this.billMatches(`${v.nickname} ${v.billerName}`, v.category, input)).map((v) => [v.id, v]));
+      }
+      case "bank.bills.lookup": {
+        const biller = this.biller(input.billerId), bill = this.openBill(biller, input.reference);
+        const lim = limitsOf(biller, bill.dueCents);
+        return {
+          billerName: biller.name, category: biller.category, label: biller.label, reference: bill.ref, holder: this.p.name.split(" (")[0],
+          due: bill.dueCents / 100, min: lim.min / 100, max: lim.max / 100, fee: biller.fee, currency: BILL_CURRENCY,
+          date: new Date(bill.dueDate).toISOString().slice(0, 10), dateText: dayLabel(bill.dueDate), late: bill.late, lateFee: bill.lateFeeCents / 100,
+          choices: choicesOf(biller, bill.dueCents, input.allowPartial !== false),
+        };
+      }
+      case "bank.bills.quote": {
+        const q = this.priceBill(input, false);
+        return {
+          billerName: q.biller.name, reference: q.ref, amount: q.cents / 100, fee: q.biller.fee, rate: q.rate, youPay: q.youPay, currency: q.from.currency, billCurrency: BILL_CURRENCY,
+          due: q.bill ? q.bill.dueCents / 100 : null, changed: q.bill?.changed ?? false, late: q.bill?.late ?? false,
+          // the late fee is part of a full payment only
+          lateFee: q.bill?.late && q.cents === q.bill.dueCents ? q.bill.lateFeeCents / 100 : 0,
+          autopayOk: !!q.bill && AUTOPAY_CATEGORIES.includes(q.biller.category), saved: this.isSavedBiller(q.biller, q.ref),
+        };
+      }
+      case "bank.bills.pay": {
+        if (!this.otpVerified) throw new BankError("OTP_REQUIRED", "OTP not verified");
+        if (this.p.behaviour.transferFails) throw new BankError("CORE_UNAVAILABLE", "Core banking unavailable");
+        const q = this.priceBill(input, true), cur = q.from.currency, key = `${q.biller.id}:${q.ref}`;
+        q.from.balance = roundMoney(q.from.balance - q.youPay, cur);
+        q.limit.usedToday += q.youPay;
+        this.billPaid.set(key, (this.billPaid.get(key) ?? 0) + q.cents);
+        this.otpVerified = false;
+        this.seq += 1;
+        // what the person asked to keep: the biller, and a monthly payment of the full bill
+        let saved = false, next: ReturnType<typeof autopayPlan> | undefined;
+        if (input.save === true && !this.isSavedBiller(q.biller, q.ref)) { this.savedBillers.push({ id: `sb_new${++this.billSeq}`, nickname: q.biller.name, billerId: q.biller.id, reference: q.ref }); saved = true; }
+        if (input.autopay === true && q.bill && AUTOPAY_CATEGORIES.includes(q.biller.category)) {
+          next = autopayPlan(q.bill.dueDate, q.bill.dueCents);
+          this.schedules.push({ id: `sch_bill${++this.schSeq}`, beneficiaryId: "", name: q.biller.name, text: `${q.biller.name} · Monthly, ${next.firstText}, full bill, up to ${money(next.cap, BILL_CURRENCY)}` });
+        }
+        // the payment shows in Activity under the biller's name, as a bill
+        this.p.finance?.transactions.unshift({ id: `t_bill${this.seq}`, title: q.biller.name, category: "bills", amount: -(q.cents + q.feeCents) / 100, daysAgo: 0, time: "Now" });
+        return {
+          reference: `BILL-20261102-${String(930 + this.seq).padStart(4, "0")}`, paid: q.cents / 100, left: Math.max(0, (q.bill?.dueCents ?? q.cents) - q.cents) / 100, fee: q.biller.fee, rate: q.rate, youPay: q.youPay, currency: cur,
+          newBalance: q.from.balance, saved, nextAutopay: next?.firstText ?? null,
+        };
+      }
+      default: return undefined;
+    }
+  }
+
   /** Single entry point used by journeys: adapter id + input -> result. */
   async call(adapter: string, input: Record<string, any> = {}): Promise<any> {
     const c = this.conditions;
@@ -547,6 +708,8 @@ export class MockBank {
       if (out !== undefined) return out;
     }
     if (adapter.startsWith("corp.")) return this.corporate(adapter, input);
+    // a BankWorkx customer pays bills from the bank's own directory (bills.ts); the Meezan customers keep the older billers below
+    if (this.p.brand === "bankworkx" && /^bank\.bill(er)?s\./.test(adapter)) return this.bankworkxBills(adapter, input);
     switch (adapter) {
       case "bank.accounts.list": {
         // homeOnly: the accounts that can pay someone else (in the currency of the customer's main account)
@@ -780,6 +943,10 @@ export class MockBank {
         const amount = 1000 + (parseInt(ref.slice(-4), 10) % 9000);
         return { billerName: biller.name, reference: ref, payerName: this.p.name.split(" (")[0], amount, dueDate: "2026-11-12" };
       }
+      // the saved billers and the price of a bill are for BankWorkx customers (bills.ts)
+      case "bank.bills.saved":
+      case "bank.bills.quote":
+        throw new BankError("NOT_SUPPORTED", "Not available for this customer");
       case "bank.bills.pay":
       case "bank.topup.create": {
         const isBill = adapter === "bank.bills.pay";

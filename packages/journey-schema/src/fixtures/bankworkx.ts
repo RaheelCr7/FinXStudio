@@ -3,6 +3,7 @@ import { ownTransfer } from "./own-transfer";
 import { manageBeneficiary } from "./manage-beneficiary";
 import { personalTransfer } from "./personal-transfer";
 import { internalTransfer } from "./internal-transfer";
+import { payBillBankworkx } from "./pay-bill-bankworkx";
 
 /** Journeys for the BankWorkx app. English only for now; the app filters them out of other banks' apps with `apps`. */
 const base = { version: 1, status: "published" as const, channels: ["mobile" as const], apps: ["bankworkx"], locale: { default: "en", supported: ["en"] } };
@@ -347,4 +348,4 @@ export const sellInvestment: Journey = {
   ],
 };
 
-export const bankworkxJourneys: Journey[] = [addMoney, addCard, connectAccount, createBudget, invest, sellInvestment, ownTransfer, manageBeneficiary, personalTransfer, internalTransfer];
+export const bankworkxJourneys: Journey[] = [addMoney, addCard, connectAccount, createBudget, invest, sellInvestment, ownTransfer, manageBeneficiary, personalTransfer, internalTransfer, payBillBankworkx];
