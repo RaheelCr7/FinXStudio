@@ -8,6 +8,8 @@ export type Step =
   | { press: string }
   | { expectScreen: string }
   | { expectText: string }
+  /** The text is not on the screen (for example an option the bank switched off). */
+  | { expectNoText: string }
   | { expectError: string }
   | { expectToast: string }
   /** Moves the sandbox clock forward (seconds), for rules that depend on time, such as a rate that is only held for 30 seconds. */
@@ -60,7 +62,8 @@ function visibleStrings(view: View): string[] {
     for (const k of ["label", "text", "title", "hint", "helper", "meta", "placeholder", "error"]) if (typeof b[k] === "string") out.push(b[k]);
     if (typeof b.value === "string") out.push(b.value);
     for (const r of b.rows ?? []) out.push(r.label, r.value);
-    for (const i of b.items ?? []) if (i?.name) out.push(i.name); else if (i?.displayName) out.push(i.displayName);
+    // a choice, a payee, or a row of a list (its label and the line under it)
+    for (const i of b.items ?? []) { if (i?.name) out.push(i.name); else if (i?.displayName) out.push(i.displayName); if (b.type === "menu") { if (i?.label) out.push(i.label); if (i?.text) out.push(i.text); } }
   }
   return out.filter(Boolean);
 }
@@ -168,6 +171,9 @@ export async function simulate(opts: SimOptions): Promise<SimResult> {
       } else if ("expectText" in step) {
         did = `expect text "${step.expectText}"`;
         if (!visibleStrings(view).some((s) => s.toLowerCase().includes(String(step.expectText).toLowerCase()))) fail(n, `${did}: not found on screen "${view.screenId}". Visible: ${visibleStrings(view).map((s) => clip(s, 40)).slice(0, 12).join(" | ")}`, view);
+      } else if ("expectNoText" in step) {
+        did = `expect no text "${step.expectNoText}"`;
+        if (visibleStrings(view).some((s) => s.toLowerCase().includes(String(step.expectNoText).toLowerCase()))) fail(n, `${did}: it is on screen "${view.screenId}"`, view);
       } else if ("expectError" in step) {
         did = `expect validation error "${step.expectError}"`;
         const q = String(step.expectError).toLowerCase();
@@ -185,7 +191,7 @@ export async function simulate(opts: SimOptions): Promise<SimResult> {
         did = `expect message "${step.expectToast}"`;
         if (!view.toast || !view.toast.toLowerCase().includes(String(step.expectToast).toLowerCase())) fail(n, `${did}: the message shown is ${view.toast ? `"${view.toast}"` : "none"}`, view);
       } else {
-        failures.push(`Step ${n} is not a known action. Use set, press, advance, expectScreen, expectText, expectError, expectToast or expectBank.`);
+        failures.push(`Step ${n} is not a known action. Use set, press, advance, expectScreen, expectText, expectNoText, expectError, expectToast or expectBank.`);
         stopped = true;
         break;
       }

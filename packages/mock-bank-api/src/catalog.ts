@@ -19,8 +19,36 @@ export const ADAPTER_CATALOG: AdapterInfo[] = [
     input: {}, returns: "Object map keyed by account id: { id, name, maskedNumber, iban, balance, currency, status, canDebit }. Save as ctx.accounts and use with accountPicker.",
   },
   {
-    adapter: "bank.beneficiaries.list", suggestedId: "beneficiaries", description: "Saved payees.",
-    input: {}, returns: "Object map keyed by beneficiary id: { id, displayName, bank, maskedNumber, addedAt, ageHours }. Save as ctx.beneficiaries.",
+    adapter: "bank.beneficiaries.list", suggestedId: "beneficiaries", description: "Saved payees. One added in the last 24 hours is new and may only be sent 500.00 USD in any 24 hours.",
+    input: {}, returns: "Object map keyed by beneficiary id: { id, displayName, bank, maskedNumber, addedAt, ageHours } and, for payees saved with bank.payees.save: kind (internal | domestic | international), region (bw | us | eu | uk | me | world), country, nickname, label, verified, nameCheck, coolingOffUntil (ISO or null), coolingOffHoursLeft, allowanceLeft (USD, null when not new), scheduledCount, scheduledText. Save as ctx.beneficiaries.",
+  },
+  {
+    adapter: "bank.payees.validate", suggestedId: "validate", description: "Checks the details of a payee being added (or changed, with payeeId): the account for its region, no second copy, at most 50 payees. Fails with the first problem.",
+    input: { payeeId: "only to change a payee", region: "bw (BankWorkx customer) | us | eu | uk | me | world (abroad)", country: "me: AE, SA, JO; world: DE, CA, IN, JP, AU, CH, SG, MX", name: "name on the account", nickname: "up to 24 characters", label: "Family | Friend | Landlord | Business | Other", customerNo: "bw: 10 digits", routing: "us: 9 digits, ABA checksum", account: "us, uk, world", accountType: "us: checking | savings", iban: "eu, me", sort: "uk: 6 digits", swift: "world: 8 or 11 characters" },
+    returns: "{ ok, bankName, maskedNumber, sensitive, restartsClock }; for bw also { registeredName, found }. sensitive: the name or bank details of a saved payee changed.",
+    errors: ["PAYEE_NAME_REQUIRED", "COUNTRY_REQUIRED", "INVALID_ACCOUNT", "CUSTOMER_NOT_FOUND", "INVALID_ROUTING", "INVALID_SORT_CODE", "INVALID_IBAN", "NOT_SEPA", "COUNTRY_MISMATCH", "INVALID_BIC", "NICKNAME_TOO_LONG", "BENEFICIARY_LIMIT", "BENEFICIARY_EXISTS", "BENEFICIARY_NOT_FOUND"],
+  },
+  {
+    adapter: "bank.payees.check", suggestedId: "check", description: "The name check (Verification or Confirmation of Payee). A BankWorkx customer always matches; abroad, an unknown account, or skip gives na.",
+    input: { "...": "the fields of bank.payees.validate", skip: "true when the bank switched the check off" },
+    returns: "{ result: match | close | none | na, registeredName?, label }", errors: ["TIMEOUT", "SERVICE_UNAVAILABLE"],
+  },
+  {
+    adapter: "bank.payees.save", suggestedId: "save", description: "Saves a new payee after the one-time code. Unless the name matched, acknowledged must be true. Verified only after a match. New for 24 hours.",
+    input: { "...": "the fields of bank.payees.validate", skip: "as for check", acknowledged: "the person ticked that they understand" },
+    returns: "{ payeeId, addedAt, coolingOffUntil, displayName, bank, maskedNumber, verified, nameCheck, allowanceUsd }",
+    requiresOtp: true, errors: ["OTP_REQUIRED", "PAYEE_NOT_CHECKED", "BENEFICIARY_EXISTS", "BENEFICIARY_LIMIT"],
+  },
+  {
+    adapter: "bank.payees.update", suggestedId: "update", description: "Changes a payee. Nickname or label: nothing more. Name or bank details: the one-time code and the check again; bank details also make it new for 24 hours (the name alone does not). Region cannot change.",
+    input: { payeeId: "payee to change", "...": "the fields of bank.payees.validate", skip: "as for check", acknowledged: "as for save" },
+    returns: "{ payeeId, addedAt, coolingOffUntil, displayName, bank, maskedNumber, verified, nameCheck, sensitive, restarted }",
+    errors: ["OTP_REQUIRED", "PAYEE_NOT_CHECKED", "BENEFICIARY_NOT_FOUND", "BENEFICIARY_EXISTS"],
+  },
+  {
+    adapter: "bank.payees.delete", suggestedId: "remove", description: "Removes a payee, no code needed. One used by a scheduled payment needs cancelSchedules true, which cancels them.",
+    input: { payeeId: "payee to remove", cancelSchedules: "true to cancel the scheduled payments that use it" },
+    returns: "{ removed, schedulesCancelled, displayName, bank, maskedNumber }", errors: ["BENEFICIARY_NOT_FOUND", "BENEFICIARY_IN_USE"],
   },
   {
     adapter: "bank.limits.get", suggestedId: "limits", description: "Daily transfer limit and how much is used today.",
@@ -113,10 +141,10 @@ export const ADAPTER_CATALOG: AdapterInfo[] = [
     errors: ["OTP_INVALID"],
   },
   {
-    adapter: "bank.transfers.create", suggestedId: "transfer", description: "Sends money to a saved beneficiary.",
+    adapter: "bank.transfers.create", suggestedId: "transfer", description: "Sends money to a saved beneficiary. A payee added in the last 24 hours may only be sent 500.00 USD (or the same value in the account's currency) in total in any 24 hours.",
     input: { fromAccountId: "account id", beneficiaryId: "beneficiary id", amount: "number (PKR)", purpose: "text" },
     returns: "{ reference, newBalance }", moneyMoving: true, requiresOtp: true,
-    errors: ["OTP_REQUIRED", "CORE_UNAVAILABLE", "ACCOUNT_NOT_FOUND", "INSUFFICIENT_FUNDS", "LIMIT_EXCEEDED"],
+    errors: ["OTP_REQUIRED", "CORE_UNAVAILABLE", "ACCOUNT_NOT_FOUND", "INSUFFICIENT_FUNDS", "LIMIT_EXCEEDED", "BENEFICIARY_COOLING_OFF"],
   },
   {
     adapter: "bank.billers.list", suggestedId: "billers", description: "Billers the customer can pay (utilities, internet).",
@@ -260,7 +288,8 @@ export function describePersonas() {
     name: p.name,
     otpCode: p.behaviour.otpCode,
     accounts: p.accounts.map((a) => `${a.id}: ${a.name} ${a.maskedNumber}, ${a.currency} ${a.balance.toLocaleString("en-US")}`),
-    beneficiaries: p.beneficiaries.map((b) => `${b.id}: ${b.displayName}`),
+    // a customer with the most payees the bank allows is described, not listed
+    beneficiaries: p.beneficiaries.length > 10 ? [`${p.beneficiaries.length} saved payees (${p.beneficiaries[0]!.id} to ${p.beneficiaries.at(-1)!.id})`] : p.beneficiaries.map((b) => `${b.id}: ${b.displayName}`),
     limits: p.limits,
     behaviour: p.behaviour.transferFails ? "Money-moving calls fail with CORE_UNAVAILABLE after a correct OTP." : p.behaviour.kyc === "rejected" ? "KYC rejected: no accounts, so money-moving journeys cannot start." : "Everything works.",
   }));
