@@ -222,6 +222,18 @@ Release 1 journey count: **Retail 52, SME 17 (14 + 1 stretch + 2 screens added i
 
 ---
 
+## Permission names: spec and prototype
+
+The prototype uses a short set of permission names; the spec uses the vocabulary in section 4. They map as follows. One list must be chosen before the sandbox work (step 2): the plan is to use the spec names and rename the prototype's.
+
+| Prototype | Spec |
+|---|---|
+| (any personal action) | `accounts.view`, `payments.create`, `payments.schedule`, `cards.manage` and the other personal names in 4.1 |
+| `accounts.view` (business) | `biz.accounts.view` |
+| `pay.create` | `biz.payments.initiate` |
+| `pay.approve` | `biz.approvals.approve` |
+| `admin` | `biz.admin.users`, `biz.admin.limits`, `biz.admin.groups` (administrator role) |
+
 ## 4. Permission vocabulary
 
 A permission is a dotted name returned by `bank.session.get` for the **active context**. A launch point shows only when the context holds the permission (check 1); the journey's `authorisation` checks again (check 2); the sandbox enforces the rule whatever the UI shows (check 3, `PERMISSION_DENIED`).

@@ -108,7 +108,7 @@ The same person sees two different Overviews. The permission list comes from `ba
 | Quick actions (**+**) | Pay a supplier, Upload payments, Run payroll | None (the button is hidden: no initiate permission) |
 | Cut-off timer **Pay now** | Shown | Hidden |
 | Balances, cash flow, cash in and out, recent payments | Shown | Shown |
-| Approvals queue | Hidden (no `biz.approvals.approve`) | Shown, with the payment started by `priya` waiting for Alex |
+| Approvals queue | Hidden (no `biz.approvals.approve`) | Shown, with the payments started by `priya` and `omar` waiting for Alex (the sandbox seeds several waiting payments, one of them needing two approvers) |
 | My payments waiting | Shown (payments Alex started) | Hidden |
 | Admin tab | Shown, but only "You don’t have access" and a preview button (no people, limits or groups) | Same |
 | Direct link to `approve-payments` | Opens a refusal: "Your role doesn't allow this. Ask an administrator at Alpha Trading LLC." | Opens the journey |
