@@ -47,6 +47,7 @@ export default ({ config }: ConfigContext): ExpoConfig => {
     ios: { ...config.ios, bundleIdentifier: brand.bundleId, buildNumber, infoPlist: { ...config.ios?.infoPlist, NSAppTransportSecurity: ats, ...localNetwork } },
     web: { ...config.web, favicon: `${a}/favicon.png`, name: brand.name, shortName: brand.shortName, themeColor: brand.accent, backgroundColor: brand.background },
     plugins: [
+      "expo-secure-store", // Keychain and Keystore for secrets (src/hardening/secure-storage.ts)
       ["expo-build-properties", { android: { usesCleartextTraffic: cleartext, buildArchs: abis } }],
       ["expo-splash-screen", {
         image: `${a}/splash-icon.png`, imageWidth: 200, resizeMode: "contain", backgroundColor: brand.accent,

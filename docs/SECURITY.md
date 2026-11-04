@@ -33,7 +33,7 @@ Do not open a public issue for a vulnerability. Email the maintainer (see the re
 ## Requirements checklist
 Mapped as the product matures; status is honest, not aspirational.
 - **OWASP ASVS (Studio, web app):** authentication and session (planned), access control (partial), input validation (schema and per-route), error handling and logging (partial), configuration and headers (planned: report-only CSP first), dependency hygiene (CI report now).
-- **OWASP MASVS L2 (mobile):** secure storage, network (TLS, pinning), platform (root/jailbreak, screenshot blocking), resilience; all planned for the production profile.
+- **OWASP MASVS L2 (mobile):** storage (Keychain/Keystore wrapper, done), network (TLS only, done; certificate pinning not yet), platform (root/jailbreak check and screen-capture blocking, done), resilience (obfuscation, tamper detection: not yet). See "Mobile app in production".
 - **PCI DSS v4.0.1:** apply only where card data is touched; none is stored today.
 - **Regulator:** set per bank (for example SBP for Pakistan). Open decision: the first bank's regulator baseline.
 
@@ -44,7 +44,7 @@ Current findings (3 Nov 2026): the production dependency audit flagged zod 3.23.
 
 ## Controls roadmap (in order)
 1. **Done (production profile): Studio sign-in, sessions, CSRF defence, rate and size limits, security headers (CSP report-only), hash-chained audit log, four-eyes publish by default.** See "Studio in production" below. Passwords are set on the People page (Manage access). Still to add: TOTP second factor, SSO, a shared rate-limit store when Studio runs on more than one server.
-2. Mobile: secure storage, certificate pinning, root/jailbreak detection, screenshot blocking, TLS only.
+2. **Mobile: done except certificate pinning** (secure storage, root/jailbreak check, screenshot blocking, TLS only). See "Mobile app in production".
 3. **Done: signed journeys.** See "Signed journeys" below.
 4. `mock-bank-api` excluded from production bundles.
 5. Done: `.gitignore` covers `.env*`, `*.pem`, `.data/`.
@@ -79,3 +79,18 @@ Make a key pair with `node apps/studio/scripts/gen-signing-key.mjs`. The public 
 An app with at least one trusted key shows a journey from Studio only if its signature checks out; anything else (unsigned, wrong key, changed) is refused and the copy bundled in the app is used, so the app keeps working with older content. An app with no trusted keys (the demo) accepts unsigned journeys as before.
 
 Rotating a key: add the new public key to the apps while the old one is still trusted, ship the apps, then switch `FINX_SIGNING_KEY` and republish, then drop the old key in a later app release. Limits: journeys published before signing was switched on stay unsigned until republished; a signature proves who published and that nothing changed since, not that the content is wise, so review and lint still matter; the bank's apps need updating if the key is ever compromised.
+
+## Mobile app in production
+Build with `FINX_ENV=production` (app configuration: https only, no server change, no cleartext) and `EXPO_PUBLIC_FINX_ENV=production` (what the app code reads; `scripts/build-*.mjs` set both). Demo and UAT builds are unchanged: the hardening code returns at once and never loads its native modules.
+
+| Control | What it does | Limits |
+|---|---|---|
+| TLS only | The OS refuses plain http (iOS ATS, Android cleartext off), and at start the app refuses a built-in server address that is not https. | Does not pin a certificate. |
+| Screen capture | Android: `FLAG_SECURE` (no screenshots or recording, blank app-switcher thumbnail). iOS: hides the app while the screen is recorded or mirrored. | iOS cannot stop the screenshot button; no app can. |
+| Rooted or jailbroken device | `expo-device` signal. Default: the app refuses to start (`EXPO_PUBLIC_FINX_INTEGRITY=warn` shows a banner instead, `off` skips it). A check that cannot run (web, simulator) allows the app. | A hint, not proof: a determined attacker hides a root. Pair with server-side risk checks and, later, Play Integrity and App Attest. |
+| Secret storage | `src/hardening/secure-storage.ts` puts secrets in the Keychain (when unlocked, this device only) or Keystore; never AsyncStorage. The web and a binary without the module keep them in memory only. | Nothing secret is stored today (sessions live in memory); this is the place for a future token or device binding. |
+| Backups | Android `allowBackup` is already off. | |
+
+Not done: **certificate pinning**. It needs a native module (for example `react-native-ssl-public-key-pinning`), two pins per host (current and backup) and a rotation process agreed with the bank's operations, so it is added with the first real bank. Also not done: code obfuscation, tamper detection of the app binary, Play Integrity and App Attest.
+
+The new native modules (`expo-secure-store`, `expo-screen-capture`, `expo-device`) need a native rebuild (`pod install` and a new dev client) to be present; a binary built earlier still runs the demo because they are loaded lazily and only in production.
