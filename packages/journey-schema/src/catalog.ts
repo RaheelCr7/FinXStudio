@@ -8,6 +8,8 @@ import { withdrawPayment } from "./fixtures/withdraw-payment";
 import { convertCurrency } from "./fixtures/convert-currency";
 import { ownTransfer } from "./fixtures/own-transfer";
 import { manageBeneficiary } from "./fixtures/manage-beneficiary";
+import { personalTransfer } from "./fixtures/personal-transfer";
+import { internalTransfer } from "./fixtures/internal-transfer";
 import { addMoney, addCard, connectAccount, createBudget, invest, sellInvestment } from "./fixtures/bankworkx";
 import { cabJourneys } from "./fixtures/cab";
 
@@ -86,6 +88,16 @@ export const catalog: CatalogEntry[] = [
     id: manageBeneficiary.slug, category: "Payments", madeFor: "bankworkx", journey: manageBeneficiary,
     summary: "Save a person or company to pay, change their details, or remove them. The bank checks the details and the name; a new or changed payee is limited to 500.00 USD for 24 hours.",
     highlights: ["Add a BankWorkx customer, a payee at a US, European, UK or Middle East bank, or abroad", "Name check with Use for a close match", "One-time code to add or change the name or account", "Nickname and label changes need no code", "Delete with or without the scheduled payments that use the payee", "Timeout and unavailable screens"],
+  },
+  {
+    id: personalTransfer.slug, category: "Payments", madeFor: "bankworkx", journey: personalTransfer,
+    summary: "Send money to a BankWorkx customer, a person at another bank or another country: choose how fast, see the fee, the rate and the arrival, confirm with a one-time code. A payee typed in the payment can be saved; a new payee is limited to 500.00 USD for 24 hours.",
+    highlights: ["Three ways to send, each switched on or off by the bank", "Find a BankWorkx customer by mobile, email or ID", "Standard, Same day, Instant (and Priority) with fee, arrival and limit", "Rate held 60 seconds, then a new price", "Later and repeating payments on business days", "Held for review, timeout and unavailable screens"],
+  },
+  {
+    id: internalTransfer.slug, category: "Payments", madeFor: "bankworkx", journey: internalTransfer,
+    summary: "Send money to a BankWorkx customer: found by mobile number, email or BankWorkx ID, free and instant, up to 25,000.00. The same flow as Send money, opened at this type; kept so that links to the old name open the right place.",
+    highlights: ["Alias of Send money for one type", "Free and instant", "Switched off with the same option", "One-time code"],
   },
   {
     id: connectAccount.slug, category: "Accounts", madeFor: "bankworkx", journey: connectAccount,
