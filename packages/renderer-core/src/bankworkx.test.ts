@@ -92,7 +92,7 @@ describe("Add a card", () => {
     await press(r, "Save card");
     expect(r.current).toBe("success");
     const cards = bank.persona.finance!.cards;
-    expect(cards.map((c) => [c.last4, c.nickname, c.isDefault])).toEqual([["5832", "Everyday", false], ["4242", "Travel", true]]);
+    expect(cards.map((c) => [c.last4, c.nickname, c.isDefault])).toEqual([["5832", "Everyday", false], ["4417", "Online", false], ["4242", "Travel", true]]);
   });
   it("lands on the failure screen when the card is already saved, and can go back", async () => {
     const { r } = mk(addCard); await r.start();

@@ -55,9 +55,9 @@ describe("dashboard view-models", () => {
   });
   it("lists notifications for nearly used budgets and renewing subscriptions", () => {
     const n = notifications(fin(), usd);
-    expect(n.map((x) => x.text)).toEqual(["Entertainment budget is 91% used", "Google One renews in 4 days ($21)"]);
+    expect(n.map((x) => x.text)).toEqual(["Entertainment budget is 91% used", "Groceries budget is 108% used", "Google One renews in 4 days ($21)", "FitClub renews in 2 days ($39)"]);
     expect(notifications(undefined, usd)).toEqual([{ icon: "check", text: "You're all caught up.", tone: "positive" }]);
-    expect(subscriptionsDue(fin().subscriptions, 9).map((s) => s.name)).toEqual(["Google One", "StreamPlus"]);
+    expect(subscriptionsDue(fin().subscriptions, 9).map((s) => s.name)).toEqual(["Google One", "StreamPlus", "FitClub"]);
   });
 });
 
@@ -81,7 +81,7 @@ describe("accounts, budgets and wallet view-models", () => {
     const food = fin().budgets[0]!;
     const month = budgetDetail(food, fin().transactions, "month");
     expect(month).toMatchObject({ left: 975, perDay: 34, daysLeft: 28 });
-    expect(month.transactions.map((t) => t.title)).toEqual(["Food & Drinks", "Starbucks Coffee"]);
+    expect(month.transactions.map((t) => t.title)).toEqual(["Food & Drinks", "Starbucks Coffee", "Dinner Out"]);
     expect(budgetDetail(fin().budgets[1]!, fin().transactions, "week").transactions.map((t) => t.title)).toEqual(["Shopping"]);
   });
   it("draws card numbers that end in the real last four", () => {
