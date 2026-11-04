@@ -4,15 +4,15 @@
 
 **What exists today:** BankWorkx® is a retail-only shell (`docs/BANKWORKX.md`): Dashboard, Accounts, Budgets, Wallet and Invest, six journeys in `packages/journey-schema/src/fixtures/bankworkx.ts` without consent, OTP or proof, the CAB access journeys (`fixtures/cab.ts`, `docs/CAB.md`) as the starting pattern for pre-login and sign-in, and Meezan journeys for local transfer, currency conversion and bill pay. **What is planned:** everything marked *(planned)*: sandbox domains, adapters, blocks, contexts, conditions.
 
-## Journey index (47)
+## Journey index (52)
 
 | Group | Journeys |
 |---|---|
 | Explore and onboarding (Public) | `loan-calculator`, `deposit-calculator`, `find-branch-atm`, `contact-support`, `open-account`, `track-application`, `register-digital-banking` |
 | Sign-in and security | `sign-in`, `setup-quick-login`, `forgot-username`, `reset-password`, `unlock-account`, `change-password`, `trusted-devices`, `change-quick-pin` |
-| Accounts | `account-statement`, `account-nickname`, `open-another-account`, `create-budget` |
-| Payments | `own-transfer`, `internal-transfer`, `personal-transfer`, `international-transfer`, `pay-bill`, `mobile-topup`, `manage-beneficiary`, `schedule-payment`, `cancel-standing-order` |
-| Cards | `activate-card`, `freeze-card`, `card-controls`, `virtual-card`, `replace-card`, `card-pin`, `dispute-transaction`, `add-card` |
+| Accounts | `accounts`, `account-details`, `statement` (was `account-statement`), `account-nickname` (alias of `account-details`), `open-another-account`, `create-budget` |
+| Payments | `transfer-types`, `own-transfer`, `internal-transfer`, `personal-transfer`, `single-transfer`, `international-transfer`, `pay-bill`, `mobile-topup`, `manage-beneficiary`, `schedule-payment`, `cancel-standing-order` (alias of `schedule-payment` in cancel mode) |
+| Cards | `cards`, `activate-card`, `freeze-card` (alias of `card-controls`), `card-controls`, `virtual-card`, `replace-card`, `card-pin`, `dispute-transaction`, `add-card` |
 | Save & Borrow | `term-deposit`, `savings-goal`, `apply-loan`, `repay-loan`, `invest`, `sell-investment`, `add-money` |
 | More | `update-profile`, `new-message`, `service-request`, `connect-account` |
 
@@ -904,325 +904,256 @@ Persona `sam`, no session, `now: 2026-11-03T10:00:00Z`.
 
 ### ★ Open an account — `open-account`
 
+**Catalog:** slug `open-account`, workspace `public`, category Explore and onboarding (Public: before sign-in), core no, can a bank switch it off: yes (basic entry, kept in the Lean preset). Options (all default on): **Offer the United States** (`regUS`); **Offer the United Kingdom** (`regUK`); **Offer the European Union** (`regEU`); **Offer the UAE and Middle East** (`regME`); **US: accept an ITIN or a passport instead of an SSN** (`allowItin`); **Allow joint accounts (second holder completes their own checks)** (`jointAccounts`); **Offer Shariah-compliant products (Middle East)** (`islamic`); **UAE: allow UAE Pass instead of photographing the Emirates ID** (`uaePass`); **Saudi Arabia: allow Nafath approval instead of an ID photo** (`nafath`); **Jordan: allow the Sanad digital ID** (`sanad`); **Send politically exposed persons to manual review** (`pepReview`). Research: `research/open-account.md`. Built in `design/bankworkx-r1/src/journeys/49-open-account.js`.
+
+The prototype builds the journey in thirteen working steps plus a resume step and a tracker, across four regions (United States, United Kingdom, European Union, UAE and Middle East with Saudi Arabia and Jordan). The region chosen first decides every later field, the ID documents and the deposit-protection text. Where it differs from the earlier text of this block the prototype rule is written here.
+
 #### 1. Summary
 
-| | |
+| Item | Value |
 |---|---|
 | Slug | `open-account` |
-| Purpose | A new customer opens a BankWorkx® account from their phone or browser: verify identity, give personal and tax details, upload documents, read and sign the agreement, submit, and come back later if needed. |
+| Purpose | A new customer applies for an account: region and product, personal and contact details, phone check, address, tax self-certification, work and money, ID check (photo or digital ID), proof of address (Middle East), selfie liveness check, consent, review, and a tracker that shows the decision. |
 | Release | 1 |
-| Workspace | Public |
-| Status | New (planned). No onboarding exists in the sandbox. |
+| Workspace | `public` |
+| Status | Built in the prototype (`basic`, submit "Done"). Production adapters are the planned `onboarding` domain (section 5). |
 | Channels | Web, mobile |
-| Starting pattern | Multi-step forms in `add-card` and `connect-account` (`fixtures/bankworkx.ts`) for field and review screens; the one-time code screens of `local-transfer`; the CAB `enroll` journey for "identify the person, then show a clear result" (`fixtures/cab.ts`). Everything about ID capture, files, the agreement and the signature is new. |
-| Who may use it | Anyone who is not yet a customer, aged 18 or older (16 to 25 for the Student Account). Persona `sam` (Sam Rivera). |
-| Money moving | No. No money moves and no account number exists until the bank approves. A security and file journey: identity, personal data, uploads. |
-
-New adapters (planned, sandbox domain `onboarding`): `bank.onboarding.start`, `.idCheck`, `.savePersonal`, `.saveTax`, `.saveProduct`, `.requiredDocuments`, `.uploadDocument`, `.removeDocument`, `.agreement`, `.sign`, `.submit`, `.save`, `.get`. Existing adapters reused: `bank.otp.send`, `bank.otp.verify`. New blocks (planned): `idCapture`, `fileUpload`, `documentViewer`, `signature`, `statusChip`, `datePicker` (batch A and B, README 2.2). Engine: `navigate.toJourney` and `returnTo`; receipts.
+| Starting pattern | `add-card` and `connect-account` for forms; the CAB `enroll` journey for identify then result |
+| Who may use it | Anyone not yet a customer, aged 18 or older. Persona `sam` (Sam Rivera). |
+| Money moving | No. No money moves and no account number exists until the bank approves. |
 
 #### 2. Entry points
 
-| Place | Label | Passes | Permission |
-|---|---|---|---|
-| Landing | Open an account | `{productId}` optional | none |
-| Products › any detail | Open this account | `{productId}` | none |
-| `loan-calculator` / `deposit-calculator` result | New to BankWorkx®? Open an account | – | none |
-| `track-application` › draft or "more information needed" | Continue application (README change needed) | `{applicationId}` | none (one-time code first) |
-| Deep link | `/public/j/open-account?productId=acc_saver` | `{productId}` | none |
+| Place › label | Passes in | Permission |
+|---|---|---|
+| Landing › Open an account | none | none |
+| Explore › Products › a product page › Open this account | `{productId}` (`acc_saver` selects Aurora Savings; any other `acc_…` selects Everyday; a non-account id such as a loan or card shows the banner "To apply for this, first open an account. You can apply once you're signed in.") | none |
+| Loan and deposit calculators › Open an account | none | none |
+| `track-application` › draft or "more information needed" | `{applicationId}` (planned) | none |
+| Test and demo launch | `{demo: true, region: "us"\|"uk"\|"eu"\|"me", fresh?: true}` fills every step with an example applicant | none |
 
-When `{productId}` is a deposit, loan or card, the journey starts with the account that comes with it (Everyday Account) and explains why on `welcome`.
+If a draft exists and `fresh` is not set, the journey opens on the resume step. Regions the bank has switched off are not offered.
 
 #### 3. Screens
 
-Order of the happy path: `welcome` → `contact` → `verifyPhone` → `idCapture` → `idConfirm` → `personal` → `tax` → `product` → `documents` → `review` → `agreement` → `consent` → `sign` → `signOtp` → `submitted`. Side screens: `saved`, `idFailed`, `notEligible`, `expired`. Resume rules: a `draft` application opens on its first unfinished screen (`resumeAt` from `bank.onboarding.get`); a `more_info` application (from `track-application`) opens straight on `documents`, shows the bank's request in an info alert, and Submit sends it back for review. A stepper (`stepper` block) shows the five stages "Your contact", "Your ID", "About you", "Documents", "Sign" from `contact` to `signOtp`. Every screen from `idCapture` to `review` has a ghost button **Save and continue later** (→ `saved`).
+Steps in order. Each shows only when it applies. After resuming, the steps before the saved step are skipped. Every step has **Back**; the first steps also have **Save and finish later**.
 
-**Screen `welcome` — "Open an account"** (entry). Blocks: `text`, `select`, `alert`, `reviewSummary`, `button`.
+**Step `resume`: "Welcome back"** (only with a saved draft). Card "You have a saved application", "{name} · saved {date}. For your safety we don't keep photos of your ID or face. You'll take those again." Field: radio cards **Continue where I left off** / **Start a new application** ("This deletes the saved one."), required. Continuing lands on the saved step, or the ID step if the person had gone further. Drafts keep 30 days.
 
-| Label | Block | Required | Rule | Error |
+**Step `region`: "Where do you live?"**, intro "This decides which details we need to ask for, by law."
+
+| Field | Block | Required | Shown when | Rule |
 |---|---|---|---|---|
-| Choose an account (`oa.productId`) | `select`, variant `rows`, source = account products (Everyday Account, Aurora Savings, Student Account), preselected from `{productId}` | Yes | One of `acc_everyday`, `acc_saver`, `acc_student` | "Choose an account." |
+| Region | radio cards: United States ("USD · FDIC insured up to $250,000"), United Kingdom ("GBP · FSCS protected up to £85,000"), European Union ("EUR · protected up to €100,000"), UAE and Middle East ("AED, SAR or JOD · Emirates ID or national ID") | Yes | always (only offered regions) | one of the offered |
+| Country | select: EU: Germany, France, Ireland, Spain, Italy, Netherlands; Middle East: United Arab Emirates, Saudi Arabia, Jordan | Yes | EU or Middle East | sets the currency (EUR, AED, SAR, JOD) and the phone dial code (+49, +971, +966, +962 …) |
+| I live at an address in this region | check | Yes | region chosen | ticked |
 
-Copy: Title "Open an account". Body "It takes about 10 minutes. You'll need your phone and a photo ID." List "What you'll need" from the product (`needed`): "Photo ID (passport, driver licence or state ID)", "Proof of address", "Your tax details". Alert (info, shown when the passed product is a card, deposit or loan): "To apply for {productName}, first open an account. You can apply once you're signed in." Link row: "Already a customer? Register for digital banking" (→ `toJourney: register-digital-banking`). Link row: "Already started? Track my application" (→ `toJourney: track-application`).
+A card **What you'll need** lists by region: US "Name, date of birth, home address and a Social Security number (SSN) or ITIN, by US law (the Customer Identification Program)", "A photo ID such as a driver's licence or passport", "A selfie"; UK "Name, date of birth and home address for the last 3 years", "A passport or photocard driving licence", "A selfie. National Insurance number is optional"; EU "Name, date of birth, home address and your tax ID (for the EU tax exchange)", "A passport or national ID card", "A selfie"; Middle East "Name, date of birth, address and your Emirates ID or national ID number", "Your ID, or UAE Pass / Nafath / Sanad if you use them", "A selfie and a recent proof of address". Then "About 8 minutes. We save your progress." A button **Use an example applicant** fills every step with synthetic data (demo only).
 
-| Button | Does | Leads to |
-|---|---|---|
-| Start | `validate` | `contact` |
-| Back | `exit` | Where the person came from |
+**Step `product`: "Choose your account"**
 
-**Screen `contact` — "Your contact details"**. Blocks: `stepper`, `textInput` x2, `alert`, `button`.
-
-| Label | Block | Required | Rule | Error |
+| Field | Block | Required | Shown when | Rule |
 |---|---|---|---|---|
-| Email (`oa.email`) | `textInput`, keyboard `email` | Yes | `name@domain.tld`, at most 80 characters | "Enter an email address like name@example.com." |
-| Mobile number (`oa.mobile`) | `textInput`, keyboard `phone`, placeholder "+1 415 555 0199" | Yes | US mobile: `+1` then 10 digits (spaces and dashes allowed) | "Enter a US mobile number with 10 digits." |
+| Account | radio cards: **Everyday Account** ("Debit card. No monthly fee. Free local transfers.", "0 / month"); **Aurora Savings** ("Interest paid monthly. Withdraw any time. Minimum opening deposit {$100 in the US, 50 elsewhere in the local symbol}.", rate US 3.10%, UK 3.40% AER, EU 2.20%, Middle East 3.00%); **Everyday Islamic Account** ("Shariah-compliant. Certified by our Shariah board. No interest.") | Yes | Islamic only in the Middle East with `islamic` on | one |
+| Who is it for? | chips Just me, Me and another person (hint "The second person gets a link and completes their own ID checks.") | No (Just me) | `jointAccounts` on | none |
 
-Copy: Body "We'll send a code to your mobile to check it's yours." Alert (info): "We use your email and mobile to send updates about your application." Button "Send code": `validate`, `callApi` `start` (creates the application), then `callApi` `otpSend` → `verifyPhone`. In the sandbox the code goes to the persona's phone (`+1 415 555 0199`, code `123456`); a planned `phone` field on `bank.otp.send` sends it to the typed number in a real bank. Ghost "Back" → `welcome`.
+**Step `personal`: "About you"**, intro "Enter your name exactly as it appears on your ID."
 
-**Screen `verifyPhone` — "Enter your code"**. Blocks: `otp` (length 6, `maxAttempts: 3`, keypad), `text`, `button`.
+| Field | Block | Required | Shown when | Validation | Message |
+|---|---|---|---|---|---|
+| Title | select Mr, Mrs, Ms, Miss, Mx, Dr | No | UK, EU | none | none |
+| First name, Last name | text, up to 40, half width | Yes | always | `^[A-Za-zÀ-ÿ' .-]{1,40}$` | "Use letters only. Hyphens and apostrophes are fine." |
+| Middle name | text, up to 40 | No | always | none | none |
+| Day, Month, Year of birth | three selects (the year runs from 2008 down 100 years) | Yes | always | a real date; age 18 or more | "That date doesn't exist. Check the day and month." / "You must be 18 or older to open this account. (UNDER_AGE)" |
+| Nationality, Country of birth | select (United States, United Kingdom, Germany, France, Ireland, Spain, Italy, Netherlands, United Arab Emirates, Saudi Arabia, Jordan, Egypt, India, Pakistan, Philippines, Lebanon, Syria, Palestine, Canada, Australia, Other) | Yes | always | hint on birth country "Needed for the US and international tax checks." | none |
+| Emirates ID number | text, `784-YYYY-NNNNNNN-C`, up to 18 | Yes | United Arab Emirates | starts 784, 15 digits, passes the Luhn check, year equals the birth year | "Check your Emirates ID number. It starts with 784 and looks like 784-YYYY-NNNNNNN-C. (EID_INVALID)" / "The birth year in this Emirates ID doesn't match your date of birth. (EID_DOB_MISMATCH)" |
+| National ID or Iqama number | text, 10 digits | Yes | Saudi Arabia | `^[12]\d{9}$` | "A Saudi national ID or Iqama number has 10 digits and starts with 1 (citizen) or 2 (resident). (NID_INVALID)" |
+| National number | text, 10 digits | Yes | Jordan | `^\d{10}$` | "A Jordanian national number has 10 digits. (NID_INVALID)" |
 
-Copy: Title "Enter your code". Body "We sent a 6-digit code to {maskedPhone}." Helper "Didn't get it? You can ask for a new code in 30 seconds." Button "Verify" (callApi `otpVerify`, id exactly `otpVerify`, so the engine counts failures) → `idCapture`. Ghost "Send a new code" (enabled after 30 s; runs `otpSend`; resets the count). After the third wrong code the engine locks the screen: message S-`OTP_INVALID` third form, button "Start again" → `contact`.
+**Step `contact`: "Your contact details"**, intro "We'll send a code to check your phone." Busy "Sending a code…" 700 ms.
 
-| Field | Block | Required | Rule | Error |
+| Field | Block | Required | Validation | Message |
 |---|---|---|---|---|
-| Code (`oa.otp`) | `otp`, 6 digits | Yes | 6 digits | "Enter the 6-digit code." |
+| Email | email, up to 80 | Yes | `^[^\s@]+@[^\s@]+\.[A-Za-z]{2,}$` | "Enter an email like name@example.com." |
+| Mobile number | tel, up to 20, hint "Country code {dial} is added for you." | Yes | by country: US 10 digits (optional leading 1); UK a mobile starting 07 or 447; UAE and Saudi a mobile starting 05 / 5 / 971 / 966; Jordan 07 / 962; others 8 to 13 digits | "Enter a mobile number with {rule}. (PHONE_INVALID)" with the rule text, for example "10 digits, like 555 010 0123" or "a UK mobile, like 07700 900123" |
 
-**Screen `idCapture` — "Verify your ID"**. Blocks: `stepper`, `select` (variant `tiles`), `idCapture` (planned) for the front, back and selfie, `alert`, `button`, `button`.
+**Step `verify`: "Check your phone"**, busy "Checking the code…" 600 ms. Card "Code sent to ••• {last 4}", "It works for 10 minutes. Didn't get it? Send a new code" (toast "New code sent"). Field **6-digit code** (text, required, `^\d{6}$`, "Enter the 6 digits from the message."). `000000` gives "That code isn't right. Check the latest message. (VERIFY_CODE_INVALID)"; any other six digits pass in the sandbox.
 
-| Label | Block | Required | Rule | Error |
+**Step `address`: "Where you live"**, intro "Your home address, not a PO box or a work address."
+
+| Field | Block | Required | Shown when | Validation | Message |
+|---|---|---|---|---|---|
+| Address line 1 | text, up to 60 | Yes | always | not a PO box (`P.O. Box` in any spelling) | "Use your home address. We can't accept a PO box here. (ADDRESS_PO_BOX)" |
+| Address line 2 | text | No | always | none | none |
+| City or town | text, half width | Yes | always | none | none |
+| State | select of 50 states and DC | Yes | US | none | none |
+| County | text | No | UK | none | none |
+| ZIP or postcode | text, up to 10 | Yes | not the Middle East, except Saudi Arabia | US `12345` or `12345-6789`; UK like `SW1A 1AA`; Germany, France, Spain, Italy, Saudi 5 digits; Netherlands like `1012 AB`; Ireland an Eircode like `D02 X285` | "Enter {rule}. (POSTCODE_INVALID)" |
+| Emirate | select (Abu Dhabi, Dubai, Sharjah, Ajman, Umm Al Quwain, Ras Al Khaimah, Fujairah) | Yes | UAE | none | none |
+| Area or district | text | Yes | Middle East | none | none |
+| How long have you lived here? | chips Under 1 year, 1 to 3 years, Over 3 years | No | UK | none | none |
+| Previous address | textarea, up to 160, hint "UK identity checks look back 3 years." | Yes | UK and under 3 years | none | none |
+| Send post to this address | check | No (on) | always | none | none |
+
+**Step `tax`: "Tax details"**, intro "Banks must ask where you are tax resident. This is the law (FATCA and CRS), not a choice."
+
+| Field | Block | Required | Shown when | Validation | Message |
+|---|---|---|---|---|---|
+| US citizen or US tax resident? | chips Yes (form W-9), No (form W-8BEN) | Yes | US | none | none |
+| Taxpayer number | chips SSN; ITIN and Passport only (only with `allowItin`) | Yes | US | hint "US law (the CIP rule) needs a number to identify you. Non-US residents may use a passport number." | none |
+| Social Security number | text `XXX-XX-XXXX` | Yes | US with SSN | 9 digits; area not 000, 666 or 900 and above; group not 00; serial not 0000 | "An SSN has 9 digits, like 123-45-6789. (TIN_INVALID)" / "That SSN isn't valid. Check the digits on your card. (TIN_INVALID)" |
+| ITIN | text `9XX-XX-XXXX` | Yes | US with ITIN | 9 digits starting 9; middle two digits 50 to 65, 70 to 88, 90 to 92 or 94 to 99 | "An ITIN has 9 digits and starts with 9, like 9XX-70-XXXX. (TIN_INVALID)" / "That ITIN isn't valid. The middle two digits are out of range. (TIN_INVALID)" |
+| Passport number | text | Yes | US with passport | `^[A-Za-z0-9]{6,12}$` | "A passport number has 6 to 12 letters and numbers." |
+| National Insurance number | text, optional, hint "Optional. It helps us match you faster." | No | UK | `QQ 12 34 56 C` shape with valid prefix, final letter A to D | "A National Insurance number looks like QQ 12 34 56 C (two letters, six digits, a letter A to D). (NI_INVALID)" |
+| Tax identification number | text | Yes | EU | by country: Germany 11 digits, not starting 0; France 13 digits; Ireland 7 digits and 1 or 2 letters; Spain 8 digits or X/Y/Z plus 7 digits, then a letter; Italy 16 letters and digits; Netherlands 9 digits | "That doesn't look like {rule}. (TIN_INVALID)" |
+| Country where you pay tax | select | Yes | always | none | none |
+| No tax ID in this country? | select: A the country doesn't issue tax IDs to residents; B I can't get one (explain below); C the country doesn't need me to give one | No | Middle East | none | none |
+| Why can't you get one? | textarea, up to 120 | Yes | reason B | none | none |
+| US citizen, resident or born in the US? | chips No, Yes | No (No) | not US | none | none |
+| US taxpayer number | text | Yes | not US and Yes | SSN or ITIN rules | as above |
+| Also pay tax in another country? | chips No, Yes | No | always | none | none |
+| Second country, its tax ID, or a reason | select, text (placeholder "Leave empty if you have none"), select A/B/C | Yes (country); one of ID or reason | Yes | one of ID or reason | "For your second country, enter the tax ID or choose a reason below." |
+| Confirmation | check "I confirm this tax information is correct and complete. I'll tell BankWorkx® within 30 days if it changes." | Yes | always | ticked | "This is required." |
+
+**Step `work`: "Work and money"**, intro "Banks must understand where your money comes from."
+
+| Field | Block | Required | Shown when | Rule |
 |---|---|---|---|---|
-| Document type (`oa.id.type`) | `select`, `tiles`: Passport (`passport`), Driver licence (`licence`), State ID (`stateId`) | Yes | One of three | "Choose a document." |
-| Front of your ID (`oa.id.front`) | `idCapture`, mode `document-front` | Yes | An image captured; for a passport this is the photo page | "Take a photo of the front of your ID." |
-| Back of your ID (`oa.id.back`) | `idCapture`, mode `document-back` | Yes unless Passport (hidden for Passport) | An image captured | "Take a photo of the back of your ID." |
-| Selfie (`oa.id.selfie`) | `idCapture`, mode `selfie` | Yes | An image captured | "Take a selfie so we can match it to your ID." |
+| Employment | select Employed, Self-employed, Student, Retired, Homemaker, Not working | Yes | always | one |
+| Employer or business; Job title | text, up to 60 / 50 | Yes | employed or self-employed | none |
+| Yearly income before tax | select: Under {S}25,000; {S}25,000 to {S}50,000; to 100,000; to 250,000; Over {S}250,000 (S is the local symbol) | Yes | always | one |
+| Main source of the money you'll deposit | select Salary, Business income, Savings, Pension, Investments, Gift or inheritance, Sale of property, Something else | Yes | always | one |
+| Tell us more | textarea, up to 200, hint "A person may read this and ask for a document." | Yes | gift, property or something else | none |
+| Money you expect to pay in each month | select Under {S}2,000; to 10,000; to 50,000; Over {S}50,000 | Yes | always | one |
+| How did you build your wealth? | textarea, up to 200 | Yes | income over 250,000 or deposits over 50,000 | none |
+| What will you use the account for? | select Everyday spending, Receiving my salary, Saving, Sending money abroad, Something else | Yes | always | one |
+| Senior public position (you, family or associate)? | chips No, Yes | No (No) | always | none |
+| Which position, and in which country? | textarea, up to 160, hint "This is not a refusal. It means a person reviews the application." | Yes | Yes | none |
 
-Copy: Title "Verify your ID". Body "Put your ID on a flat, well-lit surface. Make sure all four corners and the text can be read." Selfie helper "Look straight at the camera. Take off sunglasses and hats." Sandbox note (shown only in Studio's sandbox): "Sandbox: the camera is simulated. Pick the outcome in the sandbox panel." Button "Check my ID" (`validate`, `callApi` `idCheck`). Ghost "Save and continue later". On failure the block stays filled and the failure message shows in an `alert` (error) above the button; the person can retake only the failing item.
+**Step `idcheck`: "Verify your ID"**, intro "Take a clear photo of the whole document." Busy "Reading and checking your ID…" 1.3 s. Tips: "Lay it flat in good light. No glare, all four corners." and "We store the photo encrypted and delete it once the check is done, unless the law says to keep it."
 
-Routing after `idCheck`: `ok` → `idConfirm`; `UNDERAGE` or `ID_REJECTED` → `notEligible` or `idFailed`; `ID_ATTEMPTS_EXCEEDED` → `idFailed`; other codes → stay.
-
-**Screen `idConfirm` — "Check your details"**. Blocks: `reviewSummary`, `alert`, `button`, `button`.
-
-| Row | Example (Sam Rivera, Driver licence) |
-|---|---|
-| Full name | Sam Rivera |
-| Date of birth | 14 Mar 1992 |
-| Document | Driver licence ••7702 |
-| Expires | 9 Aug 2030 |
-| Nationality | United States |
-
-Copy: Title "Is this you?". Alert (info) "These details came from your ID. You can't change them here. If something is wrong, scan your ID again." Buttons "Yes, that's me" → `personal`; "Scan again" (counts as an attempt only if the next check fails) → `idCapture`.
-
-**Screen `personal` — "About you"**. Blocks: `stepper`, `textInput` x5, `select` x6, `button`. Email and mobile are shown read-only as `reviewSummary` rows with an Edit link back to `contact` (changing them repeats the code check).
-
-| Label (bind) | Block | Required | Rule | Error |
+| Field | Block | Required | Shown when | Validation / message |
 |---|---|---|---|---|
-| Home address (`oa.addr1`) | `textInput` | Yes | 3 to 80 characters | "Enter your street address." |
-| Apartment, suite (`oa.addr2`) | `textInput` | No | Up to 80 characters | "Use up to 80 characters." |
-| City (`oa.city`) | `textInput` | Yes | 2 to 40 letters, spaces, `-`, `'`, `.` | "Enter your city." |
-| State (`oa.state`) | `select`, `dropdown`, 50 states and DC | Yes | One of the list | "Choose your state." |
-| ZIP code (`oa.zip`) | `textInput`, keyboard `number`, pattern `^[0-9]{5}(-[0-9]{4})?$` | Yes | 5 digits, optionally `-` and 4 more | "Enter a ZIP code like 94105." |
-| Employment (`oa.employment`) | `select`, `dropdown`: Employed, Self-employed, Student, Retired, Not working | Yes | One of five | "Choose your employment." |
-| Employer or school (`oa.employer`) | `textInput`, shown unless Retired or Not working | Yes when shown | 2 to 80 characters | "Enter your employer or school." |
-| Occupation (`oa.occupation`) | `textInput`, shown for Employed and Self-employed | Yes when shown | 2 to 60 characters | "Enter your occupation." |
-| Yearly income before tax (`oa.income`) | `select`, `dropdown`: Under $25,000; $25,000 to $49,999; $50,000 to $99,999; $100,000 to $249,999; $250,000 or more | Yes | One of five | "Choose your income." |
-| Where does your money come from? (`oa.source`) | `select`, `dropdown`: Salary, Savings, Business income, Pension, Family support, Other | Yes | One of six | "Choose where your money comes from." |
-| Why do you want this account? (`oa.purpose`) | `select`, `dropdown`: Everyday spending, Saving, Receiving my salary, Other | Yes | One of four | "Choose why you want this account." |
+| How do you want to prove who you are? | chips: Photograph my ID; UAE Pass (UAE, `uaePass`); Nafath (Saudi Arabia, `nafath`); Sanad ID (Jordan, `sanad`) | No | Middle East | digital choice replaces the photo fields with "Confirm in UAE Pass / Approve in Nafath / Approve in Sanad: We'll open the app. Check the number it shows matches, then approve. We receive your verified name, date of birth and ID number. You still take a selfie next." Surname "Declined" gives `ID_DIGITAL_DECLINED` |
+| Document | select by region: US Driver's licence, Passport, State ID card; UK Passport, Photocard driving licence, Residence permit (eVisa); EU National ID card, Passport, Residence permit; Middle East Emirates ID / national ID card, Passport | Yes | photo path | one |
+| Front of the document | file (a sample is chosen in the prototype) | Yes | photo path | not blurry, not expired: "We couldn't read the text. Retake it flat, in good light, without glare. (ID_UNREADABLE)" / "This ID expired on 14 Aug 2025. Use one that is still valid. (ID_EXPIRED)"; a failed sample shows "Retake it, or choose another photo, to continue." |
+| Back of the document | file | Yes | photo path and not a passport | "We couldn't read the back. Retake it flat, in good light. (ID_UNREADABLE)" |
 
-Copy: Title "About you". Helper under income and source: "We ask because the law requires us to know our customers." Button "Continue": `validate`, `callApi` `savePersonal` → `tax`. Ghost "Save and continue later". Data stays on `personal` if the adapter answers `PRODUCT_NOT_ELIGIBLE` (the Student Account needs employment "Student").
+After a good photo the screen shows **What we read**: Name, Date of birth, Document number ("••• 4821"), Expires ("14 Aug 2031"), Source ("Photo" or "Government record"). If the name read differs from the one entered: "The name differs from what you entered. You can go back and correct it, or continue. A person will review your application."
 
-**Screen `tax` — "Tax residency"**. Blocks: `stepper`, `toggle` x2, `textInput`, `select`, `textInput`, `alert`, `button`.
+**Step `poa`: "Proof of address"** (Middle East only), intro "A document from the last 3 months showing your name and address."
 
-| Label (bind) | Block | Required | Rule | Error |
-|---|---|---|---|---|
-| I'm a US citizen or US tax resident (`oa.usPerson`) | `toggle` (default on) | Yes | Yes or No | – |
-| Social Security number or ITIN (`oa.ssn`) | `textInput`, `secure`, shown when `usPerson` is on, pattern `^[0-9]{3}-?[0-9]{2}-?[0-9]{4}$` | Yes when shown | 9 digits, dashes optional | "Enter your 9-digit number, like 900-70-0001." |
-| I'm also a tax resident of another country (`oa.otherResidency`) | `toggle` (default off) | Yes | – | – |
-| Country (`oa.otherCountry`) | `select`, `dropdown`, countries list | Yes when shown | A listed country that is not the United States | "Choose a country." |
-| Tax number in that country (`oa.otherTin`) | `textInput` | Yes when shown, unless "no number" is chosen | 4 to 20 letters, digits, `-` | "Enter your tax number, or say you don't have one." |
-| I don't have a tax number (`oa.noTin`) with reason (`oa.noTinReason`) | `toggle` + `select`: "The country doesn't issue one", "I can't get one" | Reason required when on | One of two | "Choose a reason." |
+| Field | Block | Required | Validation / message |
+|---|---|---|---|
+| Document type | select Utility bill (UAE: DEWA, SEWA, ADDC), Tenancy contract (UAE: Ejari), Bank statement, Government letter | Yes | one |
+| Upload it | file (PDF, JPG or PNG up to 10 MB) | Yes | older than 3 months: "This document is dated 12 Feb 2026. We need one from the last 3 months. (POA_TOO_OLD)"; field text "Choose a document from the last 3 months." |
 
-Copy: Title "Tax residency". Body "Banks must ask where you pay tax (FATCA and CRS rules)." Alert (info): "We may share this with tax authorities where the law requires. We don't use it for anything else." Button "Continue": `validate`, `callApi` `saveTax` → `product`. One other country only in Release 1; more than one is an open question.
+A document in a different name shows "The name on this document is different. You can continue. A person will review it."
 
-**Screen `product` — "Your account"**. Blocks: `stepper`, `select` (`rows`), `toggle` x2, `textInput`, `reviewSummary`, `button`.
+**Step `selfie`: "Quick selfie check"**, intro "This proves you are really there and that the ID is yours." Busy "Matching your face to your ID…" 1.3 s. Text "Look at the camera, then turn your head slowly left and right. It takes 3 seconds."
 
-| Label (bind) | Block | Required | Rule | Error |
-|---|---|---|---|---|
-| Account (`oa.productId`) | `select`, `rows` | Yes | An account product | "Choose an account." |
-| Debit card (`oa.debitCard`) | `toggle` (default on), hidden for Aurora Savings | Yes | – | – |
-| Paperless statements (`oa.paperless`) | `toggle` (default on) | Yes | – | – |
-| Account nickname (`oa.nickname`) | `textInput` | No | Up to 30 letters, digits, spaces | "Use up to 30 letters or numbers." |
+| Field | Block | Required | Validation / message |
+|---|---|---|---|
+| Consent | check "I agree BankWorkx® may scan my face to check it matches my ID. The scan is deleted within 30 days." | Yes | ticked |
+| Start the check | file (live check) | Yes | too dark: "It was too dark to see your face. Move to a brighter place. (LIVENESS_LOW_LIGHT)"; spoof: "We couldn't confirm a live person. Try again without a screen or print. (LIVENESS_FAILED)"; field text "Try again, or choose another way, to continue." |
+| Alternative | button **Verify at a branch or by video call instead** | – | Saves the draft and leaves: toast "Saved. Book a branch visit or a video call and we'll continue from here." |
 
-Facts shown for the chosen account: monthly fee, interest rate (Savings), minimum opening balance (Savings: "$100, to put in within 30 days of opening"), card included. Copy: Title "Your account". Body "You can change these later in the app." Button "Continue": `validate`, `callApi` `saveProduct` → `documents`.
+A face that differs from the ID is allowed to continue and sends the file to manual review.
 
-**Screen `documents` — "Upload your documents"**. Blocks: `stepper`, one `fileUpload` per required document, `statusChip`, `alert`, `button`.
+**Step `consent`: "Terms and consent"**. Card **How your money is protected** with the regional text (US FDIC up to $250,000 per depositor per ownership category; UK FSCS up to £85,000; EU national scheme up to €100,000; Saudi Arabia deposit insurance fund, SAR 200,000 at the time of writing; Jordan JDIC, JOD 50,000 at the time of writing; UAE "does not have a deposit guarantee scheme yet", with Central Bank supervision) and a regional notice (US PATRIOT Act notice; UK identity check with a credit reference agency that does not affect the score; EU GDPR rights; others tax reporting). Checks, all required: "I accept the account terms and fee table (version 2026-10)", "I have read the privacy notice", "I agree to receive documents and statements electronically", "The information I gave is true and complete". Toggles (optional, off): **Offers by email**, **Offers by text message**.
 
-| Document (bind) | Block | Required | Rule | Error |
-|---|---|---|---|---|
-| Proof of address (`oa.doc.address`) | `fileUpload` | Yes | PDF, JPG or PNG; up to 5 MB; up to 2 files; issued in the last 3 months (utility bill, bank statement or lease) | See file messages below |
-| Student letter (`oa.doc.student`) | `fileUpload`, shown only for the Student Account | Yes when shown | Same file rules; dated this academic year | "Upload a letter from your school." |
+**Step `review`: "Check and send"**, button **Submit application**, busy "Sending your application…" 1.5 s. Four cards: Account (account, country, currency, holders), You (name, date of birth, nationality, email, masked mobile, masked taxpayer or ID number), Address and tax (address, tax country, US connection), Checks (ID "Photo taken" or "Verified by UAE Pass", Selfie "Passed" or "Taken (face differs, will be reviewed)", Proof of address, Source of funds). Checks on submit: email `duplicate@example.com` gives "We already have an application with these details. Track it or sign in instead. (DUPLICATE_APPLICATION)"; surname "Blocked" gives "We can't open this account online. Please contact us. (APPLICATION_NOT_ACCEPTED)" (neutral on purpose so nobody learns why). The file goes to **manual review** when the ID name differed, the selfie differed, the proof of address name differed, the source of funds is "Something else", or the person is politically exposed and `pepReview` is on.
 
-File messages (shown under the field, announced to screen readers):
+**Step `tracker`: "Your application"**, button **Finish**. Check mark, "Application received", "Reference {APP-nnnnnn}. We'll tell you here, by email and by push notification." A timeline: Application received ("We have your details and documents."), ID check ("We check your ID, your face and the database records." about 10 minutes), Manual review (only when needed; "A person at BankWorkx® looks at your application. This is normal and not a refusal. We may ask for one more document." usually within 1 business day), Approved (a few minutes), Account ready. The prototype has **Prototype: move to the next update**. At the end: "Your account is open" with sample identifiers (US `Routing 021 000 021 · Account ••• 4417`; UK `Sort code 20-00-00 · Account ••• 3081`; EU `IBAN DE00 •••• •••• 4417`; Middle East `IBAN AE00 …`, JO or SA) and currency.
 
-| Situation | Message |
-|---|---|
-| Not PDF, JPG or PNG | "Upload a PDF, JPG or PNG file." |
-| Over 5 MB | "That file is {size} MB. The limit is 5 MB." |
-| Can't be read | "We can't read that file. Upload a clearer copy." |
-| Blocked by the safety scan | "We can't accept that file. Upload a different one." |
-| Older than 3 months | "This document is more than 3 months old. Upload a newer one." |
-| Third file for one document | "You can upload up to 2 files for this document." |
+**Result**: title "Application on its way" (or "We're reviewing your application", or "Your account is ready"), text "We'll email you and send a push notification at each step." Chip: the stage. Rows: Account, Applicant, Status, Route ("Manual review needed" / "Automatic checks"), Next ("You'll be told within minutes" / "1 business day") or Account identifiers. Button **Track my application later** (toast "Find it any time under Track my application on the home screen") or, when ready, **Sign in**.
 
-Each uploaded file shows its name, size, a `statusChip` (Uploading, Checking, Accepted, Rejected) and a Remove link. Copy: Title "Upload your documents". Body "Take a photo or choose a file. Make sure the name and address can be read." Button "Continue": enabled when every required document has one Accepted file; otherwise pressing it shows "Upload every document to continue." (S-`DOCUMENT_REQUIRED`) → `review`.
-
-**Screen `review` — "Review your application"**. Block: `reviewSummary` in groups, with an Edit link on each group, `alert`, `button`.
-
-| Group | Rows |
-|---|---|
-| You | Full name, Date of birth, Email, Mobile |
-| Address | Street, City, State, ZIP |
-| Work and money | Employment, Employer, Occupation, Income, Source of funds, Purpose |
-| Tax | US person (Yes or No) and "SSN ending 0001"; other country (if any) |
-| Account | Account, Debit card (Yes or No), Paperless (Yes or No), Nickname |
-| Documents | File names with "Accepted" |
-
-Copy: Title "Check everything". Alert (warning): "You can't change these once you sign." Button "Looks good" → `agreement`. Ghost "Save and continue later".
-
-**Screen `agreement` — "Read your agreement"**. Blocks: `documentViewer` (planned), `text`, `button`.
-
-Copy: Title "Account agreement". Body "Please read all of it. The button turns on when you reach the end." Viewer shows "Account agreement and terms, version 2026-10" in sections: "1. Your account", "2. Fees and interest", "3. Keeping your details safe", "4. Tax information", "5. Closing your account", "6. How we use your information". Buttons: "I've read it" (disabled until the viewer reports the last page; `callApi` `agreement` records the version read) → `consent`. Ghost "Open the privacy notice" (opens Shell: Legal pages in a sheet). The viewer bind `oa.agreementRead` becomes true only at the end of the last page.
-
-**Screen `consent` — "Your agreement"**. Blocks: `consent` (bind `oa.consent`, `termsVersion: "2026-10"`, `mustBeTrue`), `toggle` (optional marketing), `button`.
-
-Consent text: "I confirm that the details I gave are true and complete. I have read and accept the account agreement and the privacy notice. I agree that BankWorkx® may check my identity and share my tax details with tax authorities where the law requires." Error "You need to agree to continue." Toggle (default off): "Send me news and offers (optional)". Button "Continue to sign" → `sign`.
-
-**Screen `sign` — "Sign your application"**. Blocks: `signature` (planned), `text`, `alert`, `button`.
-
-| Label (bind) | Block | Required | Rule | Error |
-|---|---|---|---|---|
-| Signature (`oa.signature`) | `signature`, modes "Draw" and "Type" | Yes | Draw: at least one stroke that covers 40 x 20 points or more. Type: equals the name on the ID, ignoring case, extra spaces and punctuation ("sam  rivera" is accepted) | Draw empty: "Draw your signature in the box." Type mismatch: "The name doesn't match your ID. Type {fullName}." |
-
-Copy: Title "Sign". Body "Sign here to confirm your application. We'll send a code to {maskedPhone} to finish." Button "Sign and send code": `validate`, `callApi` `otpSend` → `signOtp`. Ghost "Back" → `consent`.
-
-**Screen `signOtp` — "Confirm with your code"**. Blocks: `otp` (6 digits, 3 attempts), `button`.
-
-Copy: Title "Confirm with your code". Body "Enter the 6-digit code we sent to {maskedPhone}." Button "Submit application": runs `otpVerify` (id exactly `otpVerify`), then `sign`, then `submit` in order, then `navigate` → `submitted`. Resend as in `verifyPhone`. On `INCOMPLETE` goes back to the first missing item (named in the message).
-
-**Screen `submitted` — "Application submitted"** (terminal). Blocks: `result` (success), `reviewSummary`, `button` x2.
-
-Copy: Title "We've got your application". Text "We'll check your details and your documents. You'll hear from us by email and text within 1 to 2 working days." Meta: "Application number {reference}" (for example `APP-20261103-0042`). Rows: Account, Submitted (`3 Nov 2026 10:12 UTC`), Email (masked), Status "Submitted". Buttons: "Track my application" (`toJourney: track-application`, `{applicationId}`), "View receipt" (print or share, planned receipts), "Done" (`exit` → Landing).
-
-**Screen `saved` — "Application saved"** (terminal). `result` (success). Title "Your application is saved". Text "We'll keep it for 30 days, until {expiresOn}. To carry on, choose Track my application, enter {applicationId} and the code we text you." Buttons "Done" (`exit`), "Track my application" (`toJourney`). Data saved: ID result, personal, tax, product and uploaded files. Not saved: the signature, the consent and any code; these are done again at the end.
-
-**Screen `idFailed` — "We couldn't check your ID"** (terminal). `result` (error). Title "We couldn't check your ID online". Text "Visit a branch and bring your ID. We'll help you open the account there. Nothing was charged." Buttons "Find a branch" (`toJourney: find-branch-atm`, `{kind: "branch"}`), "Done".
-
-**Screen `notEligible` — "We can't open this account"** (terminal). `result` (error). Title by cause: UNDERAGE "You must be 18 or older" (Student Account: "The Student Account is for ages 16 to 25"); body "You can open an account once you're old enough. If you think this is a mistake, contact us." Buttons "Contact us" (`toJourney: contact-support`), "Done".
-
-**Screen `expired` — "This application has expired"** (terminal). `result` (error). Title "This application has expired". Text "Applications are kept for 30 days. Start a new one when you're ready." Buttons "Start again" → `welcome`, "Done".
-
-States common to all: Loading: submit buttons disabled with a spinner; lists as skeletons. 10 seconds without an answer shows the `TIMEOUT` state of the failing step with Try again. Empty: n/a. Back: the system back button goes one screen back; it never loses typed data inside the journey.
+**States:** loading is the busy spinner on contact, verify, ID, selfie and review; an empty state does not apply; errors show as a banner with the code's message and the person's answers are kept ("We couldn't reach the bank. Your answers are saved."); a timeout says "This is taking longer than expected. Nothing was sent."; leaving mid-way saves a draft for 30 days without photos.
 
 #### 4. Sandbox errors
 
-| Code | Message the person sees | Shows on | Button |
+| Code | Message | Shows on | Button |
 |---|---|---|---|
-| `EMAIL_INVALID` | "Enter an email address like name@example.com." | `contact` | Change email |
-| `PHONE_INVALID` | "Enter a US mobile number with 10 digits." | `contact` | Change number |
-| `CANNOT_START` | "We couldn't start an application with these details. If you already bank with us, choose Register for digital banking." | `contact`, alert | Register for digital banking (`toJourney`) / Change details |
-| `APPLICATION_EXISTS` | "You already have an application with this email. Choose Track my application to carry on." | `contact`, alert | Track my application |
-| `PRODUCT_NOT_FOUND` | "We can't find that account. Choose another." | `welcome` or `product` | Choose account |
-| `OTP_INVALID` | "That code isn't right. {n} tries left." After the third: "Too many wrong codes. Start again." | `verifyPhone`, `signOtp` | Try again / Start again |
-| `OTP_REQUIRED` | "Confirm with your one-time code first." | `signOtp` | Back to code |
-| `ID_UNREADABLE` | "We couldn't read your ID. Take a clearer photo with all four corners in view. {n} tries left." | `idCapture` | Retake |
-| `ID_EXPIRED` | "This ID has expired. Use a valid ID. {n} tries left." | `idCapture` | Use another ID |
-| `FACE_MISMATCH` | "Your selfie doesn't match your ID. Try again in good light. {n} tries left." | `idCapture` | Retake selfie |
-| `ID_NOT_SUPPORTED` | "We can't accept that kind of ID. Use a passport, driver licence or state ID." | `idCapture` | Choose document |
-| `UNDERAGE` | "You must be 18 or older to open this account." (Student: "The Student Account is for ages 16 to 25.") | `notEligible` | Contact us / Done |
-| `ID_REJECTED` | "We couldn't check your ID online. Nothing was charged." | `idFailed` | Find a branch |
-| `ID_ATTEMPTS_EXCEEDED` | Same as `ID_REJECTED` | `idFailed` | Find a branch |
-| `PRODUCT_NOT_ELIGIBLE` | "The Student Account is for students. Choose Student as your employment, or pick another account." | `personal` | Change employment / Change account |
-| `TIN_INVALID` | "Enter your 9-digit number, like 900-70-0001." | `tax` | Change number |
-| `COUNTRY_NOT_SUPPORTED` | "We can't take tax details for that country online. Visit a branch to finish." | `tax`, alert | Save and continue later / Find a branch |
-| `FILE_TYPE_NOT_ALLOWED` | "Upload a PDF, JPG or PNG file." | `documents` | Choose another file |
-| `FILE_TOO_LARGE` | "That file is {size} MB. The limit is 5 MB." | `documents` | Choose another file |
-| `FILE_UNREADABLE` | "We can't read that file. Upload a clearer copy." | `documents` | Choose another file |
-| `FILE_REJECTED` | "We can't accept that file. Upload a different one." | `documents` | Choose another file |
-| `DOCUMENT_TOO_OLD` | "This document is more than 3 months old. Upload a newer one." | `documents` | Choose another file |
-| `TOO_MANY_FILES` | "You can upload up to 2 files for this document." | `documents` | Remove a file |
-| `DOCUMENT_REQUIRED` | "Upload every document to continue." | `documents` | Upload |
-| `AGREEMENT_NOT_READ` | "Please read the whole agreement first." | `agreement` | Keep reading |
-| `AGREEMENT_VERSION_CHANGED` | "The agreement was updated. Please read the new version." | `agreement` (sent back) | Read again |
-| `SIGNATURE_EMPTY` | "Draw your signature in the box." | `sign` | Sign |
-| `SIGNATURE_MISMATCH` | "The name doesn't match your ID. Type {fullName}." | `sign` | Change name |
-| `INCOMPLETE` | "Your application isn't finished: {missing}. Go back to finish it." | `signOtp`, alert | Go to {screen} |
-| `APPLICATION_NOT_FOUND` | "We can't find that application. Start a new one." | `expired` screen shell | Start again |
-| `APPLICATION_EXPIRED` | "This application has expired. Start a new one." | `expired` | Start again |
-| `TIMEOUT` | Non-money wording: "This is taking longer than expected. Nothing was changed." On `submit` the wording adds: "Check Track my application before you apply again, so you don't apply twice." | The step that was running | Try again (submit: Track my application) |
-| `SERVICE_UNAVAILABLE` | S-`SERVICE_UNAVAILABLE` (README 1.6) | The step that was running | Try again / Save and continue later |
-
-Business outcomes of `idCheck`, `uploadDocument`, `savePersonal`, `saveTax` and `start` come back as data (`{ ok: false, code, attemptsLeft? }`), as the `cab.*` adapters do, so the journey routes on them. Misuse (an unknown application id) throws.
+| `UNDER_AGE` | "You must be 18 or older to open this account." | `personal` | Edit |
+| `VERIFY_CODE_INVALID` | "That code isn't right. Check the latest message." | `verify` | Try again |
+| `ID_UNREADABLE` | "We couldn't read the ID. Retake it in good light." | `idcheck` | Retake |
+| `ID_EXPIRED` | "This ID has expired. Use one that is still valid." | `idcheck` | Choose another |
+| `ID_DIGITAL_DECLINED` | "The approval was declined or timed out. Try again or photograph your ID." | `idcheck` | Try again |
+| `LIVENESS_LOW_LIGHT` | "It was too dark to see your face." | `selfie` | Try again |
+| `LIVENESS_FAILED` | "We couldn't confirm a live person." | `selfie` | Try again |
+| `POA_TOO_OLD` | "The proof of address must be from the last 3 months." | `poa` | Choose another |
+| `TIN_INVALID` | "The tax ID isn't in the right format." | `tax` | Edit |
+| `NI_INVALID` | "A National Insurance number looks like QQ 12 34 56 C." | `tax` | Edit |
+| `EID_INVALID`, `EID_DOB_MISMATCH`, `NID_INVALID` | see `personal` | `personal` | Edit |
+| `POSTCODE_INVALID` | "The postcode isn't in the right format." | `address` | Edit |
+| `PHONE_INVALID` | "The mobile number isn't in the right format." | `contact` | Edit |
+| `ADDRESS_PO_BOX` | "We can't accept a PO box as a home address." | `address` | Edit |
+| `DUPLICATE_APPLICATION` | "We already have an application with these details. Track it or sign in instead." | `review` | Track my application / Sign in |
+| `APPLICATION_NOT_ACCEPTED` | "We can't open this account online. Please contact us." | `review` | Contact us |
+| `SERVICE_UNAVAILABLE` | "We couldn't reach the bank. Your answers are saved." | the step | Try again |
+| `TIMEOUT` | "This is taking longer than expected. Nothing was sent." | the step | Try again |
 
 #### 5. Adapters
 
-| Integration id | Adapter | Request | Response | Error codes | Status | moneyMoving | requiresOtp |
-|---|---|---|---|---|---|---|---|
-| `start` | `bank.onboarding.start` | `{ productId, email, mobile }` | `{ ok: true, applicationId: "APP-20261103-0042", expiresOn }` | `EMAIL_INVALID`, `PHONE_INVALID`, `CANNOT_START`, `APPLICATION_EXISTS`, `PRODUCT_NOT_FOUND` | (planned) | No | No |
-| `otpSend` | `bank.otp.send` | `{ channel: "sms" }` | `{ sent, maskedPhone, channel }` | – | Existing | No | No |
-| `otpVerify` | `bank.otp.verify` | `{ code }` | `{ verified: true }` | `OTP_INVALID` (carries attempt) | Existing | No | No |
-| `idCheck` | `bank.onboarding.idCheck` | `{ applicationId, documentType, frontImageId, backImageId?, selfieImageId }` | `{ ok: true, extracted: { fullName, dob, documentNumberMasked, expires, nationality } }` or `{ ok: false, code, attemptsLeft }` | `ID_UNREADABLE`, `ID_EXPIRED`, `FACE_MISMATCH`, `ID_NOT_SUPPORTED`, `UNDERAGE`, `ID_REJECTED`, `ID_ATTEMPTS_EXCEEDED` | (planned) | No | No |
-| `savePersonal` | `bank.onboarding.savePersonal` | `{ applicationId, address, employment, employer?, occupation?, income, source, purpose }` | `{ ok: true }` or `{ ok: false, code, field? }` | `PRODUCT_NOT_ELIGIBLE`, `APPLICATION_EXPIRED`, `APPLICATION_NOT_FOUND` | (planned) | No | No |
-| `saveTax` | `bank.onboarding.saveTax` | `{ applicationId, usPerson, ssn?, otherResidency?: { country, tin?, noTinReason? } }` | `{ ok: true }` or `{ ok: false, code }` | `TIN_INVALID`, `COUNTRY_NOT_SUPPORTED` | (planned) | No | No |
-| `saveProduct` | `bank.onboarding.saveProduct` | `{ applicationId, productId, debitCard, paperless, nickname? }` | `{ ok: true, requiredDocuments: [{ kind, label }] }` | `PRODUCT_NOT_FOUND`, `PRODUCT_NOT_ELIGIBLE` | (planned) | No | No |
-| `uploadDocument` | `bank.onboarding.uploadDocument` | `{ applicationId, kind: "address" \| "student", fileName, mimeType, sizeBytes, fileId }` | `{ ok: true, documentId, status: "accepted" }` or `{ ok: false, code }` | `FILE_TYPE_NOT_ALLOWED`, `FILE_TOO_LARGE`, `FILE_UNREADABLE`, `FILE_REJECTED`, `DOCUMENT_TOO_OLD`, `TOO_MANY_FILES` | (planned) | No | No |
-| `removeDocument` | `bank.onboarding.removeDocument` | `{ applicationId, documentId }` | `{ ok: true }` | `APPLICATION_NOT_FOUND` | (planned) | No | No |
-| `agreement` | `bank.onboarding.agreement` | `{ applicationId, markRead?: true }` | `{ version: "2026-10", title, sections: [{ heading, text }], read }` | `AGREEMENT_NOT_READ` (when `markRead` is not preceded by the viewer reaching the end), `APPLICATION_NOT_FOUND` | (planned) | No | No |
-| `signApplication` | `bank.onboarding.sign` | `{ applicationId, agreementVersion, signature: { mode: "draw" \| "type", value } }` | `{ ok: true, signedAt }` or `{ ok: false, code }` | `OTP_REQUIRED`, `AGREEMENT_NOT_READ`, `AGREEMENT_VERSION_CHANGED`, `SIGNATURE_EMPTY`, `SIGNATURE_MISMATCH` | (planned) | No | Yes |
-| `submitApplication` | `bank.onboarding.submit` | `{ applicationId }` | `{ ok: true, reference, status: "submitted", submittedAt }` or `{ ok: false, code: "INCOMPLETE", missing: [] }` | `INCOMPLETE`, `APPLICATION_EXPIRED`, `APPLICATION_NOT_FOUND` | (planned) | No | Yes (signed) |
-| `saveForLater` | `bank.onboarding.save` | `{ applicationId }` | `{ ok: true, savedAt, expiresOn }` | `APPLICATION_EXPIRED`, `APPLICATION_NOT_FOUND` | (planned) | No | No |
-| `getApplication` | `bank.onboarding.get` | `{ applicationId }` | `{ applicationId, status, resumeAt, productId, expiresOn }` (the data to resume with; used by `track-application` too) | `APPLICATION_NOT_FOUND`, `APPLICATION_EXPIRED` | (planned) | No | No |
+All planned in the sandbox domain `onboarding` (none exists today; `bank.otp.send` and `bank.otp.verify` exist).
 
-Sandbox rules: an application is `draft` until `submit`, then `submitted`; drafts expire 30 days after the last save; an `idCheck` outcome is chosen by the test panel or the scenario's `idOutcome` (`good` default, `blurry`, `expired`, `mismatch`, `underage`, `unsupported`, `fraud`); a retryable failure counts toward 3 attempts, the third gives `ID_ATTEMPTS_EXCEEDED`; the age rule is 18 (Student Account 16 to 25 inclusive, in whole years from the date of birth at the sandbox clock; outside the band the code is `UNDERAGE`; a scenario can set the ID's date of birth with `idDob`); the sandbox decides a file by its name: `address-ok.pdf` and `student-letter.pdf` accepted, `address-old.pdf` is `DOCUMENT_TOO_OLD`, `scan-blurry.jpg` is `FILE_UNREADABLE`, `macro.exe` is `FILE_TYPE_NOT_ALLOWED`, `infected.pdf` is `FILE_REJECTED`, and a declared size above 5,242,880 bytes is `FILE_TOO_LARGE`; the typed signature must equal the ID name; `sign` and `submit` need the one-time code to have been verified (`OTP_REQUIRED`).
+| Integration id | Adapter | Request | Response | Errors | Status |
+|---|---|---|---|---|---|
+| `start` | `bank.onboarding.start` | `{region, country, product, holder}` | `{applicationId}` | `SERVICE_UNAVAILABLE` | (planned) |
+| `savePersonal` | `bank.onboarding.savePersonal` | personal, contact, address, tax, work fields | `{saved}` | `UNDER_AGE`, `EID_INVALID`, `EID_DOB_MISMATCH`, `NID_INVALID`, `PHONE_INVALID`, `POSTCODE_INVALID`, `ADDRESS_PO_BOX`, `TIN_INVALID`, `NI_INVALID` | (planned) |
+| `otpSend`, `otpVerify` | `bank.otp.send`, `bank.otp.verify` | `{phone}` / `{code}` | `{sent}` / `{verified}` | `VERIFY_CODE_INVALID` (was `OTP_INVALID`) | Existing |
+| `idCheck` | `bank.onboarding.idCheck` | `{documentType, front, back?}` or `{digitalId: "uaepass"\|"nafath"\|"sanad"}` | `{read: {name, dob, number, expires}, match}` | `ID_UNREADABLE`, `ID_EXPIRED`, `ID_DIGITAL_DECLINED` | (planned) |
+| `uploadProof` | `bank.onboarding.uploadDocument` | `{type, file}` | `{read, match}` | `POA_TOO_OLD` | (planned) |
+| `liveness` | `bank.onboarding.liveness` | `{video, consent}` | `{live, match}` | `LIVENESS_LOW_LIGHT`, `LIVENESS_FAILED` | (planned) |
+| `submit` | `bank.onboarding.submit` | `{applicationId, consents}` | `{reference, route: "auto"\|"manual", path[]}` | `DUPLICATE_APPLICATION`, `APPLICATION_NOT_ACCEPTED`, `TIMEOUT`, `SERVICE_UNAVAILABLE` | (planned) |
+| `saveDraft` | `bank.onboarding.save` / `.get` | `{applicationId}` | answers without photos | none | (planned) |
+| `track` | `bank.onboarding.status` | `{reference}` | `{stage, path[], account?}` | none | (planned) |
 
 #### 6. Permissions, step-up and limits
 
-No permission and no session. Step-up `otp` twice: to prove the mobile (`verifyPhone`) and to sign (`signOtp`). Limits: 3 one-time-code tries per code, resend after 30 seconds; 3 ID attempts; 5 MB and 2 files per document; drafts kept 30 days; one open application per email. Personal data is kept only in the application until it is approved or expires; the SSN is shown only as the last four digits after it is entered.
+No permission (public). Step-up: the phone code in `verify`; the selfie liveness check is the identity proof. Limits: minimum age 18; drafts kept 30 days without photos; ID photo deleted after the check, selfie within 30 days; one application per email (`DUPLICATE_APPLICATION`). The earlier text of this block named a Student Account for ages 16 to 25 and a separate agreement-signing step; the prototype has neither (the consent checks replace the signature; youth accounts are an open question).
 
 #### 7. Result and links out
 
-Result: `submitted`. Receipt (planned receipts engine feature): application number, date and time (`3 Nov 2026 10:12 UTC`), account chosen, applicant name, masked email and mobile, documents received (file names), agreement version signed (2026-10), signature method, time of consent. Print on web, share sheet on mobile. Notifications: email "We've got your application APP-20261103-0042" and a text message with the same line; both say "You can follow it at any time with Track my application." Links out: Track my application (`track-application`, `{applicationId}`), View receipt, Done (Landing). From `idFailed`: `find-branch-atm`. From `notEligible`: `contact-support`.
+Result as above. Receipt: reference `APP-nnnnnn` and the stage rows. Notifications raised: "Application received {reference}", "ID check complete", "Application in review" (only when manual), "Approved", "Your account is ready" (push and email). Links out: **Track my application** (`track-application`), **Sign in** (`sign-in`), Explore › Products.
 
 #### 8. Acceptance criteria
 
-- AC-1: A code sent to the mobile must be entered before the application goes further; the third wrong code stops the step.
-- AC-2: A good ID and selfie give the confirm screen with the name and date of birth from the ID, which the person cannot edit.
-- AC-3: A blurry, expired, non-matching or unsupported ID gives its message with the tries left; the third failure ends in the branch screen.
-- AC-4: A person under 18 (or outside 16 to 25 for the Student Account) cannot continue and sees the eligibility message.
-- AC-5: Every required personal field is checked with its exact message; the Student Account needs employment "Student".
-- AC-6: A US person must give a valid number; a second tax country needs a country and a number or a reason.
-- AC-7: A required document must be uploaded and accepted before Continue works; each file rule gives its own message.
-- AC-8: The review screen shows everything entered and each group can be edited.
-- AC-9: The agreement button works only after the whole agreement was read; the consent must be ticked.
-- AC-10: A drawn signature must not be empty and a typed one must match the ID name; signing needs the one-time code.
-- AC-11: Submitting gives an application number, a receipt and the notifications, and the application is `submitted`.
-- AC-12: Save and continue later keeps the answers, ID result and files for 30 days, and not the signature or consent.
-- AC-13: An expired or unknown application shows the expired screen.
-- AC-14: A timeout on submit does not create a second application; the message points to Track my application.
-- AC-15: An unavailable service on any step shows its message, keeps the answers and offers Save and continue later.
+- AC-1: Only the regions the bank offers are shown; the region and country decide the currency, dial code, address fields, ID documents, tax fields and protection text.
+- AC-2: A person under 18 or with an impossible date of birth cannot continue; the exact messages show.
+- AC-3: A mobile number, postcode, Emirates ID, Saudi or Jordanian ID, SSN, ITIN, National Insurance number and EU tax ID are each checked by their country's rule with the exact message.
+- AC-4: A PO box is refused as a home address.
+- AC-5: The verification code step accepts any six digits except `000000`.
+- AC-6: A blurry or expired ID, an expired-style proof of address, a dark selfie and a spoofed selfie are each refused with their message, and the person can retake without losing other answers.
+- AC-7: A name mismatch on the ID or proof of address, a face that differs from the ID, "Something else" as the source of funds, or a politically exposed person with `pepReview` on, all send the application to manual review; otherwise it goes the automatic route.
+- AC-8: The review shows masked numbers only (last four digits) and a tick-box consent set; the application is not sent until all four consents are ticked.
+- AC-9: Email `duplicate@example.com` gives `DUPLICATE_APPLICATION`; surname Blocked gives the neutral `APPLICATION_NOT_ACCEPTED`.
+- AC-10: Leaving mid-way saves a draft without photos; the next start offers Continue or Start new, and continuing returns to the saved step (or the ID step if later).
+- AC-11: The tracker shows four stages (five with manual review) and ends with the sample account identifiers for the region.
+- AC-12: With `jointAccounts`, `islamic`, `allowItin`, `uaePass`, `nafath` or `sanad` off the matching choice is absent.
+- AC-13: On a timeout or unavailable service nothing is sent, the answers are kept, and the person is told so.
 
 #### 9. Scenarios
 
-Persona `sam` (one-time code `123456`; `000000` also accepted). Sandbox clock `now: 2026-11-03T10:00:00Z`. Details used unless stated: email `sam.rivera@example.com`, mobile `+1 415 555 0199`, address 500 Howard Street, San Francisco, CA 94105, Employed at Northwind Studio as Designer, income $50,000 to $99,999, source Salary, purpose Everyday spending, US person with number `900-70-0001`, no other residency, Everyday Account with debit card and paperless on, document `address-ok.pdf`, typed signature "Sam Rivera".
+Sandbox demo values (synthetic): launch `{demo: true, region}` or tap **Use an example applicant**. US: Alex Morgan, born 14 Mar 1990, SSN `412-55-0197`, `alex.morgan@example.com`, mobile `5550100123`, `120 Example Street`, Springfield, IL `62704`, driver's licence. UK: NI `AB123456C`, mobile `07700900123`, `12 Example Road`, London `SW1A 1AA`, passport. EU: Germany, Berlin `10115`, tax ID `65929970489`, mobile `15123456789`, national ID. Middle East: United Arab Emirates, Dubai, Business Bay, mobile `0501234567`, Emirates ID `784-1990-1234567-6`, tax reason A. Verification code `482916` (any six digits except `000000`). ID samples: Clear photo, Blurry photo, Expired ID, Name doesn't match; back: Clear, Blurry; proof of address: Recent bill, Bill older than 3 months, Different name; selfie: Complete the check, Try in low light, Show a photo of a photo, Face differs from ID. Triggers: email `duplicate@example.com`; surname `Blocked` or `Declined` (digital ID). Today is Tue 3 Nov 2026.
 
-| Id | Covers | Setup / conditions | Steps | Expected |
+| # | Covers | Persona / setup | Conditions | Steps and expected result |
 |---|---|---|---|---|
-| T-1 | AC-1, AC-2, AC-5, AC-6, AC-7, AC-8, AC-9, AC-10, AC-11 | `idOutcome: good` | Run the whole journey with the details above | Ends on `submitted` with `APP-20261103-0042`; application status `submitted`; email and text notifications recorded; receipt lists `address-ok.pdf`, version 2026-10, signature type |
-| T-2 | AC-1 | – | At `verifyPhone` enter `111111`, `222222`, `333333` | Messages "That code isn't right. 2 tries left.", "...1 tries left."; third: "Too many wrong codes. Start again."; Start again returns to `contact`; the engine counted the failures on `otpVerify` |
-| T-3 | AC-3 | `idOutcome: blurry` | Check my ID three times | Messages with 2, then 1 tries left; third time `idFailed` with Find a branch |
-| T-4 | AC-3 | `idOutcome: expired`, then `good` | Check, change to good, Check again | First "This ID has expired. Use a valid ID. 2 tries left."; second reaches `idConfirm` |
-| T-5 | AC-3 | `idOutcome: mismatch`, then `unsupported` | Check twice | Selfie message, then ID-type message; person stays on `idCapture` each time |
-| T-6 | AC-4 | `idOutcome: underage` | Check | `notEligible`: "You must be 18 or older to open this account." |
-| T-7 | AC-4, AC-5 | Student Account chosen. Run A: ID date of birth 14 Mar 1992 (age 34, the default). Run B: scenario sets `idDob: 2005-06-12` (age 21) | Run A: Check my ID. Run B: Check, then at `personal` choose Employed, then Student | Run A: `notEligible`, "The Student Account is for ages 16 to 25." (code `UNDERAGE` is also used for an age outside the product's band). Run B: Employed gives the `PRODUCT_NOT_ELIGIBLE` message on `personal`; Student continues |
-| T-8 | AC-5 | – | Leave address, city, ZIP empty; enter ZIP `9410` | Each exact message; adapter not called |
-| T-9 | AC-6 | – | US person on with SSN `12345`; then other residency on with no country | "Enter your 9-digit number, like 900-70-0001."; "Choose a country." |
-| T-10 | AC-7 | – | Upload `macro.exe`, then `huge.pdf` declared 6 MB, `scan-blurry.jpg`, `infected.pdf`, `address-old.pdf`, then three good files | Each file message in the table; the third good file gives "You can upload up to 2 files for this document."; Continue is blocked with no accepted file ("Upload every document to continue.") |
-| T-11 | AC-8 | After `documents` | Edit "Address" on `review`, change the city, return | Review shows the new city; other answers unchanged |
-| T-12 | AC-9 | – | Press "I've read it" before the end (the scenario sends `markRead` early); then read to the end; then continue with the consent unticked | `AGREEMENT_NOT_READ` message; after the end the button works; consent unticked gives "You need to agree to continue." |
-| T-13 | AC-10 | – | Type "Sam Rivers"; draw nothing; then type "sam  rivera"; then submit without a verified code (scenario skips `otpVerify`) | Mismatch message "The name doesn't match your ID. Type Sam Rivera."; empty-drawing message; "sam  rivera" accepted; `sign` without code gives `OTP_REQUIRED` |
-| T-14 | AC-12 | After `product` | Save and continue later; later `track-application` → Continue application with the code | `saved` shows the 30-day date; resume opens on `documents`; earlier answers and the accepted file present; consent and signature empty |
-| T-15 | AC-13 | After T-14, `now` advanced to `2026-12-04T10:00:00Z` | Continue application | `expired`: "This application has expired. Start a new one." |
-| T-16 | AC-14 | `conditions.timeout: ["bank.onboarding.submit"]`, `latencyMs: 10000` | Submit at `signOtp` | Timeout message with Track my application; no application number; status still `draft`; clearing the condition and submitting once gives exactly one number |
-| T-17 | AC-15 | `conditions.unavailable: ["bank.onboarding.idCheck"]` | Check my ID | Unavailable message; selfie and photos kept; Save and continue later offered |
-| T-18 | AC-15 | `conditions.unavailable: ["bank.onboarding.uploadDocument"]` | Upload `address-ok.pdf` | Unavailable message under the field; no file listed |
-| T-19 | AC-1 | – | Email of an existing customer (`alex.morgan@example.com`) | `CANNOT_START` message with the Register for digital banking button; the message does not say the email is known |
-| T-20 | AC-2 | Start with `{productId: "loan_personal"}` | Open | Info alert about applying once signed in; Everyday Account preselected |
+| T-1 | AC-1, AC-11 | `sam` | none | Demo `us`, submit: Application received, automatic route, tracker received, ID check, approved, account ready (Routing 021 000 021). Repeat for `uk`, `eu`, `me` and check the currency, dial code and identifiers. |
+| T-2 | AC-2 | `sam` | none | Birth year 2008 with a month after today: `UNDER_AGE`; 31 February: "That date doesn't exist." |
+| T-3 | AC-3, AC-4 | `sam` | none | Bad phone, ZIP `1234`, SSN `666-12-3456`, ITIN `800-12-3456`, UK NI `ZZ123456A`, German tax ID starting 0, Emirates ID with the wrong year or checksum, Saudi ID `3123456789`, "PO Box 12": each exact message. |
+| T-4 | AC-5 | `sam` | none | Code `000000` gives `VERIFY_CODE_INVALID`; `123456` passes. |
+| T-5 | AC-6 | `sam` | none | Blurry, expired ID; older proof of address; low-light and spoofed selfie: each message; choose a clear sample and continue with the earlier answers kept. |
+| T-6 | AC-7 | `sam` | none | Name-mismatch ID, then a clean run otherwise: tracker has Manual review; the result Route says "Manual review needed". A clean run with `pepReview` on and pep Yes also goes manual; with `pepReview` off it does not. |
+| T-7 | AC-8, AC-9 | `sam` | none | Review shows masked numbers. Leave one consent unticked: the button is off. `duplicate@example.com` and surname Blocked give their messages. |
+| T-8 | AC-10 | `sam` | none | Fill to the address step, tap Back out / close: toast "Saved…". Start again: Welcome back; Continue returns to the address step; photos are asked again. |
+| T-9 | AC-12 | `sam` | each option off in turn | Joint chips, Islamic card, ITIN and passport chips, UAE Pass, Nafath, Sanad: the matching choice disappears. |
+| T-10 | AC-13 | `sam` | `timeout: ["bank.onboarding.submit"]`, `latencyMs: 10000` (prototype: Timeout on) | "This is taking longer than expected. Nothing was sent."; answers still there. |
+| T-11 | AC-13 | `sam` | `unavailable: ["bank.onboarding.submit"]` (prototype: Service down on) | "We couldn't reach the bank. Your answers are saved."; Try again works after the condition is cleared. |
 
 #### 10. Expected mutation-check survivors
 
-| Survivor | Why it stays alive |
-|---|---|
-| Resend delay of 30 s changed | The engine's timer is tested in the `otp` block tests, not in a scenario clock. |
-| Marketing toggle default | It changes nothing the scenarios assert. |
-| `APPLICATION_NOT_FOUND` check removed | Only ids the journey created are used; a scenario would have to invent an id. |
-| Student age bound 25 inclusive vs exclusive | T-7 uses ages 21 and 34; add age 26 and 25 only if the team wants the boundary proved (open question). |
-| Postal ZIP+4 branch of the pattern | T-8 tests the 4-digit failure and the 5-digit pass, not the 9-digit form. |
+Age and ID shapes are checked on the field and again by `bank.onboarding.savePersonal` (planned); removing only one layer survives T-2 and T-3; expected. `EID_DOB_MISMATCH` and the Luhn check are covered together by T-3; flipping the Luhn check alone survives if the test number has a matching birth year; T-3 uses a wrong checksum with a right year, so none expected. The 30-day draft expiry and the 30-day selfie deletion cannot be shown by the sandbox without a clock; expected survivors. The deposit-protection wording per country is only checked for US and UAE in the scenarios; expected survivors for UK, EU, Saudi and Jordan text.
 
 ---
 
@@ -1777,210 +1708,138 @@ These states are drawn by the shell and apply to every screen, so journeys do no
 
 ### ★ Sign in — `sign-in`
 
+**Catalog:** slug `sign-in`, workspace `public`, category Signing in and security, core **yes**, can a bank switch it off: **no**. Options: **Offer one-time codes by text message (being phased out; app approval is safer)** (`allowSms`, default on); **Offer Face ID / fingerprint quick sign-in** (`allowBio`, on); **Offer passkeys** (`allowPasskey`, on); **Offer a 6-digit quick PIN** (`allowQuickPin`, on); **Let people remember their username on this device** (`rememberUser`, on); **Passwords expire after 12 months (NIST advises against; some regulators expect it)** (`forceExpiry`, on); **Ask for a code when the sign-in looks unusual, even on a trusted device** (`riskStepUp`, on). Research: `research/sign-in.md`. Built in `design/bankworkx-r1/src/journeys/48-sign-in.js`.
+
 #### 1. Summary
 
-| Item | Value |
+| Field | Value |
 |---|---|
 | Slug | `sign-in` |
-| Purpose | Let a returning customer in with username and password, confirm a new device with a one-time code, offer to remember the device, and open Personal Home. Also the returning mode with quick PIN or biometrics. |
-| Release | 1 |
-| Workspace | `public` (planned field) |
-| Status | New. Built from the CAB fixture `sign-in` (`fixtures/cab.ts`, slug `sign-in`) and its sandbox `cab.auth.signIn`, `cab.device.options`, `cab.device.verifyPin`. |
+| Purpose | Let a returning customer in with username and password, confirm a new or unusual sign-in with a one-time code, force a new password when needed, offer to trust the device, and offer quick sign-in (Face ID or fingerprint, passkey, 6-digit PIN). Also the returning mode with quick sign-in. |
+| Release / workspace | 1 / `public` |
+| Status | Built in the prototype (submit "Finish"). Replaces the CAB-based plan for the steps below; the CAB fixture remains the starting pattern for production. |
 | Channels | Web, mobile |
-| Starting pattern | CAB `sign-in` (screens `welcome`, `login`, `signed-in`, `locked`, `expired`, `inactive`) and the `default-sign-in` fixture for the PIN and biometric pop-ups. |
 | Who may use it | Anyone. |
+
+Step order (a deliberate rule): credentials, one-time code, forced password change, trust device, quick sign-in set-up. The code comes before the password change so a stolen password alone cannot set a new password.
 
 #### 2. Entry points
 
 | Place | Launch point | Passes | Permission |
 |---|---|---|---|
-| Landing | Sign in | – | none |
-| Reset and unlock results, `forgot-username` result | Sign in | `{username}` | none |
-| Session-expired banner, sign-out | Sign in | – | none |
-| Mobile app start with a remembered device | (automatic) returning mode | – | none |
-| Landing, after `register-digital-banking` | Sign in | `{username}` | none |
-
-Leads to: Personal Home (or, if the last used workspace was Business, Personal Home with a banner "Switch to {company}"). Switching to Business always needs a step-up, so the app never opens it directly from sign-in.
+| Landing | Sign in | `{demo}` optional (fills the demo user) | none |
+| Sign-out, session timeout | Sign in again | none | none |
+| `unlock-account`, `forgot-username`, password reset results | Sign in | `{user}` | none |
+| Mobile start with a remembered user and quick sign-in | "Welcome back, {first name}" card, button **Use PIN / passkey / Face ID** | none | none |
 
 #### 3. Screens
 
-**Screen `login` — "Sign in"** (blocks: `hero`, `sectionHeader`, `textInput` ×2, `alert`, `button`, `menu`, `dialog` ×2)
+**`credentials`: "Sign in"**, intro "Use your BankWorkx® username and password.", button **Continue**, busy "Checking your details…" 800 ms.
 
-| Field | Block | Required | Rule | Error message |
+| Field | Block | Required | Validation | Message |
 |---|---|---|---|---|
-| Username | `textInput` | Yes | Not empty after trimming; not case sensitive; at most 50 characters | "Enter your username." |
-| Password | `textInput`, `secure: true` | Yes | Not empty; at most 100 characters | "Enter your password." |
+| Username | text, up to 40, placeholder "For example alex.morgan" | Yes | `^[A-Za-z0-9._@-]{3,40}$` | "Usernames have 3 to 40 letters, numbers, dots, dashes or underscores." |
+| Password | password, up to 128, paste allowed, **Show** button, "Caps Lock is on" warning | Yes | none (checked by the bank) | wrong pair: `INVALID_CREDENTIALS` |
+| Quick PIN (quick mode with PIN only) | password, 6 digits | Yes | `^\d{6}$` | "Enter your 6-digit PIN." |
+| Remember my username on this device | check | No | shown only with `rememberUser` | none |
+| Prototype: how the bank sees this device | chips New device, Known device, Unusual location | No | known device needs no code; new device or (with `riskStepUp`) unusual location needs one | none |
 
-Copy:
-- Heading (`sectionHeader`): "Welcome" (returning mode: "Welcome back, {firstName}"). Subtitle: "Sign in to BankWorkx®".
-- Alert (error, shown when `auth.result.code == 'INVALID_CREDENTIALS'`): "Incorrect username or password. {attemptsLeft} attempt(s) left before your profile is locked."
-- Alert (info, shown when `ui.sessionExpired`): the `SESSION_EXPIRED` text.
-- Helper under password: none. A "Show password" eye icon toggles the mask.
-- Links (`menu`, text buttons): "Forgot username?", "Forgot password?", "Register for digital banking", and in sandbox builds only "Demo users".
+Links: Forgot password? (`forgot-password`, the spec's `reset-password`), Forgot username? (`forgot-username`), Register (`register`, the spec's `register-digital-banking`). A "Demo accounts (tap to fill)" card lists the demo users. From the third wrong attempt a box reads "{n} attempt(s) left. After that, we lock sign-in to protect your account." A locked user sees "Sign-in is locked. Too many wrong attempts. This protects your money. Unlocking takes a few minutes." with **Unlock my account** (`unlock-account {user}`), **Call us instead**, and prototype links to clear the lock or reset the demo. A remembered user with quick sign-in sees "Welcome back, {first name}. Sign in with your quick PIN / passkey / Face ID on this device." and **Use PIN** (or passkey, Face ID).
 
-Buttons:
+**`code`: "Enter your code"** (shown for a new device, or an unusual location with `riskStepUp`; never in quick mode), intro "This looks like a new device, so we need one more check."
 
-| Button | Does | Leads to |
-|---|---|---|
-| Sign in (primary) | `validate`, then `callApi signIn`, then `navigate` | By `auth.result`: ok and `newDevice` → `deviceCode`; ok and not `newDevice` → `signedIn`; `LOCKED` → `locked`; `PASSWORD_EXPIRED` → `expired`; `INACTIVE` → `inactive` |
-| Forgot username? | `navigate.toJourney` | `forgot-username` |
-| Forgot password? | `navigate.toJourney` with `{username}` if typed | `reset-password` |
-| Register for digital banking | `navigate.toJourney` | `register-digital-banking` |
-| Demo users | `navigate` | `demoUsers` |
-
-Returning-mode pop-ups (`dialog` blocks, as in CAB `login`; shown when `device.default` is `pin` or `biometric` and `ui.password` is not set):
-
-| Pop-up | Title | Text | Buttons |
-|---|---|---|---|
-| Quick PIN (`bind: login.pin`, `length: 6`) | "Enter Sign in PIN" | "Enter your six digit PIN to sign in." After a wrong PIN: "That PIN is not right. {n} tries left." | "Use password" (sets `ui.password`, shows the form); "Sign In" (`callApi verifyPin`, then `navigate`) |
-| Biometric (mobile) | "Unlock" | "Use your fingerprint or face to sign in." | "Use password"; "Unlock" |
-
-States:
-- **Loading.** On open, `deviceOptions` runs (`onEnter`). The greeting shows a skeleton line until it answers. While signing in the button shows a spinner and is disabled.
-- **Timeout.** After 10 seconds without an answer the form stays and a toast shows "This is taking longer than expected. Nothing was changed." with the button "Try again". Nothing is locked by a timeout.
-- **Error.** Network failure: toast "We couldn't reach the bank. Try again." (CAB wording).
-
-**Screen `deviceCode` — "Confirm it's you"** (blocks: `text`, `otp`, `alert`, `button`)
-
-Shown only when the sign-in answer says the device is new. The session is not open yet.
-
-| Field | Block | Required | Rule | Error message |
+| Field | Block | Required | Validation | Message |
 |---|---|---|---|---|
-| One-time code | `otp`, `length: 6`, `resendAfterSeconds: 30` | Yes | Exactly 6 digits | "Enter the 6-digit code." |
+| 6-digit code | text, paste allowed | Yes | `^\d{6}$`; `000000` is wrong; `999999` or older than 5 minutes is expired | "Enter the 6 digits from the message." / `OTP_INVALID` / `OTP_EXPIRED` |
+| Didn't get it? Send it another way | chips Text message (only with `allowSms`), Another signed-in device | No | changing it restarts the timer | none |
 
-- On open: `callApi otpSend` with `channel: "sms"`. Hint: "We don't recognise this device. Enter the 6-digit code we sent to {maskedPhone}." Link under the code: "Send it by email instead" (calls `otpSend` with `channel: "email"`).
-- Alert (error): "That code isn't right. {n} tries left." after a wrong code.
-- Button "Verify" (primary): `validate`; `callApi otpVerify` (integration id exactly `otpVerify`, `onError: lockAfter 3, lockTo "otpLocked"`); `callApi completeSignIn`; `navigate` to `trustDevice`.
-- Button "Cancel" (ghost): back to `login`; the half-done sign-in is dropped.
-- **Loading.** Spinner on "Verify". **Timeout / unavailable.** Standard rows below.
+Card text: "Code sent by text message: We sent a 6-digit code to ••• {last 4}." or "Approve in the BankWorkx® app: We sent a prompt to your other signed-in device. Open it and type the 6-digit code shown." plus "It works for 5 minutes and only once." Button **Resend code** is disabled for 60 seconds ("Resend code in {n} s"), at most 3 resends, then `OTP_RESEND_LIMIT`. Warning: "BankWorkx® will never call or message you to ask for this code. Don't share it with anyone." After wrong codes: "{n} attempt(s) left", from the third "After that, sign-in locks."
 
-**Screen `trustDevice` — "Remember this device?"** (blocks: `text`, `alert`, `textInput`, `button`)
+**`newPassword`: "Choose a new password"** (when the password is expired and `forceExpiry` is on, or it is the first sign-in with a temporary password; not in quick mode). Banner "Welcome to BankWorkx®: You signed in with a temporary password. Choose your own to continue." or "Your password has expired: It is more than 12 months old. Choose a new one to continue." Fields **New password** (up to 64, hint "Tip: a phrase of unrelated words is easy to remember and hard to guess. No symbols required.") and **Confirm new password** ("The two passwords don't match."). A live checklist: At least 12 characters; Not your username; Not a common password; Not in a known data breach; Not one you used before. Errors: "Use at least 12 characters. Three or four unrelated words work well." / "Use 64 characters or fewer." / "Don't use your username in your password. (PASSWORD_CONTAINS_USERNAME)" / "That password is too common. Try a longer phrase of unrelated words. (PASSWORD_COMMON)" / "This password has appeared in a data breach, so we can't accept it. (PASSWORD_BREACHED)" / "Choose a password you haven't used here before. (PASSWORD_REUSED)". No composition rules. Busy "Saving your new password…".
 
-Shown after a new-device code. Skipped for devices already trusted.
+**`trust`: "Trust this device?"** (not on a known device, not in quick mode, not if already trusted), intro "This saves you a code next time." Rows: Device, Near, Now. Cards **Trust this device** ("No code for 90 days. Remove it any time in Security › Trusted devices.") or **Don't trust (public or shared)** ("We ask for a code every time you sign in here."), required. **Name this device** (up to 30, required when trusting, hint "So you can recognise it later. Up to 5 trusted devices.").
 
-| Field | Block | Required | Rule | Error message |
-|---|---|---|---|---|
-| Device name | `textInput` | Yes | 1 to 40 characters; pre-filled from the device (e.g. "Alex's iPhone") | "Give this device a name (up to 40 characters)." |
+**`quick`: "Sign in faster next time"** (not when "Don't trust", not if quick sign-in already set). Cards, each only if its option is on: **Face ID or fingerprint** ("Your phone checks it's you. BankWorkx® never receives your face or fingerprint."), **Passkey** ("A secure key stored on your device. Nothing to remember or type."), **6-digit quick PIN** ("Works only on this device."), and always **Not now**. For PIN: **Choose a PIN** (6 digits, "Use exactly 6 digits.", hint "Not 111111, 123456 or part of your phone number.") and **Confirm PIN** ("The PINs don't match."). Weak: "That PIN is too easy to guess. Avoid repeats and runs like 111111 or 123456. (PIN_WEAK)" (also refuses 112233, 123123, 121212, 696969, 000111 and digits of the phone number: "Don't use digits from your phone number. (PIN_WEAK)"). Busy "Turning on quick sign-in…".
 
-- Body: "Next time you can sign in with your fingerprint, face or a 6-digit PIN, and we won't ask for a code on this device."
-- Alert (info): "Only do this on a device you own."
-- Alert (error, `DEVICE_LIMIT`): "You can remember up to 5 devices. Remove one first, or choose Not now." with the link "Manage trusted devices" → `trusted-devices` (then `returnTo` this screen).
-- Buttons: "Remember this device" (primary): `callApi registerDevice` with `trust: true`, then `navigate.toJourney` → `setup-quick-login` with `returnTo` `signedIn`. "Not now" (ghost): `callApi registerDevice` with `trust: false` (the code will be asked again next time), then `navigate` to `signedIn`.
+**Result**: "Signed in", "Welcome, {first name}. Taking you to your accounts.", chip "Secure session". Rows: Signed in as, How (Password and one-time code / Password on a known device / quick method), This device (Trusted for 90 days / Not trusted), Quick sign-in, Password (Changed just now / Unchanged), Session ("Ends after 5 minutes without use"), Last sign-in. Button **Go to Home**.
 
-**Screen `signedIn` — "Signed in"** (terminal; blocks: `result`, `button`)
-
-`onEnter` runs `bank.session.get` (saved as `session`): identity, the list of **contexts** and each context's permissions and limits.
-- Result (success): title "Welcome back, {firstName}", text "You're signed in.", meta "Last sign in {lastLogin}".
-- For Alex the session holds three contexts: Personal "Alex Morgan"; Alpha Trading LLC (role Maker); Beta Services Ltd (role Approver). The shell's context switcher is drawn from this list.
-- Button "Go to Home" (primary): `exit` → Personal Home.
-- If `session.lastContext` is a business context: banner "You last used {company}. Switch when you're ready." with the button "Switch to {company}" → context switch (step-up).
-
-**Screen `demoUsers` — "Demo users"** (sandbox and demo builds only; hidden in production)
-
-A `reviewSummary` list: one row per seed user: name, username, a one-line "what it shows" (table at the top of this group). Row button "Use" fills `login.username` and `login.password` and returns to `login`. Copy at the top: "These are practice profiles. They only exist in the sandbox."
-
-**Terminal screens (blocks: `result`, `button`)**
-
-| Screen | Result | Buttons |
-|---|---|---|
-| `locked` | Error: "Your profile is locked". Text: "For your security, sign in is blocked for {lockMinutes} minutes. Try again later, or unlock it now." | "Unlock account" (primary) → `unlock-account` `{username}`; "Back to sign in" (secondary) → `login` |
-| `expired` | Error: "Your password has expired". Text: "Choose a new password to keep banking." | "Reset password" (primary) → `reset-password` `{username}`; "Back" |
-| `inactive` | Error: "Your profile isn't active yet". Text: "Finish setting up digital banking first." | "Register" → `register-digital-banking`; "Track my application" → `track-application` |
-| `otpLocked` | Error: "Too many incorrect codes". Text: "For your security, your profile is locked for 30 minutes. Try again later." (CAB `otp-locked` wording; this rewords the README default "Start again", because the lock is real.) | "Unlock account" → `unlock-account`; "Done" → `exit` |
+**States:** loading is the busy text per step; locked and expired-code states above; unavailable "We couldn't reach the bank. Nothing was changed."; timeout "This is taking longer than expected. Nothing was changed."
 
 #### 4. Sandbox errors
 
-Sign-in outcomes arrive as data (`ok: false, code`), not exceptions.
-
-| Code | Message the person sees | Screen | Button |
+| Code | Message | Shows on | Button |
 |---|---|---|---|
-| `INVALID_CREDENTIALS` (errorCode 10095, `attemptsLeft` 2 then 1) | "Incorrect username or password. {attemptsLeft} attempt(s) left before your profile is locked." | `login` (alert) | Stay; try again |
-| `LOCKED` (10088, `lockMinutes` 30). Also the answer to the third wrong try. | "Your profile is locked. For your security, sign in is blocked for 30 minutes. Try again later, or unlock it now." | `locked` | Unlock account |
-| `INACTIVE` (10092) | "Your profile isn't active yet." | `inactive` | Register |
-| `PASSWORD_EXPIRED` (10135, only after a right password) | "Your password has expired." | `expired` | Reset password |
-| `INVALID_PIN` (planned; `attemptsLeft`) | "That PIN is not right. {n} tries left." | PIN pop-up | Try again; Use password |
-| `OTP_INVALID` | "That code isn't right. {n} tries left." Third wrong: `otpLocked` text. | `deviceCode` | Try again; Unlock account |
-| `OTP_REQUIRED` | Standard S-`OTP_REQUIRED` (cannot normally show; the journey sends the code first) | `deviceCode` | Back to code |
-| `DEVICE_LIMIT` (planned) | "You can remember up to 5 devices. Remove one first, or choose Not now." | `trustDevice` | Manage trusted devices; Not now |
-| `DEVICE_NAME_INVALID` (planned) | "Give this device a name (up to 40 characters)." | `trustDevice` | Edit |
-| `TIMEOUT` (planned) | "This is taking longer than expected. Nothing was changed." | the screen that called | Try again |
-| `SERVICE_UNAVAILABLE` (planned) | Standard S-`SERVICE_UNAVAILABLE` | the screen that called | Try again |
-| `SESSION_EXPIRED` (planned) | On `deviceCode` and `trustDevice` only (the half-done sign-in expired after 5 minutes): "Your sign-in took too long. Start again." | `login` | Sign in |
-| Network failure | "We couldn't reach the bank. Try again." (toast) | any | Try again |
-
-Not applicable: `PERMISSION_DENIED`, `WRONG_CONTEXT`, `STEP_UP_REQUIRED` (a sign-in is the proof), `NOT_SUPPORTED`, the money codes.
+| `INVALID_CREDENTIALS` | "The username or password isn't right. Check them and try again." (never says which; an unknown username counts too) | `credentials` | Try again |
+| `ACCOUNT_LOCKED` | "Sign-in is locked to protect your account. Unlock it to continue." | `credentials`, `code` | Unlock my account |
+| `OTP_INVALID` | "That code isn't right. Check the latest message and try again." | `code` | Try again |
+| `OTP_EXPIRED` | "That code has expired. Ask for a new one." | `code` | Resend code |
+| `OTP_RESEND_LIMIT` | "You have asked for the maximum number of codes. Wait 15 minutes or choose another way." | `code` | Another way |
+| `QUICK_PIN_INVALID` | "That PIN isn't right." | `credentials` (quick) | Use password |
+| `PASSWORD_COMMON`, `PASSWORD_BREACHED`, `PASSWORD_REUSED`, `PASSWORD_CONTAINS_USERNAME` | see `newPassword` | `newPassword` | Edit |
+| `PIN_WEAK` | "That PIN is too easy to guess." | `quick` | Edit |
+| `DEVICE_LIMIT` (planned) | "You can trust up to 5 devices. Remove one in Security first." | `trust` | Not now |
+| `TIMEOUT` | "This is taking longer than expected. Nothing was changed." | engine error | Try again |
+| `SERVICE_UNAVAILABLE` | "We couldn't reach the bank. Nothing was changed." | engine error | Try again |
 
 #### 5. Adapters
 
-| Integration id | Adapter | Request | Response | Error codes | Status | moneyMoving | requiresOtp |
-|---|---|---|---|---|---|---|---|
-| `deviceOptions` | `bank.device.options` (CAB: `cab.device.options`) | `{ deviceId }` | `{ mode, default, pinSet, biometricAvailable, firstName, trusted }` | `TIMEOUT`, `SERVICE_UNAVAILABLE` | Planned | No | No |
-| `signIn` | `bank.auth.signIn` (CAB: `cab.auth.signIn`) | `{ username, password, deviceId }` | `{ ok: true, firstName, lastLogin, defaultSignIn, newDevice, accountCount }` or `{ ok: false, code, errorCode, attemptsLeft?, lockMinutes? }` | Data codes above; throws `TIMEOUT`, `SERVICE_UNAVAILABLE` | Planned | No | No |
-| `verifyPin` | `bank.device.verifyPin` (CAB: `cab.device.verifyPin`) | `{ pin }` | Same answer as a right password, or `{ ok: false, code: "INVALID_PIN", attemptsLeft }` | `LOCKED`, `TIMEOUT`, `SERVICE_UNAVAILABLE` | Planned | No | No |
-| `otpSend` | `bank.otp.send` | `{ channel }` | `{ sent, maskedPhone, channel }` | `TIMEOUT`, `SERVICE_UNAVAILABLE` | Existing | No | – |
-| `otpVerify` | `bank.otp.verify` | `{ code }` | `{ verified: true }` | `OTP_INVALID` (carries `attempt`) | Existing | No | – |
-| `completeSignIn` | `bank.auth.completeSignIn` | `{ deviceId }` (needs the code verified) | `{ ok: true, sessionId }` | `OTP_REQUIRED`, `SESSION_EXPIRED` | Planned | No | Yes (new device) |
-| `registerDevice` | `bank.device.register` | `{ name, trust }` | `{ deviceId, trusted }` | `DEVICE_LIMIT`, `DEVICE_NAME_INVALID`, `SESSION_EXPIRED` | Planned | No | No |
-| `session` | `bank.session.get` | `{}` | `{ identity, contexts: [{ id, kind, name, role, permissions, limits }], lastContext }` | `SESSION_EXPIRED`, `TIMEOUT`, `SERVICE_UNAVAILABLE` | Planned | No | No |
+| Integration id | Adapter | Request | Response | Errors | Status |
+|---|---|---|---|---|---|
+| `signIn` | `cab.auth.signIn` | `{username, password}` | profile, `mode` (`first`, `expired`) | `INVALID_CREDENTIALS`, `ACCOUNT_LOCKED` | Existing (`packages/mock-bank-api/src/cab.ts`); the failure limit is 3 there, 5 in the prototype (see report) |
+| `deviceOptions` | `cab.device.options` | none | quick methods | none | Existing |
+| `verifyPin` | `cab.device.verifyPin` | `{pin}` | result | `QUICK_PIN_INVALID` | Existing |
+| `sendCode` / `verifyCode` | `bank.session.sendCode`, `bank.session.verifyCode` | `{username, channel}` / `{code}` | `{sent}` / `{verified}` | `OTP_INVALID`, `OTP_EXPIRED`, `OTP_RESEND_LIMIT`, `ACCOUNT_LOCKED` | (planned) |
+| `setPassword` | `bank.session.setPassword` | `{newPassword}` | `{changed}` | the four password codes | (planned) |
+| `trustDevice` | `bank.session.trustDevice` | `{deviceName}` | `{expiresAt}` | `DEVICE_LIMIT` | (planned) |
+| `enrollQuick` | `bank.session.enrollQuick` | `{method, pin?}` | `{method}` | `PIN_WEAK` | (planned) |
 
 #### 6. Permissions, step-up and limits
 
-- Permission needed: none. Step-up: none. Limits: 3 wrong passwords or PINs lock the profile for 30 minutes; 3 wrong one-time codes lock it too; resend after 30 seconds; the half-done sign-in expires after 5 minutes.
-- The sandbox keeps one failed counter per profile and does not count down the 30 minutes on its own: a scenario sets the clock with `now`, or uses `unlock-account` (planned).
+None needed. Five wrong passwords or codes (one counter per username, unknown names included) lock sign-in; unlock through `unlock-account`. Code: 6 digits, once, 5 minutes, resend after 60 s, at most 3 resends. Trusted device: 90 days, up to 5. Password: 12 to 64 characters, no composition rule. Idle session: 5 minutes.
 
 #### 7. Result and links out
 
-- **Result:** `signedIn` (reference: none; shows last sign-in time).
-- **Receipt:** none.
-- **Notifications raised:** "New sign-in on {deviceName}" (in-app and email) when a new device is verified; "Your profile was locked" when `LOCKED` is first reached (planned).
-- **Links out:** "Go to Home" → Personal Home. Locked → `unlock-account`. Expired → `reset-password`. Inactive → `register-digital-banking`, `track-application`. Remember this device → `setup-quick-login` then back to `signedIn`.
+Result `Signed in` (no reference). Notifications: "New sign-in on {device}" when a new device is verified; "Your password was changed"; "Sign-in locked". Links out: Home, `unlock-account`, `forgot-username`, `reset-password`, `register-digital-banking`.
 
 #### 8. Acceptance criteria
 
-- **AC-1.** A right username and password on a known device opens `signedIn` and then Personal Home, with the person's first name and last sign-in time.
-- **AC-2.** A wrong password keeps the person on `login` and shows the attempts left (2, then 1) without saying which field was wrong.
-- **AC-3.** The third wrong password ends on `locked` with the message "sign in is blocked for 30 minutes".
-- **AC-4.** A locked profile answers `locked` even with the right password.
-- **AC-5.** An expired password (after a right password) ends on `expired`; an inactive profile ends on `inactive`.
-- **AC-6.** On a new device a right password leads to `deviceCode`, and no session exists until the right code is entered.
-- **AC-7.** Three wrong one-time codes end on `otpLocked`; the right code (`482100`) leads to `trustDevice`.
-- **AC-8.** "Remember this device" saves the device and opens `setup-quick-login`; "Not now" skips it and the code is asked again next time.
-- **AC-9.** In returning mode a right PIN signs in with the same result as a right password, a wrong PIN shows the tries left, and "Use password" always shows the form.
-- **AC-10.** Wrong passwords and wrong PINs share one counter of 3.
-- **AC-11.** The sign-in answer loads the contexts; for Alex Morgan they are Personal, Alpha Trading LLC (Maker) and Beta Services Ltd (Approver).
-- **AC-12.** On a timeout or an unavailable service the person sees the standard message and nothing is locked or changed.
-- **AC-13.** A sixth trusted device is refused with `DEVICE_LIMIT` and the person can still continue with "Not now".
+- AC-1: A right pair on a known device signs in without a code and shows the result.
+- AC-2: A wrong pair shows the neutral message, counts toward the lock, and from the third failure shows the attempts left.
+- AC-3: The fifth wrong password or code locks sign-in, even for the right password afterwards, with an unlock path.
+- AC-4: A new device (or an unusual location with `riskStepUp`) needs a code; `000000` is wrong, `999999` is expired, any other six digits pass in the sandbox.
+- AC-5: Resend is available after 60 seconds, at most 3 times, and changing the channel restarts the timer.
+- AC-6: An expired or first-sign-in password forces a new password after the code; rules are enforced with the exact messages; an expired password is not forced when `forceExpiry` is off.
+- AC-7: Trusting a device skips the code for 90 days; "Don't trust" asks again and hides quick sign-in.
+- AC-8: Quick sign-in methods are offered only per option; a weak or phone-digit PIN is refused; afterwards the returning card signs in with the method.
+- AC-9: A wrong quick PIN is refused with `QUICK_PIN_INVALID`.
+- AC-10: Unavailable or timeout shows the message and locks nothing.
 
 #### 9. Scenarios
 
-| ID | Covers | Persona | Setup and conditions | Expected |
+Sandbox demo values (prototype): `alex.morgan` / `demo-password` (new device, needs a code); `sam.rivera` / `old-password` (password expired); `new.user` / `temp-password-1` (first sign-in); `locked.user` (already locked); any other pair is wrong. Code: any 6 digits, `000000` wrong, `999999` expired. Good new password `Harbour-Maple-47-Tide`; refused: `bankworkx2026!` (common), `Password123!` (breached), `demo-password` (reused). Test launch `{demo: true}`. Today is Tue 3 Nov 2026.
+
+| # | Covers | Persona / setup | Conditions | Steps and expected result |
 |---|---|---|---|---|
-| T-1 | AC-1, AC-11 | `alex.morgan` | Device already trusted. Enter `alex.morgan` / `Bwx!Demo2026`. | Ends on `signedIn`: "Welcome back, Alex". `bank.session.get` returns 3 contexts with roles Maker (Alpha) and Approver (Beta). |
-| T-2 | AC-2, AC-10 | `alex.morgan` | Wrong password once, then twice. | First: "2 attempt(s) left", then "1 attempt(s) left". Stays on `login`. |
-| T-3 | AC-3, AC-4 | `alex.morgan` | Three wrong passwords, then the right one. | Third answer is `LOCKED`, screen `locked` with "30 minutes". The right password then still answers `LOCKED`. |
-| T-4 | AC-5 | `demo.expired`, `demo.inactive` | Right password for each. | `expired` for `demo.expired`; `inactive` for `demo.inactive`. |
-| T-5 | AC-6, AC-7 | `alex.morgan` | New device. Right password, code `482100`. | Goes to `deviceCode`; session absent until `completeSignIn`; after the code, `trustDevice`. |
-| T-6 | AC-7 | `alex.morgan` | New device; code `111111` three times. | `OTP_INVALID` attempts 1, 2, 3; ends on `otpLocked` (`lockTo`). No session. |
-| T-7 | AC-8 | `alex.morgan` | New device, right code; choose "Remember this device" with name "Alex's iPhone". | `registerDevice` trust true, opens `setup-quick-login`, returns to `signedIn`. Second case: "Not now" then a new sign-in asks for a code again. |
-| T-8 | AC-9, AC-10 | `alex.morgan` | Device with quick PIN `482916` set and default `pin`. Wrong PIN `000000` once, then right PIN. | "That PIN is not right. 2 tries left." then `signedIn`. Second case: 1 wrong password + 1 wrong PIN + 1 wrong PIN = `LOCKED`. |
-| T-9 | AC-9 | `alex.morgan` | Default `biometric`; choose "Use password". | Form shows; password sign-in works. |
-| T-10 | AC-12 | `alex.morgan` | Timeout: `conditions.timeout: ["bank.auth.signIn"]`. | "This is taking longer than expected. Nothing was changed." Failed counter unchanged: three wrong passwords later still lock on the third. |
-| T-11 | AC-12 | `alex.morgan` | Unavailable: `conditions.unavailable: ["bank.auth.signIn"]`. | Standard S-`SERVICE_UNAVAILABLE`; counter unchanged. |
-| T-12 | AC-12 | `alex.morgan` | New device; `conditions.timeout: ["bank.otp.verify"]` on the code step. | Timeout message; the code attempt is not counted. |
-| T-13 | AC-13 | `alex.morgan` | Five trusted devices already; sign in on a sixth and choose "Remember this device". | `DEVICE_LIMIT` message; "Not now" completes the sign-in. |
+| T-1 | AC-1 | `alex.morgan` | device Known | Sign in: result "Password on a known device". |
+| T-2 | AC-2, AC-3 | `alex.morgan` | none | Wrong password: "2 attempt(s) left" appears after the third failure ("2 left"); the fifth locks; the right password still shows the lock. |
+| T-3 | AC-4, AC-5 | `alex.morgan` | New device | Code `000000`: `OTP_INVALID`; `999999`: `OTP_EXPIRED`; `482916` passes. Resend disabled for 60 s. |
+| T-4 | AC-6 | `sam.rivera`, `new.user` | none | Forced password step after the code; each refused password shows its message; with `forceExpiry` off Sam skips it. |
+| T-5 | AC-7, AC-8 | `alex.morgan` | none | Trust (name "Alex's iPhone"), choose PIN `111111` (PIN_WEAK) then `739104`; next visit shows the returning card; PIN `000000` gives `QUICK_PIN_INVALID`. |
+| T-6 | AC-10 | `alex.morgan` | `timeout: ["cab.auth.signIn"]`, `latencyMs: 10000` | Timeout message; failure counter unchanged. |
+| T-7 | AC-10 | `alex.morgan` | `unavailable: ["cab.auth.signIn"]` | Unavailable message; nothing locked. |
+| T-8 | AC-3 | `locked.user` | none | Lock card with **Unlock my account** opening `unlock-account`. |
 
 #### 10. Expected mutation-check survivors
 
-| Mutant | Why it survives |
-|---|---|
-| `resendAfterSeconds` removed or changed on the `otp` block | The sandbox has no clock for resend; it is a screen timing rule only. |
-| The biometric pop-up's "Unlock" is made to do nothing | The sandbox cannot produce the phone's own fingerprint or face prompt; the pop-up is a stand-in. |
-| `LOCK_MINUTES` raised above 30 without changing the text | Killed only if a scenario asserts the number; the sandbox does not expire the lock by itself, so no scenario can wait the 30 minutes. T-3 asserts the text, so this one should be killed. |
-| Changing the greeting to drop the last sign-in time | Presentation only; no rule depends on it. |
+The rule "code before password change" is order only; a mutation swapping them survives unless T-4 asserts the sequence (it does). `DEVICE_LIMIT` is not produced by the prototype and survives. The resend cap and 5-minute expiry are not asserted beyond T-3; expected survivors.
+
+**Reconciliation with the short sign-in blocks.** The prototype changes these earlier statements: sign-in locks after **5** failures (earlier: 3, 30 minutes); the one-time code resends after **60 s** (earlier: 30 s); trusted devices last 90 days and 5 devices; password rules are 12 to 64 characters, no composition (earlier: 8 to 100, 5 different); quick PIN also refuses 112233, 123123, 121212, 696969, 000111 and phone digits. `setup-quick-login` is now a step of this journey (still reachable from Security), `change-quick-pin` and `unlock-account` apply the same PIN and lock rules, `forgot-username` is linked unchanged.
 
 ---
 
 ### ★ Set up quick sign in — `setup-quick-login`
+
+**Prototype note:** Quick sign-in set-up is now also a step of `sign-in`; the prototype PIN rules (6 digits, no repeats, runs, 112233, 123123, 121212, 696969, 000111 or phone digits) apply here.
 
 #### 1. Summary
 
@@ -2098,6 +1957,8 @@ Result screen `done`. No receipt. Notification: "Quick sign in changed on {devic
 | Biometric prompt skipped | The sandbox has no real fingerprint or face prompt. |
 | `masked: true` or `keypad: true` removed on the PIN block | Display only; the stored PIN is the same. |
 
+**Prototype reconciliation (from `sign-in`).** In the prototype the first set-up of quick sign-in is the last step of `sign-in` ("Sign in faster next time"), offered on a device the person has not refused to trust. Methods follow the bank options: Face ID or fingerprint (`allowBio`), passkey (`allowPasskey`, a new method), 6-digit quick PIN (`allowQuickPin`), or "Not now". PIN rules are stricter than the text above: exactly 6 digits; not one digit repeated (111111); not a run up or down (123456, 654321); not a repeated pair (121212, 696969); not 112233, 123123 or 000111; and not containing the last four digits of the phone. Messages: "Use exactly 6 digits." / "That PIN is too easy to guess. Avoid repeats and runs like 111111 or 123456. (PIN_WEAK)" / "Don't use digits from your phone number. (PIN_WEAK)" / "The PINs don't match." This journey stays the place to change the method later. The first-time offer in the prototype is not limited to a trusted device (a known device also sees it); the lead should settle that.
+
 ---
 
 ### ★ Forgot username — `forgot-username`
@@ -2209,6 +2070,8 @@ Result `found`. Notification: email "Your username was requested" to the address
 |---|---|
 | Phone compare uses the last 7 instead of 8 digits | The seed numbers differ in other digits, so no scenario separates 7 from 8 (the same limit exists in CAB). |
 | `RATE_LIMITED` threshold changed | The sandbox has no hourly counter (planned only). |
+
+**Prototype reconciliation (from `sign-in`).** The prototype `sign-in` links "Forgot username?" to this journey with no launch values, so nothing in this block changes. Its other two links use different slugs from this file: "Forgot password?" opens `forgot-password` (this file: `reset-password`) and "Register" opens `register` (this file: `register-digital-banking`). The lead should settle one name for each.
 
 ---
 
@@ -2339,6 +2202,8 @@ Result `done`. Notification: "Your BankWorkx® password was changed. Wasn't you?
 
 ### ★ Unlock account — `unlock-account`
 
+**Prototype note:** The prototype `sign-in` locks after 5 wrong passwords or codes (not 3) and opens this journey with `{user}`; the 30-minute wording here should follow the bank setting.
+
 #### 1. Summary
 
 | Item | Value |
@@ -2438,6 +2303,8 @@ Result `unlocked`. Notification: "Your profile was unlocked" (email and in-app).
 |---|---|
 | `minutesLeft` shown wrongly | The sandbox does not run a lock clock (the CAB sandbox does not either); only the text "30 minutes" can be asserted. |
 | `UNLOCK_LIMIT` changed from 3 to 4 | Killed only by T-6, which must run the 4-step sequence; if skipped it survives. |
+
+**Prototype reconciliation (from `sign-in`).** The prototype locks sign-in after **5** wrong passwords or **5** wrong one-time codes, not 3; read "3 wrong tries" above as 5 until the lead settles it. The locked card on `sign-in` shows "Unlock your account", "Confirm it's you with your registered phone and a photo ID check. It takes about 3 minutes.", a button **Unlock my account** that opens this journey with `{user}`, and **Call us instead**. The prototype has no timed unlock (no 30-minute clock); only this journey, or the sandbox shortcut "clear this lock", unlocks.
 
 ---
 
@@ -2665,6 +2532,8 @@ Result `removed` or `renamed`, with a reference. Notification: "A trusted device
 
 ### ★ Change quick PIN — `change-quick-pin`
 
+**Prototype note:** The new PIN follows the `sign-in` PIN rules (6 digits; no repeats, runs, 112233, 123123, 121212, 696969, 000111 or phone digits).
+
 #### 1. Summary
 
 | Item | Value |
@@ -2772,6 +2641,8 @@ Result `done`. Notification: "Your quick PIN was changed on {deviceName}" (in-ap
 | `masked: true` removed on the PIN blocks | Display only. |
 | The "forgot my PIN" link removed | Survives if no scenario follows the link; T-6 does, so it should be killed. |
 | Step-up window changed from 300 to 301 seconds | The scenario clock steps by minutes; a one-second change cannot be told apart. |
+
+**Prototype reconciliation (from `sign-in`).** The new-PIN rules match the quick PIN set-up in `sign-in`: 6 digits; not repeated (111111); not a run (123456, 654321); not a repeated pair (121212, 696969); not 112233, 123123 or 000111; not containing the last four digits of the phone ("Don't use digits from your phone number. (PIN_WEAK)"). In the prototype a wrong quick PIN at sign-in answers `QUICK_PIN_INVALID` ("That PIN isn't right.") and does not yet count toward the lock; this file's shared counter of 3 (now 5 for sign-in) is still the intended rule.
 
 ---
 
@@ -2910,200 +2781,514 @@ Alex Morgan (`alex`) is the person in every example. Sandbox "today" is 2 Nov 20
 
 ---
 
-### ★ Account statement — `account-statement`
+### ★ Accounts overview — `accounts`
+
+**Catalog:** slug `accounts`, workspace `personal`, category Accounts (Personal: Accounts), core no, can a bank switch it off: yes (a screen, also in the Lean preset as a basic entry; switching it off hides the Accounts tab content and the Home accounts card). Options: **Offer the hide-balance eye** (`hideBalance`, default on); **Show foreign currency accounts** (`showFx`, default on); **Show Statement and Transfer on each account** (`quickActions`, default on; see AC-9); **Offer sort and filter** (`sortFilter`, default on).
+
+This block replaces the table "Shell: Accounts list" above as the specification of the screen. The earlier table stays as the production data-source note (`bank.accounts.list`, `bank.accounts.totals`). The prototype adds the hide-balance eye, grouping, sort, filter and a hidden-accounts filter. Research: `research/accounts.md`. Built in `design/bankworkx-r1/src/journeys/20-accounts.js`, which also holds the shared account model `ACC` used by `account-details` and `statement`.
 
 #### 1. Summary
 
 | Field | Value |
 |---|---|
-| Slug | `account-statement` |
-| Purpose | Make a statement for one account and period, as a PDF or CSV the person can download or share. |
+| Slug | `accounts` |
+| Purpose | Show every account in one place: a total balance, a chip per currency, and a card per account with available balance, holds, status and quick actions. |
 | Release / workspace | 1 / Personal |
-| Status | New (planned). File journey. |
-| Channels | Web and mobile |
-| Starting pattern | None (new). Pick account, pick period, pick format, generate, result with the file. |
-| Who may use it | Anyone with `accounts.statement` (Alex, Personal context). |
+| Status | Built in the prototype as a screen (`view: true`, tab `acc`). Not a ★ form journey: no submit, no money moves. Production data source partly planned (see section 5). |
+| Channels | Web (list on the left, account detail on the right when one is selected) and mobile (list, then detail full screen) |
+| Starting pattern | None |
+| Who may use it | Anyone signed in to Personal with `accounts.view`. Sam Rivera sees the empty state. |
 
 #### 2. Entry points
 
 | Place › label | Passes in | Permission |
 |---|---|---|
-| Accounts › detail › Statement | `{accountId}` | `accounts.statement` |
-| Accounts › transaction history › Export | `{accountId, from, to}` | `accounts.statement` |
-| ⌘K command bar, deep link `/personal/j/account-statement?accountId=…` | `{accountId}` optional | `accounts.statement` |
+| Tab bar › Accounts (mobile), left rail › Accounts (web) | none | `accounts.view` |
+| Home › Accounts card | none | `accounts.view` |
+| `account-details` › All accounts (back) | none | `accounts.view` |
+| Deep link `/personal/accounts` | optional `{accountId}` (opens the detail beside the list on web) | `accounts.view` |
 
 #### 3. Screens
 
-**`setup` — "Get a statement"** (entry). Blocks: `stepper` (setup, result), `accountPicker` (`stmt.accountId`, `showBalance`), `select` chips (`stmt.period`), `datePicker` range (planned, shown for Custom), `select` tiles (`stmt.format`), `alert`, `button`.
+One screen with five regions. It has no typed fields; every control is a button, chip, select or checkbox.
 
-| Field | Block | Required | Validation | Error message |
-|---|---|---|---|---|
-| From account | `accountPicker` | Yes (prefilled when `accountId` is passed) | Must be one of the person's accounts | "Choose an account." |
-| Period | `select` chips: This month, Last month, Last 3 months, Last 6 months, Custom | Yes (default Last month) | One of the five | "Choose a period." |
-| Dates (Custom only) | `datePicker` range (planned), labels "From" and "To" | Yes when Custom | Start on or before end; end not after today (2 Nov 2026); start not before the account's open date; at most 12 months | "The end date must be after the start date." / "Choose a date that isn't in the future." / "Choose a period of 12 months or less." |
-| Format | `select` tiles: PDF ("Best for sharing and printing"), CSV ("Best for spreadsheets") | Yes (default PDF) | One of two | "Choose a format." |
+**Region A: Total balance hero** (shown only when the list has loaded and there is at least one account). Text "Total balance". Big number: the sum of every visible account converted to USD at the sandbox rate (`ACC.usd`), for example $30,375.02 for the seed. Line under it: "Across {n} accounts · USD equivalent · Available {availableTotal}". One chip per currency: "{CODE} {sum} · {count}" (for example USD, EUR, GBP, AED, JOD). A **Hide** / **Show** button (only when option `hideBalance` is on) toggles `ACC.hide`: every amount on this screen, on the detail and on the transaction rows becomes "••••••". Hidden accounts and, when `showFx` is off, foreign accounts are left out of the total.
 
-Copy: title "Get a statement". Helper under Period: "Statements cover up to 12 months." Alert (info): "Your statement shows your IBAN and your full transaction list. Keep it safe." Button **Create statement** (validate, then `callApi createStatement`). Loading: button disabled with spinner and text "Creating your statement…". Error: toast on the screen for validation; service errors go to the states below.
+**Region B: Filter and sort bar.** Chips **All**, **Current**, **Savings**, **Foreign currency** (the last only when `showFx` is on). When `sortFilter` is on, a **Sort** select ("By type", "Name", "Balance, high to low", "Currency") and, only when at least one account is hidden, a checkbox **Hidden ({n})**.
 
-**`result` — "Your statement is ready"** (terminal, kind `terminal`). Blocks: `result` tone success, `documentViewer` preview (planned, first page, read-only), `button`s.
+| Control | Rule | Message |
+|---|---|---|
+| Filter chip | One of the four | none |
+| Sort | One of "By type" (default), "Name", "Balance, high to low", "Currency" | none |
+| Hidden checkbox | Shown only when `n` hidden accounts is above 0; shows hidden accounts, dimmed, with a "Hidden" chip | none |
 
-- Title "Your statement is ready". Text "{accountName} {mask}, {from} to {to}. {count} transactions." Meta "Ref {reference} · {format} · {sizeKb} KB".
-- Buttons: **Download** (web: browser download; mobile: save to Files), **Share** (`share` action; mobile share sheet), **Done** (exit to origin).
-- Empty period: when `count` is 0 the journey does not reach this screen; see `empty` below.
+**Region C: Account list.** With sort "By type" the list is in three groups with a heading "Current ({n})", "Savings ({n})", "Foreign currency ({n})". Current and Savings headings add the group total in USD. Other sorts show one flat list. Each account card shows an icon (wallet, savings, swap for foreign currency), the name (the person's nickname if set, else the product name), the product name and mask "••4410" and currency code, the **Available** balance (ledger minus holds) on the right, then chips: status (Active, Dormant, Closure requested, Frozen), "Holds {amount}" when holds exist, "Hidden", and the interest chip ("0.05% APY", "3.85% APY", "AER" for a UK account) when the rate is above 0. When `quickActions` is on the card also shows **Statement** (opens `statement {accountId}`), **Transfer** (opens `personal-transfer`) and **Details** buttons, and a "Ledger balance" line. The whole card opens `account-details {accountId}`. A button that opens a journey the bank has switched off is hidden.
 
-**`empty` — "No transactions in this period"** (branch). `alert` tone info: "There are no transactions on {account} between {from} and {to}." Buttons **Change period** (to `setup`), **Close** (exit).
+**Region D: Footer.** A note: "Available balance is your ledger balance minus money held for card payments that haven't settled. Foreign currency accounts are converted to USD at today's sandbox rate for the total only." Buttons **Open another account** (opens `open-another-account`, `btn`) and **Refresh** (reloads the list with a 650 ms skeleton).
 
-**`timeout`**, **`unavailable`**, **`failed`**: see section 4.
+**Region E: Split detail (web only).** When `accountId` is set or an account is tapped, the list narrows to compact cards and `account-details` fills the right pane. On a phone the detail replaces the list.
+
+**States:**
+- Loading: a hero skeleton (110 px) and three card skeletons for 600 ms on first open.
+- Empty (no accounts at all, Sam): heading "You don't have an account yet", text "Open one in a few minutes. You can add more later.", button **Open an account** (`open-another-account`). If `open-another-account` is off the button is replaced by a message that the bank has not switched account opening on.
+- Empty (filter matches nothing): "No accounts match", "Try another filter.", button **Show all accounts**.
+- Error: card with "We couldn't load your accounts", "Nothing was changed.", code `SERVICE_UNAVAILABLE`, button **Try again**. If the list already loaded and the service then goes down, a banner above the list says "Some balances may be out of date. (SERVICE_UNAVAILABLE)" and the list stays.
+- Timeout: after 10 seconds without an answer the error card is shown with the text "This is taking longer than expected. Nothing was changed." (planned; the prototype has only the unavailable state).
 
 #### 4. Sandbox errors
 
 | Code | Message | Shows on | Button |
 |---|---|---|---|
-| `ACCOUNT_NOT_FOUND` | "We can't find that account. Choose another." | `setup` (inline on the account field) | Choose account |
-| `RANGE_INVALID` (planned) | "The end date must be after the start date." | `setup` (on Dates) | Fix dates |
-| `RANGE_TOO_LONG` (planned) | "Choose a period of 12 months or less." | `setup` (on Dates) | Fix dates |
-| `FUTURE_DATE` (planned) | "Choose a date that isn't in the future." | `setup` (on Dates) | Fix dates |
-| `NO_TRANSACTIONS` (planned) | "There are no transactions on {account} between {from} and {to}." | `empty` | Change period |
-| `NOT_SUPPORTED` | "This isn't available for your profile." | `failed` | Back |
-| `TIMEOUT` (planned) | "This is taking longer than expected. Nothing was changed." | `timeout` | Try again |
-| `SERVICE_UNAVAILABLE` (planned) | "This service is not available right now. Nothing was changed. Please try again in a few minutes." | `unavailable` | Try again / Back |
-| `WRONG_CONTEXT` (planned) | Standard message S-`WRONG_CONTEXT` (README 1.6) | `failed` | Switch |
-| `SESSION_EXPIRED` (planned) | Standard message S-`SESSION_EXPIRED` | sign-in | Sign in |
-
-Statements move no money, so `TIMEOUT` and `SERVICE_UNAVAILABLE` both say "Nothing was changed."
+| `SERVICE_UNAVAILABLE` | "We couldn't load your accounts. Nothing was changed." (with a list already loaded: "Some balances may be out of date.") | Region C error card, or banner | Try again |
+| `TIMEOUT` (planned) | "This is taking longer than expected. Nothing was changed." | Region C error card | Try again |
+| `JOURNEY_DISABLED` | "This isn't available at your bank." | Whole tab | none |
+| `WRONG_CONTEXT` | Standard message (README 1.6) | Whole tab | Switch |
 
 #### 5. Adapters
 
 | Integration id | Adapter | Request | Response | Errors | Status |
 |---|---|---|---|---|---|
-| `accounts` | `bank.accounts.list` | none | map of accounts | none | Existing |
-| `createStatement` | `bank.statements.create` | `{accountId, from, to, format: "pdf"\|"csv"}` | `{reference, fileName, format, sizeKb, pages, count, openingBalance, closingBalance, downloadUrl, expiresAt}` (the link is valid for 10 minutes) | `ACCOUNT_NOT_FOUND`, `RANGE_INVALID`, `RANGE_TOO_LONG`, `FUTURE_DATE`, `NO_TRANSACTIONS`, `TIMEOUT`, `SERVICE_UNAVAILABLE` | (planned). `moneyMoving: false`, `requiresOtp: false` |
-
-Sandbox arithmetic to rely on: Alex's seeded transactions give **3** for "This month" (1 to 2 Nov: Food & Drinks −20.00, Freelancing Work +22.00, Shopping −20.00; net −18.00) and **7** for "Last month" (22 to 31 Oct; net +2,096.60).
+| `accounts` | `bank.accounts.list` | none | map of accounts (`name`, `maskedNumber`, `iban`, `balance`, `currency`, `status`) | none | Existing (`packages/mock-bank-api/src/index.ts`) |
+| `totals` | `bank.accounts.totals` | none | per-currency totals | none | Existing |
+| `accountsOverview` | `bank.accounts.overview` | none | existing fields plus `availableBalance`, `ledgerBalance`, `holds[]`, `status` (`active`, `dormant`, `closing`, `frozen`), `type`, `region`, `interestRate`, `hidden` | `SERVICE_UNAVAILABLE`, `TIMEOUT` | (planned). The prototype computes these from its own model `ACC` |
+| `setHidden` | `bank.accounts.setHidden` | `{accountId, hidden}` | `{accountId, hidden}` | `LAST_VISIBLE_ACCOUNT` | (planned). Used by `account-details` |
 
 #### 6. Permissions, step-up and limits
 
-`accounts.statement`. Step-up level `none` (session only). No limit on the number of statements; maximum span 12 months; download link lives 10 minutes, after which Statement must be run again. Business context: `WRONG_CONTEXT`.
+`accounts.view`, step-up `none`. Hiding balances is a display choice stored per device in production (prototype: for the session). No limits.
 
 #### 7. Result and links out
 
-Result screen as in section 3. Receipt: the file itself (a statement is its own proof; no separate receipt). Notifications raised: none. Buttons: **Download**, **Share**, **Done** (back to Accounts › detail or history, wherever the person started).
+No result screen and no receipt. Notifications raised: none. Links out: `account-details {accountId}`, `statement {accountId}`, `personal-transfer`, `open-another-account`.
 
 #### 8. Acceptance criteria
 
-- AC-1: The person can pick an account, a preset period and a format, and receive a file named `statement-{mask}-{from}-{to}.{ext}` with a reference.
-- AC-2: A custom period longer than 12 months is refused with "Choose a period of 12 months or less." and no file is made.
-- AC-3: An end date before the start date or in the future is refused with the exact messages in section 3.
-- AC-4: A period with no transactions shows "There are no transactions on {account} between {from} and {to}." and offers Change period.
-- AC-5: The transaction count and closing balance on the result match the sandbox data for that period (3 transactions for This month, 7 for Last month for Alex's Main account).
-- AC-6: If the service times out, the person is told nothing was changed and can try again; no file is offered.
-- AC-7: If the service is unavailable, the person sees the standard unavailable message and can go back.
-- AC-8: Sam Rivera (no accounts) cannot reach the journey; Alex in a Business context gets the switch message.
+- AC-1: The hero shows the USD-equivalent total of all visible accounts, the available total, and one chip per currency with account counts.
+- AC-2: Each card leads with the available balance and shows the ledger balance and a "Holds" chip only when holds exist; available equals ledger minus holds.
+- AC-3: Accounts are grouped Current, Savings, Foreign currency with a count each; the three-decimal JOD account shows three decimals.
+- AC-4: The Hide button masks every amount on the screen and the detail; Show brings them back.
+- AC-5: Sort and filter change the list without a reload; a filter with no match shows "No accounts match" and **Show all accounts** clears it.
+- AC-6: A hidden account leaves the list and the total, and returns when "Hidden" is ticked; the last visible account cannot be hidden.
+- AC-7: Sam Rivera sees "You don't have an account yet" and **Open an account**.
+- AC-8: When the service is unavailable the first load shows the error card with Try again, and nothing else changes; after it loaded the list stays with the out-of-date banner.
+- AC-9: With `quickActions` off the Statement, Transfer and Details buttons are gone but the card still opens the detail; with `hideBalance` off there is no Hide button; with `showFx` off foreign accounts are neither listed nor in the total.
+- AC-10: If `open-another-account` or `statement` is switched off in the catalog the matching button is not drawn.
 
 #### 9. Scenarios
 
+Sandbox demo values: persona Alex Morgan with Current ••4410 ($8,240.18 ledger, $8,102.40 available, three card holds of $98.00, $33.38 and $6.40), Savings ••7720 ($14,310.00), Euro ••3302 (€2,150.40), Dirham ••9981 (AED 5,000.00), Sterling ••3301 (£1,240.55, one hold of £12.40) and Dinar ••6120 (JOD 1,820.500, dormant). "Today" is Tue 3 Nov 2026. The prototype switch "Service down" simulates `SERVICE_UNAVAILABLE`.
+
 | # | Covers | Persona / setup | Conditions | Steps and expected result |
 |---|---|---|---|---|
-| T-1 | AC-1, AC-5 | `alex`, `now` 2 Nov 2026 | none | Choose Main, Last month, PDF, Create statement. Result shows "7 transactions" and a reference. |
-| T-2 | AC-5 | `alex` | none | Choose Main, This month, CSV. Result shows "3 transactions". |
-| T-3 | AC-2 | `alex` | none | Custom 1 Oct 2025 to 2 Nov 2026. Field error "Choose a period of 12 months or less."; no call made. |
-| T-4 | AC-3 | `alex` | none | Custom start 10 Oct, end 1 Oct: "The end date must be after the start date." End 5 Nov 2026: "Choose a date that isn't in the future." |
-| T-5 | AC-4 | `alex` | `empty: ["bank.statements.create"]` | Any valid period. Lands on `empty`; **Change period** returns to `setup` with choices kept. |
-| T-6 | AC-6 | `alex` | `timeout: ["bank.statements.create"]`, `latencyMs: 10000` | Create statement. `timeout` screen: "This is taking longer than expected. Nothing was changed." **Try again** works after the condition is cleared. |
-| T-7 | AC-7 | `alex` | `unavailable: ["bank.statements.create"]` | `unavailable` screen with the standard message. |
-| T-8 | AC-8 | `sam`; `alex` with Business active | none | Sam: no Statement button (no accounts). Alex in Business: `WRONG_CONTEXT`. |
+| T-1 | AC-1, AC-2, AC-3 | `alex` | none | Open Accounts. Hero shows the USD-equivalent total and six account cards in three groups. Current card: available $8,102.40, ledger $8,240.18, chip "Holds $137.78". Dinar card shows JOD with three decimals and a "Dormant" chip. |
+| T-2 | AC-4 | `alex` | none | Press Hide: all amounts read "••••••". Press Show: they return. |
+| T-3 | AC-5 | `alex` | none | Choose Savings: one card. Choose Sort "Balance, high to low": Savings first. Choose Foreign currency then clear: all six again. |
+| T-4 | AC-6 | `alex` | none | On the Euro detail, Hide this account: the list has five accounts and the total drops by the Euro value. Tick "Hidden (1)": Euro returns, dimmed. Hiding down to one account is refused with `LAST_VISIBLE_ACCOUNT`. |
+| T-5 | AC-7 | `sam` | `empty: ["bank.accounts.overview"]` | Empty state with **Open an account**. |
+| T-6 | AC-8 | `alex` | `unavailable: ["bank.accounts.overview"]` (prototype: Service down on) | Error card with Try again; after Service down is cleared, Try again loads the list. With the list loaded first and the service then down, the banner appears. |
+| T-7 | AC-8 | `alex` | `timeout: ["bank.accounts.overview"]`, `latencyMs: 10000` (planned) | After 10 seconds the error card says "This is taking longer than expected. Nothing was changed." |
+| T-8 | AC-9, AC-10 | `alex` | options `quickActions`, `hideBalance`, `showFx` off one at a time; `statement` off | Each option removes only its own control; with `statement` off the card has no Statement button. |
 
 #### 10. Expected mutation-check survivors
 
-`FUTURE_DATE` check is enforced both in the datePicker (cannot pick a future day) and in the sandbox, so removing only the sandbox check survives T-4; expected survivor, the UI layer still stops it. All others: none expected.
+Removing the sandbox rule that excludes hidden accounts from the total survives T-4 if the screen also filters them (two layers); expected survivor. The 10-second timeout state (planned) has no sandbox layer in the prototype, so a mutation there cannot be checked yet. Everything else: none expected.
 
 ---
 
-### ★ Rename an account — `account-nickname`
+### ★ Account details — `account-details`
+
+**Catalog:** slug `account-details`, workspace `personal`, category Accounts (Personal: Accounts), core no, can a bank switch it off: yes (a screen; also a basic entry kept in the Lean preset). Options: **Offer Share details** (`shareDetails`, default on); **Allow closure requests in the app** (`closeRequest`, default on); **Offer Report a problem on transactions** (`reportProblem`, default on); **Allow hiding an account** (`hideAccount`, default on). Note: the prototype declares these four options but does not yet read them; the Share, Close, Report and Hide controls are always drawn. The bank-side switches are therefore (planned) and are covered by AC-13.
+
+This block replaces the table "Shell: Account detail" above, absorbs "Shell: Transaction history" and "Shell: Transaction detail" for one account, and absorbs the journey `account-nickname` (rename is a sub-screen here). Research: `research/account-details.md`. Built in `design/bankworkx-r1/src/journeys/21-account-details.js`, sharing the account model `ACC` from `20-accounts.js`.
 
 #### 1. Summary
 
 | Field | Value |
 |---|---|
-| Slug | `account-nickname` |
-| Purpose | Give an account a friendly name that shows everywhere in the app. |
+| Slug | `account-details` |
+| Purpose | Everything about one account: balances and holds, region-correct payment identifiers, daily limits, linked cards, past statements, searchable transactions with receipts and "Report a problem", rename, share details, hide and close. |
 | Release / workspace | 1 / Personal |
-| Status | New (planned). |
-| Channels | Web and mobile |
-| Starting pattern | None. One screen plus result. |
-| Who may use it | `accounts.manage` |
+| Status | Built in the prototype as a screen with sub-screens (`view: true`, tab `acc`). Closing and reporting are requests, not instant money movement. |
+| Channels | Web (details on the left, transactions on the right) and mobile (single column) |
+| Starting pattern | None |
+| Who may use it | Anyone signed in to Personal with `accounts.view`. Closing needs a PIN (step-up). |
 
 #### 2. Entry points
 
 | Place › label | Passes in | Permission |
 |---|---|---|
-| Accounts › detail › Rename | `{accountId}` | `accounts.manage` |
-| ⌘K command bar | `{accountId}` optional | `accounts.manage` |
+| Accounts › account card (anywhere on it, or Details) | `{accountId}` | `accounts.view` |
+| Home › Accounts card | `{accountId}` | `accounts.view` |
+| Cards › linked account link, Transactions › See all | `{accountId}` | `accounts.view` |
+| Deep link `/personal/accounts/{accountId}` | `{accountId}` (default `cur`) | `accounts.view` |
 
 #### 3. Screens
 
-**`rename` — "Rename account"** (entry). Blocks: `text` (current name), `textInput`, `button`.
+Sub-screen state lives in the journey (`sub`): `main`, `tx`, `receipt`, `report`, `reported`, `nick`, `share`, `hide`, `export`, `close`, `closed`. Every sub-screen except `main` and `reported` has a **Back** button to the screen before it. An unknown account id shows "We can't find that account" with text "Choose another. (ACCOUNT_NOT_FOUND)" and the button **Back to accounts**.
 
-| Field | Block | Required | Validation | Error message |
+**`main`: account screen.** Top: **All accounts** (back to `accounts`).
+
+- Balance hero: "{name} ••{last}", big **Available balance**, then **Ledger balance** and **On hold**. Chips: status (Active, Dormant, Closure requested, Frozen), product name, currency code, "Hidden from overview" when hidden. A line: with holds, "Available is your ledger balance minus money held for card payments that haven't settled." and a link **See holds** / **Hide holds** that lists each hold (merchant, "{date} · released by {date}", amount). With no holds: "Nothing is on hold. Available and ledger balance are the same." Hide-balance (set on `accounts`) masks every amount.
+- Dormant banner (status dormant): "This account is dormant", "There has been no activity for 12 months. You can still receive money. Make a deposit or a transfer to reactivate it. (ACCOUNT_DORMANT)", button **Reactivate** (sets active, toast "Account reactivated").
+- Closure banner (status closing): "Closure requested", "Reference {CLS-nnnnn}. We'll close this account within 14 days. You can still cancel the request.", button **Cancel the request** (toast "Closure request cancelled").
+- Action buttons: **Transfer** (opens `personal-transfer`; only when active or closing), **Statement** (opens `statement {accountId}`), **Rename** (opens sub-screen `nick`), **Share details** (opens `share`).
+- Card **Account details**: one row per identifier by region, each with a **Copy** button (toast "{label} copied"):
+
+| Region of the account | Identifiers shown (label: hint) |
+|---|---|
+| United States (USD) | Routing number (ABA) `021000021`: use for US transfers and direct deposit. Account number: keep this private. SWIFT/BIC `BWXAUS33`: only for international wires into this account |
+| United Kingdom (GBP) | Sort code `99-00-12` (6 digits). Account number (8 digits). IBAN and BIC `BWXAGB2L` for payments from abroad |
+| Euro area (EUR) | IBAN (DE, check digits computed, mod 97). BIC `BWXADEFF`: needed for some payers outside the euro area |
+| UAE (AED) | IBAN, 23 characters, starts with AE. BIC `BWXAAEAA` |
+| Jordan (JOD) | IBAN, 30 characters, starts with JO. BIC `BWXAJOAM` |
+
+  Then rows Currency, Opened ("14 Mar 2019"), Interest rate (hint "Variable, shown as APY" for US, "Variable, shown as AER" for UK, "Variable, per year" otherwise; "No interest" when 0). A US account never shows an IBAN; a UK account shows both.
+- Card **Limits today**: one bar per limit: "Transfers out today", "Card spending today", "ATM cash today" as "{used} of {ceiling}". Button **Change limits** opens the journey `change-limits {accountId}`, or a toast that it opens when built, if it does not exist.
+- Card **Linked cards**: each card linked to the account with last four digits, status chip and monthly limit, tapping opens Cards. Empty: "No cards are linked to this account."
+- Card **Statements**: the last three months ("Oct 2026 statement", "PDF · Ready") each opening `statement {accountId, month}`, and **All statements and letters** (`statement {accountId}`).
+- Card **Transactions** (below on mobile, right column on web): filters in this order, all working live as the person types:
+
+| Field | Control | Required | Validation | Message |
 |---|---|---|---|---|
-| Account | `accountPicker` (only when `accountId` was not passed) | Yes | Own account | "Choose an account." |
-| New name | `textInput`, label "Account name", placeholder "For example, Holiday fund" | Yes | 2 to 24 characters; letters, digits, spaces and `& - ' .`; not only spaces; not the same as another account's name | "Enter a name of 2 to 24 characters." / "Use letters, numbers and spaces only." / "You already have an account called {name}." |
+| Search | text, "Search by name, category, reference or amount" | No | Matches description, category, reference, or amount digits | none |
+| Type | chips All, Money in, Money out | No (All) | none | none |
+| Status | chips "Pending and posted", Pending, Posted | No | none | none |
+| Period | select Last 7 days, Last 30 days, Last 90 days (default), Last 12 months, All, Choose dates | No | none | none |
+| From, To (only for Choose dates) | date | Yes for that choice | End not before start; end not in the future; at most 24 months | "The end date is before the start date." / "Choose a date that isn't in the future. (FUTURE_DATE)" / "Choose a period of 24 months or less. (RANGE_TOO_LONG)". The list ignores an invalid range until fixed |
+| Category | select, built from the categories present | No | none | none |
+| Smallest, Largest amount | decimal text | No | Both numbers; smallest not above largest | "Enter the minimum as a number." / "Enter the maximum as a number." / "The minimum is higher than the maximum." |
 
-Copy: title "Rename account". Body "Currently called **{currentName}** (••4410). Only you see this name." Helper "2 to 24 characters." Button **Save name** (validate, call `rename`). Secondary **Cancel** (exit). Loading: disabled button with spinner.
+  Result line: "{n} transactions" plus "filters on" and **Clear filters** when any filter differs from the default. Pending items come first, under "Pending · not yet in your ledger balance" (mobile); then posted ones under day headers ("Today", "Yesterday", "{date}"). On web it is a table with Date, Description, Category, Status, Amount. Ten rows show at first; **Load more ({n} left)** adds ten. A row shows an initial, the description, "{category} · {channel} · {time}" (and "· Reported" when a problem was reported), and the signed amount (+ for money in). Empty list for the account: "No activity yet", "Money you send, spend and receive will show here.", button **Add money**. No match: "No transactions match these filters", "Try a longer period or clear the filters.", button **Clear filters**. Button **Export these transactions** opens `export`.
+- Card **Manage**: **Hide this account** (or **Show on overview** when hidden): "Hidden accounts stay open; they just leave your overview and total." and **Close this account** (hidden when closure is already requested): "Request closure. We confirm by message."
 
-**`success` — "Name saved"** (terminal). `result` success: title "Name saved", text "Your account is now called {newName}.", no reference. Buttons **Done** (exit to account detail).
+**`tx`: Transaction.** Initial, description, large signed amount, chip Pending or Posted (and "Reported {case}"). A pending notice: "This payment is pending. The shop hasn't finished it, so the amount can change and it can drop off. The money is held and counts against your available balance, not your ledger balance." Rows: Date and time, Account, Category, Channel, Card (debit ••4410, for card items), From or To (counterparty), Reference (for example `TX-480100`), Balance after (or "Shown once posted"). Buttons: **Receipt**; **Report a problem** (for card items and any money out); **Repeat this payment** (money-out transfers, bills and standing orders; opens `personal-transfer`). Unknown id: "We can't find that transaction" ("Choose another from the list. (TRANSACTION_NOT_FOUND)").
 
-**`failed`** (terminal). `result` error: title "Name not saved", text per error, button **Try again** (to `rename`).
+**`receipt`.** "BankWorkx® receipt" with chip Final or "Not final". Amount, then Type (Payment or Money received), Description, Date, Account, Channel, Reference. Footer: "This is a record of the transaction, not a tax invoice." (pending: "This receipt will be re-issued when the payment posts."). Buttons **Download PDF** (toast; planned engine receipts) and **Copy reference**.
+
+**`report`: "Report a problem".** Shows description, amount, date. Reasons depend on the item:
+
+| Item | Reasons (value: label) |
+|---|---|
+| Card or ATM | `unknown` "I don't recognise this payment"; `twice` "I was charged twice"; `amount` "The amount is wrong"; `service` "I didn't get what I paid for"; `other` "Something else" |
+| Money out, not card | `wrongpayee` "I sent it to the wrong person"; `notauth` "I didn't make this transfer"; `other` "Something else" |
+| Money in | `other` "Something else" |
+
+Fields: **What went wrong?** (required, radio list; the **Send report** button stays disabled until chosen); **Tell us more** (textarea, up to 300 characters; required and at least 10 characters for "Something else", otherwise optional; hint "Please don't type your card number or PIN."); for `unknown` on a card item a check **Freeze my debit card ••4410 now so nobody can use it again**. Rules: a pending item accepts only `unknown`, `notauth` and `other`; any other reason shows "This payment is still pending. Wait until it posts, or choose "I don't recognise this payment". (PENDING_NOT_DISPUTABLE)" and keeps the button off. A payment already reported shows "Already reported", "Case {DSP-nnnnn} was opened on {date}. We'll reply within 2 working days. (DUPLICATE_REPORT)" with no form. Send with a short note: "Tell us a little more, at least 10 characters. (NOTE_TOO_SHORT)". Service down: "We couldn't reach the bank. Nothing was sent. (SERVICE_UNAVAILABLE)". Success goes to `reported`.
+
+**`reported`.** Green tick, "Report sent", "We'll reply within 2 working days. If you don't recognise a card payment we can credit you while we look into it." Rows Case, Payment, Opened, Card ("Frozen" or "Unchanged"). Button **Back to payment**. Freeze here sets the first card frozen without a code because it only makes the card safer.
+
+**`nick`: "Rename account".** Text "Currently called **{name}** ••4410. Only you see this name." Field **Account name** (text, up to 24 characters, placeholder "For example, Holiday fund", hint "2 to 24 characters"):
+
+| Rule | Message |
+|---|---|
+| 2 to 24 characters after trimming | "Enter a name of 2 to 24 characters. (NAME_LENGTH)" |
+| Only letters, numbers, spaces and `& - ' .` | "Use letters, numbers and spaces only. (NAME_CHARS)" |
+| Not another of the person's accounts (any case) | "You already have an account called {name}. (NAME_TAKEN)" |
+
+Message shows as the person types and the **Save name** button is disabled while it shows. Save: toast "Name saved" and back to `main`. If the service is down, the error sheet "We couldn't save" is shown and the name is unchanged. A second button **Use the product name** shows when a nickname exists (toast "Back to the product name"). The IBAN, mask and balance never change.
+
+**`share`: "Share account details".** Text "Send these to someone who needs to pay you. They can pay in, but they can't take money out." A preview card: "BankWorkx® account details / Account holder: Alex Morgan / Account: {name} ({CUR}) / {each identifier line}". Buttons **Share** (system share sheet, else copies) and **Copy all** (toast "Account details copied"). Warning: "Only share these with people you trust. We will never ask you for a PIN, a password or a code in return."
+
+**`hide`: "Hide this account?".** "{name} ••{last} stays open and keeps working. It leaves your overview and your total balance until you show it again." Button **Hide account** (toast "Account hidden", back to `accounts`); disabled with "You need at least one account on your overview. (LAST_VISIBLE_ACCOUNT)" when it is the last visible one.
+
+**`export`.** "Export transactions", "{n} transactions from your current filters." Rows **CSV** (for spreadsheets), **OFX** (for accounting and budgeting apps), **PDF** (for printing), each with a toast in the prototype. A hint: "Need a stamped statement for a visa or loan? Use Statement." (opens `statement`). Nothing to export: "Nothing to export", "No transactions match your filters. (NO_TRANSACTIONS)".
+
+**`close`: "Close this account".** First the blocks: with holds, a red card `ACCOUNT_HAS_HOLDS` "You can't close this account while card payments are on hold. Try again after they settle."; overdrawn, `ACCOUNT_OVERDRAWN` "This account is overdrawn. Pay in the shortfall before you close it."; each with **Back to account**. Otherwise:
+
+| Field | Control | Required | Validation | Message |
+|---|---|---|---|---|
+| Why are you closing it? | select: "I don't need it any more", "I'm moving to another bank", "Fees are too high", "I have a duplicate account", "Something else" | Yes | none | button disabled |
+| Tell us more | textarea, up to 200 | Yes if "Something else" | 10 characters or more | button disabled |
+| Where should we send {balance}? | select: other open accounts in the same currency, or "A bank cheque posted to my address" | Yes only if the balance is above 0 | none | button disabled |
+| Acknowledge 1 | check "Standing orders, direct debits and scheduled payments from this account will stop." | Yes | ticked | button disabled |
+| Acknowledge 2 | check "The debit card linked to this account will be cancelled." | Yes if cards are linked | ticked | button disabled |
+| Acknowledge 3 | check "Closing takes up to 14 days. The account can't be reopened; I'd need to open a new one." | Yes | ticked | button disabled |
+
+Button **Request closure** opens the PIN sheet "Confirm closure" ("Enter your PIN to close {name} ••{last}", 6 digits; any six digits in the prototype). Service down: error sheet, nothing requested. Secondary **Keep this account**.
+
+**`closed`.** Clock icon, "Closure requested", "We'll close the account within 14 days and message you when it's done. You can cancel until then." Chip Pending. Rows Account, Balance to send, Send to, Reference (`CLS-nnnnn`), Requested. Button **Back to account**; the account now shows the closure banner and chip.
+
+**States:** loading is a skeleton for the transaction list (the first render is immediate in the prototype); empty and error states are as written above; the service-down banner mirrors `accounts`.
 
 #### 4. Sandbox errors
 
 | Code | Message | Shows on | Button |
 |---|---|---|---|
-| `ACCOUNT_NOT_FOUND` | "We can't find that account. Choose another." | `failed` | Choose account |
-| `NAME_INVALID` (planned) | "Enter a name of 2 to 24 characters, using letters, numbers and spaces only." | `rename` (inline) | Edit |
-| `NAME_EXISTS` (planned) | "You already have an account called {name}." | `rename` (inline) | Edit |
-| `NOT_SUPPORTED` | "This isn't available for your profile." | `failed` | Back |
-| `TIMEOUT` (planned) | "This is taking longer than expected. Nothing was changed." | `failed` | Try again |
-| `SERVICE_UNAVAILABLE` (planned) | Standard message S-`SERVICE_UNAVAILABLE` | `failed` | Try again |
+| `ACCOUNT_NOT_FOUND` | "We can't find that account. Choose another." | Whole screen | Back to accounts |
+| `TRANSACTION_NOT_FOUND` | "We can't find that transaction." | `tx` | Back |
+| `RANGE_TOO_LONG` | "Choose a period of 24 months or less." | Filter bar | Fix dates |
+| `FUTURE_DATE` | "Choose a date that isn't in the future." | Filter bar | Fix dates |
+| `NAME_LENGTH`, `NAME_CHARS` | see `nick` | `nick` | Edit |
+| `NAME_TAKEN` | "You already have an account with that name." | `nick` | Edit |
+| `PENDING_NOT_DISPUTABLE` | "This payment is still pending." | `report` | Choose another reason |
+| `DUPLICATE_REPORT` | "You already reported this payment." | `report` | Back |
+| `NOTE_TOO_SHORT` | "Tell us a little more, at least 10 characters." | `report` | Edit |
+| `ACCOUNT_HAS_HOLDS` | "You can't close this account while card payments are on hold." | `close` | Back to account |
+| `ACCOUNT_OVERDRAWN` | "This account is overdrawn. Pay in the shortfall first." | `close` | Back to account |
+| `LAST_VISIBLE_ACCOUNT` | "You need at least one account on your overview." | `hide` | Back |
+| `ACCOUNT_DORMANT` | "There has been no activity for 12 months..." | `main` banner | Reactivate |
+| `NO_TRANSACTIONS` | "Nothing to export" | `export` | Back |
+| `SERVICE_UNAVAILABLE` | "We couldn't reach the bank. Nothing was sent." (report), error sheet (rename, close) | the sub-screen | Try again |
+| `TIMEOUT` (planned) | "This is taking longer than expected. Nothing was changed." | the sub-screen | Try again |
+
+#### 5. Adapters
+
+| Integration id | Adapter | Request | Response | Errors | Status |
+|---|---|---|---|---|---|
+| `accounts` | `bank.accounts.list` | none | accounts with `name`, `maskedNumber`, `iban`, `balance`, `currency` | none | Existing |
+| `limits` | `bank.limits.get` | `{currency?}` | daily limit and used | none | Existing |
+| `cards` | `bank.cards.list` | none | cards | none | Existing |
+| `accountGet` | `bank.accounts.get` | `{accountId}` | account with `ledgerBalance`, `availableBalance`, `holds[]`, `identifiers[]`, `openedOn`, `interestRate`, `status`, `limits[]` | `ACCOUNT_NOT_FOUND` | (planned) |
+| `transactions` | `bank.transactions.list` | `{accountId, from, to, kind, status, category, minAmount, maxAmount, query, cursor, pageSize}` | page and `total` | `RANGE_TOO_LONG`, `FUTURE_DATE` | (planned) |
+| `transactionGet` | `bank.transactions.get` | `{transactionId}` | transaction with `reference`, `channel`, `runningBalance`, `counterparty` | `TRANSACTION_NOT_FOUND` | (planned) |
+| `rename` | `bank.accounts.rename` | `{accountId, name}` | `{accountId, name, previousName}` | `NAME_LENGTH`, `NAME_CHARS`, `NAME_TAKEN`, `ACCOUNT_NOT_FOUND` | (planned). Not money-moving |
+| `reportProblem` | `bank.transactions.report` | `{transactionId, reason, note, freezeCard}` | `{caseRef}` | `PENDING_NOT_DISPUTABLE`, `DUPLICATE_REPORT`, `NOTE_TOO_SHORT` | (planned) |
+| `setHidden` | `bank.accounts.setHidden` | `{accountId, hidden}` | `{hidden}` | `LAST_VISIBLE_ACCOUNT` | (planned) |
+| `closeAccount` | `bank.accounts.requestClosure` | `{accountId, reason, note, destination, acknowledged}` plus PIN step-up | `{reference, requestedAt}` | `ACCOUNT_HAS_HOLDS`, `ACCOUNT_OVERDRAWN`, `STEP_UP_REQUIRED` | (planned). `requiresOtp`-style step-up (PIN) |
+| `cancelClosure` | `bank.accounts.cancelClosure` | `{accountId}` | `{}` | none | (planned) |
+| `exportTransactions` | `bank.transactions.export` | filters plus `format: "csv"\|"ofx"\|"pdf"` | file | `NO_TRANSACTIONS` | (planned) |
+
+#### 6. Permissions, step-up and limits
+
+`accounts.view` for the screen, reading, receipts, export, share and hide. Renaming needs `accounts.manage` in production (the prototype treats any signed-in person as allowed). Closing needs a PIN step-up valid for the request only; a wrong PIN counts toward the shared counter of 3 (README 1.6). Reporting and freezing from `reported` need no code because they only protect. Limits: filter period at most 24 months; closure up to 14 days; ten transactions per page.
+
+#### 7. Result and links out
+
+Results: `reported` (case reference `DSP-nnnnn`), `closed` (reference `CLS-nnnnn`), toasts for rename, hide, copy and share. Receipt: the transaction receipt on `receipt`. Notifications raised: "Report received {case}" (in-app and email), "Closure requested {reference}", "Closure completed" after 14 days (planned). Links out: `statement`, `personal-transfer`, `change-limits`, `add-money`, Cards, `accounts`.
+
+#### 8. Acceptance criteria
+
+- AC-1: The hero shows Available as the big number, with Ledger and On hold beside it; Available equals Ledger minus the holds, and **See holds** lists each hold with merchant, date and release date.
+- AC-2: Identifiers follow the account's region exactly as in the table in section 3, each with its own Copy button; a US account shows no IBAN.
+- AC-3: The transaction filters work together and live; pending items appear first with the heading "Pending · not yet in your ledger balance"; the count line and **Clear filters** match.
+- AC-4: A custom period with the end before the start, in the future, or longer than 24 months shows the exact message and the list ignores the range until fixed.
+- AC-5: A pending card payment can only be reported as "I don't recognise this payment" or "Something else"; any other reason shows `PENDING_NOT_DISPUTABLE`.
+- AC-6: A payment can be reported once; a second attempt shows the existing case (`DUPLICATE_REPORT`). "Something else" needs at least 10 characters.
+- AC-7: Reporting "I don't recognise this payment" with the freeze box ticked freezes the card and the result says "Frozen".
+- AC-8: Renaming accepts 2 to 24 allowed characters, refuses a name used by another account, and leaves the identifiers and balance unchanged; **Use the product name** restores the original.
+- AC-9: Hiding an account removes it from the overview and total, keeps it working, and is refused for the last visible account.
+- AC-10: Closure is refused with `ACCOUNT_HAS_HOLDS` while holds exist and with `ACCOUNT_OVERDRAWN` when overdrawn; otherwise it needs a reason, a destination (when a balance exists), the acknowledgements and a PIN, and then shows "Closure requested" with a reference.
+- AC-11: A requested closure can be cancelled before it completes; nothing else changes on the account.
+- AC-12: Share details produces a preview whose lines equal the identifiers on screen, and a warning that no PIN, password or code will ever be requested.
+- AC-13: When the bank switches off `shareDetails`, `closeRequest`, `reportProblem` or `hideAccount` the matching control is not drawn (planned; not yet wired in the prototype).
+- AC-14: When the service is down, reporting, renaming and closing change nothing and say so; a timeout shows the standard message.
+
+#### 9. Scenarios
+
+Sandbox demo values: account ids `cur` (Current ••4410, US, opened 14 Mar 2019, 0.05% APY, routing `021000021`, account number `120004410`, holds Hotel Meridian $98.00, Fuel Station 12 $33.38, Blue Bottle Café $6.40), `sav` (Savings, product Savings Plus, ••7720, 3.85% APY), `eur` (••3302), `aed` (••9981), `gbp` (Sterling ••3301, sort `99-00-12`, account `55003301`), `jod` (Dinar ••6120, dormant). Today is Tue 3 Nov 2026. Transactions for Current include "Salary, Northwind" +$4,200.00 (2 days ago), "Maya Chen" -$80.00 transfer (5 days ago) and pending "Blue Bottle Café" -$6.40 and "Hotel Meridian (authorisation)" -$98.00. Any six digits are accepted as the PIN. Names to test: "Holiday fund" valid, "A" too short, and "Savings" or "Euro account" refused as taken (a name equal to another account's displayed name, in any case, is taken). The account list names are "Current account", "Savings", "Euro account", "Dirham account", "Sterling account" and "Dinar account"; "Savings Plus" is the product chip on Savings.
+
+| # | Covers | Persona / setup | Conditions | Steps and expected result |
+|---|---|---|---|---|
+| T-1 | AC-1 | `alex` | none | Open Current. Available $8,102.40, ledger $8,240.18, on hold $137.78. See holds lists three holds. |
+| T-2 | AC-2 | `alex` | none | Open Current: routing, account number, SWIFT. Open Sterling: sort code, account number, IBAN `GB..`, BIC. Open Euro: IBAN `DE..` and BIC. Open Dinar: 30-character IBAN `JO..`. |
+| T-3 | AC-3 | `alex` | none | Type "northwind": the salary rows only. Choose Money out and Pending: two rows. Clear filters restores the default count. |
+| T-4 | AC-4 | `alex` | none | Choose dates with end before start, an end tomorrow, and a 30-month span; each message appears. |
+| T-5 | AC-5, AC-6 | `alex` | none | Open pending "Blue Bottle Café", Report a problem: "I was charged twice" shows `PENDING_NOT_DISPUTABLE`; "I don't recognise this payment" is accepted. Report it again: `DUPLICATE_REPORT`. |
+| T-6 | AC-7 | `alex` | none | Report "Fuel Station 12" as unknown with the freeze box ticked. Result shows Card "Frozen"; Cards shows the debit card frozen. |
+| T-7 | AC-8 | `alex` | none | Rename Savings to "Rainy day": saved. Rename Euro to "Rainy day": `NAME_TAKEN`. "A" and 25 characters: `NAME_LENGTH`. "Trip #1": `NAME_CHARS`. Use the product name restores. |
+| T-8 | AC-9 | `alex` | none | Hide Euro; overview total drops; hide until one remains; the last is refused. |
+| T-9 | AC-10, AC-11 | `alex` | none | Close Current: `ACCOUNT_HAS_HOLDS`. Close Sterling (a hold) also blocked. Close Savings with all choices and a PIN: "Closure requested" with `CLS-` reference; Cancel the request removes the banner. |
+| T-10 | AC-12 | `alex` | none | Share details on Sterling: preview lists sort code, account number, IBAN, BIC; warning present. |
+| T-11 | AC-14 | `alex` | `unavailable: ["bank.transactions.report", "bank.accounts.rename", "bank.accounts.requestClosure"]` (prototype: Service down on) | Report shows "We couldn't reach the bank. Nothing was sent."; Save name and Request closure show the error sheet; no change. |
+| T-12 | AC-14 | `alex` | `timeout: ["bank.accounts.requestClosure"]`, `latencyMs: 10000` (planned) | Request closure shows the timeout message; the account shows no closure banner. |
+| T-13 | AC-13 | `alex` | options `shareDetails`, `closeRequest`, `reportProblem`, `hideAccount` off (planned) | The matching control is absent. |
+
+#### 10. Expected mutation-check survivors
+
+`FUTURE_DATE` is checked on the screen and (planned) in the adapter, so removing only the adapter check survives T-4; expected. The rule that the last visible account cannot be hidden exists in the screen and in `bank.accounts.setHidden` (planned), so removing one survives; expected. The prototype does not read the four options, so AC-13 cannot be proved until they are wired. All others: none expected.
+
+---
+
+### ★ Account statement — `statement`
+
+**Catalog:** slug `statement` (earlier spec slug `account-statement`), name in the prototype "Statements and letters", workspace `personal`, category Accounts (Personal: Accounts), core no, can a bank switch it off: yes (basic entry, kept in the Lean preset). Options (all default on): **Offer CSV** (`allowCsv`); **Offer OFX and QIF for accounting apps** (`allowOfxQif`); **Offer official stamped statements** (`allowOfficial`); **Charge a fee ($5.00) for official statements and balance certificates** (`officialFee`); **Offer proof of address letters** (`allowLetter`); **Offer balance certificates** (`allowBalanceCert`); **Offer paperless settings** (`allowPaperless`); **Allow sending official documents straight to a third party** (`emailThirdParty`). Research: `research/statement.md`. Built in `design/bankworkx-r1/src/journeys/22-statement.js`, which replaces the small reference journey in `10-statement.js`.
+
+#### 1. Summary
+
+| Field | Value |
+|---|---|
+| Slug | `statement` |
+| Purpose | One place for every account document: a statement for the person's own records, an official stamped statement, a proof of address letter, a balance certificate, a past monthly statement, and the paperless setting per account. |
+| Release / workspace | 1 / Personal |
+| Status | Built in the prototype as a ★ journey (`money: false`, submit label "Get it"). The fee is a sandbox charge. File creation is simulated. |
+| Channels | Web and mobile |
+| Starting pattern | The reference journey `10-statement.js` (account, period, format, review, result) |
+| Who may use it | Anyone with `accounts.view` (Alex, Personal). Official documents and paperless changes ask for a code. |
+
+#### 2. Entry points
+
+| Place › label | Passes in | Permission |
+|---|---|---|
+| Accounts › account card › Statement; account screen › Statement | `{accountId}` | `accounts.view` |
+| Account screen › Statements card › a month | `{accountId, month}` (opens as "Past monthly statement") | `accounts.view` |
+| Account screen › Statements card › All statements and letters | `{accountId}` | `accounts.view` |
+| Account screen › Export (hint "Need a stamped statement…?") | `{accountId}` | `accounts.view` |
+| Home › quick action, ⌘K | none (account defaults to Current) | `accounts.view` |
+| Other launch parameters | `purpose` (`records`, `official`, `letter`, `balcert`, `monthly`, `paperless`), `period` (`m0`, `m1`, `q`, `h`, `y`, `y2`, `custom`) | `accounts.view` |
+
+#### 3. Screens
+
+The screens run in this order and each can be skipped: **purpose**, then **where** (not for paperless), **format** (not for paperless), **prefs** (paperless only), **review**, a code prompt (official documents), and the result.
+
+**`purpose`: "Statements and letters"**, intro "What do you need it for?". One field, **I need** (radio cards, required). The cards shown depend on the options:
+
+| Value | Title | Text | Right side | Shown when |
+|---|---|---|---|---|
+| `records` | Statement for my records | "Any period up to 24 months, for your own use. PDF, CSV, OFX or QIF." | none | always |
+| `official` | Official statement | "Stamped by the bank for a visa, loan or tenancy. Up to 12 months." | "$5.00" or "Free" | `allowOfficial` |
+| `letter` | Proof of address letter | "A signed letter with your name, address and account. Valid 3 months." | none | `allowLetter` |
+| `balcert` | Balance certificate | "States your balance on one date. For a visa or a loan." | "$5.00" or "Free" | `allowBalanceCert` |
+| `monthly` | Past monthly statement | "The regular monthly statement, last 24 months." | none | always |
+| `paperless` | Paperless settings | "Choose e-statements or paper, and how we tell you." | none | `allowPaperless` |
+
+Changing the purpose resets the format to PDF and the paper toggle to the account's saved value. Launching with `month` sets the purpose to Past monthly statement.
+
+**`where`: "Account and period"** (skipped for paperless). Fields:
+
+| Field | Block | Required | Shown when | Validation | Message |
+|---|---|---|---|---|---|
+| Account | select "{name} ••{last} · {balance}" | Yes (prefilled) | always | Not a closed account | "Closed accounts can only be requested at a branch. (ACCOUNT_CLOSED)" |
+| Period | chips | Yes (default Last month) | records, official | Records: This month, Last month, Last 3 months, Last 12 months, Last 24 months, Choose dates. Official: Last month, Last 3 months, Last 6 months, Last 12 months, Choose dates | none |
+| From | date | Yes | Choose dates (records, official) | Not before the account opened | "This account opened on {date}. Choose a later start. (BEFORE_OPENING)" |
+| To | date | Yes | Choose dates | Not before From; records at most 731 days; official at most 366 days | "The end date is before the start date. (RANGE_INVALID)" / "Statements cover up to 24 months at a time. (PERIOD_TOO_LONG)" / "Official statements cover up to 12 months. (PERIOD_TOO_LONG)" |
+| Statement month | select (last 24 months, "{Month Year} · Ready") | Yes | monthly | none; hint "Statements are ready on the 1st of the next month." | none |
+| Balance on | date (last 740 days) | Yes (default today) | balcert | none; hint "We state your ledger balance at the end of this day." | none |
+
+An info card for the letter shows "Address on the letter: {address}. Verified {date}. To change it, go to More › Profile." An info line for official: "An official statement is stamped and signed by BankWorkx®. Visa offices, landlords and lenders can check it online with the code printed on it. Choose up to 12 months." A letter for a dormant account is refused on this screen: "This account is dormant. Make a deposit first, then ask for the letter. (ACCOUNT_DORMANT)".
+
+**`format`: "Format and delivery"** (skipped for paperless).
+
+| Field | Block | Required | Shown when | Rule | Message |
+|---|---|---|---|---|---|
+| Format | radio cards | Yes (PDF) | always | PDF always. Official, letter and balance certificate: PDF only, text "Signed PDF with a QR code the recipient can check." Records: PDF "Opens anywhere. Best to read and print.", CSV (if `allowCsv`), OFX and QIF (if `allowOfxQif`). Monthly: PDF "The original statement.", CSV (if `allowCsv`) | none |
+| Language | chips English, "Arabic and English" | No | official, letter, balcert | none | none |
+| What is it for? | select Visa application, Loan or mortgage, Rent or tenancy, Employer, Something else | No (default Visa) | official, letter, balcert | hint "The purpose is printed on the document so the recipient knows why it was issued." | none |
+| Summary page | check "Include a summary page with opening and closing balances" | No (on) | PDF and records | none | none |
+| Running balance | check "Include a running balance column" | No | CSV | none | none |
+| How do you want it? | chips Download now, Email it | No | always | none | none |
+| Send to | chips "Me ({masked email})", Someone else | No | Email it, official documents, `emailThirdParty` on | none | none |
+| Recipient's email | email, placeholder name@company.com | Yes | Someone else | `^[^\s@]+@[^\s@]+\.[A-Za-z]{2,}$`; hint "They get a link that works for 14 days. We never attach the document." | "That email address doesn't look right. (INVALID_EMAIL)" |
+
+When emailing to the person, the info line reads "We email it to {a•••@example.com}, the address you gave us. Large files arrive as a secure link."
+
+**`prefs`: "Paperless settings"** (paperless only), intro "Choose how each account's monthly statement reaches you."
+
+| Field | Block | Required | Rule | Message |
+|---|---|---|---|---|
+| Account | select "{name} ••{last} · Paperless" or "· Paper" | Yes | none | none |
+| Paperless e-statements | toggle, "We stop posting paper. Your statement stays in the app for 24 months." | No (on) | none | none |
+| Tell me when it's ready by | chips Email, Text message, App notification | Yes while paperless is on (default Email) | none | none |
+
+When paper is chosen an info card says "Paper statements cost $2.00 a month. Posted to {address}. You can switch back any time." (`PAPERLESS_LOCKED` "Paperless can't be turned off for this account." is reserved for accounts a regulator or the bank requires to stay digital; the prototype never raises it.)
+
+**`review`: "Check and get it"**, button **Get it**, busy text "Preparing your document…" for about 900 ms. A rows card lists: Document, Account, Address (letter) or Balance on (certificate) or Period, Format (with "Arabic and English" when chosen), Delivery ("Download" or "Emailed to {address}"), Fee ("$5.00", also "({amount} {currency})" for a foreign currency account, or "Free" for official documents). For paperless: Account, Statements ("Paper, posted" or "Paperless in the app"), Fee or "Told by". Official documents add: "You'll confirm with a code. We show your name, address and account number on this document. Share it only with the organisation that asked for it." Checks on Get it:
+
+| Check | Error code | Message |
+|---|---|---|
+| Letter and no verified address | `ADDRESS_NOT_VERIFIED` | "We can't confirm your address yet." |
+| Records, official or monthly with no non-pending transaction in the period | `NO_TRANSACTIONS` | "There are no transactions on {account} in the period {period}." |
+| Fee above the available balance (in the account's currency) | `FEE_INSUFFICIENT_FUNDS` | "Your available balance of {available} is too low for the {fee} fee." |
+
+A balance certificate for a date with no activity is allowed.
+
+**Code prompt.** For official statement, letter and balance certificate (and, in the specification, paperless changes) the person is asked: title "Confirm {document name in lower case}" (for example "Confirm official statement"), subtitle "Code sent to ••• 4410". The prototype uses its 6-digit keypad that accepts any six digits; the production rule is the standard one-time code (6 digits, 3 tries, resend after 30 s; sandbox `482100`). Records and past monthly statements need no code.
+
+**Result.** For documents: title "Statement ready", or "{Document} ready" for official documents, or "On its way" when emailed. Text: "Your {FORMAT} is ready to download.", or "Signed and stamped. The recipient can check it with the code.", or "We emailed it. It can take a few minutes." Status chip "PDF · {n} pages" or the format. Rows: Document, Account, then for a letter Address and "Valid until 3 Feb 2027"; for a balance certificate Balance on and Ledger balance; otherwise Period, Transactions, Opening balance, Closing balance; then File ("{file name} · {kb} KB"), Delivery, and for official documents Verification code (`VC-nnnn-nnnn`) and Purpose, then Fee charged when a fee applies. File names: `statement-{last4}-{from}-{to}.{ext}`, `address-letter-{last4}-{date}.pdf`, `balance-certificate-{last4}-{date}.pdf`. Paperless result: "You're paperless" ("Your monthly statement will be in the app. We'll tell you when it's ready.") or "Paper statements on" ("We'll post your statement each month. It also stays in the app."), rows Account, Statements, Told by, Starts ("Next statement, 1 Dec 2026"). Buttons: **Download** and **Share** (or **Back to account** after emailing), **Done**.
+
+**States:** loading is the 900 ms preparing spinner; the empty state is `NO_TRANSACTIONS`; errors show the engine banner with the code's message; timeout and unavailable use the standard messages ("Nothing was charged" is added when a fee applied).
+
+#### 4. Sandbox errors
+
+| Code | Message | Shows on | Button |
+|---|---|---|---|
+| `PERIOD_TOO_LONG` | "This period is too long for this type of statement." (field text: "Statements cover up to 24 months at a time." or "Official statements cover up to 12 months.") | `where` (To field) | Fix dates |
+| `RANGE_INVALID` | "The end date is before the start date." | `where` | Fix dates |
+| `BEFORE_OPENING` | "This account didn't exist then." (field text names the opening date) | `where` | Fix dates |
+| `INVALID_EMAIL` | "That email address doesn't look right." | `format` | Edit |
+| `ACCOUNT_CLOSED` | "Closed accounts can only be requested at a branch." | `where` | Choose account |
+| `ACCOUNT_DORMANT` | "This account is dormant. Make a deposit first, then ask for the letter." | `where` | Choose account |
+| `ADDRESS_NOT_VERIFIED` | "We can't confirm your address yet." | `review` | Back |
+| `NO_TRANSACTIONS` | "There are no transactions on {account} in the period {period}." | `review` | Change period |
+| `FEE_INSUFFICIENT_FUNDS` | "Your available balance of {available} is too low for the {fee} fee." | `review` | Back |
+| `PAPERLESS_LOCKED` | "Paperless can't be turned off for this account." | `review` | Back |
+| `OTP_INVALID` (planned for this journey) | "That code isn't right. {n} tries left." | code prompt | Try again |
+| `TIMEOUT` (planned) | "This is taking longer than expected. Nothing was changed. No fee was charged." | engine error | Try again |
+| `SERVICE_UNAVAILABLE` (planned) | "This service is not available right now. Nothing was changed. Please try again in a few minutes." | engine error | Try again |
 
 #### 5. Adapters
 
 | Integration id | Adapter | Request | Response | Errors | Status |
 |---|---|---|---|---|---|
 | `accounts` | `bank.accounts.list` | none | accounts | none | Existing |
-| `rename` | `bank.accounts.rename` | `{accountId, name}` | `{accountId, name, previousName}` | `ACCOUNT_NOT_FOUND`, `NAME_INVALID`, `NAME_EXISTS`, `NOT_SUPPORTED`, `TIMEOUT`, `SERVICE_UNAVAILABLE` | (planned). Not money-moving; no OTP |
+| `createStatement` | `bank.statements.create` | `{accountId, purpose, from, to, month, asOf, format, language, purposeOfUse, delivery, recipientEmail, includeSummary, runningBalance}` | `{reference, verificationCode?, fileName, format, sizeKb, pages, count, openingBalance, closingBalance, feeCharged, downloadUrl, expiresAt}` (download link valid for 10 minutes; e-mailed link 14 days) | `ACCOUNT_NOT_FOUND`, `ACCOUNT_CLOSED`, `ACCOUNT_DORMANT`, `PERIOD_TOO_LONG`, `RANGE_INVALID`, `BEFORE_OPENING`, `INVALID_EMAIL`, `ADDRESS_NOT_VERIFIED`, `NO_TRANSACTIONS`, `FEE_INSUFFICIENT_FUNDS`, `STEP_UP_REQUIRED`, `TIMEOUT`, `SERVICE_UNAVAILABLE` | (planned). Replaces the planned adapter in the earlier spec. Charges a fee; `requiresOtp` for official documents |
+| `statementPrefs` | `bank.statements.setPreference` | `{accountId, paperless, notifyBy}` | `{accountId, paperless, notifyBy, startsOn}` | `PAPERLESS_LOCKED`, `STEP_UP_REQUIRED` | (planned) |
+| `statementMonths` | `bank.statements.listMonths` | `{accountId}` | last 24 months with `ready` | none | (planned) |
+| `otp` | `bank.otp.send`, `bank.otp.verify` | existing | existing | `OTP_INVALID`, `OTP_REQUIRED` | Existing |
 
-The nickname is stored as `Account.nickname`; the `name` field the app shows becomes the nickname when set. The IBAN and mask never change.
+Sandbox arithmetic: for Current ••4410 (ledger $8,240.18) with "Last month" (1 to 31 Oct 2026) the data holds 19 posted transactions, opening $3,190.57 and closing $4,040.18, 3 pages (derived from the seed; confirm when the adapter is built). Pending items are never counted.
 
 #### 6. Permissions, step-up and limits
 
-`accounts.manage`; step-up `none`. No limits.
+`accounts.view`. Step-up: a one-time code for official statement, proof of address letter, balance certificate (these carry name, address and account number) and for any paperless change; none for records and past monthly statements, and none for e-mail to the person's own address. Fees: $5.00 for official statement and balance certificate when `officialFee` is on; letter, records, monthly and paperless changes are free; paper statements cost $2.00 a month. A foreign-currency fee is converted at the sandbox rate. Limits: records at most 24 months; official at most 12 months; letter valid 3 months; e-mailed link valid 14 days.
 
 #### 7. Result and links out
 
-Result as above; no receipt; notifications none. **Done** returns to Accounts › detail with the new name in the header and the Home account card.
+Result as above. Receipt: the document itself, plus the result rows (reference, verification code, fee). Notifications raised: "Your {document} is ready" (in-app), "Statement emailed to {address}" (email), "Fee of $5.00 charged" (in-app), "Paperless setting changed" (email and in-app). Buttons: **Download**, **Share** (system share sheet, hidden after e-mail), **Done** (back to the account screen or wherever the person started). Letter and certificate link to More › Profile for address changes.
 
 #### 8. Acceptance criteria
 
-- AC-1: A valid name is saved and shows on the account detail, the list and the Home card.
-- AC-2: A name shorter than 2 or longer than 24 characters, or with other symbols, is refused with the exact message.
-- AC-3: A name already used by another of the person's accounts is refused.
-- AC-4: The IBAN, mask and balance are unchanged after a rename.
-- AC-5: When the service is unavailable or times out nothing is changed and the old name stays.
+- AC-1: Each purpose card appears only when its option is on; `records` and `monthly` always appear.
+- AC-2: A records statement for any account and a preset period is produced as PDF, CSV, OFX or QIF according to the options, named `statement-{last4}-{from}-{to}.{ext}`, with the transaction count and opening and closing balances matching the sandbox data.
+- AC-3: A custom period longer than 24 months (records) or 12 months (official), an end before the start, or a start before the account opened is refused on the `where` screen with the exact message and no document is made.
+- AC-4: An official statement, letter or balance certificate asks for a code before it is made; a records statement and a past monthly statement do not.
+- AC-5: The official statement result shows a verification code, the stated purpose and the fee; the fee is taken from the available balance in the account's currency, and refused with `FEE_INSUFFICIENT_FUNDS` when the available balance is too low (no fee charged, no document).
+- AC-6: With `officialFee` off the document is free and the fee row reads "Free".
+- AC-7: A proof of address letter shows the verified address and "Valid until" three months ahead, and is refused for a dormant account (`ACCOUNT_DORMANT`) or an unverified address (`ADDRESS_NOT_VERIFIED`).
+- AC-8: A balance certificate for a date with no activity is produced; a records, official or monthly document for a period with no transactions shows `NO_TRANSACTIONS` and offers a change of period.
+- AC-9: Emailing to someone else is offered only for official documents with `emailThirdParty` on, needs a valid address (`INVALID_EMAIL`), and says the link works for 14 days.
+- AC-10: Paperless per account can be switched on or off, choosing a notification channel while on; switching to paper shows the $2.00 monthly fee and the posted address.
+- AC-11: A past monthly statement is chosen from the last 24 months and opens directly from the Statements card on the account screen.
+- AC-12: CSV, OFX and QIF are offered only when their options are on; official documents are PDF only.
+- AC-13: If the service times out or is unavailable no document is produced and no fee is charged.
+- AC-14: A closed account is refused with `ACCOUNT_CLOSED`.
 
 #### 9. Scenarios
 
+Sandbox demo values: account ids `cur` (Current ••4410, US, available $8,102.40), `sav`, `eur` (fee shown as €4.63), `aed`, `gbp`, `jod` (Dinar, dormant, no transactions). Today is Tue 3 Nov 2026. The address on file is "Flat 12, 8 Bay Street, Dubai Marina, Dubai, UAE", verified 12 Mar 2026. Masked email `a•••@example.com`. The prototype code prompt accepts any six digits; the production sandbox code is `482100`. Recipient emails to try: `visa.office@example.com` valid, `visa.office@` invalid.
+
 | # | Covers | Persona / setup | Conditions | Steps and expected result |
 |---|---|---|---|---|
-| T-1 | AC-1, AC-4 | `alex` | none | Rename Savings to "Rainy day". Success text "Your account is now called Rainy day." `bank.accounts.list` shows the name; IBAN `US00 BWX 0000 0000 7731` unchanged. |
-| T-2 | AC-2 | `alex` | none | "A" and a 25-character name each give the inline message; no call. |
-| T-3 | AC-3 | `alex` | none | Rename Savings to "Main". "You already have an account called Main." |
-| T-4 | AC-5 | `alex` | `unavailable: ["bank.accounts.rename"]` | Failed screen; name unchanged. |
-| T-5 | AC-5 | `alex` | `timeout: ["bank.accounts.rename"]` | Failed screen with the timeout copy; name unchanged. |
+| T-1 | AC-1, AC-2, AC-12 | `alex` | none | Choose "Statement for my records", Current, Last month, PDF, Download, Get it. No code. Result shows 19 transactions, opening $3,190.57, closing $4,040.18 and file `statement-4410-2026-10-01-2026-10-31.pdf`. Repeat with CSV, OFX, QIF. |
+| T-2 | AC-3 | `alex` | none | Records, Choose dates: end before start gives `RANGE_INVALID`; a 30-month span gives `PERIOD_TOO_LONG`; a start before 14 Mar 2019 gives `BEFORE_OPENING`. Official, a 13-month span: "Official statements cover up to 12 months." |
+| T-3 | AC-4, AC-5 | `alex` | none | Official statement, Current, Last 3 months, Visa application, Download. Code prompt appears; after it the result shows Verification code `VC-…`, Purpose, Fee charged $5.00. Current's ledger and available balance drop by $5.00. |
+| T-4 | AC-5 | `alex` | Euro account available lowered to under €4.63 (setup) | Official statement for Euro. Review shows "$5.00 (€4.63)"; Get it gives `FEE_INSUFFICIENT_FUNDS`; balance unchanged. |
+| T-5 | AC-6 | `alex` | option `officialFee` off | Official statement shows "Free" at review and no fee on the result. |
+| T-6 | AC-7 | `alex` | none | Proof of address letter for Current: address and "Valid until 3 Feb 2027" on the result. For Dinar: `ACCOUNT_DORMANT` on the `where` screen. |
+| T-7 | AC-8 | `alex` | none | Balance certificate for yesterday: produced. Records for Dinar (no transactions): `NO_TRANSACTIONS`, Change period. |
+| T-8 | AC-9 | `alex` | none | Official statement, Email it, Send to Someone else, `visa.office@` shows `INVALID_EMAIL`; `visa.office@example.com` accepted and the result says "Emailed to visa.office@example.com". With `emailThirdParty` off, the "Send to" chips are gone. |
+| T-9 | AC-10 | `alex` | none | Paperless settings, Savings, turn paper on: info card "Paper statements cost $2.00 a month" and the address; result "Paper statements on", Starts 1 Dec 2026. |
+| T-10 | AC-11 | `alex` | none | From the account screen Statements card tap "Sep 2026 statement": opens as Past monthly statement for September with PDF or CSV. |
+| T-11 | AC-13 | `alex` | `timeout: ["bank.statements.create"]`, `latencyMs: 10000` (planned) | Official statement through the code prompt: timeout message, no document, balance unchanged. |
+| T-12 | AC-13 | `alex` | `unavailable: ["bank.statements.create"]` (prototype: Service down on) | Unavailable message, no document, no fee. |
+| T-13 | AC-14 | `alex` | a closed account in the seed (planned) | Choosing it shows `ACCOUNT_CLOSED`. |
 
 #### 10. Expected mutation-check survivors
 
-None expected.
+The fee check is made on `review` in the screen and in the adapter (planned), so removing only the adapter check survives T-4; expected. `PAPERLESS_LOCKED` is never produced in the sandbox, so removing it cannot be seen; expected survivor. The paperless step-up is declared but not enforced in the prototype (see the settle list in the report), so a mutation that removes it also survives until it is wired. All others: none expected.
+
+---
+
+### ★ Rename an account — `account-nickname`
+
+**Catalog:** slug `account-nickname`, workspace `personal`, category Accounts (Personal: Accounts), core no, can a bank switch it off: yes. Options: none of its own; it is reached through `account-details` and switches off only with it.
+
+**Alias of `account-details`:** reached from the **Rename** button on the account screen (`account-details`, sub-screen `nick`), launch parameter `{accountId}`. There is no separate catalog entry in the prototype; switching `account-details` off removes rename. A future bank option `renameAccount` could switch the button alone (planned). What differs from the earlier standalone spec:
+
+- Rename is a sub-screen of the account screen, with a **Back** button, not a separate journey with a result screen. Success is a toast "Name saved" and a return to the account screen.
+- Validation is live as the person types, with codes `NAME_LENGTH` ("Enter a name of 2 to 24 characters."), `NAME_CHARS` ("Use letters, numbers and spaces only.") and `NAME_TAKEN` ("You already have an account called {name}."). These replace `NAME_INVALID` and `NAME_EXISTS`.
+- The allowed characters are letters, digits, spaces and `& - ' .`; the name is trimmed; a name equal (any case) to another account's displayed name is refused.
+- A second button **Use the product name** removes the nickname.
+- The adapter is `bank.accounts.rename` (planned) as before; acceptance criteria and scenarios T-7 and AC-8 of `account-details` cover it.
 
 ---
 
@@ -3432,23 +3617,173 @@ Accounts: Main ••4410 available 8,720.76 USD, Savings ••7731 15,254.37 U
 
 ---
 
+### ★ Ways to send money — `transfer-types`
+
+Catalog: `transfer-types`, workspace Personal, category Personal: Payments (tab `pay`), core no, a bank can switch it off: yes (kept in the Lean preset, `basic`). Options: "Show the “Which should I use?” helper" (default on, key `showHelper`); "Show the side-by-side table" (default on, key `showCompare`). It moves no money. A type card disappears when every journey that starts it is switched off; a card whose journey is not built shows a disabled "(soon)" button.
+
+#### 1. Summary
+
+| Field | Value |
+|---|---|
+| Slug | `transfer-types` |
+| Purpose | One screen that shows every way to move money, with speed, cost, limit, cut-off and name check, filtered by where the money is going, plus a helper that recommends one way from three answers (how soon, where to, how much). It teaches the choice that US and Middle East banks make the person take and UK and EU banks hide. |
+| Release / workspace | 1 / Personal |
+| Status | New. Built in the prototype (`design/bankworkx-r1/src/journeys/28-transfer-types.js`, a view journey, `view: true`); research in `research/transfer-types.md`. Not in the module as a journey before. In the product it is a shell screen with the catalog entry above. |
+| Channels | Web and mobile |
+| Starting pattern | None. Rails come from the shared table in 09 section 2. |
+| Who may use it | `payments.create` (the prototype checks this; a person without it does not see the buttons that start a payment) |
+| Shared reference | `09-payment-rails.md` sections 2 (rails, fees, limits, cut-offs), 4 (name check), 9 (daily limit), 10 (cooling-off). This screen restates only what it displays. |
+
+**Sandbox demo values.** Rails, fees, limits and cut-offs are the 09 section 2 table. Daily limit left 41,250.00 USD (fixed in the prototype). New-payee allowance 500.00 USD for 24 hours. Rates 1 USD = EUR 0.926, GBP 0.781, AED 3.672, SAR 3.75, JOD 0.709, CAD 1.36 (09 section 5). Helper defaults on opening: region United States, urgency "Right now", destination United States, amount 1000.
+
+#### 2. Entry points
+
+| Place › label | Passes in | Permission |
+|---|---|---|
+| Payments › Send money (top of the tab) | `{region?}` (`us`, `eu`, `uk`, `me`, `intl`; default `us`) | `payments.create` |
+| Home › Send › Which way? | none | `payments.create` |
+| Any transfer journey › "Which way?" link (planned) | `{region}` | `payments.create` |
+
+#### 3. Screens
+
+One screen, `ways` ("Ways to send money"). Blocks: `heading`, `segmented` (region), `card` (helper), `cardGrid` of type cards, `dataTable` (side by side), small print.
+
+Copy: title "Ways to send money". Intro "Pick where the money is going. Each card shows how fast it is, what it costs and what to watch for." Small print "Fees and limits are examples for this prototype. Your bank's own terms apply." In the product the last line reads "Fees and limits are set by your bank." (planned).
+
+**Region selector** (`segmented`, one choice): United States, Europe, United Kingdom, Middle East, International. Default United States. Changing it redraws the cards and the table.
+
+**Helper card "Which should I use?"** (shown when option `showHelper` is on). Small text "Answer three things and we recommend a way to send."
+
+| Field | Block | Required | Validation | Message |
+|---|---|---|---|---|
+| How soon does it need to arrive? | `segmented`: Right now, Today, In a few days, Cheapest (default Right now) | Yes | One of four | none |
+| Where to? | `select` of nine: My accounts, BankWorkx® customer, United States, Europe, United Kingdom, UAE, Saudi Arabia, Jordan, Abroad (SWIFT). Default United States | Yes | One of nine | none |
+| How much (USD)? | `textInput` (decimal), prefix "$", placeholder "0.00", default 1000 | No | A number; empty means "no limit test". Converted to the destination currency at the sandbox rate to test each rail's maximum | When no rail fits: "No rail fits this amount. Try a smaller amount, or split the payment. (RAIL_LIMIT)" |
+
+The recommendation redraws on every keystroke without moving the cursor.
+
+How the helper decides:
+- Destination "My accounts": "Use Between my accounts. It is instant and free. A fee of 0.20% applies only if the currency changes, and you see the rate before you confirm." Button **Start** (`personal-transfer {type: own}`; the prototype still points at `own-transfer`, which is the same flow).
+- Destination "BankWorkx® customer": "Use To a BankWorkx® customer. It is free and arrives in seconds because the money never leaves the bank." Button **Start** (`personal-transfer {type: internal}`; the prototype points at `internal-transfer`, not yet built, so it shows "(soon)").
+- Any other destination: take the destination's rails (09 section 2). Drop SEPA Instant when the demo switch is on, and drop any instant rail when `single-transfer` option "Offer instant rails" is off. Drop rails whose maximum is below the amount. Rank by speed: instant 0, same day 1, next day 2, Bacs and SWIFT 3. Allowed rank by urgency: Right now 0, Today 1, In a few days 3, Cheapest 3. Among rails inside the allowed rank, pick the lowest fee, ties by speed. If none is fast enough, pick the fastest that fits and say so. If nothing fits: the red box above.
+- The text: "Use {rail}." then up to four sentences: why (urgency), cost and limit ("It costs $0.25 and its limit is $500,000, so $1,000.00 fits."), a cheaper-but-slower rail when there is one, and "Send before {cut-off}, or it goes out the next business day." for a cut-off rail.
+- Warnings in red: amount over 41,250: "Over your remaining daily limit of $41,250.00 (DAILY_LIMIT_EXCEEDED). Split it or ask us to raise the limit."; amount over 500: "If the person is a new payee, the first 24 hours are limited to $500.00 (BENEFICIARY_COOLING_OFF)."; destination Abroad: "Name checks are usually not available over SWIFT, so check the details with the person first."
+- "Other options: {rail} ({fee}, {speed}); …" lists the other rails that fit.
+- Buttons: **Quick transfer** (`single-transfer {rail}`; for Abroad **Start** to `personal-transfer {type: international}`; the prototype points at `international-transfer`, not yet built) and **New payee** (`personal-transfer`, except Abroad).
+
+**Type cards** (one per type that is switched on, in this order). A card has: icon, name, "Best for: …", an "Instant" chip where it applies, then either fixed facts (Speed, Cost, Limit, Cut-off, Name check) or, for rail types, one line per rail (name, speed, fee, limit) plus "Cut-off" and "Name check" and an optional note, then buttons.
+
+| Card | Facts or rails | Buttons |
+|---|---|---|
+| Between my accounts | Instant; free (0.20% if the currency changes); limit "Your available balance"; no cut-off, any time; name check not needed | **Start** |
+| To a BankWorkx® customer | Instant; free; $25,000.00 per payment; none, 24/7; matched to the customer record | **Start** |
+| Domestic: standard | Rails by region (table below) | **Quick transfer**, **New payee** |
+| Domestic: instant | Rails by region | **Quick transfer**, **New payee** |
+| Same-day or wire | Rails by region | **Quick transfer**, **New payee** |
+| International (SWIFT) | Shown only for region International: SWIFT, "$25.00 (+ $15.00 if you pay all charges)", no limit, cut-off 15:00 UTC; "Track it with the UETR." | **Start**, **Saved payee** (`single-transfer {rail: swift}`) |
+| Bill payment | Same day, set by the biller; free; set by the biller; bills paid by 16:00 count today | **Pay a bill** (`pay-bill`) |
+| Scheduled and recurring | On the date you choose; same as the rail you pick; up to 30 days ahead for one-off dates; checked again on the day | **Schedule** (`schedule-payment`), **One-off date** (`single-transfer`) |
+| Bulk (business) | Greyed teaser "Pay many people from a CSV or a payroll file, with approvals. Available in a business workspace." | none |
+
+Rails shown per region (the buttons pass the first rail as the starting choice, plus the region):
+
+| Region | Standard | Instant | Same-day or wire |
+|---|---|---|---|
+| United States | ACH | RTP / FedNow | Same-day ACH, Fedwire |
+| Europe | SEPA Credit Transfer | SEPA Instant | greyed: "SEPA has no separate same-day rail. If it must arrive today, use SEPA Instant." |
+| United Kingdom | Faster Payments (note: "In the UK, Faster Payments is the normal way to pay. Bacs (3 working days, up to £20,000) is kept for scheduled and recurring payments.") | Faster Payments ("Faster Payments is already instant, so it is the same rail as Standard.") | CHAPS |
+| Middle East | UAEFTS, SARIE, JoPACC | Aani, sarie instant, CliQ | greyed: "UAEFTS and SARIE are already same-day rails. They are listed under Standard." |
+| International | no card | no card | no card (only the SWIFT card) |
+
+US standard also carries the note "Standard ACH is free but not guaranteed to be same day. Use Same-day or wire when timing matters." A greyed card says "Not a separate option in this region." when nothing else explains it. Name check line by region: United States "Account name check (only where the bank can see the name)"; Europe "Verification of Payee (EU rule since Oct 2025)"; United Kingdom "Confirmation of Payee"; Middle East "Name check (varies by country)"; International "Usually not available (SWIFT)". Cut-offs: Same-day ACH 14:45 ET, Fedwire 18:00 ET, SEPA Credit Transfer 15:00 CET, CHAPS 17:00 UK, UAEFTS 15:00 UAE, SARIE 15:00 Riyadh, JoPACC 14:00 Amman, SWIFT 15:00 UTC; instant rails "none, 24/7". Limits "No limit" where the rail maximum is 10 million or more.
+
+**Side-by-side table** (option `showCompare`): heading "Side by side · {region}"; columns Way to send, Speed, Cost, Limit, Cut-off; one row per rail of the region (SWIFT for International).
+
+States:
+- Loading: skeleton cards (planned; the prototype draws at once).
+- Empty: when every type is switched off: icon, "Nothing is switched on", "Your bank has switched off every way to send money here."
+- Error: "We couldn't load the ways to send money. Nothing was changed." with **Try again** (planned, for when rails come from the sandbox).
+
+#### 4. Sandbox errors
+
+| Code | Message the person sees | Shows on | Button |
+|---|---|---|---|
+| `RAIL_LIMIT` | "That is over the limit of every way to send it. Try a smaller amount." (helper box: "No rail fits this amount. Try a smaller amount, or split the payment.") | helper | change the amount |
+| `JOURNEY_DISABLED` | "This isn't available at your bank." | when a button's journey is switched off but opened by an old link | Back |
+| `DAILY_LIMIT_EXCEEDED` | warning line, see above (information only) | helper | none |
+| `BENEFICIARY_COOLING_OFF` | warning line, see above (information only) | helper | none |
+| `TIMEOUT` (planned) | "We didn't get an answer in time. Nothing was changed." | `ways` | Try again |
+| `SERVICE_UNAVAILABLE` (planned) | S-`SERVICE_UNAVAILABLE` | `ways` | Try again |
+
+#### 5. Adapters
+
+| Integration id | Adapter | Request | Response | Errors | Status |
+|---|---|---|---|---|---|
+| `limits` | `bank.limits.get` | `{currency?}` | `{daily, usedToday}` (replaces the fixed 41,250.00) | `LIMIT_NOT_SET` | Existing |
+| `rails` | `bank.payments.rails` | `{region}` | `{rails[{id, name, speed, currency, max, fee, cutoff, instant, available}]}` from the bank's configuration (limits are bank settings, not scheme limits) | `TIMEOUT`, `SERVICE_UNAVAILABLE` | (planned). Not money-moving; no OTP |
+| `catalog` | `bank.catalog.get` | none | which journeys are on, and their options | none | (planned; the prototype reads `JR.off` and `JR.opt`) |
+
+In the prototype the rails come from the constant table `RAILS`, `REG` and `ME` in `src/js/90-payflow.js`, the cut-offs from `TT_CUT`, and the helper uses `FX` for the amount test. No adapter is called.
+
+#### 6. Permissions, step-up and limits
+
+`payments.create` to start any payment from a card. The screen itself changes nothing and asks for no code. It shows, but does not enforce, the daily limit and the new-payee allowance (the journeys enforce them).
+
+#### 7. Result and links out
+
+No result: the screen is the destination. Each button opens a journey with values: `single-transfer {rail}` (saved payee), `personal-transfer {type, region, rail}` (new payee; `type` is `domestic`, or `international` for the International region), `personal-transfer {type: own}`, `personal-transfer {type: internal}`, `pay-bill`, `schedule-payment`. No notification.
+
+#### 8. Acceptance criteria
+
+- AC-1: Choosing a region shows only the rails of that region, each with speed, fee, limit and cut-off taken from the shared rails table, and the side-by-side table lists the same rails.
+- AC-2: International shows one SWIFT card and no domestic cards; Europe shows a greyed same-day card that points to SEPA Instant; the Middle East shows a greyed same-day card that points to Standard.
+- AC-3: The helper with United States, Right now, $1,000 recommends Instant (RTP / FedNow) and gives the reason, the fee and the limit.
+- AC-4: When no rail is fast enough for the amount, the helper recommends the fastest that fits and says so; when none fits it shows `RAIL_LIMIT` and no buttons.
+- AC-5: The helper warns about the daily limit above 41,250.00 and about the new-payee limit above 500.00, and warns that SWIFT has no name check.
+- AC-6: A rail that is switched off, or SEPA Instant when it is down, is never recommended.
+- AC-7: A type whose journey is switched off does not appear; a type whose journey is not built shows a disabled "(soon)" button.
+- AC-8: With both options off the helper and the table disappear; with every journey off the empty state shows.
+- AC-9: The screen moves no money and asks for no code.
+
+#### 9. Scenarios
+
+| # | Covers | Persona / setup | Conditions | Steps and expected result |
+|---|---|---|---|---|
+| T-1 | AC-1, AC-2 | `alex` | none | Open the screen; pick each of the five regions. US shows ACH, Same-day ACH, RTP, Fedwire; International shows only the SWIFT card. |
+| T-2 | AC-2 | `alex` | none | UK: Standard and Instant both show Faster Payments with the two notes; Same-day shows CHAPS (limit "No limit", cut-off 17:00 UK). |
+| T-3 | AC-3 | `alex` | none | Helper: United States, Right now, 1000: "Use Instant (RTP® / FedNow®)", costs $0.25, limit $500,000, other options listed. |
+| T-4 | AC-4 | `alex` | none | Helper: Europe, Right now, 200000 USD (about EUR 185,200): SEPA Instant does not fit (100,000), so "Nothing here is as fast as you asked for at this amount, so SEPA Credit Transfer is the fastest that fits." |
+| T-5 | AC-4 | `alex` | none | Helper: Jordan, Today, 20,000,000 USD: no rail fits; red box with `RAIL_LIMIT`; no buttons. |
+| T-6 | AC-5 | `alex` | none | Helper: Abroad, In a few days, 600: SWIFT recommended with the SWIFT warning and the new-payee warning; 50,000 adds the daily-limit warning. |
+| T-7 | AC-6 | `alex` | `single-transfer` demo switch "SEPA Instant is unavailable" on | Helper: Europe, Right now, 200: SEPA Instant is skipped. |
+| T-8 | AC-7 | `alex`, `single-transfer` off | none | The Quick transfer buttons are hidden; Bill payment and Scheduled cards remain. |
+| T-9 | AC-8 | `alex` | both options off | No helper, no table. With every journey off: "Nothing is switched on". |
+| T-10 | AC-9, unavailable | `alex` | `unavailable: ["bank.payments.rails"]` (planned) | "We couldn't load the ways to send money. Nothing was changed." with **Try again**; nothing else changes. |
+| T-11 | AC-9, timeout | `alex` | `timeout: ["bank.payments.rails"]`, `latencyMs: 10000` (planned) | The timeout copy with **Try again**; no balance or payee changes. |
+
+#### 10. Expected mutation-check survivors
+
+The per-region note texts and the order of the type cards survive (only presence is asserted). The ranking tie-break between two rails with the same fee survives unless a scenario has equal fees (US ACH and Same-day differ, so it is not reached). The 41,250.00 figure survives until `bank.limits.get` feeds it. The hard-coded Middle East card mixes the rails of three countries (UAE, Saudi Arabia, Jordan) in one list; a mutant that drops one country's rail survives because no scenario counts them.
+
+---
+
 ### ★ Between my accounts — `own-transfer`
+
+Catalog: `own-transfer`, workspace Personal, category Personal: Payments, core no, a bank can switch it off: yes. Options (key, label, default): `allowFx` "Allow conversion between currencies" (on); `fxFee` "Charge the 0.20% conversion fee" (on). The same flow is also type `own` inside `personal-transfer` (option `type.own` there; the conversion options of that journey are `allowFx` there too); switching off this catalog entry removes the stand-alone launch points, not the type inside `personal-transfer`.
 
 #### 1. Summary
 
 | Field | Value |
 |---|---|
 | Slug | `own-transfer` |
-| Purpose | Move money between the customer's own accounts. Same currency is a plain transfer; different currencies are converted at a quoted rate, with the fee shown. |
+| Purpose | Move money between the customer's own accounts. Same currency is a plain, instant, free move. Different currencies are converted at the mid-market rate with no margin, a separate 0.20% fee, and a rate held for 30 seconds. |
 | Release / workspace | 1 / Personal |
-| Status | Existing, upgraded. The FX half is `fixtures/convert-currency.ts` (slug `convert-currency`, id `jrn_convert_currency`, version 1, published, web and mobile, English and Urdu). The same-currency half is new (planned). The slug moves to `own-transfer`; `convert-currency` stays as an alias for Meezan. |
+| Status | Existing, rebuilt. Built in the prototype (`design/bankworkx-r1/src/journeys/30-own-transfer.js`); research in `research/own-transfer.md`. The FX half started as `fixtures/convert-currency.ts` (slug `convert-currency`, id `jrn_convert_currency`, version 1, published, web and mobile, English and Urdu); the same-currency half is new. `convert-currency` stays an alias for Meezan. |
 | Channels | Web and mobile |
 | Starting pattern | `fixtures/convert-currency.ts` |
 | Who may use it | `payments.create` |
 
-**What exists today.** Screens `from` (account picker with balances), `to` (second picker, helper "Choose an account in a different currency."), `amount` (an `amountInput` in the currency of the source account, helper "Available: …", button **See the rate** that calls `quote` and shows a toast "We couldn't price this. Check that the accounts are in different currencies and you have enough money." on failure), `review` (rows From, To, You convert, Rate, Fee, You get; info alert "This rate is valid for {ttlSeconds} seconds. If it runs out you will be shown a new one."; consent `fx-v1`; **Confirm and send OTP**), `otp` (button **Verify and convert**), `success` ("Converted", "{from} became {to}.", `Ref`), `failed` ("Not converted": "No money has left your account. The rate may have run out: try again to get a new one."). The fixture only handles different currencies, shows a generic failure for every cause, and counts toward no limit.
-
-**The upgrade.** Same-currency transfers; specific messages per code; a visible rate countdown with a refresh; limits; receipts; links.
+**Sandbox demo values (prototype).** Current account ••4410 (balance 8,240.18, available 8,102.40 USD), Savings ••7720 (14,310.00 USD), Euro account ••3302 (EUR 2,150.40), Dirham account ••9981 (AED 5,000.00). Mid-market rates come from the table 1 USD = EUR 0.926, AED 3.672 (so 1 EUR = 1.0799 USD, 1 EUR = 3.9654 AED). The first quote equals the mid rate; a refreshed or renewed quote moves up to 0.04% either way (random). Worked example: Current to Euro, send USD 500.00: rate 0.9260, fee 1.00, total taken 501.00, you get EUR 463.00; Current available 7,601.40, ledger 7,739.18, Euro 2,613.40. Current to Savings, 200.00 with note "Rainy day": Current available 7,902.40, Savings 14,510.00. The prototype accepts any six digits as the code.
 
 #### 2. Entry points
 
@@ -3457,756 +3792,871 @@ Accounts: Main ••4410 available 8,720.76 USD, Savings ••7731 15,254.37 U
 | Payments › hub › Between my accounts | none | `payments.create` |
 | Accounts › detail › Transfer from this account | `{accountId}` (prefills From) | `payments.create` |
 | Home › + Send money › Between my accounts | none | `payments.create` |
-| Payments › tracker › payment › Repeat payment | `{paymentId}` | `payments.create` |
+| Payments › Ways to send money › Between my accounts (`transfer-types`) | none | `payments.create` |
+| Payments › tracker › payment › Repeat payment | `{paymentId}` (planned) | `payments.create` |
+
+Launch values read: `accountId` (From), `toId` (To), `amount`. Defaults: From Current, To Savings.
 
 #### 3. Screens
 
-**`accounts` — "Between my accounts"** (entry). `stepper` ["accounts", "amount", "review", "otp"]. onEnter: `accounts`.
+`stepper` (planned): accounts, amount, review, code.
+
+**`accounts`: "Between my accounts"** (entry). Intro "Money between your own accounts arrives straight away." A **Swap accounts** button (swaps From and To and drops any quote). Button **Continue**.
 
 | Field | Block | Required | Validation | Error message |
 |---|---|---|---|---|
-| From | `accountPicker` `own.from`, `showBalance` | Yes | Own account that can debit (`canDebit`, not frozen) | "Choose an account to send from." |
-| To | `accountPicker` `own.to`, `showBalance` | Yes | Own account, not the same as From; a frozen account may receive | "Choose an account to send to." / "Choose two different accounts." |
+| From | `select` of all own accounts: "{name} ••{last} · {available}" | Yes | Not a frozen account | `ACCOUNT_CANNOT_DEBIT` "You can't send money from this account right now. Choose another account." |
+| To | `select` of all own accounts: "{name} ••{last} · {balance}" | Yes | Not the same as From; if the currencies differ, option `allowFx` must be on | "Choose an account to send to." / `SAME_ACCOUNT` "Choose two different accounts." / `CURRENCY_NOT_SUPPORTED` "We can't convert between {A} and {B} yet." |
 
-Copy: title "Which accounts?". Helper under To: "Money between your own accounts arrives straight away." When the two currencies differ an `alert` (info) appears: "These accounts use different currencies, so we'll convert the money. You'll see the rate before you confirm." Button **Continue**. If only one account exists: empty state "You need two accounts to move money between them." with **Open another account**.
+When the two accounts use different currencies an info box appears: "These accounts use different currencies. We convert at the mid-market rate, the one banks use between themselves, with no margin added. Today that is 1 {A} = {rate} {B}. Our fee is shown separately: 0.20% of the amount. You see the exact rate before you confirm." (When option `fxFee` is off the prototype still says 0.20%; see contradictions.) If the person has only one account: empty state "You need two accounts to move money between them." with **Open another account** (planned).
 
-**`amount` — "Amount"**.
+**`amount`: "Amount"**. A card shows From and To. Button **See the rate**, busy text "Getting your rate…" (about 0.6 s). Loading must answer within 10 seconds, otherwise `timeout`.
 
 | Field | Block | Required | Validation | Error message |
 |---|---|---|---|---|
-| Amount | `amountInput` in the From currency (`currency: "{{ctx.accounts[own.from].currency}}"`), helper "Available: {balance}" | Yes | Greater than 0; at most the currency's decimals (USD 2, JPY 0, KWD 3); at most the available balance (the FX path adds the 0.2% fee to this check) | "Enter an amount greater than 0." / "Enter an amount in {currency} with at most {digits} decimal places" / "There isn't enough money in {account}. Available: {balance}." |
-| Note (same currency only) | `textInput` | No | Up to 35 characters | "Use 35 characters or fewer." |
+| I want to enter | `chips`: "What I send ({A})", "What I get ({B})"; default send; only when the currencies differ | No | One of two | none |
+| Amount | `amountInput` in the entered currency; hint "Entered in {currency}. Available in {account}: {balance}." | Yes | At least 1.00, at most 2 decimals; the amount to send plus the fee at most the available balance | "The smallest amount is 1.00." (`INVALID_AMOUNT`) / "Enter an amount in {currency} with at most 2 decimal places." (`INVALID_AMOUNT`) / "There isn't enough money in {account}. Available: {balance}, and the fee is {fee}." (`INSUFFICIENT_FUNDS`) |
+| Note to yourself | `textInput`, placeholder "Optional"; same currency only; hint "Up to 35 characters." | No | 35 characters | none (the field refuses extra characters) |
 
-Buttons: same currency: **Review transfer** (validate, navigate `review`). Different currencies: **See the rate** (validate, `callApi quote`, saveAs `ctx.quote`, then `review`). Loading: spinner on the button; the quote call must answer within 10 s.
+Live summary under the amount. Same currency: You send, Fee (0.00), They get, Arrives Now. Different currencies: You send, Mid-market rate (1 {A} = {rate} {B}), Margin on the rate None, Fee (0.20%), **Total taken**, **You get**. Before an amount is typed: "Enter an amount to see the result." Rounding: when the person types what they get, the amount sent is rounded up to the next cent and the fee is 0.20% of that; the fee is rounded to the cent.
 
-**`review` — "Review transfer"**. Same currency rows: From, To, You send, Fee "$0.00" (in the currency), They get, Arrives "Now". Different currencies rows exactly as the fixture: From, To, You convert, Rate ("1 USD = 0.9154 EUR"), Fee, You get; plus **Total taken** (amount plus fee), and the mid-market rate in small print ("Mid-market rate 0.92 EUR. Our margin is 0.5%."). Rate countdown (different currencies): alert info "This rate is valid for 30 seconds." with a live "Rate expires in {n}s"; at 0 the alert becomes warning "The rate has expired." and the button reads **Get a new rate**. Consent text: "I confirm the details are correct" (same currency, `termsVersion` "transfers-v3") or "I confirm the details and the rate are correct" (`fx-v1`). Button **Confirm and send code**.
+On **See the rate** with different currencies the journey takes a quote: id `Q-` plus six characters, the rate and the time. With the same currency there is no quote.
 
-**`otp`** — shared screen C; button **Send {amount}** (same currency) or **Convert {amount}** (FX).
+**`review`: "Review transfer"**. A card: "You send" (or "Moving") with the big amount, and "You get {amount}" (or "to {account} ••{last}"). For a conversion a box: chip "{n} s left", the rate "1 {A} = {rate} {B}", and "Mid-market rate, no margin. Held for 30 seconds from when you saw it. If it runs out we show a new rate and you confirm again. Nothing is taken until you enter your code." with a button **Get a new rate**. Rows: From, To, You send, Rate (with "(mid-market)"), Fee (0.20%) or Fee, Total taken, You get, Arrives Now, Note. Consent: "I confirm the details are correct" (required, "Tick to confirm."). Button **Confirm and send code**.
 
-**`rateExpired` — "The rate has changed"** (branch, on `QUOTE_EXPIRED`). Alert warning: "The rate has expired. Get a new one." Button **Get a new rate** calls `quote` again, clears consent and the code, and returns to `review`; if the new rate differs it adds "The rate moved from 0.9154 to {new}."
+If the 30 seconds have passed when the person confirms: `QUOTE_EXPIRED`, a new quote is taken, and the banner reads "The rate moved from {old} to {new}. Check the new amounts and confirm again." The person confirms again. **Get a new rate** does the same on demand and announces "New rate: …".
 
-**`success` — "Money moved"** (terminal). Same currency: text "{amount} moved from {from} to {to}." FX: "{from.amount} became {to.amount}." (fixture wording "Converted"). Meta "Ref {reference}". Buttons **Track payment**, **View receipt**, **Done**.
+**Code prompt** (shared screen C): "Authorise converting {amount} to {amount}" or "Authorise moving {amount} to {account}", sub "Code sent to ••• 4410. It only works for this transfer."
 
-**`locked`, `timeout`, `unavailable`, `failed`** — shared screens C.
+**`result`** (terminal). Same currency: title "Money moved", text "{amount} moved from {from} to {to}.", chip "Done · instant". Conversion: title "Converted", text "{amount} became {amount}.". Receipt rows: From, To, You sent, Rate (mid-market, no margin), Fee, Total taken, You received, Rate reference (the `Q-` id), Arrived Now, Note. Buttons **View accounts**, **Move more** (this journey), **Done**. Balances: From drops by Total taken (available and ledger), To rises by You get; the Current account activity gets "To {account}" or "From {account}".
+
+**`locked`, `timeout`, `unavailable`, `failed`**: shared screens C.
 
 #### 4. Sandbox errors
 
 | Code | Message the person sees | Shows on | Button |
 |---|---|---|---|
-| `OTP_INVALID` | S-`OTP_INVALID` | `otp`; after 3: `locked` | Try again / Start again |
-| `OTP_REQUIRED` | S-`OTP_REQUIRED` | `failed` | Back to code |
-| `ACCOUNT_NOT_FOUND` | S-`ACCOUNT_NOT_FOUND` | `failed` | Choose account |
-| `ACCOUNT_CANNOT_DEBIT` (planned; `canDebit` is false or status is frozen) | "You can't send money from {account} right now. Choose another account." | `accounts` | Choose account |
-| `SAME_ACCOUNT` (planned) | "Choose two different accounts." | `accounts` | Choose account |
-| `SAME_CURRENCY` (FX path; existing) | "Choose two accounts in different currencies" (not reachable: the journey uses the plain path for equal currencies) | `accounts` | Choose account |
-| `CURRENCY_NOT_SUPPORTED` (existing) | "We can't convert between {from} and {to} yet." (sandbox text: "We do not convert that currency pair") | `accounts` | Choose account |
-| `INVALID_AMOUNT` (existing in FX; planned for plain) | "Enter an amount in {currency} with at most {digits} decimal places" | `amount` | Change amount |
-| `INSUFFICIENT_FUNDS` | S-`INSUFFICIENT_FUNDS` | `amount` (quote) or `failed` (convert) | Change amount |
-| `QUOTE_EXPIRED` (existing) | "The rate has expired. Get a new one." | `rateExpired` | Get a new rate |
-| `QUOTE_USED` (existing) | "This rate was already used. Get a new one." | `rateExpired` | Get a new rate |
-| `QUOTE_NOT_FOUND` (existing) | "We couldn't find that rate. Get a new one." | `rateExpired` | Get a new rate |
-| `CORE_UNAVAILABLE` | S-`CORE_UNAVAILABLE` | `failed` | Try again |
-| `NOT_SUPPORTED` | S-`NOT_SUPPORTED` | `failed` | Back |
-| `TIMEOUT` (planned) | "We didn't get an answer in time. Check Activity before you try again, so you don't pay twice." | `timeout` | Check Activity |
-| `SERVICE_UNAVAILABLE` (planned) | S-`SERVICE_UNAVAILABLE` | `unavailable` | Try again |
+| `SAME_ACCOUNT` | "Choose two different accounts." | `accounts` | Choose account |
+| `ACCOUNT_CANNOT_DEBIT` | "You can't send money from this account right now. Choose another account." | `accounts` | Choose account |
+| `CURRENCY_NOT_SUPPORTED` | "We can't convert between those currencies yet." | `accounts` | Choose account |
+| `INVALID_AMOUNT` | "Enter an amount in the account's currency with at most 2 decimal places." | `amount` | Change amount |
+| `INSUFFICIENT_FUNDS` | "There isn't enough money in {account}. Available: …" | `amount` | Change amount |
+| `ACCOUNT_NOT_FOUND` | "We can't find that account." | `failed` | Choose account |
+| `QUOTE_EXPIRED` | "The rate has expired. A new rate is shown. Check it and confirm again." | `review` | Confirm again / Get a new rate |
+| `STEP_UP_FAILED` | "We couldn't confirm this transfer. Nothing was moved. Start again." | `locked` / `failed` | Start again |
+| `TIMEOUT` | "We didn't get an answer in time. Check Activity before you try again, so you don't pay twice." | `timeout` | Check Activity |
+| `SERVICE_UNAVAILABLE` | S-`SERVICE_UNAVAILABLE` | `unavailable` | Try again |
+| `JOURNEY_DISABLED` | "This isn't available at your bank." | on open | Back |
 
-`LIMIT_EXCEEDED` is not possible: money between a customer's own accounts does not use the daily limit (as `bank.fx.convert` already behaves).
+Also `OTP_INVALID`, `OTP_REQUIRED`, `CORE_UNAVAILABLE`, `NOT_SUPPORTED` as in the group rules. The sandbox also has `QUOTE_USED` and `QUOTE_NOT_FOUND` ("This rate was already used. Get a new one." / "We couldn't find that rate. Get a new one."); the prototype does not produce them. `LIMIT_EXCEEDED` is not possible: money between a person's own accounts does not use the daily limit.
 
 #### 5. Adapters
 
 | Integration id | Adapter | Request | Response | Errors | Status |
 |---|---|---|---|---|---|
 | `accounts` | `bank.accounts.list` | none | accounts | none | Existing |
-| `quote` | `bank.fx.quote` | `{fromAccountId, toAccountId, amount}` | `{quoteId, fromAccountId, toAccountId, from{currency, amount}, to{currency, amount}, midRate, rate, fee, feeCurrency, total, expiresAt, ttlSeconds}` (30 s) | `ACCOUNT_NOT_FOUND`, `SAME_CURRENCY`, `CURRENCY_NOT_SUPPORTED`, `INVALID_AMOUNT`, `INSUFFICIENT_FUNDS` | Existing. Not money-moving; no OTP |
+| `quote` | `bank.fx.quote` | `{fromAccountId, toAccountId, amount, direction?}` | `{quoteId, fromAccountId, toAccountId, from{currency, amount}, to{currency, amount}, midRate, rate, fee, feeCurrency, total, expiresAt, ttlSeconds}` (30 s) | `ACCOUNT_NOT_FOUND`, `SAME_CURRENCY`, `CURRENCY_NOT_SUPPORTED`, `INVALID_AMOUNT`, `INSUFFICIENT_FUNDS` | Existing. Today it prices the rate at the mid rate less a 0.5% spread (`fx.ts` `FX_SPREAD`) and takes the fee as 0.2% (`FX_FEE_RATE`); the prototype shows no margin, so the spread must go to 0 (planned change). The `direction` field (type what you get) is planned |
 | `convert` | `bank.fx.convert` | `{quoteId}` | `{reference, from{currency, newBalance}, to{currency, newBalance}, quoteId}` | `OTP_REQUIRED`, `CORE_UNAVAILABLE`, `QUOTE_NOT_FOUND`, `QUOTE_USED`, `QUOTE_EXPIRED`, `INSUFFICIENT_FUNDS` | Existing. Money-moving; OTP |
 | `transferOwn` | `bank.transfers.own` | `{fromAccountId, toAccountId, amount, note?}` | `{reference, from{newBalance, currency}, to{newBalance, currency}}` | `OTP_REQUIRED`, `CORE_UNAVAILABLE`, `ACCOUNT_NOT_FOUND`, `ACCOUNT_CANNOT_DEBIT`, `SAME_ACCOUNT`, `INVALID_AMOUNT`, `INSUFFICIENT_FUNDS`, `TIMEOUT`, `SERVICE_UNAVAILABLE` | (planned). Money-moving; OTP |
 | `otpSend`, `otpVerify` | `bank.otp.send`, `bank.otp.verify` | `{channel}`, `{code}` | `{sent, maskedPhone, channel}`, `{verified}` | `OTP_INVALID` | Existing |
 
-Rates (existing, `fx.ts`): mid-market from a table; customer rate is the mid rate less 0.5%; fee is 0.2% of the amount sent; quote valid 30 s. Worked example for Alex: convert **USD 500.00** from Main to EUR Travel: mid 0.92, rate **0.9154**, fee **USD 1.00**, total taken **USD 501.00**, receives **EUR 457.70**. Main 8,720.76 becomes 8,219.76; EUR Travel 2,400.00 becomes 2,857.70. Reference `FX-20261102-0931`.
-
 #### 6. Permissions, step-up and limits
 
-`payments.create`; step-up `otp`. No daily limit applies. No cooling-off (own accounts). Business context: `WRONG_CONTEXT`.
+`payments.create`; step-up `otp` (a code is asked because the move takes money out of a spendable account; the prompt names the amounts). No daily limit applies; no payee, so no name check and no cooling-off. A frozen account cannot send but may receive. Conversion needs option `allowFx`; the fee needs `fxFee`. Business context: `WRONG_CONTEXT`.
 
 #### 7. Result and links out
 
-Result as above. Receipt (planned): kind "Transfer between your accounts" or "Currency conversion" with from, to, amounts, rate, fee, reference. Notifications: in-app "{amount} moved to {account}" (and SMS only above $1,000 equivalent, planned). Buttons: **Track payment** (tracker detail), **View receipt**, **Done**.
+Result as above. Receipt (planned): kind "Transfer between your accounts" or "Currency conversion" with from, to, amounts, rate, fee, rate reference, reference. Notification N-20 "{amount} from {from} to {to}. Ref {ref}." (SMS only above USD 1,000 equivalent, planned). Buttons: **View accounts** (Accounts), **Move more** (this journey), **Done**, **Track payment** (planned).
 
 #### 8. Acceptance criteria
 
-- AC-1: A same-currency transfer needs a verified code, moves the exact amount, and both balances change by it.
-- AC-2: A different-currency transfer shows the rate, the fee, the total taken and what the person gets before any code is asked.
-- AC-3: The rate is good for 30 seconds; after that the person must get a new rate and cannot confirm the old one.
-- AC-4: The amount plus fee can never exceed the available balance.
-- AC-5: Choosing the same account twice is refused with "Choose two different accounts."
-- AC-6: A wrong code three times stops the journey and no balance changes.
-- AC-7: A timeout tells the person to check Activity and changes no balance.
-- AC-8: An unavailable service shows the standard message and changes no balance.
-- AC-9: The daily limit is untouched by a transfer between own accounts.
+- AC-1: A same-currency transfer needs a verified code, moves the exact amount, and both balances change by it with no fee.
+- AC-2: A different-currency transfer shows the mid-market rate, "Margin on the rate: None", the 0.20% fee as its own line, the total taken and what the person gets, before any code is asked.
+- AC-3: The rate is held 30 seconds with a visible count; after that the person gets a new rate with the old and new values named and must confirm again; the old rate can never be charged.
+- AC-4: The amount plus fee can never exceed the available balance; the smallest amount is 1.00.
+- AC-5: The person can type either what they send or what they get; the other side is computed and rounded as stated.
+- AC-6: Choosing the same account twice, or a frozen account to send from, is refused with the exact message.
+- AC-7: With `allowFx` off a currency pair is refused with `CURRENCY_NOT_SUPPORTED`; with `fxFee` off the fee line is 0.00.
+- AC-8: A wrong code three times stops the journey and no balance changes.
+- AC-9: A timeout tells the person to check Activity and changes no balance; an unavailable service shows the standard message and changes no balance.
+- AC-10: The daily limit is untouched by a transfer between own accounts.
 
 #### 9. Scenarios
 
 | # | Covers | Persona / setup | Conditions | Steps and expected result |
 |---|---|---|---|---|
-| T-1 | AC-1, AC-9 | `alex` | none | Main to Savings, $200.00, note "Rainy day", code `482100`. Main 8,520.76; Savings 15,454.37; `bank.limits.get` `usedToday` still 0. |
-| T-2 | AC-2, AC-4 | `alex` | none | Main to EUR Travel, $500.00. Review shows rate 0.9154, fee $1.00, total $501.00, you get €457.70. After code: Main 8,219.76; EUR 2,857.70. |
-| T-3 | AC-3 | `alex`, `now` controllable | none | Get the quote, advance `now` by 31 s, confirm with `482100`. `QUOTE_EXPIRED`; `rateExpired` screen; no balance change; **Get a new rate** returns to a fresh review. |
-| T-4 | AC-4 | `alex` | none | $8,720.76 Main to EUR Travel: total 8,738.20 is above the balance, `INSUFFICIENT_FUNDS` at the quote. |
-| T-5 | AC-5 | `alex` | none | Choose Main twice: "Choose two different accounts." |
-| T-6 | AC-6 | `alex` | none | Review, then `111111` three times: `locked`; balances unchanged. |
-| T-7 | AC-7 | `alex` | `timeout: ["bank.transfers.own"]`, `latencyMs: 10000` | `timeout` screen with the Activity message; balances unchanged. |
-| T-8 | AC-8 | `alex` | `unavailable: ["bank.fx.quote"]` | **See the rate** shows the unavailable screen; nothing changed. |
-| T-9 | AC-1 | `bilal`-style flag (`transferFails`) on `alex` | none | Code accepted, `CORE_UNAVAILABLE`: `failed` screen "We couldn't complete this right now. No money has left your account." |
+| T-1 | AC-1, AC-10 | `alex` | none | Current to Savings, 200.00, note "Rainy day", any six digits. Current available 7,902.40; Savings 14,510.00; `bank.limits.get` `usedToday` unchanged. |
+| T-2 | AC-2, AC-4 | `alex` | none | Current to Euro, send 500.00. Review shows rate 0.9260, fee 1.00, total taken 501.00, you get EUR 463.00. After code: Current available 7,601.40; Euro 2,613.40. |
+| T-3 | AC-3 | `alex`, `now` controllable | none | Get the rate, advance 31 s, confirm: `QUOTE_EXPIRED`, message names old and new rate; no balance change; the next confirm works with the new rate. **Get a new rate** announces the new rate. |
+| T-4 | AC-5 | `alex` | none | Current to Euro, "What I get" 463.00: send rounds up to 500.00; fee 1.00. What I get 100.00: the amount sent is 107.9914 rounded up to 108.00, the fee is 0.22 and the total taken is 108.22. |
+| T-5 | AC-4 | `alex` | none | Current to Euro, send 8,102.40: total 8,118.60 exceeds available: `INSUFFICIENT_FUNDS` naming both and the fee. 0.50: "The smallest amount is 1.00." |
+| T-6 | AC-6 | `alex`, an account marked frozen | none | Current twice: `SAME_ACCOUNT`. Frozen account as From: `ACCOUNT_CANNOT_DEBIT`; as To: allowed. |
+| T-7 | AC-7 | `alex`, `allowFx` off / `fxFee` off | none | Current to Euro refused with `CURRENCY_NOT_SUPPORTED`. With only `fxFee` off: fee 0.00, total 500.00. |
+| T-8 | AC-8 | `alex` | none | Review, then a wrong code three times (sandbox): `locked`; balances unchanged. |
+| T-9 | AC-9 | `alex` | `timeout: ["bank.transfers.own"]`, `latencyMs: 10000` | `timeout` screen with the Activity message; balances unchanged. |
+| T-10 | AC-9 | `alex` | `unavailable: ["bank.fx.quote"]` | **See the rate** shows the unavailable screen; nothing changed. |
+| T-11 | AC-1 | `alex` with `transferFails` | none | Code accepted, `CORE_UNAVAILABLE`: "We couldn't complete this right now. No money has left your account." |
+| T-12 | AC-2 | `alex` | none | Euro to Dirham, send EUR 100.00: rate 3.9654 (mid), fee 0.20, total taken EUR 100.20, you get AED 396.54. |
 
 #### 10. Expected mutation-check survivors
 
-`SAME_CURRENCY` guard in `bank.fx.quote` survives (the journey never sends equal currencies to the quote; the plain path handles them). `QUOTE_USED` survives unless a scenario replays a quote id; add T-3b to kill it, otherwise list it. Everything else: none expected.
+`SAME_CURRENCY` in `bank.fx.quote` survives (the journey never sends equal currencies to the quote). `QUOTE_USED` and `QUOTE_NOT_FOUND` survive unless a scenario replays a quote id; add T-3b to kill them, otherwise list them. The random 0.04% movement on a renewed quote survives (tests assert the old and new values are different and named, not their size). The rounding of the send side for "What I get" is killed by T-4 only if both examples run. Everything else: none expected.
 
 ---
 
 ### ★ To a BankWorkx customer — `internal-transfer`
 
-#### 1. Summary
+Catalog: `internal-transfer`, workspace Personal, category Personal: Payments, core no, a bank can switch it off: yes (through option `type.internal` of `personal-transfer`). Options: none of its own.
 
-| Field | Value |
-|---|---|
-| Slug | `internal-transfer` |
-| Purpose | Send money to another BankWorkx® customer, free, instantly, any time of day. |
-| Release / workspace | 1 / Personal |
-| Status | New (planned). |
-| Channels | Web and mobile |
-| Starting pattern | `fixtures/local-transfer.ts` (account, beneficiary, amount, review, OTP, result) with a customer-lookup step. |
-| Who may use it | `payments.create` |
+Alias of `personal-transfer`: reached with `personal-transfer {type: internal}` (the prototype's "Ways to send money" and `manage-beneficiary` still point at the old slug `internal-transfer`, which is not registered there; they must pass the type instead). The catalog option `type.internal` ("Offer “To a BankWorkx® customer”") switches it off.
 
-#### 2. Entry points
-
-| Place › label | Passes in | Permission |
-|---|---|---|
-| Payments › hub › To a BankWorkx customer | `{beneficiaryId}` optional | `payments.create` |
-| Payments › beneficiaries › row (BankWorkx type) › Send money | `{beneficiaryId}` | `payments.create` |
-| Home › + Send money (pick "BankWorkx customer") | none | `payments.create` |
-
-#### 3. Screens
-
-**`payee` — "Who are you paying?"** (entry). `stepper` ["payee", "amount", "review", "otp"]. onEnter: `beneficiaries` (filtered to type BankWorkx), `accounts`.
-
-| Field | Block | Required | Validation | Error message |
-|---|---|---|---|---|
-| Payee | `beneficiaryPicker` `ipay.beneficiaryId`, `allowAddNew: true`, `addNewJourney: "manage-beneficiary"` | Yes | A BankWorkx beneficiary | "Choose who to pay." |
-| Find by account number | `textInput` shown under the tab "New payee", pattern `^[0-9]{10}$` | Only for a new payee | 10 digits | "Enter the 10-digit BankWorkx account number." |
-
-Copy: title "Who are you paying?". Helper "Payments to BankWorkx customers are free and arrive straight away." The **New payee** tab calls `lookup` and shows "Taylor B. · ••3308 · USD" (name shortened for privacy) with **Use this payee**; **Save for next time** is a toggle on. Choosing "Add a new beneficiary" opens `manage-beneficiary` with `returnTo: "payee"`; on return the new payee is selected. Empty (no BankWorkx payees): "You haven't saved a BankWorkx customer yet." with **Add a beneficiary**. A beneficiary under 24 hours old shows the chip "New · {n} hours left".
-
-**`amount` — "Amount"**.
-
-| Field | Block | Required | Validation | Error message |
-|---|---|---|---|---|
-| From | `accountPicker` `ipay.fromAccountId` | Yes | `canDebit`, in the payee's account currency | "Choose an account to send from." / "{name} has a {currency} account. Send from a {currency} account." |
-| Amount | `amountInput` (From currency), helper "Daily limit {daily} · used {used} · left {left}" from `bank.limits.get` | Yes | More than 0; at most the account's decimals; at most the available balance; at most the daily limit left; for a new payee at most the cooling-off allowance | "Enter an amount greater than 0." / "There isn't enough money in {account}. Available: {balance}." / "This is above your daily limit of {limit}. You have {remaining} left today." / the cooling-off message (rule A) |
-| Reference | `textInput` | No | Up to 35 characters; letters, digits, spaces and `. , - /` | "Use 35 characters or fewer, with letters and numbers only." |
-
-Navigation rule: when `ipay.amount > ctx.limits.daily − ctx.limits.usedToday` go to `limitExceeded` (as in the fixture: alert "{amount} is above your remaining daily limit." with **Change amount**). Button **Review payment**.
-
-**`review` — "Review payment"**. Rows: From (name and mask), To (payee name, ••3308), Amount, Fee "$0.00", Arrives "Straight away", Reference. Alert (info, only when the payee is new): "{name} is a new payee. For your security you can send up to $500.00 in the first 24 hours." Consent: "I confirm the details are correct." Button **Confirm and send code**.
-
-**`otp`** — shared C; button **Send {amount}**. **`success` — "Payment sent"**: text "{amount} to {payeeName}", meta "Ref {reference}"; buttons **Track payment**, **View receipt**, **Send again** (restarts with the same payee), **Done**. Other screens: `limitExceeded`, `locked`, `timeout`, `unavailable`, `failed` (C).
-
-#### 4. Sandbox errors
-
-| Code | Message | Shows on | Button |
-|---|---|---|---|
-| `OTP_INVALID` / `OTP_REQUIRED` | S-`OTP_INVALID` / S-`OTP_REQUIRED` | `otp` / `failed` | Try again / Back to code |
-| `ACCOUNT_NOT_FOUND` | S-`ACCOUNT_NOT_FOUND` | `failed` | Choose account |
-| `ACCOUNT_CANNOT_DEBIT` (planned) | "You can't send money from {account} right now. Choose another account." | `amount` | Choose account |
-| `CUSTOMER_NOT_FOUND` (planned) | "We can't find a BankWorkx account with that number. Check it and try again." | `payee` | Edit |
-| `CUSTOMER_CANNOT_RECEIVE` (planned) | "{name} can't receive money right now. Try again later." | `failed` | Back |
-| `CURRENCY_MISMATCH` (planned) | "{name} has a {currency} account. Send from a {currency} account, or use Abroad." | `amount` | Choose account |
-| `BENEFICIARY_NOT_FOUND` (planned) | "We can't find that beneficiary. Choose another." | `payee` | Choose payee |
-| `BENEFICIARY_COOLING_OFF` (planned) | Rule A message | `amount` | Change amount |
-| `INSUFFICIENT_FUNDS` | S-`INSUFFICIENT_FUNDS` | `amount` / `failed` | Change amount |
-| `LIMIT_EXCEEDED` | S-`LIMIT_EXCEEDED` | `limitExceeded` | Change amount |
-| `INVALID_AMOUNT` (planned for this adapter) | "Enter an amount greater than 0, with at most {digits} decimal places." | `amount` | Change amount |
-| `CORE_UNAVAILABLE` | S-`CORE_UNAVAILABLE` | `failed` | Try again |
-| `NOT_SUPPORTED` | S-`NOT_SUPPORTED` | `failed` | Back |
-| `TIMEOUT` / `SERVICE_UNAVAILABLE` (planned) | shared C | `timeout` / `unavailable` | Check Activity / Try again |
-
-#### 5. Adapters
-
-| Integration id | Adapter | Request | Response | Errors | Status |
-|---|---|---|---|---|---|
-| `accounts` | `bank.accounts.list` | none | accounts | none | Existing |
-| `beneficiaries` | `bank.beneficiaries.list` | none | map with `ageHours` (planned adds `kind`, `coolingOffUntil`, `allowanceLeft`) | none | Existing, extended |
-| `limits` | `bank.limits.get` | `{currency?}` | `{daily, usedToday, currency}` | `LIMIT_NOT_SET` | Existing |
-| `lookup` | `bank.customers.lookup` | `{accountNumber}` | `{customerId, displayName (shortened), maskedNumber, currency}` | `CUSTOMER_NOT_FOUND`, `TIMEOUT`, `SERVICE_UNAVAILABLE` | (planned). Not money-moving; no OTP |
-| `otpSend`, `otpVerify` | `bank.otp.send`, `bank.otp.verify` | as C | as C | `OTP_INVALID` | Existing |
-| `sendInternal` | `bank.transfers.internal` | `{fromAccountId, beneficiaryId, amount, reference?}` | `{reference, newBalance, currency, status: "completed", completedAt}` | all in section 4 | (planned). Money-moving; OTP; counts toward the daily limit and the cooling-off allowance |
-
-#### 6. Permissions, step-up and limits
-
-`payments.create`; step-up `otp`. Daily limit 50,000 USD per currency (existing). Cooling-off rule A. Per payment minimum 0.01. 24/7. Business context: `WRONG_CONTEXT`.
-
-#### 7. Result and links out
-
-Receipt as in the tracker (kind BankWorkx). Notifications: sender gets "{amount} sent to {payee}" (in-app); the receiving customer, if in the sandbox, gets "{name} sent you {amount}". Buttons: **Track payment**, **View receipt**, **Send again**, **Done**.
-
-#### 8. Acceptance criteria
-
-- AC-1: A payment to a saved BankWorkx payee needs a verified code, debits the sender, credits the receiver and returns a reference.
-- AC-2: A new payee can be found by account number and saved in the same journey.
-- AC-3: Sending more than the daily limit left is refused with the exact limit message and no money moves.
-- AC-4: A payee added under 24 hours ago cannot receive more than $500.00 in total; the message tells the person when the full amount is allowed.
-- AC-5: A payee whose account is in another currency cannot be paid from a different-currency account.
-- AC-6: Three wrong codes stop the journey with nothing sent.
-- AC-7: Timeout and unavailable states leave both balances unchanged and say so.
-
-#### 9. Scenarios
-
-| # | Covers | Persona / setup | Conditions | Steps and expected result |
-|---|---|---|---|---|
-| T-1 | AC-1 | `alex` with seeded beneficiaries | none | Main to Taylor Brooks, $75.00, code `482100`. Main 8,645.76; reference `TRX-…`; receipt shows Taylor. |
-| T-2 | AC-2 | `alex` | none | New payee tab, account `1000003308`: "Taylor B. · ••3308 · USD"; save toggle on; beneficiary list gains one entry with `ageHours` 0. |
-| T-3 | AC-3 | `alex`, setup: `usedToday` 49,950 | none | $100.00: "This is above your daily limit of $50,000.00. You have $50.00 left today." |
-| T-4 | AC-4 | `alex`, add Taylor-like payee 3 hours ago | none | $600.00: cooling-off message; $400.00 allowed; then a second $200.00 within 24 h is refused with $100.00 left. |
-| T-5 | AC-5 | `alex` with a EUR-only payee | none | From Main (USD): `CURRENCY_MISMATCH`. |
-| T-6 | AC-6 | `alex` | none | Wrong code three times: `locked`. |
-| T-7 | AC-7 | `alex` | `timeout: ["bank.transfers.internal"]` | `timeout` screen; balances unchanged. |
-| T-8 | AC-7 | `alex` | `unavailable: ["bank.transfers.internal"]` | `unavailable` screen; balances unchanged. |
-
-#### 10. Expected mutation-check survivors
-
-The daily-limit rule exists in the UI navigation rule and in the sandbox; removing only the UI rule is killed by T-3 (the sandbox then answers `LIMIT_EXCEEDED`); removing only the sandbox rule survives T-3 because the navigation rule stops it first. Expected survivor: "sandbox daily-limit check", reason: the journey's own limit rule catches it. Add a direct adapter scenario to kill it if wanted. Others: none expected.
+What differs from the other types:
+- The person finds the customer by mobile number, email, BankWorkx ID or 10-digit account number; the name comes back (result `found`) and the person ticks to confirm. Unknown: `CUSTOMER_NOT_FOUND`.
+- One fixed rail, "BankWorkx® transfer": free, arrives in seconds, 24/7, maximum $25,000.00 per payment, reference "Transfer ID" (`BX` + 10 digits). No rail choice, no purpose, no address.
+- The daily limit (41,250.00 left) and the 24-hour 500.00 USD new-payee rule apply; sanctions screening applies; a note up to 140 characters replaces the reference.
+- Demo values: Taylor Brooks (+1 202 555 0142, `taylor.brooks@example.com`, `taylorb`, 3301123308), Jordan Keller (+1 202 555 0177, `jordan.keller@example.com`, `jkeller`, 3301554412). Full field rules, scenarios and criteria are in `personal-transfer`.
 
 ---
+
 ### ★ Send money — `personal-transfer`
+
+Catalog: `personal-transfer`, workspace Personal, category Personal: Payments, core no, a bank can switch it off: yes. Options (key, label, default): `type.own` "Offer “Between my accounts”" (on); `type.internal` "Offer “To a BankWorkx® customer”" (on); `type.domestic` "Offer “To another bank in the same region”" (on); `type.intl` "Offer “To another country” (SWIFT)" (on); `region.us` "Region: United States", `region.uk` "Region: United Kingdom", `region.eu` "Region: Europe (SEPA)", `region.ae` "Region: United Arab Emirates", `region.sa` "Region: Saudi Arabia", `region.jo` "Region: Jordan" (all on); one switch per rail, all on: `rail.ach` "Rail: ACH (standard)", `rail.sach` "Rail: Same-day ACH", `rail.rtp` "Rail: Instant (RTP® / FedNow®)", `rail.wire` "Rail: Wire (Fedwire®)", `rail.sct` "Rail: SEPA Credit Transfer", `rail.sinst` "Rail: SEPA Instant", `rail.fps` "Rail: Faster Payments", `rail.chaps` "Rail: CHAPS", `rail.bacs` "Rail: Bacs", `rail.aani` "Rail: Aani instant payment", `rail.uaefts` "Rail: UAEFTS transfer", `rail.sarieI` "Rail: sarie instant", `rail.sarie` "Rail: SARIE transfer", `rail.cliq` "Rail: CliQ instant payment", `rail.jopacc` "Rail: JoPACC transfer", `rail.swift` "Rail: International (SWIFT)"; `allowFx` "Allow currency conversion between my accounts" (on); `nameCheck` "Run the name check (CoP, VoP and others)" (on); `allowLater` "Allow “Later” and repeating payments" (on); `coolingOff` "Apply the 24-hour $500 limit to new payees" (on); `sinstDown` "Demo: SEPA Instant is unavailable" (off); `lateDemo` "Demo: it is 16:30, after same-day cut-offs" (off). Merged journeys: `own-transfer` (also its own entry), `internal-transfer` and `international-transfer` are reached through this journey; see their alias blocks.
 
 #### 1. Summary
 
 | Field | Value |
 |---|---|
 | Slug | `personal-transfer` |
-| Purpose | Send money from a USD account to a person at another bank in the United States, Europe (SEPA), the United Kingdom or the Middle East (UAE, Saudi Arabia, Jordan). The person types what the payee receives, in the payee's currency, and chooses a rail (standard or instant, where one exists). Other countries use `international-transfer`. **This is the journey Alex runs in the Personal half of the combined demo (M1).** |
+| Purpose | One guided flow, one question per screen, for every kind of transfer from a personal account: (1) between my own accounts, (2) to a BankWorkx® customer, (3) to another bank in the same region (United States, United Kingdom, Europe, UAE, Saudi Arabia, Jordan), (4) to another country over SWIFT (Canada, India, Japan, Australia, Switzerland, Singapore, Mexico). The fields, the name check, the rails and the extra information asked all follow the type and the region. A new payee can be saved. |
 | Release / workspace | 1 / Personal |
-| Status | Existing, upgraded. `fixtures/local-transfer.ts` (slug `fund-transfer-local`, id `jrn_fund_transfer_local`, version 5, published, web and mobile, English and Urdu). The slug moves to `personal-transfer`; the old slug remains an alias for Meezan. The shell's **Send money** button opens this journey for the five regions and `international-transfer` for every other country (09 section 1). |
+| Status | Existing, rebuilt. Built in the prototype (`design/bankworkx-r1/src/journeys/32-personal-transfer.js`); the field table is the global `TXF` in that file (adding a country or changing a rule is a data change). Research: `research/send-money-fields.md`. It replaces the old five-step wizard and takes over `internal-transfer` and `international-transfer`. The Meezan fixture `fixtures/local-transfer.ts` (slug `fund-transfer-local`) is the starting pattern for the account, review, code and result screens; the slug stays an alias for Meezan. |
 | Channels | Web and mobile |
-| Starting pattern | `fixtures/local-transfer.ts` for the account, review, consent, code and result screens; the name-check screen and rails list are new. |
+| Starting pattern | `fixtures/local-transfer.ts` (account, review, consent, code, result); everything else is new |
 | Who may use it | `payments.create` |
-| Shared reference | `09-payment-rails.md`: rails (2), payee fields (3), name check (4), amount and FX (5), purpose and reference (7), scheduling (8), limits and SCA (9), compliance (10), receipts (11), error codes (12). This journey names them and lists the screen-level fields and copy; it does not restate every table row. |
+| Shared reference | `09-payment-rails.md`: rails (section 2), payee fields (3), name check (4), amount and conversion (5), charges (6), purpose and reference (7), when (8), limits and strong authentication (9), compliance (10), receipts (11), codes (12). This journey names them, lists screen-level fields and copy, and gives the master field table (section 3.1); where the prototype and 09 differ, this file follows the prototype (see "Differences from 09" at the end of section 3). |
 
-**What exists today.** Entry screen `account` (a `stepper` ["account", "beneficiary", "amount", "review", "otp"] and an `accountPicker`; onEnter loads accounts and limits). `beneficiary` (`beneficiaryPicker`, `allowAddNew: true`). `amount` (`amountInput`, a purpose `select`, a navigation rule to `limitExceeded`). `review` (`reviewSummary`, consent `transfers-v3`). `otp` (6 digits, 3 attempts, resend 60 s; `otpVerify`; `lockAfter: 3`). `success` and `failed`. The adapter `bank.transfers.create` (`packages/mock-bank-api`) only debits the account: it ignores the beneficiary, the rail and the purpose.
-
-**The upgrade.** One flow, five steps (09 section 1): **Payee**, **Payee check**, **Amount and speed**, **Review**, **Result**. A region chip decides the payee fields. Money is typed in the payee's currency with a live "You pay" summary. The rails come from 09 section 2. New adapters (planned): `bank.payees.validate`, `bank.payees.check`, `bank.payees.save`, `bank.payments.quote`, `bank.payments.create` (09 section 13). The old `bank.transfers.create` stays for the internal-transfer family.
+**Sandbox demo values (prototype).** Accounts: Current account ••4410 (balance 8,240.18, available 8,102.40 USD), Savings ••7720 (14,310.00 USD), Euro account ••3302 (EUR 2,150.40), Dirham account ••9981 (AED 5,000.00). Only USD accounts can pay a third party; all four can be used for "Between my accounts". Saved payees: Maya Chen (US, ABA 021000021, account 123456789), Lena Fischer (Europe, `DE89 3704 0044 0532 0130 00`), James Whitfield (UK, 20-00-00, 55779911), Omar Haddad (UAE, `AE07 0331 2345 6789 0123 456`). Daily limit left 41,250.00 USD (fixed); new-payee allowance 500.00 USD for 24 hours; code prompt: any six digits are accepted in the prototype (wrong-code lockout is a sandbox rule, section 6). Rates (1 USD =): EUR 0.926, GBP 0.781, AED 3.672, SAR 3.75, JOD 0.709, CAD 1.36, INR 83.2, JPY 151, AUD 1.52, CHF 0.88, SGD 1.34, MXN 17.1. The name-check registry (synthetic): Maya Chen, Priya Raman (`021000021` / `987654321`), Lena Fischer, Camille Dubois (`FR14 2004 1010 0505 0001 3M02 606`), James Whitfield (`20000055779911`, a personal account), Omar Haddad, Faisal Al-Harbi (`SA03 8000 0000 6080 1016 7519`), Rania Haddad (`JO94 CBJO 0010 0000 0000 0131 0003 02`). BankWorkx® customer directory: Taylor Brooks (mobile +1 202 555 0142, email `taylor.brooks@example.com`, ID `taylorb`, account 3301123308), Jordan Keller (+1 202 555 0177, `jordan.keller@example.com`, `jkeller`, 3301554412). Alias directory: CliQ alias `rania.h` and mobile 0795550142 give Rania Haddad; Aani mobile 0501234567 gives Omar Haddad. A payee named "Test Sanctions" is held for review. SWIFT sample payees (button **Fill with a sample payee**): Noah Tremblay (Canada, BIC `ROYCCAT2`, transit `00012-003`, account 1234567), Anil Sharma (India, `HDFCINBB`, IFSC `HDFC0000001`, 50100123456789), Aiko Tanaka (Japan, `BOTKJPJT`, 1234567890), Chloe Nguyen (Australia, `CTBAAU2S`, BSB `062-000`, 12345678), Lukas Meier (Switzerland, `UBSWCHZH`, IBAN `CH93 0076 2011 6238 5295 7`), Wei Ling Tan (Singapore, `DBSSSGSG`, 0123456789), Sofia Ramirez (Mexico, `BMSXMXMM`, CLABE 032180000118359719). Sample payees for the other regions: Priya Raman (US), James Whitfield (UK), Camille Dubois (Europe), Omar Haddad (UAE), Faisal Al-Harbi (Saudi Arabia), Rania Haddad (Jordan).
 
 #### 2. Entry points
 
 | Place › label | Passes in | Permission |
 |---|---|---|
-| Home › + Send money (shell button) | none | `payments.create` |
-| Payments › hub › Send money | `{payeeId}` optional | `payments.create` |
-| Payments › beneficiaries › row (not Abroad) › Send money | `{payeeId}` | `payments.create` |
-| Accounts › detail › Transfer from this account | `{accountId}` | `payments.create` |
-| Payments › tracker › payment › Repeat payment | `{paymentId}` | `payments.create` |
+| Home › + Send money | none | `payments.create` |
+| Payments › Send money | none | `payments.create` |
+| Payments › Ways to send money › New payee (`transfer-types`) | `{type, region, rail}` | `payments.create` |
+| Accounts › detail › Transfer from this account | `{accountId}` (prefills From) | `payments.create` |
+| Payments › Beneficiaries › row › Send (saved payee) | `{ben}` (a saved payee id) | `payments.create` |
+| `manage-beneficiary` result › Send money | `{ben}` (prototype passes `payeeId`; see contradictions) | `payments.create` |
+| Payments › tracker › payment › Repeat payment | `{paymentId}` (planned) | `payments.create` |
 
-A payee in the "Other countries (SWIFT)" region always opens `international-transfer` instead.
+Launch values the prototype reads: `type` (`own`, `internal`, `domestic`, `international`; `intl` is accepted for `international`), `region` (`us`, `uk`, `eu`, `ae`, `sa`, `jo`, or `me` which means UAE unless a rail or `country` names another), `country` (`ca`, `in`, `jp`, `au`, `ch`, `sg`, `mx`), `rail` (a rail id; sets the region; `swift` sets type `international`), `ben` (a saved payee id: jumps straight to the amount screen with the payee chosen), `accountId`, `toId`, `amount`. Values that are given skip the screen that would ask for them. With `type: own` or `internal` the "where" screen is skipped.
 
 #### 3. Screens
 
-Step 1 of 5 is **Payee**; the stepper reads "Payee · Payee check · Amount and speed · Review · Result". The `account` choice moves to the amount screen (the From field), so the stepper is five steps.
+`stepper` (planned): type, where, payee, check, amount, review, code. One title, one short line, headed sections and one button per screen. The person can change the kind of transfer at any point by going back.
 
-**`payee` — "Who are you paying?"** (entry; skipped when `payeeId` is passed). `beneficiaryPicker` `pay.payeeId` (source `ctx.payees`, every region except SWIFT), `allowAddNew`. Each row shows initial, name, region name, masked account (09 section 3) and a chip: "Saved" or "Verified" (see `manage-beneficiary`), and "New · {n} hours left" when under 24 hours old. Last row: **New payee** ("US, Europe, UK, Middle East or anywhere else"). Required, message "Choose who to pay." Empty: "You haven't saved anyone yet." with **New payee**.
+**`type`: "What kind of transfer?"** (skipped when `type`, `region` or `ben` was passed). Intro "Choose where the money is going. You can change this at any point." Blocks: `cards`.
 
-Choosing **New payee** shows a card "Where is the account?" with region chips: **United States**, **Europe (SEPA)**, **United Kingdom**, **Middle East**, **Other countries (SWIFT)**. The last chip hands over to `international-transfer` with the typed name. Fields by region (rules and codes from 09 section 3). An error shows once the field has a value; an empty required field shows its message after **Continue** is pressed.
-
-| Region | Field | Block | Required | Validation | Error message (code) |
-|---|---|---|---|---|---|
-| All | Name on the account | `textInput`, 70 characters | Yes | 2 to 70 characters | "Enter the name on the account." (`PAYEE_NAME_REQUIRED`) |
-| US | Routing number (ABA) | `textInput`, 9 | Yes | 9 digits and the ABA checksum | "Enter the 9-digit routing number." (empty) / "That routing number isn't valid. Check the 9 digits." (`INVALID_ROUTING`) |
-| US | Account number | `textInput`, 17 | Yes | 4 to 17 digits | "Enter the account number." (empty) / "An account number has 4 to 17 digits." (`INVALID_ACCOUNT`) |
-| US | Account type | `select` Checking, Savings | Yes (default Checking) | One of two | none |
-| Europe | IBAN | `textInput` | Yes | mod-97 check and length for the country; country in the SEPA list | "Enter the IBAN." (empty) / "That IBAN doesn't look right. Check each character." (`INVALID_IBAN`) / "That IBAN isn't in the SEPA area. Use 'Other countries (SWIFT)'." (`NOT_SEPA`) |
-| UK | Sort code | `textInput`, 8 | Yes | 6 digits, dashes optional | "Enter the 6-digit sort code." (empty) / "A sort code has 6 digits, like 20-00-00." (`INVALID_SORT_CODE`) |
-| UK | Account number | `textInput`, 8 | Yes | 8 digits | "Enter the 8-digit account number." (empty) / "A UK account number has 8 digits." (`INVALID_ACCOUNT`) |
-| Middle East | Country | `select` United Arab Emirates, Saudi Arabia, Jordan | Yes | One of three; fixes the currency (AED, SAR, JOD) | none |
-| Middle East | IBAN | `textInput` | Yes | IBAN check; first two letters match the country (AE 23, SA 24, JO 30 characters) | "Enter the IBAN." (empty) / `INVALID_IBAN` message / "That IBAN starts with AE, but you chose Saudi Arabia." (`COUNTRY_MISMATCH`) |
-
-A green note appears under a valid field, for example "✓ Valid IBAN · Commerzbank", "✓ Valid routing number · JPMorgan Chase", "✓ Valid sort code · Barclays". **Continue** is disabled until every required field is valid. A `Fill with a sample payee` helper exists in the prototype only (sandbox builds). Pressing **Continue** on a new payee runs `bank.payees.validate` (planned) and then `bank.payees.check`; on a saved payee it goes straight to `amount`.
-
-**`payeeCheck` — "Check the payee"** (new payees only). Header chip with the region's label from 09 section 4: Europe "Verification of Payee", UK "Confirmation of Payee", US "Account name check", Middle East "Name check". The card shows Name, Account (masked), Country. Four outcomes:
-
-| Result | Colour and heading | Body copy | Extra control | Can continue? |
+| Field | Block | Required | Validation | Error message |
 |---|---|---|---|---|
-| `match` | Green: "✓ The name matches" | "{label}: the account is held by {registered name}. It's safe to continue." | none | Yes |
-| `close` | Amber: "The name is close, but not exact" | "{label}: the account is held by {registered name}. You typed {typed name}. Check with them before you send money." | Button **Use '{registered name}'** (replaces the name and re-runs the check) | Yes, after ticking "I understand and want to continue." |
-| `none` | Red: "The name doesn't match" | "{label}: the account is held by someone else. If you go on, the money may go to the wrong person and might not be recoverable." | none | Yes, only after the tick |
-| `na` | Grey: "We couldn't check this name" | US: "US banks don't share account names with us for this account." Others: "The receiving bank doesn't support name checks for this account." then "Only continue if you trust {name}." | none | Yes, only after the tick |
+| Kind | `cards` with up to four cards (a card is hidden when its type option is off): "Between my accounts" (Move money to your own savings or other accounts. Instant.), "To a BankWorkx® customer" (Find them by mobile number, email, BankWorkx ID or account number. Free and instant.), "To another bank in the same region" (United States, United Kingdom, Europe, UAE, Saudi Arabia or Jordan.), "To another country" (Over SWIFT, with a tracking number (UETR). Canada, India, Japan, Australia and more.) | Yes | One chosen | "Choose a kind of transfer." |
 
-Below the card: a tick "Save this payee for next time" (on by default) and the buttons **Continue** (disabled until `match` or the tick) and **Change details** (back to `payee`). Error `PAYEE_NOT_CHECKED` ("Check the payee before you continue.") if the bank is called without the acknowledgement. A tick is recorded on the payment (`payeeCheck: "none", acknowledged: true`, or `"close"`, `"na"`) and shown on the receipt.
+Empty (every type off): "Nothing to send with" / "Your bank has switched off every kind of transfer here." Button **Continue**.
 
-**`amount` — "Amount and speed"**. A payee card at the top (name, region, masked account, chip "Verified" or "Saved").
+**`where`: "Where is it going?"** (domestic and international only). Intro "Choose the region. It decides which details we ask for." (domestic) or "Choose the country. We show the currency they will receive." (international).
 
-| Field | Block | Required | Validation | Error message (code) |
+| Field | Block | Required | Validation | Error message |
 |---|---|---|---|---|
-| From | `accountPicker` `pay.fromAccountId`, USD accounts only, balances shown | Yes | `canDebit` | "Choose an account to send from." |
-| They receive ({currency}) | `amountInput`, symbol of the payee's currency | Yes | Greater than 0; 2 decimals (JOD 3); at most the rail maximum; **You pay** at most the available balance; **You pay** at most the remaining daily limit | "Enter an amount above zero." (`INVALID_AMOUNT`) / "That's over the {rail} limit of {limit}. Choose another way to send it." (`RAIL_LIMIT`) / "Not enough in the account: you'd pay {total} but {available} is available." (`INSUFFICIENT_FUNDS`) / "That's over your remaining daily limit of {remaining}." (`DAILY_LIMIT_EXCEEDED`) |
-| How fast? | Rail list (tiles, below) | Yes | The default rail is the first in the region's list that fits (09 section 2); a rail the amount does not fit is dimmed and cannot be picked | "{rail} isn't available right now. Choose another way to send it." (`RAIL_NOT_AVAILABLE`) |
-| Purpose of payment | `select`: Family support, Goods or services, Salary, Rent, Education, Savings or investment, Other | Middle East only | One of the list | "Choose a purpose for this payment." (`PURPOSE_REQUIRED`) |
-| Reference | `textInput`; label "Memo (up to 80 characters)" for the US, "Reference (up to 18 characters)" for the UK, "Payment reference (up to 140 characters)" for Europe and the Middle East | No | The field refuses extra characters; allowed: letters, digits, space and `. , ' - / ( ) + : ?`; anything else is removed with the note "We removed characters this payment can't carry." | none |
-| When? | Chips **Now** / **Later** | Yes (default Now) | Later needs a date (below) | "Choose a date." |
+| Region (domestic) | `cards`: one per region whose option is on: United States, United Kingdom, Europe (SEPA), United Arab Emirates, Saudi Arabia, Jordan, each with "Pay in {currency}. {rail names}." | Yes | One chosen | "Choose a region." |
+| Country (international) | `select` "Country", placeholder "Choose a country", options "Canada (CAD)", "India (INR)", "Japan (JPY)", "Australia (AUD)", "Switzerland (CHF)", "Singapore (SGD)", "Mexico (MXN)" | Yes | One chosen | "Choose a country." |
 
-*Rails offered* (09 section 2; the figures are sandbox proposals). Each tile shows name, speed, "max {currency}{limit}", fee ("Free" or USD amount) and an "Instant" chip where it applies.
+International note (`note`): "Payments go over SWIFT. Each one gets a tracking number (UETR) so you and the receiving bank can follow it. It usually arrives in 1 to 3 working days." Button **Continue**.
 
-| Region | Rails (default first) | Speed | Fee (USD) | Max per payment |
+**`payee`: "Who are you paying?"** (title "Which accounts?" for between my accounts). Skipped when `ben` was passed. Intro "Choose someone you have paid before, or add a new payee." (own: "Money between your own accounts arrives straight away."). Button **Continue**, busy text "Checking the payee…" (about 0.65 s) for a new payee.
+
+For a type other than "own", a `cards` field "Choose a payee" lists the saved payees of this type and region (each with name or "nickname (name)", the masked account, and a chip: Verified, Saved or New) and a last card "Add a new payee" ("You enter their details once and we can save them.") Required, message "Choose a payee or add a new one." When there are no saved payees, "Add a new payee" is chosen for the person. Choosing "Add a new payee" shows the form for the type and region, with a **Fill with a sample payee** button (demo). The form fields are generated from the master table in section 3.1.
+
+For "own": **From** and **To** (see the table) and a **Swap accounts** button; when the currencies differ an info box "These accounts use different currencies. We convert at the mid-market rate with no margin. Today that is 1 {A} = {rate} {B}. A 0.20% fee is shown separately."
+
+On **Continue** with a new payee the journey looks the payee up and runs the name check (`resolve`): a BankWorkx® customer by identifier; a mobile or alias payment (UAE, Jordan) in the directory; a duplicate against the saved list; then the region's name check. Errors: `CUSTOMER_NOT_FOUND`, `ALIAS_NOT_FOUND`, `BENEFICIARY_EXISTS`.
+
+**`check`: "Check the payee"** (new payees only, not "own"). Intro "Make sure the money goes to the right person." Shows a note with the result, then a card "Who you are paying" (Name, Account, Country).
+
+| Result | Colour | Text | Can the person continue? |
+|---|---|---|---|
+| `match` | green | "{label}: the name matches. The account is held by {registered name}. It is safe to continue." | Yes |
+| `found` (BankWorkx® customer, alias or mobile) | neutral | "We found {name}. {masked account}. Check this is the person you mean. Their details come from the bank's own records (or the {country} alias directory)." | Only after the tick |
+| `close` | amber | "{label}: the name is close, but not exact. The account is held by {registered name}. You typed {typed name}. Check with them before you send money." Button **Use “{registered name}”** (replaces the name and re-checks) | Only after the tick |
+| `type` (UK only) | amber | "{label}: wrong type of account. The name matches {name}, but that is a {personal or business} account and you chose {the other}. Sending to the wrong type can fail or be returned." Button **Switch to {type}** | Only after the tick |
+| `none` | red | "{label}: the name doesn't match. The account is held by someone else. If you go on, the money may go to the wrong person and might not be recoverable. (NAME_MISMATCH)" | Only after the tick |
+| `na` | amber | "We couldn't check this name. {US banks don't share account names with us for this account. / Name checks are usually not available over SWIFT. / The receiving bank doesn't support name checks for this account.} Only continue if you trust {name}." | Only after the tick |
+
+Labels: United States "Account name check where the bank can see the name"; United Kingdom "Confirmation of Payee"; Europe "Verification of Payee"; UAE, Saudi Arabia, Jordan "Name check"; BankWorkx® customer "BankWorkx® customer record".
+
+| Field | Block | Required | Validation | Error message |
 |---|---|---|---|---|
-| United States | ACH `ach` | 1–2 business days | Free | $25,000 |
-| | Same-day ACH `sach` | Same day (cut-off 14:45 ET) | 1.00 | $1,000,000 |
-| | Instant RTP / FedNow `rtp` | Seconds, 24/7 | 0.25 | $500,000 |
-| | Wire `wire` | Same day (cut-off 18:00 ET) | 25.00 | no limit |
-| Europe | SEPA Credit Transfer `sct` | Next business day (cut-off 15:00 CET) | Free | €1,000,000 |
-| | SEPA Instant `sinst` | Within 10 seconds, 24/7 | 0.50 | €100,000 |
-| United Kingdom | Faster Payments `fps` | Seconds, 24/7 | Free | £1,000,000 |
-| | CHAPS `chaps` | Same day (cut-off 17:00 UK) | 25.00 | no limit |
-| | Bacs `bacs` | 3 business days | Free | £20,000 |
-| UAE | Aani `aani` | Seconds, 24/7 | 0.50 | AED 50,000 |
-| | UAEFTS `uaefts` | Same day (cut-off 15:00 UAE) | 2.00 | no limit |
-| Saudi Arabia | sarie instant `sarieI` | Seconds, 24/7 | 0.50 | SAR 20,000 |
-| | SARIE `sarie` | Same day (cut-off 15:00 Riyadh) | 2.00 | no limit |
-| Jordan | CliQ `cliq` | Seconds, 24/7 | 0.30 | JOD 10,000 |
-| | JoPACC `jopacc` | Next business day (cut-off 14:00 Amman) | 1.00 | no limit |
+| I understand and want to continue | `check` | Yes, unless the result is `match` | Ticked | "Tick to continue." / `PAYEE_NOT_CHECKED` "Check the payee before you continue." |
+| Save this payee for next time | `check` | No | default on | none |
 
-Instant rails ignore cut-offs. If the sandbox condition `unavailable: ["rail:sinst"]` (or any rail id) is set, that tile shows "Not available right now" and cannot be chosen; the screen keeps the standard rail selected.
+When option `nameCheck` is off, or the type is international, the result is `na`. A tick on a non-matching result is recorded on the payment and shown on the review.
 
-*Summary card* (updates on every keystroke without moving the cursor): **They receive** and **Rate** ("1 USD = {rate} {currency} · held for 60 s") and **Converted** appear only when the payee's currency is not USD; then **Fee**, **You pay**, **Arrives**. Empty amount: "Enter an amount to see the cost." Rounding is to the cent, half up, once, at the end (09 section 5). Sandbox rates are in 09 section 5.
+**`amount`: "How much, how fast?"** Button **Review**, busy text "Getting your quote…" (about 0.6 s). Intro "Type what they receive. You see the cost as you type." (own: "Type an amount. You see the result before you confirm."). A card at the top shows the payee (initial, name, country and masked account, chip Verified or Saved).
 
-*Later.* Choosing **Later** shows a date `select` of business days in the next 30 days for the payee's region (weekends and the region's holidays are disabled; see `schedule-payment`) and **Repeat**: Doesn't repeat, Every week, Every month. Instant rails still go out at 06:00 UTC on the date. Under **Now**, a hint reads "Instant payments go out straight away, any time." for an instant rail, else "Cut-off for same-day delivery: {time}."
+For "own":
 
-*Alerts.* New payee under 24 hours (rule A, `BENEFICIARY_COOLING_OFF`): a warning "{name} is new. You can send up to ${left} in the first 24 hours."; an amount over the allowance is refused with the same message (`BENEFICIARY_COOLING_OFF`) Button **Review**, disabled until the amount, rail, purpose (Middle East) and date (Later) are valid.
+| Field | Block | Required | Validation | Error message |
+|---|---|---|---|---|
+| I want to enter | `chips` "What I send ({A})" / "What I get ({B})" (only if the currencies differ; default send) | No | One of two | none |
+| Amount | `amountInput` in the entered currency; hint "Entered in {currency}. Available in {account}: {balance}." | Yes | At least 1.00, 2 decimals; amount plus fee at most the available balance | "The smallest amount is 1.00. (INVALID_AMOUNT)" / "There isn't enough money in {account}. Available: {balance}, and the fee is {fee}. (INSUFFICIENT_FUNDS)" |
+| Note to yourself | `textInput`, placeholder "Optional", same currency only | No | 35 characters | none |
 
-**`review` — "Review payment"**. Big line: "You're sending {symbol}{amount}" (or "Scheduled for {date}"). `reviewSummary` rows:
+Result summary, same currency: You send, Fee (0.00), They get, Arrives Now. Different currencies: You send, Mid-market rate (1 {A} = {rate} {B}), Margin on the rate None, Fee (0.20%), Total taken, You get. Details in `own-transfer`.
 
-| Row | Value (example: Lena Fischer, €200.00) |
-|---|---|
-| From | Main ••4410 |
-| To | Lena Fischer, `DE89 •••• 3000` |
-| Country | Europe (SEPA) |
-| Sent by | SEPA Credit Transfer |
-| Rate | 1 USD = 0.926 EUR |
-| Fee | $0.00 |
-| **You pay** | **$215.98** |
-| Arrives | Next business day |
-| Purpose | shown when chosen |
-| Reference | shown when typed |
-| Repeats | shown when Later and repeating |
+For every other type:
 
-Cut-off line: if a same-day rail is picked after its cut-off, an info alert says "Goes out tomorrow: after the {time} cut-off." and **Arrives** shows the next business day. Small print: "We screen payments against sanctions lists. Some may be held for a short review." Consent (`transfers-v4`, planned): "I confirm the details are correct". Button **Confirm and send** (Now), **Schedule payment** (Later). The rate is held for 60 seconds from the moment the amount screen opens: after that the alert "The exchange rate changed. Check the new amount." appears (`QUOTE_EXPIRED`) with **Refresh quote**; a USD-to-USD payment has no quote.
+| Field | Block | Required | Validation | Error message |
+|---|---|---|---|---|
+| From account | `select`: USD accounts only, "{name} ••{last} · {available} available" | Yes | Has enough: total at most available | `INSUFFICIENT_FUNDS` "Not enough in the account: you'd pay {total} but {available} is available." |
+| They receive ({currency}) / Amount (BankWorkx®) | `amountInput` in the payee's currency, placeholder "0.00"; hint "You type what {first name} receives, in {currency}. Available: {balance}." | Yes | Above zero; yen whole numbers only; within the chosen rail's maximum; within balance; within the daily limit (41,250.00 USD left); a new payee at most 500.00 USD | `INVALID_AMOUNT` "Enter an amount above zero." / "Yen has no decimals. Enter a whole number." / `RAIL_LIMIT` "That's over the {rail} limit of {limit}. Choose another way to send it." / "That is over the limit of every way to send it here. Try a smaller amount." / `INSUFFICIENT_FUNDS` / `DAILY_LIMIT_EXCEEDED` "That's over your remaining daily limit of $41,250.00." / `BENEFICIARY_COOLING_OFF` "That's over the $500.00 you can send to a new payee in the first 24 hours." |
+| Live summary | `kv` rows | n/a | n/a | Foreign currency: They receive, Rate "1 USD = {rate} {CUR} · held 60 s", Converted; then Fee, **You pay**, Arrives (or Scheduled for {date}); "New payee allowance: $500.00 in the first 24 hours"; "Daily limit left: $41,250.00" |
+| How fast? | `cards` list of the region's rails (not for BankWorkx®, which has one): name, speed, limit, cut-off, fee ("Free" or $), an "Instant" chip. A rail is dimmed and cannot be chosen when over its limit ("over the limit of {limit}"), when its option is off ("Not offered by your bank"), when SEPA Instant is demo-down ("Not available right now"), or for an alias payment on a non-instant rail ("Alias payments use the instant rail"). The default is the first rail that fits | Yes | A rail that fits | `RAIL_NOT_AVAILABLE` "{rail} isn't available right now. Choose another way to send it." when no rail is left |
+| Street and number, Town or city, Postcode | `textInput` (street 70, city 35, postcode 16) | Street and city yes; postcode no | Letters, numbers, spaces and . , # ' & ( ) / - | `ADDRESS_REQUIRED` "This way to send needs the payee's address." Shown only when the rail needs an address and the saved payee has none |
+| Purpose of payment | `select` of seven purposes, each with a code: Family support (FAM), Goods or services (GDS), Salary (SAL), Rent (RNT), Education (EDU), Savings or investment (INV), Other (OTH); hint "Sent with the payment for sanctions screening." | Yes where asked | One chosen | `PURPOSE_REQUIRED` "Choose a purpose for this payment." |
+| Your relationship to them | `select`: Myself, Family member, Friend, My employer, Supplier or business, Landlord, School or university, Other; hint "Banks must collect this for payments abroad." | Yes, international only | One chosen | "Choose how you know them." |
+| Where does the money come from? | `select`: Salary, Savings, Sale of property or assets, Business income, Gift, Loan, Other; hint "We ask this for payments of $10,000 or more." | Yes, international and 10,000 USD or more | One chosen | "Choose a source of funds." |
+| Who pays the bank charges? | `chips`: Shared (SHA), I pay all (+$15) (OUR), They pay (BEN); hint by choice: "You pay our fee; they may pay their bank's fee." / "They receive the full amount. Extra $15.00 from you." / "You pay the same as Shared; their bank may take its charges from what arrives." | No (default Shared) | One of three | none |
+| Reference (label by payee: see below) | `textInput`, placeholder "Optional" | No | Within the maximum; allowed characters letters, digits, space and `. , ' - / ( ) + : ?` | `REFERENCE_TOO_LONG` "Use {max} characters or fewer for this payee's bank." / `INVALID_REFERENCE` "Use letters, numbers, spaces and . , ' - / ( ) + : ? only." |
+| When | `chips` Now, Later (shown when option `allowLater`) | No | none | none |
+| Send on | date list, 30 days ahead, business days only; weekend skipped per country (Saturday and Sunday for the US, UK, Europe and UAE; Friday and Saturday for Saudi Arabia and Jordan) | Yes, when Later | A listed date | "Choose a date." hint "Weekends and bank holidays are skipped. It is checked again on the day." |
+| Repeat | `chips` Doesn't repeat, Every week, Every month | No | none | none |
 
-**`otp`** — the code prompt names the payment (dynamic linking, 09 section 9): "Authorise {symbol}{amount} to {name}" with the note "Code sent to ••• 4410. It only works for this payment." 6 digits, 3 attempts, resend 60 s. Changing the amount or payee after the code is sent voids it. Button **Send {symbol}{amount}**.
+Purpose of payment is asked for the UAE, Saudi Arabia, Jordan and international, and for any rail that needs it: Fedwire, CHAPS, Aani, UAEFTS, sarie, SARIE, CliQ, JoPACC, SWIFT. An address is asked (when the payee has none) for Fedwire, CHAPS, UAEFTS, SARIE, JoPACC and SWIFT. Reference label and limit: United Kingdom "Reference", 18; United States on a non-wire rail "Memo", 80; United States wire "Message to the beneficiary", 140; international "Details of payment", 140; BankWorkx® customer "Note", 140; everything else "Payment details", 140.
 
-**`locked`**, **`timeout`**, **`unavailable`**, **`failed`** — shared C. The `failed` text comes from section 4. `PAYMENT_HELD` is not a failure: it ends on `success` with the status "Held for review".
+When the total, rail and rules check out, **Review** stores the quote time. Rail unavailable, rule breaches, missing purpose and missing address stop the step with a banner carrying the code.
 
-**`success` — "Payment sent"** (terminal; titles by status: "Payment sent" (settled), "Payment on its way" (not yet settled), "Payment scheduled" (Later), "Payment held" (screening)). Status chip, big amount, "{They receive} to {name}". Rows: Sent by, They receive, You pay, Arrives, then the rail's own reference with its label from 09 section 2 (for example "ACH trace number", "End-to-end ID", "FPS reference", "Aani reference"), and the BankWorkx® reference `BWX-nnnnnn`. If the name check was acknowledged: "Name check: {result}, you chose to continue." Buttons **Track payment**, **View receipt**, **Send again**, **Done**.
+**`review`: "Review"**. Intro "Check everything. Nothing is taken until you enter your code." Own transfer: big amount ("You send" or "Moving"), the payee line, and for conversion the rate with a countdown chip "{n} s left" (30 s) and "Mid-market rate, held for 30 seconds. If it runs out we show a new rate." Other types: big amount "{amount in their currency}" with "You're sending" (or "Scheduled for {date}"), "to {name}", chips Verified or Saved and the rail name. Notes, when they apply: foreign currency "The rate is held for 60 seconds from when you got your quote. If it runs out, we show the new amount before anything is taken."; new payee "This is a new payee. For your security you can send up to $500.00 in their first 24 hours."; late demo "Goes out tomorrow: after the {cut-off} cut-off."; non-matching name check "You chose to continue after the name check did not match. We record this on the payment."
+
+Row groups: **From** (account, mask). **To**: Name, Account, Country, Bank (the BIC and bank name for SWIFT; "Bank not shown" when unknown), Address, Intermediary bank, National ID (last four digits only). **Amount and fees**: They receive, Rate, Converted, Fee, Total taken (own: You send, Rate, Fee, Total taken, You get). **Delivery**: Sent by, Arrives (or Scheduled for), Repeats, Purpose (with code), Relationship, Source of funds, Reference (with its label), Charges, Tracking "A UETR is issued when it is sent" (SWIFT), Payee check (Verified, or Not checked). Then `consent`: "I confirm the details are correct" (required; "Tick to confirm."), and the small print "We screen payments against sanctions lists. Some may be held for a short review. Your code names the amount and the payee, and only works for this payment." Button **Confirm and send code**. A rate older than the hold: `QUOTE_EXPIRED`, a fresh quote is taken and the person confirms again (own: "The rate moved from {old} to {new}. Check the new amounts and confirm again.").
+
+**Code prompt** (shared screen C). Title "Authorise {amount} to {name}" (own: "Authorise moving {amount} to {account}", or "Authorise converting {amount} to {amount}"), sub "Code sent to ••• 4410. It only works for this payment. Changing the amount or payee voids it." Six digits, three tries.
+
+**`result`** (terminal), by outcome:
+
+| Outcome | Title | Status chip | Text |
+|---|---|---|---|
+| Own transfer | "Money moved" (same currency) or "Converted" | "Done · instant" | "{amount} moved from {from} to {to}." / "{amount} became {amount}." |
+| Instant rail, now | "Sent" | "Delivered in seconds" | "{amount} to {name}" |
+| Other rail, now | "On its way" | "Arrives {date}" | "{amount} to {name}" |
+| Later | "Scheduled" | "Scheduled for {date}" | "{amount} to {name}" |
+| Screening hit | "Held for review" (amber) | "Held for review" | "We're checking this payment and will tell you within one working day. You don't need to do anything. (PAYMENT_HELD)" |
+
+Receipt rows (not own): Sent by, They receive, Rate, Fee, You pay, Arrives (or First payment), the rail's own reference with its label (09 section 2), Payee check (Verified or "Saved, not verified"), Charges, Purpose, Reference. Own: From, To, You sent, Rate, Fee, You received, Arrived Now. Buttons: **Track payment** (or **See scheduled payments**), **Send another**, **Done**. The sender's available balance drops by You pay at once; the ledger balance drops too unless the payment is held (held: reserved, not debited). A saved payee is written to the list when "Save this payee" was ticked.
+
+**`locked`, `timeout`, `unavailable`, `failed`**: shared screens C.
+
+##### 3.1 Master field table: payee form by type and region
+
+R means required. "Shown" fields are conditional. Messages are the person-facing text; the prototype adds the code in brackets after it for testers. Address fields (street 70, town 35, state 2, ZIP or postcode) accept letters, numbers, spaces and `. , ' & ( ) / -` (also `#` for the street), otherwise "Use letters, numbers, spaces and . , # - / only."
+
+| Type / region | Field (key) | R | Rule | Message |
+|---|---|---|---|---|
+| Between my accounts | From (`from`) | R | Own account that is not frozen | "You can't send money from this account right now. Choose another account." (`ACCOUNT_CANNOT_DEBIT`) |
+| Between my accounts | To (`toAcc`) | R | Own account, not the same as From; if currencies differ, option `allowFx` must be on | "Choose two different accounts." (`SAME_ACCOUNT`) / "We can't convert between {A} and {B} yet." (`CURRENCY_NOT_SUPPORTED`) |
+| BankWorkx® customer | Find them by (`by`) | no | Mobile number (default), Email, BankWorkx ID, Account number | none |
+| BankWorkx® customer | Their details (`look`, 60) | R | Mobile: 8 to 20 digits, spaces, dashes, brackets, optional +. Email: a full address. ID: 3 to 24 letters, numbers, dots, dashes. Account: 10 digits. The customer must exist | "Enter the mobile number with its country code." (`INVALID_MOBILE`) / "Enter a full email address." (`INVALID_EMAIL`) / "A BankWorkx ID has 3 to 24 letters, numbers, dots or dashes." (`INVALID_ID`) / "A BankWorkx® account number has 10 digits." (`INVALID_ACCOUNT`) / "We can't find a BankWorkx® customer with those details. Check them and try again." (`CUSTOMER_NOT_FOUND`) |
+| United States | Full name on the account (`nm`, 70) | R | 2 or more characters; letters, numbers, spaces and . , ' & ( ) / - | "Enter the name on the account." (`PAYEE_NAME_REQUIRED`) / "Use letters, numbers, spaces and . , ' & ( ) / - only." (`INVALID_NAME`) |
+| United States | Account type (`atype`) | no | Checking (default) or Savings | none (hint: ACH files carry the account type; a wrong one can return the payment) |
+| United States | Routing number, ABA (`rout`, 9) | R | 9 digits and the ABA checksum | "That routing number isn't valid. Check the 9 digits." (`INVALID_ROUTING`) |
+| United States | Account number (`acct`, 17) | R | 4 to 17 digits | "A US account number has 4 to 17 digits." (`INVALID_ACCOUNT`) |
+| United States | Street, City, State, ZIP (`addr1`, `city`, `state`, `post`) | no (a wire asks for street and city on the amount screen) | State: 2 letters. ZIP: 5 digits or 5+4 | "Use the 2-letter state code, like NY." / "Use a 5-digit ZIP code, like 10001." |
+| United Kingdom | Full name (`nm`) | R | as above | as above |
+| United Kingdom | Type of account (`ptype`) | no | Personal (default) or Business; compared against the registry by Confirmation of Payee | none |
+| United Kingdom | Sort code (`sort`, 8) | R | 6 digits, dashes optional | "A sort code has 6 digits, like 20-00-00." (`INVALID_SORT_CODE`) |
+| United Kingdom | Account number (`acct`, 8) | R | 8 digits | "A UK account number has 8 digits." (`INVALID_ACCOUNT`) |
+| United Kingdom | Street, Town, Postcode | no (CHAPS asks on the amount screen) | address characters | as above |
+| Europe (SEPA) | Full name (`nm`) | R | as above | as above |
+| Europe (SEPA) | IBAN (`iban`, 42) | R | Mod-97 check passes; length matches the country; the country is in the SEPA list (DE, FR, ES, IT, NL, IE, BE, AT, PT, FI, LU, GR); spaces are fine | "That IBAN doesn't look right. Check each character." (`INVALID_IBAN`) / "That IBAN isn't in the SEPA area. Use “To another country”." (`NOT_SEPA`) |
+| Europe (SEPA) | Street, Town, Postcode | no | if sent: town, country and up to two address lines | address characters |
+| UAE | How do you want to pay them? (`method`) | no | IBAN (default) or Mobile number (Aani) | none |
+| UAE | Full name (`nm`), shown for IBAN | R | as above | as above |
+| UAE | IBAN (`iban`), shown for IBAN | R | Valid IBAN; starts with AE; 23 characters | "That IBAN starts with {cc}, but you chose United Arab Emirates." (`COUNTRY_MISMATCH`), else `INVALID_IBAN` |
+| UAE | UAE mobile number (`look`), shown for mobile | R | `+971`, `971` or `0` then 5 and 8 digits; spaces and dashes ignored; the alias directory must know it | "Enter a UAE mobile number, like 050 123 4567." (`INVALID_MOBILE`) / "We can't find an account for that alias or mobile number. Check it, or pay by IBAN." (`ALIAS_NOT_FOUND`) |
+| UAE | City (`city`, 35) | no (UAEFTS asks for street and city on the amount screen) | address characters | as above |
+| Saudi Arabia | Full name (`nm`) | R | as above | as above |
+| Saudi Arabia | IBAN (`iban`) | R | Valid IBAN; starts with SA; 24 characters | `COUNTRY_MISMATCH` / `INVALID_IBAN` |
+| Saudi Arabia | National ID or Iqama number (`idno`, 10) | no | 10 digits | "A national ID or Iqama number has 10 digits." (`INVALID_ID`) |
+| Saudi Arabia | City | no (SARIE asks on the amount screen) | address characters | as above |
+| Jordan | How do you want to pay them? (`method`) | no | IBAN (default), CliQ alias, Mobile number | none |
+| Jordan | Full name (`nm`), shown for IBAN | R | as above | as above |
+| Jordan | IBAN (`iban`), shown for IBAN | R | Valid IBAN; starts with JO; 30 characters | `COUNTRY_MISMATCH` / `INVALID_IBAN` |
+| Jordan | CliQ alias or mobile number (`look`, 30), shown for alias or mobile | R | Alias: 3 to 30 letters, numbers, dots, dashes. Mobile: `+962`, `962` or `0` then 7, then 7, 8 or 9, then 7 digits. Must be in the alias directory | "An alias has 3 to 30 letters, numbers, dots or dashes." (`INVALID_ALIAS`) / "Enter a Jordan mobile number, like 079 555 0142." (`INVALID_MOBILE`) / `ALIAS_NOT_FOUND` |
+| Jordan | City | no (JoPACC asks on the amount screen) | address characters | as above |
+| International (SWIFT) | Full name (`nm`) | R | as above (a company uses its registered name) | as above |
+| International (SWIFT) | Who is it? (`bt`) | no | A person (default) or A company | none |
+| International (SWIFT) | Street and number (`addr1`), Town or city (`city`) | R | address characters | "This is required." / address message |
+| International (SWIFT) | Postcode (`post`) | no | address characters | as above |
+| International (SWIFT) | Bank name (`bname`, 70) | R | address characters | "This is required." |
+| International (SWIFT) | SWIFT / BIC (`bic`, 11) | R | 8 or 11 characters (4 letters, 2 letters, 2 letters or digits, optional 3); the 5th and 6th letters must equal the chosen country | "A SWIFT/BIC has 8 or 11 letters and numbers." (`INVALID_BIC`) / "That BIC belongs to a bank in another country." (`COUNTRY_MISMATCH`) |
+| International (SWIFT) | Local bank code (`local`, 14), by country | R in Canada, India, Australia | Canada: institution and transit `00012-003` (5 digits, optional dash, 3 digits). India: IFSC, 4 letters, a zero, 6 letters or numbers. Australia: BSB `062-000`. None for Japan, Switzerland, Singapore, Mexico | "Use the 5-digit transit number and 3-digit institution number, like 00012-003." / "An IFSC has 11 characters: 4 letters, a zero, then 6 letters or numbers." / "A BSB has 6 digits, like 062-000." (all `INVALID_BANK_CODE`) |
+| International (SWIFT) | IBAN (`iban`, 42), Switzerland only | R | Valid IBAN, 21 characters, starts with CH | "That IBAN doesn't look right for Switzerland." (`INVALID_IBAN`) |
+| International (SWIFT) | Account number (`acct`, 34), every other country | R | 6 to 34 letters, digits, spaces, dashes; Mexico: CLABE, 18 digits (label "CLABE account number") | "That account number looks too short or too long." (`INVALID_ACCOUNT`) / "A CLABE has 18 digits." (`INVALID_ACCOUNT`) |
+| International (SWIFT) | Their bank uses an intermediary bank (`hasInt`) | no | switch, off by default | none (sub-line: only if the person told you; most payments don't need one) |
+| International (SWIFT) | Intermediary bank BIC (`interbic`, 11) | R when the switch is on | 8 or 11 characters | "A SWIFT/BIC has 8 or 11 letters and numbers." (`INVALID_BIC`) |
+
+Required counts from the table: own 2 of 2, BankWorkx® customer 1 of 2, US 3 of 8, UK 3 of 7, Europe 2 of 5, UAE 3 of 5 (one of IBAN or mobile), Saudi Arabia 2 of 4, Jordan 3 of 5, SWIFT 9 of 12 (counting only the fields shown for the country).
+
+What each region asks on top, once the rail is known (amount screen): see the table above (purpose, address, reference, charges, relationship, source of funds).
+
+**Differences from 09** (this file follows the prototype): (1) one journey with four types replaces the two-journey split of 09 section 1; (2) SWIFT countries are seven (09 lists four); (3) the name check has two more outcomes, `type` (UK account type mismatch) and `found` (identifier or alias lookup); (4) purpose is also required for Fedwire and CHAPS wires and for every instant and same-day Middle East rail, and an address is required for Fedwire, CHAPS, UAEFTS, SARIE, JoPACC and SWIFT (09 section 7 does not name wires); (5) the SWIFT payee form adds person or company, postal address, bank name, local bank codes, IBAN for Switzerland, CLABE for Mexico and an optional intermediary bank; the amount screen adds relationship and source of funds from 10,000 USD; (6) CliQ alias and Aani mobile payments (09 "planned extras") exist and force the instant rail; (7) BankWorkx® customers are found by mobile, email, ID or account number; (8) the code is shown in brackets after each message in the prototype; (9) a held payment reserves the money (09 is silent); (10) the daily-limit and balance checks come in the order: rail limit, balance, daily limit, new payee, so the daily limit cannot be reached with the demo balances.
 
 #### 4. Sandbox errors
 
-Codes and messages for the payee fields are in section 3 (09 section 12). The rest:
-
-| Code | Message | Shows on | Button |
+| Code | Message the person sees | Shows on | Button |
 |---|---|---|---|
-| `OTP_INVALID` | S-`OTP_INVALID` | `otp`; after 3 `locked` | Try again / Start again |
+| `PAYEE_NAME_REQUIRED` | "Enter the name on the account." | `payee` field | fix the field |
+| `INVALID_NAME` | "Use letters, numbers and spaces in the name." | `payee` field | fix the field |
+| `INVALID_IBAN` | "That IBAN doesn't look right. Check each character." | `payee` field | fix the field |
+| `NOT_SEPA` | "That IBAN isn't in the SEPA area. Use “To another country”." | `payee` field | fix the field |
+| `COUNTRY_MISMATCH` | "That doesn't match the country you chose." (field text names both countries) | `payee` field | fix the field |
+| `INVALID_ROUTING` | "That routing number isn't valid. Check the 9 digits." | `payee` field | fix the field |
+| `INVALID_SORT_CODE` | "A sort code has 6 digits, like 20-00-00." | `payee` field | fix the field |
+| `INVALID_ACCOUNT` | "That account number doesn't look right." | `payee` field | fix the field |
+| `INVALID_BIC` | "A SWIFT/BIC has 8 or 11 letters and numbers." | `payee` field | fix the field |
+| `INVALID_BANK_CODE` | "That bank code doesn't look right." | `payee` field | fix the field |
+| `INVALID_MOBILE` | "That mobile number doesn't look right." | `payee` field | fix the field |
+| `INVALID_EMAIL`, `INVALID_ID`, `INVALID_ALIAS` | field texts in the master table | `payee` field | fix the field |
+| `CUSTOMER_NOT_FOUND` | "We can't find a BankWorkx® customer with those details. Check them and try again." | `payee` banner | Change details |
+| `ALIAS_NOT_FOUND` | "We can't find an account for that alias or mobile number. Check it, or pay by IBAN." | `payee` banner | Change details |
+| `BENEFICIARY_EXISTS` | "You've already saved this payee. Choose them from your saved payees." | `payee` banner | Choose payee |
+| `PAYEE_NOT_CHECKED` | "Check the payee before you continue." | `check` | tick the box |
+| `NAME_MISMATCH` | "The name doesn't match the account holder." | `check` note | continue only after the tick |
+| `RAIL_NOT_AVAILABLE` | "That way to send isn't available right now. Choose another." | `amount` | Change rail |
+| `RAIL_LIMIT` | "That is over the limit for this way to send. Choose another or send less." | `amount` | Change rail |
+| `INSUFFICIENT_FUNDS` | "There isn't enough money in the account." (field text names both numbers) | `amount` | Change amount |
+| `DAILY_LIMIT_EXCEEDED` | "That is over your remaining daily limit." | `amount` | Change amount |
+| `BENEFICIARY_COOLING_OFF` | "New payees can receive up to $500.00 in their first 24 hours." | `amount` | Change amount |
+| `PURPOSE_REQUIRED` | "Choose a purpose for this payment." | `amount` | Edit |
+| `ADDRESS_REQUIRED` | "This way to send needs the payee's address." | `amount` | Edit |
+| `REFERENCE_TOO_LONG` | "That reference is too long for the payee's bank." | `amount` field | fix the field |
+| `INVALID_REFERENCE` | "That reference has characters the bank can't send." | `amount` field | fix the field |
+| `INVALID_AMOUNT` | "Enter a valid amount." | `amount` | Change amount |
+| `SAME_ACCOUNT` | "Choose two different accounts." | `payee` (own) | Choose account |
+| `ACCOUNT_CANNOT_DEBIT` | "You can't send money from this account right now." | `payee` (own) | Choose account |
+| `CURRENCY_NOT_SUPPORTED` | "We can't convert between those currencies yet." | `payee` (own) | Choose account |
+| `QUOTE_EXPIRED` | "The exchange rate changed. Check the new amount and confirm again." | `review` | Confirm again |
 | `STEP_UP_FAILED` | "We couldn't confirm this payment. Nothing was sent. Start again." | `locked` / `failed` | Start again |
-| `OTP_REQUIRED` | S-`OTP_REQUIRED` | `failed` | Back to code |
-| `ACCOUNT_NOT_FOUND` | S-`ACCOUNT_NOT_FOUND` | `failed` | Choose account |
-| `ACCOUNT_CANNOT_DEBIT` (planned) | "You can't send money from {account} right now. Choose another account." | `amount` | Choose account |
-| `BENEFICIARY_NOT_FOUND` (planned) | "We can't find that payee. Choose another." | `payee` | Choose payee |
-| `BENEFICIARY_COOLING_OFF` | Rule A message (section 3) | `amount` | Change amount |
-| `INVALID_AMOUNT` | "Enter an amount above zero." | `amount` | Change amount |
-| `CURRENCY_NOT_SUPPORTED` | "We can't send {currency} to that country." | `payee` | Choose payee |
-| `RAIL_LIMIT` (planned) | "That's over the {rail} limit of {limit}. Choose another way to send it." | `amount` | Change rail |
-| `RAIL_NOT_AVAILABLE` (planned) | "{rail} isn't available right now. Choose another way to send it." | `amount` | Change rail |
-| `QUOTE_EXPIRED` (planned) | "The exchange rate changed. Check the new amount." | `review` | Refresh quote |
-| `INSUFFICIENT_FUNDS` | "Not enough in the account: you'd pay {total} but {available} is available." | `amount` / `failed` | Change amount |
-| `DAILY_LIMIT_EXCEEDED` (planned) | "That's over your remaining daily limit of {remaining}." | `amount` / `limitExceeded` | Change amount |
-| `LIMIT_EXCEEDED` (existing, other-currency accounts) | S-`LIMIT_EXCEEDED` | `limitExceeded` | Change amount |
-| `PURPOSE_REQUIRED` (planned) | "Choose a purpose for this payment." | `amount` | Edit |
-| `PAYEE_NOT_CHECKED` (planned) | "Check the payee before you continue." | `payeeCheck` | Check the payee |
-| `PAYMENT_HELD` (planned) | "We're checking this payment and will tell you within one working day. You don't need to do anything." | `success` (status Held for review) | Done |
-| `PAYMENT_RETURNED` (planned) | "The payee's bank sent this payment back. The money is in your account." | notification, tracker | View payment |
-| `CORE_UNAVAILABLE` | S-`CORE_UNAVAILABLE` ("No money has left your account.") | `failed` | Try again |
-| `NOT_SUPPORTED` | S-`NOT_SUPPORTED` | `failed` | Back |
-| `TIMEOUT` (planned) | "We didn't get an answer in time. Check Activity before you try again, so you don't pay twice." | `timeout` | Check Activity |
-| `SERVICE_UNAVAILABLE` (planned) | S-`SERVICE_UNAVAILABLE` | `unavailable` | Try again |
+| `PAYMENT_HELD` | "We're checking this payment and will tell you within one working day." | `result` (amber) | Back to Payments |
+| `TIMEOUT` | "We didn't get an answer in time. Check Activity before you try again, so you don't pay twice." | `timeout` | Check Activity |
+| `SERVICE_UNAVAILABLE` | "We couldn't reach the bank. Nothing was sent." | `unavailable` | Try again |
+| `JOURNEY_DISABLED` | "This isn't available at your bank." | on open | Back |
+| `PAYMENT_RETURNED` (planned) | 09 section 12 | notification, tracker | View payment |
+
+Also from the shared screens: `OTP_INVALID`, `OTP_REQUIRED`, `ACCOUNT_NOT_FOUND`, `CORE_UNAVAILABLE`, `NOT_SUPPORTED` as in the Rules at the top of this group (S-codes).
 
 #### 5. Adapters
+
+Prototype: no adapter is called; the rails, fees, rates, registry and directories are constants in `32-personal-transfer.js` and `90-payflow.js`, and the engine simulates the calls (busy text and delay) and the `TIMEOUT` and `SERVICE_UNAVAILABLE` conditions. The sandbox adapters below carry the same contract.
 
 | Integration id | Adapter | Request | Response | Errors | Status |
 |---|---|---|---|---|---|
 | `accounts` | `bank.accounts.list` | none | accounts | none | Existing |
-| `payees` | `bank.beneficiaries.list` | none | map with `ageHours`; planned adds `region`, `country`, `currency`, `checkResult`, `maskedAccount` | none | Existing, extended |
+| `payees` | `bank.beneficiaries.list` | none | map with `ageHours`; planned adds `kind`, `region`, `country`, `currency`, `checkResult`, `maskedAccount`, address | none | Existing, extended |
 | `limits` | `bank.limits.get` | `{currency?}` | `{daily, usedToday}` | `LIMIT_NOT_SET` | Existing |
-| `validate` | `bank.payees.validate` | `{region, country?, fields…}` | `{ok, fieldErrors{field: code}, bankName?}` | `PAYEE_NAME_REQUIRED`, `INVALID_ROUTING`, `INVALID_ACCOUNT`, `INVALID_IBAN`, `NOT_SEPA`, `INVALID_SORT_CODE`, `COUNTRY_MISMATCH` | (planned). Not money-moving; no OTP |
-| `check` | `bank.payees.check` | `{region, name, account key}` | `{result: "match"\|"close"\|"none"\|"na", registeredName?, label}` | `TIMEOUT`, `SERVICE_UNAVAILABLE` | (planned). Not money-moving; no OTP |
-| `quote` | `bank.payments.quote` | `{fromAccountId, payee or fields, receiveAmount, railId?, when?}` | `{quoteId, railId, rails[{id, fits, available}], rate, converted, fee, total, arrives, cutoffNote?, expiresAt (60 s)}` | `INVALID_AMOUNT`, `CURRENCY_NOT_SUPPORTED`, `RAIL_LIMIT`, `RAIL_NOT_AVAILABLE`, `INSUFFICIENT_FUNDS`, `DAILY_LIMIT_EXCEEDED`, `BENEFICIARY_COOLING_OFF`, `PURPOSE_REQUIRED`, `TIMEOUT`, `SERVICE_UNAVAILABLE` | (planned). Not money-moving; no OTP |
+| `lookup` | `bank.payees.lookup` | `{by, value}` or `{region, method, value}` | `{name, maskedAccount}` | `CUSTOMER_NOT_FOUND`, `ALIAS_NOT_FOUND`, `BENEFICIARY_EXISTS` | (planned). Not money-moving; no OTP |
+| `validate` | `bank.payees.validate` | `{region, country?, fields…}` | `{ok, fieldErrors, bankName?}` | the field codes in section 4 | (planned, 09 section 13) |
+| `check` | `bank.payees.check` | `{region, name, account key, accountType?}` | `{result: "match"\|"close"\|"none"\|"na"\|"type"\|"found", registeredName?, label}` | `TIMEOUT`, `SERVICE_UNAVAILABLE` | (planned) |
+| `save` | `bank.payees.save` | `{type, region, fields…, checkResult, acknowledged}` | `{payeeId, addedAt, coolingOffUntil}` | the validate codes, `PAYEE_NOT_CHECKED`, `BENEFICIARY_EXISTS` | (planned) |
+| `quote` | `bank.payments.quote` | `{fromAccountId, payee or fields, receiveAmount, railId?, when?, chargeBearer?, purpose?}` | `{quoteId, railId, rails[{id, fits, available, reason?}], rate, converted, fee, total, arrives, cutoffNote?, expiresAt (60 s)}` | `INVALID_AMOUNT`, `CURRENCY_NOT_SUPPORTED`, `RAIL_LIMIT`, `RAIL_NOT_AVAILABLE`, `INSUFFICIENT_FUNDS`, `DAILY_LIMIT_EXCEEDED`, `BENEFICIARY_COOLING_OFF`, `PURPOSE_REQUIRED`, `ADDRESS_REQUIRED`, `TIMEOUT`, `SERVICE_UNAVAILABLE` | (planned) |
+| `ownQuote`, `ownMove` | `bank.fx.quote`, `bank.transfers.own` (planned) | see `own-transfer` | see `own-transfer` | see `own-transfer` | Existing quote; own move planned |
 | `otpSend`, `otpVerify` | `bank.otp.send`, `bank.otp.verify` | `{channel}`, `{code}` | `{sent, maskedPhone, channel}`, `{verified}` | `OTP_INVALID` | Existing |
-| `save` | `bank.payees.save` | `{region, fields…, checkResult, acknowledged}` | `{payeeId, addedAt, coolingOffUntil}` | the validate codes, `PAYEE_NOT_CHECKED` | (planned). Not money-moving; OTP is taken with the first payment |
-| `pay` | `bank.payments.create` | `{quoteId, payeeId or fields, purpose?, reference?, when?, repeat?, payeeCheck, acknowledged}` | `{reference (BWX-…), railReference, status: "settled"\|"processing"\|"scheduled"\|"held", newBalance, youPay}` | `OTP_REQUIRED`, `STEP_UP_FAILED`, `QUOTE_EXPIRED`, `PURPOSE_REQUIRED`, `PAYEE_NOT_CHECKED`, plus the quote codes, `PAYMENT_HELD`, `CORE_UNAVAILABLE`, `ACCOUNT_NOT_FOUND`, `TIMEOUT`, `SERVICE_UNAVAILABLE` | (planned). Money-moving; OTP. Replaces `bank.transfers.create` for this journey |
+| `pay` | `bank.payments.create` | `{quoteId, payeeId or fields, purpose?, relationship?, sourceOfFunds?, reference?, when?, repeat?, payeeCheck, acknowledged, save?}` | `{reference (BWX-…), railReference, status: "settled"\|"processing"\|"scheduled"\|"held", newBalance, youPay}` | `OTP_REQUIRED`, `STEP_UP_FAILED`, `QUOTE_EXPIRED`, `PURPOSE_REQUIRED`, `PAYEE_NOT_CHECKED`, the quote codes, `PAYMENT_HELD`, `CORE_UNAVAILABLE`, `ACCOUNT_NOT_FOUND`, `TIMEOUT`, `SERVICE_UNAVAILABLE` | (planned). Money-moving; OTP |
 
-Sandbox conditions (09 section 13): `unavailable: ["rail:sinst"]` takes one rail down; `unavailable: ["bank.payments.create"]` takes the bank down; `timeout: ["bank.payments.create"]` returns `TIMEOUT` without moving money; `latencyMs`; a payee named `Test Sanctions` triggers `PAYMENT_HELD`.
+Today `bank.transfers.create` ignores the payee and purpose and stays for the Meezan journeys. Sandbox conditions (09 section 13): `unavailable: ["rail:sinst"]` (or any rail id) takes one rail down; `unavailable: ["bank.payments.create"]` takes the bank down; `timeout: ["bank.payments.create"]` returns `TIMEOUT` without moving money; `latencyMs`; a payee named `Test Sanctions` gives `PAYMENT_HELD`. In the prototype the engine switches `S.down` (unavailable) and `S.timeout` (timeout) apply to every money-moving journey on the code step.
 
-Worked examples (synthetic; Alex, Main ••4410, 8,720.76 available, 41,250.00 daily limit left; the sample payees are in 09 section 14):
+Worked examples (prototype; Current ••4410 available 8,102.40):
 
-| Region | Payee | Receive | Rail | Rate | Fee | You pay | Main after | Rail reference |
+| Type / region | Payee | Receive | Rail | Rate | Fee | You pay | Available after | Rail reference |
 |---|---|---|---|---|---|---|---|---|
-| US | Maya Chen, ABA 021000021, account 123456789 | $120.00 | ACH | none | $0.00 | $120.00 | 8,600.76 | ACH trace number (15 digits) |
-| Europe | Lena Fischer, `DE89 3704 0044 0532 0130 00` | €200.00 | SEPA Credit Transfer | 0.926 | $0.00 | $215.98 | 8,504.78 | End-to-end ID `E2E` + 12 digits |
-| Europe | same | €200.00 | SEPA Instant | 0.926 | $0.50 | $216.48 | 8,504.28 | UETR |
-| UK | James Whitfield, 20-00-00, 55779911 | £100.00 | Faster Payments | 0.781 | $0.00 | $128.04 | 8,592.72 | FPS reference `FP` + 10 digits |
-| UAE | Omar Haddad, `AE07 0331 2345 6789 0123 456` | AED 500.00 | Aani | 3.672 | $0.50 | $136.67 | 8,584.09 | Aani reference |
+| BankWorkx® customer | Taylor Brooks (3301123308) | $50.00 | BankWorkx® transfer | none | $0.00 | $50.00 | 8,052.40 | Transfer ID `BX` + 10 digits |
+| US | Maya Chen | $120.00 | ACH | none | $0.00 | $120.00 | 7,982.40 | 15-digit trace number |
+| Europe | Lena Fischer | EUR 200.00 | SEPA Credit Transfer | 0.926 | $0.00 | $215.98 | 7,886.42 | `E2E` + 12 digits |
+| Europe | Lena Fischer | EUR 200.00 | SEPA Instant | 0.926 | $0.50 | $216.48 | 7,885.92 | UETR |
+| UK | James Whitfield | GBP 100.00 | Faster Payments | 0.781 | $0.00 | $128.04 | 7,974.36 | `FP` + 10 digits |
+| UAE | Omar Haddad | AED 500.00 | Aani | 3.672 | $0.50 | $136.67 | 7,965.73 | `AANI` + 10 digits |
+| SWIFT | Aiko Tanaka (Japan) | JPY 100,000 | International (SWIFT) | 151 | $25.00 | $687.25 ($702.25 if I pay all) | 7,415.15 | UETR |
+| SWIFT | Noah Tremblay (Canada) | CAD 1,000.00 | International (SWIFT) | 1.36 | $25.00 | $760.29 | 7,342.11 | UETR |
+| Own | Current to Savings | $200.00 | instant | none | $0.00 | $200.00 | 7,902.40 | none |
 
 #### 6. Permissions, step-up and limits
 
-`payments.create`; step-up `otp` on every payment (09 section 9; the "under USD 30 to a saved payee" skip is planned, not in Release 1). Personal daily limit USD 50,000 across all payments (proposal, 09 section 9; 41,250.00 left in the demo). Rail maximums as in section 3. Cooling-off rule A: a payee under 24 hours old can receive at most USD 500 in 24 hours. Sanctions screening on every payment. Three wrong codes fail the payment (`STEP_UP_FAILED`), not the account. Business context: `WRONG_CONTEXT`.
+`payments.create`; step-up `otp` on every payment (09 section 9; the "under USD 30 to a saved payee skips the code" idea is planned, not in Release 1). The code names the amount and payee (dynamic linking); three wrong codes fail the payment with `STEP_UP_FAILED` (the sandbox rule; the prototype accepts any six digits). Personal daily limit USD 50,000 across all payments, shown as 41,250.00 left in the demo (own transfers do not use it). Rail maximums as in 09 section 2 (shown dimmed). Cooling-off (rule A at the top of this group): a payee under 24 hours old, which includes a payee typed in this flow, can receive at most 500.00 USD; the first payment of a scheduled payment counts. Sanctions screening on every payment. Only USD accounts pay third parties. Business context: `WRONG_CONTEXT`. A switched-off type, region or rail is hidden or dimmed ("Not offered by your bank"); a deep link to it is refused with `JOURNEY_DISABLED`.
 
 #### 7. Result and links out
 
-Receipt (09 section 11): "Payment receipt" with status chip, amount they receive, rate (if any), You pay, fee, rail name, payee name and masked account, date, the rail's own reference with its label, the BankWorkx® reference `BWX-nnnnnn`, purpose and reference when given, and the name-check line when acknowledged. Notifications: in-app and SMS "{amount} sent to {name}. Ref {reference}."; when a non-instant payment settles, "{name} received {amount}."; `PAYMENT_RETURNED` raises "The payee's bank sent this payment back. The money is in your account."; a held payment: "We're checking this payment and will tell you within one working day." Buttons: **Track payment**, **View receipt**, **Send again**, **Done** (returns to Home when started there, otherwise to the origin place). In the combined demo, **Done** returns Alex to Home, where the **Switch to Business** button is then used (`session` step-up).
+Receipt (09 section 11): "Payment receipt" with status chip, amount they receive, rate, You pay, fee, rail name, payee name and masked account, date, the rail's own reference, the `BWX-nnnnnn` reference, purpose and reference when given, the name-check line and the charges choice. Notifications: N-20 (own), N-21 (BankWorkx® customer), N-22 (another bank), N-23 and N-24 (abroad) in the Retail notification catalogue; the held payment raises "Payment held". Buttons: **Track payment** (tracker detail), **See scheduled payments** (Payments › Scheduled), **Send another** (this journey), **Done**. "New payee" inside the flow is part of this journey; `manage-beneficiary` is the stand-alone way to add, change or delete a payee and links back here with **Send money**.
 
 #### 8. Acceptance criteria
 
-- AC-1: A payment to a saved payee on the default rail in each of the United States, Europe, the United Kingdom and the Middle East needs a consent tick and a verified code, debits exactly **You pay**, and returns the rail's own reference and a `BWX-` reference.
-- AC-2: A new payee's fields are validated by region with the exact messages and codes in section 3; Continue stays disabled while any required field is invalid or empty.
-- AC-3: A new payee shows the name check; `match` continues freely, and `close`, `none` and `na` need the "I understand" tick; `close` offers "Use '{name}'"; the tick is recorded on the payment.
-- AC-4: A rail the amount does not fit cannot be chosen; the default moves to the first rail that fits; forcing it at the bank gives `RAIL_LIMIT`.
-- AC-5: When an instant rail is unavailable it shows "Not available right now", the standard rail stays selected, and forcing it gives `RAIL_NOT_AVAILABLE`.
-- AC-6: A same-day rail chosen after its cut-off is shown as going out the next business day, before any code is asked.
-- AC-7: When the payee's currency is not USD, the summary shows They receive, Rate, Converted, Fee, You pay, Arrives; rounding follows 09 section 5; the rate is held 60 seconds and an older quote gives `QUOTE_EXPIRED`.
-- AC-8: Purpose is required for the Middle East; the reference limit is 80 (US), 18 (UK) and 140 (Europe, Middle East) characters.
-- AC-9: An amount whose **You pay** exceeds the available balance gives `INSUFFICIENT_FUNDS` naming both numbers; above the remaining daily limit, `DAILY_LIMIT_EXCEEDED`; no money moves.
-- AC-10: A payee under 24 hours old cannot receive more than $500.00 in total, with the exact message.
-- AC-11: A payment set for **Later** moves no money until its date, uses a business day for the payee's region, and appears in Scheduled in the payee's currency.
-- AC-12: The code prompt names the amount and the payee; changing either voids the code; three wrong codes end in `STEP_UP_FAILED` and nothing is created.
-- AC-13: A screening hit ends with the status "Held for review" and the exact message; money is reserved, not sent.
-- AC-14: Money cannot leave before the code is verified (`OTP_REQUIRED`).
-- AC-15: A timeout says to check Activity first and moves no money; an unavailable service shows the standard message and moves no money; `CORE_UNAVAILABLE` says no money has left the account.
-- AC-16: "New payee" and "Add a beneficiary" open `manage-beneficiary` where needed and return to the same screen with the payee chosen.
+- AC-1: A payment to a saved payee on the default rail in each of the United States, Europe, United Kingdom, UAE, Saudi Arabia and Jordan, and to a BankWorkx® customer, needs a consent tick and a verified code, debits exactly You pay, and returns the rail's own reference and a `BWX-` reference.
+- AC-2: Each type and region asks the fields in the master table, with the exact rule and message for each; Continue stays blocked while a required field is empty or invalid.
+- AC-3: A BankWorkx® customer is found by mobile, email, ID or account number and shown by name before paying; an unknown identifier gives `CUSTOMER_NOT_FOUND`.
+- AC-4: A UAE mobile number and a Jordan CliQ alias or mobile number return the name for the person to confirm, and limit the choice to instant rails; an unknown one gives `ALIAS_NOT_FOUND`.
+- AC-5: A new payee shows the name check; `match` continues freely; `close`, `type`, `none`, `na` and `found` need the tick; `close` offers "Use {name}"; a UK type mismatch offers the switch; the tick is recorded on the payment.
+- AC-6: A rail the amount does not fit, a rail the bank switched off, a rail that is down and a non-instant rail for an alias payment are dimmed and cannot be chosen; the default is the first rail that fits.
+- AC-7: A same-day rail chosen after its cut-off is shown as going out the next business day before any code is asked.
+- AC-8: When the payee's currency is not USD the summary shows They receive, Rate, Converted, Fee, You pay, Arrives; the rate is held 60 seconds; an older quote gives `QUOTE_EXPIRED` and shows the new amount.
+- AC-9: Purpose is required for the UAE, Saudi Arabia, Jordan, SWIFT and for Fedwire, CHAPS and every same-day or instant Middle East rail; an address is asked where the rail needs it and the payee has none; SWIFT also asks relationship, source of funds from 10,000 USD, and the charges choice (OUR adds 15.00).
+- AC-10: The reference limit is 18 (UK), 80 (US memo), 140 (everything else); characters outside the allowed set are refused.
+- AC-11: An amount above the rail maximum gives `RAIL_LIMIT`; above the balance `INSUFFICIENT_FUNDS` naming both numbers; above the daily limit `DAILY_LIMIT_EXCEEDED`; above 500.00 USD to a new payee `BENEFICIARY_COOLING_OFF`; yen with decimals `INVALID_AMOUNT`; no money moves.
+- AC-12: A payment set for Later moves no money until its date, uses a business day for the payee's country, and appears in Scheduled.
+- AC-13: Between my accounts: same account refused, a frozen account cannot send, conversion uses the mid-market rate with the 0.20% fee separate and a 30-second hold (full rules in `own-transfer`).
+- AC-14: The code prompt names the amount and payee; three wrong codes end in `STEP_UP_FAILED` and nothing is created.
+- AC-15: A screening hit ends with "Held for review" and the exact message; money is reserved, not sent.
+- AC-16: A timeout tells the person to check Activity and moves no money; an unavailable service shows the standard message and moves no money.
+- AC-17: Launching with `ben`, `type`, `region`, `rail` or `country` skips the screens those values answer.
+- AC-18: Switching off a type, a region or a rail hides or dims it; switching off the whole journey hides every launch point.
+- AC-19: "Save this payee" adds the payee to the list with `ageHours` 0 and the cooling-off chip.
 
 #### 9. Scenarios
 
-Setup for all: `alex`, seeded payees from 09 section 14, sandbox rate table of 09 section 5.
+Setup for all: persona `alex` (prototype demo values above; the sandbox seed uses 8,720.76 available, so figures in the right-hand column are the prototype's).
 
 | # | Covers | Persona / setup | Conditions | Steps and expected result |
 |---|---|---|---|---|
-| T-1 | AC-1 | `alex` | none | US: Maya Chen, $120.00, ACH, tick, `482100`. Main 8,600.76; result has an ACH trace number (15 digits) and a `BWX-` reference. |
-| T-2 | AC-1, AC-7 | `alex` | none | Europe: Lena Fischer, €200.00, SEPA Credit Transfer. Summary: Rate 1 USD = 0.926 EUR, Converted $215.98, Fee $0.00, You pay $215.98; Main 8,504.78; `E2E` + 12 digits. |
-| T-3 | AC-1 | `alex` | none | UK: James Whitfield, £100.00, Faster Payments: You pay $128.04; Main 8,592.72; `FP` + 10 digits. |
-| T-4 | AC-1, AC-8 | `alex` | none | Middle East: Omar Haddad, AED 500.00, Aani; no purpose: Review disabled with "Choose a purpose for this payment."; choose Family support: You pay $136.67; Main 8,584.09. |
-| T-5 | AC-2 | `alex` | none | US new payee: routing `123456789` gives `INVALID_ROUTING`; `021000021` is accepted with "✓ Valid routing number · JPMorgan Chase"; account `123` gives `INVALID_ACCOUNT`. |
-| T-6 | AC-2 | `alex` | none | Europe: `DE89 3704 0044 0532 0130 01` gives `INVALID_IBAN`; a valid GB IBAN, which is outside the sandbox SEPA list (`GB29 NWBK 6016 1331 9268 19`), gives `NOT_SEPA`. UK: sort code `20-00` gives `INVALID_SORT_CODE`; account `1234567` gives `INVALID_ACCOUNT`. Continue stays disabled in each case. |
-| T-7 | AC-2 | `alex` | none | Middle East, country Saudi Arabia, IBAN `AE07 0331 2345 6789 0123 456`: `COUNTRY_MISMATCH` "That IBAN starts with AE, but you chose Saudi Arabia." |
-| T-8 | AC-3 | `alex` | none | New payee "Lena Fischer" + her IBAN: green "The name matches"; Continue enabled without a tick; "Save this payee" is on. |
-| T-9 | AC-3 | `alex` | none | Name "Lena Fisher" + her IBAN: amber; **Use 'Lena Fischer'** fixes the name and turns it green; without using it, Continue needs the tick. |
-| T-10 | AC-3 | `alex` | none | Name "Bob Smith" + her IBAN: red; Continue disabled until the tick; the receipt shows `payeeCheck: "none", acknowledged: true`. |
-| T-11 | AC-3 | `alex` | none | A US account unknown to the registry: grey "We couldn't check this name"; tick required; payment still goes. |
-| T-12 | AC-4 | `alex` | none | UAE, AED 60,000.00: Aani is dimmed ("max AED 50,000"); the default moves to UAEFTS. Forcing Aani at `bank.payments.quote` gives `RAIL_LIMIT`. |
-| T-13 | AC-5 | `alex` | `unavailable: ["rail:sinst"]` | Lena Fischer: SEPA Instant shows "Not available right now"; SEPA Credit Transfer stays selected; forcing `sinst` gives `RAIL_NOT_AVAILABLE`. |
-| T-14 | AC-6 | `alex`, clock 20:00 UTC on a weekday | none | US, Same-day ACH picked: review says "Goes out tomorrow: after the 14:45 ET cut-off." and Arrives is the next business day. Instant RTP at the same time: no such line. |
-| T-15 | AC-7 | `alex`, controllable `now` | none | Lena Fischer €200.00: advance 61 seconds on review, confirm: `QUOTE_EXPIRED` "The exchange rate changed. Check the new amount."; **Refresh quote** reprices; no debit. |
-| T-16 | AC-8 | `alex` | none | UK reference longer than 18 characters is refused by the field; a US memo accepts 80; a character like `#` is removed with the note. |
-| T-17 | AC-9 | `alex`; second run with the remaining daily limit set to 100.00 | none | US $9,000.00 on Wire: "Not enough in the account: you'd pay $9,025.00 but $8,720.76 is available." (`INSUFFICIENT_FUNDS`); with the limit at 100.00, $150.00 on ACH: `DAILY_LIMIT_EXCEEDED`; direct adapter calls give the same codes; no money moves. |
-| T-18 | AC-10 | `alex` | none | Casey Nguyen (US, 3 hours old): $600.00 refused with the rule A message; $400.00 sent; $150.00 refused ($100.00 left). |
-| T-19 | AC-11 | `alex`, clock Monday 2 Nov 2026 | none | Maya Chen $120.00, Later, Wed 4 Nov, Every month: Main unchanged 8,720.76; Scheduled lists "$120.00 · every month · next Wed 4 Nov". |
-| T-20 | AC-12 | `alex` | none | Wrong code three times: `locked` / `STEP_UP_FAILED`; no payment created; balance unchanged. Changing the amount after the code is sent voids the code. |
-| T-21 | AC-13 | `alex` | none | New payee named `Test Sanctions`: result status "Held for review", message of `PAYMENT_HELD`; the payment is not settled. |
-| T-22 | AC-14 | `alex` | none | Call `bank.payments.create` without verifying: `OTP_REQUIRED`. |
-| T-23 | AC-15 | `alex` | `timeout: ["bank.payments.create"]`, `latencyMs: 10000` | `timeout` screen with "Check Activity before you try again"; balance unchanged. |
-| T-24 | AC-15 | `alex` | `unavailable: ["bank.payments.create"]` | `unavailable` screen; balance unchanged. |
-| T-25 | AC-15 | `alex` with `transferFails` | none | `CORE_UNAVAILABLE`: "We couldn't complete this right now. No money has left your account." |
-| T-26 | AC-16 | `alex` | none | From `payee` choose New payee, save it from the check screen, return: the new payee is chosen and the "New · 24 hours left" chip shows. |
+| T-1 | AC-1 | `alex` | none | Domestic, United States, Maya Chen, $120.00, ACH, tick, any six digits: available 7,982.40; result "On its way", 15-digit trace number. |
+| T-2 | AC-1, AC-8 | `alex` | none | Europe, Lena Fischer, EUR 200.00, SEPA Credit Transfer: Rate 1 USD = 0.926 EUR, Converted $215.98, Fee $0.00, You pay $215.98; available 7,886.42. |
+| T-3 | AC-1 | `alex` | none | UK, James Whitfield, GBP 100.00, Faster Payments: You pay $128.04; "Sent", "Delivered in seconds". |
+| T-4 | AC-1, AC-9 | `alex` | none | UAE, Omar Haddad, AED 500.00, Aani, no purpose: "Choose a purpose for this payment."; choose Family support (FAM): You pay $136.67. |
+| T-5 | AC-1, AC-3 | `alex` | none | BankWorkx® customer, by mobile `+1 202 555 0142`: "We found Taylor Brooks"; tick; $50.00: You pay $50.00. By account `3301123308` finds the same person; `0000000000` gives `CUSTOMER_NOT_FOUND`. Pay Taylor again as a new payee after saving: `BENEFICIARY_EXISTS`. |
+| T-6 | AC-2 | `alex` | none | US new payee: routing `123456789` gives `INVALID_ROUTING`; `021000021` is accepted; account `123` gives `INVALID_ACCOUNT`; state `N` and ZIP `1234` give their messages. |
+| T-7 | AC-2 | `alex` | none | Europe `DE89 3704 0044 0532 0130 01` gives `INVALID_IBAN`; `GB29 NWBK 6016 1331 9268 19` gives `NOT_SEPA`. UK sort code `20-00` gives `INVALID_SORT_CODE`; account `1234567` gives `INVALID_ACCOUNT`. Saudi Arabia with an AE IBAN gives `COUNTRY_MISMATCH`. |
+| T-8 | AC-2 | `alex` | none | SWIFT Canada: BIC `ROYCCAT2` accepted; BIC `ROYCGBT2` gives `COUNTRY_MISMATCH`; transit `123` gives `INVALID_BANK_CODE`. India IFSC `HDFC1000001` fails (needs the zero). Switzerland asks IBAN not account; Mexico CLABE of 17 digits fails. |
+| T-9 | AC-4 | `alex` | none | UAE, Mobile number (Aani), `0501234567`: "We found Omar Haddad"; only Aani is selectable. Jordan, CliQ alias `rania.h`: "We found Rania Haddad". Alias `nobody`: `ALIAS_NOT_FOUND`. |
+| T-10 | AC-5 | `alex` | none | New payee "Lena Fischer" + her IBAN: green, Continue without a tick; "Lena Fisher": amber, **Use** fixes it; "Bob Smith": red, tick needed. UK James Whitfield with type Business: "wrong type of account"; **Switch to personal** turns it green. US unknown account: grey, tick needed. |
+| T-11 | AC-6 | `alex` | none | UAE, AED 60,000.00: Aani dimmed ("over the limit of AED 50,000"), default UAEFTS. UK Bacs with GBP 25,000 is dimmed. |
+| T-12 | AC-6 | `alex` | option `sinstDown` on | Lena Fischer: SEPA Instant "Not available right now"; SEPA Credit Transfer stays; with option `rail.sct` also off every rail is gone: `RAIL_NOT_AVAILABLE`. |
+| T-13 | AC-7 | `alex` | option `lateDemo` on | US, Same-day ACH: "Goes out tomorrow: after the 14:45 ET cut-off.", Arrives "Wed 4 Nov (after the cut-off)". RTP: no such line. |
+| T-14 | AC-8 | `alex`, 61 seconds pass on review | none | Lena Fischer EUR 200: confirm gives `QUOTE_EXPIRED`; a new quote; confirm again works. |
+| T-15 | AC-9, AC-10 | `alex` | none | UK reference of 19 characters: `REFERENCE_TOO_LONG`; a US ACH memo accepts 80, a wire accepts 140; `#` gives `INVALID_REFERENCE`. Fedwire with a payee that has no address asks for street and city. Japan: relationship and purpose asked; source of funds only at 10,000 USD or more; `OUR` adds $15.00. |
+| T-16 | AC-11 | `alex` | none | $30,000 to Maya on ACH: default moves to Same-day ACH, then `INSUFFICIENT_FUNDS` "you'd pay $30,001.00 but $8,102.40 is available". Forcing ACH through a direct adapter call: `RAIL_LIMIT`. A new payee, $600.00: `BENEFICIARY_COOLING_OFF`; $400.00 passes. JPY 100.5: `INVALID_AMOUNT`. Daily limit: a direct call with the remaining limit set to 100.00 and $150.00 gives `DAILY_LIMIT_EXCEEDED` (not reachable with the demo balances). |
+| T-17 | AC-12 | `alex` | none | Maya, $120.00, Later, a business day, Every month: balance unchanged; Scheduled lists it. Saudi Arabia offers Sunday to Thursday only. |
+| T-18 | AC-13 | `alex` | none | Between my accounts: Current to Current gives `SAME_ACCOUNT`; Current to Euro, send $500.00: rate 0.9260, fee $1.00, total $501.00, you get EUR 463.00. With `allowFx` off: `CURRENCY_NOT_SUPPORTED`. |
+| T-19 | AC-14 | `alex` | none | Wrong code three times (sandbox): `STEP_UP_FAILED`; nothing created; balance unchanged. |
+| T-20 | AC-15 | `alex` | none | New payee "Test Sanctions": result "Held for review"; available drops, ledger balance does not. |
+| T-21 | AC-16 | `alex` | `timeout: ["bank.payments.create"]`, `latencyMs: 10000` | `timeout` screen with "Check Activity before you try again"; balance unchanged. |
+| T-22 | AC-16 | `alex` | `unavailable: ["bank.payments.create"]` | `unavailable` screen; balance unchanged. |
+| T-23 | AC-16 | `alex` with `transferFails` | none | `CORE_UNAVAILABLE`: "We couldn't complete this right now. No money has left your account." |
+| T-24 | AC-17 | `alex` | none | Open with `ben: maya`: starts on the amount screen with Maya chosen. Open with `rail: sinst`: type domestic, region Europe, no type or region screen. Open with `region: me`: UAE. |
+| T-25 | AC-18 | `alex` | options `type.intl` off, `region.uk` off, `rail.chaps` off | The "To another country" card and UK card are gone; CHAPS is dimmed "Not offered by your bank". |
+| T-26 | AC-19 | `alex` | none | Add Priya Raman (sample), keep "Save this payee" ticked, pay: Payments › Beneficiaries lists her with chip "New" and `ageHours` 0. |
 
 #### 10. Expected mutation-check survivors
 
-Per 09 section 15: the exact text of each message (tests check the code, not the words); the sandbox registry names and rates (fixture data); the ordering of rails inside a region (only the default is asserted). Journey-specific: the daily-limit and balance rules exist in the UI navigation rule and in the sandbox, so a sandbox-only mutant survives unless a direct adapter scenario exists (T-17 includes one, so it is killed). `RAIL_LIMIT` is killed by T-12; `QUOTE_EXPIRED` by T-15; cut-off date maths by T-14 only for the one cut-off tested, so the other regions' cut-off times survive (reason: one scenario per rule). The IBAN length table survives for countries not used in scenarios. The "under USD 30 without a code" skip is not built, so nothing to mutate.
+Per 09 section 15: the exact text of messages, the registry and directory names, the rates, the order of rails inside a region. Journey-specific: `DAILY_LIMIT_EXCEEDED` survives in the prototype because the balance is lower than the limit (a direct sandbox scenario kills it, T-16). The Saudi national ID rule (10 digits) survives unless a scenario fills it. The intermediary BIC rule survives (no scenario ticks the switch). The `Test Sanctions` match is killed by T-20. The 60-second and 30-second holds survive without a controllable clock. The per-country weekend lists survive unless T-17 checks Saudi Arabia and Jordan. The `type` result survives because only one registry account is a personal UK account.
 
 ---
 
-### ★ Abroad — `international-transfer`
+### ★ Quick transfer — `single-transfer`
+
+Catalog: `single-transfer`, workspace Personal, category Personal: Payments, core no, a bank can switch it off: yes. Options (key, label, default): `allowInstant` "Offer instant rails (RTP, SEPA Instant, Faster Payments, Aani, sarie, CliQ)" (on); `allowLater` "Allow “Later” and repeating payments" (on); `coolingOff` "Apply the 24-hour $500 limit to new payees" (on); `sinstDown` "Demo: SEPA Instant is unavailable" (off); `lateDemo` "Demo: it is 16:30, after same-day cut-offs" (off).
 
 #### 1. Summary
 
 | Field | Value |
 |---|---|
-| Slug | `international-transfer` |
-| Purpose | Send money to a person in a country outside the United States, Europe (SEPA), the United Kingdom and the Middle East, over SWIFT. The payee receives their own currency; the screen shows the rate (held 60 seconds), the bank charge option (SHA, OUR, BEN), a required purpose, and the total. Arrival is 1 to 3 business days; the receipt carries a UETR. |
+| Slug | `single-transfer` |
+| Purpose | A one-page form to pay a payee the person has already saved, in any region: choose who, type what they receive, see the cost and the ways to send it update as you type, add a reference, then review and confirm with a code. New payees use `personal-transfer`. |
 | Release / workspace | 1 / Personal |
-| Status | New (planned). Follows the same five steps as `personal-transfer` (09 section 1): Payee, Payee check, Amount and speed, Review, Result. |
+| Status | New. Built in the prototype (`design/bankworkx-r1/src/journeys/29-single-transfer.js`); research in `research/single-transfer.md`. Not in the module before. It is a catalog entry of its own, so a bank can offer the long guided flow, the quick form, or both. |
 | Channels | Web and mobile |
-| Starting pattern | `fixtures/convert-currency.ts` for the rate, fee and quote hold; `fixtures/local-transfer.ts` for the review, consent, code and result. |
+| Starting pattern | The review, code and result screens of `personal-transfer` |
 | Who may use it | `payments.create` |
-| Shared reference | `09-payment-rails.md`: SWIFT row of section 2; SWIFT fields of section 3; name check (4); amount and FX (5); charges (6); purpose and reference (7); scheduling (8); limits (9); compliance (10); receipt (11); codes (12). |
+| Shared reference | `09-payment-rails.md` sections 2 (rails), 5 (amount and conversion), 6 (charges), 7 (purpose and reference), 8 (when), 9 (limits and strong authentication), 10 (cooling-off, screening), 11 (receipts), 12 (codes). |
 
-Sandbox countries (09 section 5): Canada `CAD`, India `INR`, Japan `JPY`, Australia `AUD`. Rates (1 USD =): 1.360, 83.20, 151.0, 1.520. (The older list of PKR, KWD, GBP and others is replaced: UK, UAE, Saudi Arabia and Jordan now go through `personal-transfer`.)
+**Sandbox demo values.** Account: Current ••4410, available 8,102.40 USD (only USD accounts are offered). Saved payees: Maya Chen (US, ABA 021000021, 123456789), Lena Fischer (Europe, `DE89 3704 0044 0532 0130 00`), James Whitfield (UK, 20-00-00, 55779911), Omar Haddad (UAE, `AE07 0331 2345 6789 0123 456`). A payee saved today through `manage-beneficiary` or `personal-transfer` is "New · 24 hours left" and limited to 500.00 USD. Daily limit left 41,250.00 USD. Rates as in 09 section 5. A payee named "Test Sanctions" is held for review. The shared demo switches: service down, timeout.
 
 #### 2. Entry points
 
 | Place › label | Passes in | Permission |
 |---|---|---|
-| Home › + Send money › region chip "Other countries (SWIFT)" | optional typed name | `payments.create` |
-| Payments › hub › Abroad | `{payeeId}` optional | `payments.create` |
-| Payments › beneficiaries › row (Abroad) › Send money | `{payeeId}` | `payments.create` |
-| `personal-transfer` › New payee › "Other countries (SWIFT)" | `{name}` | `payments.create` |
-| Payments › tracker › payment › Repeat payment | `{paymentId}` | `payments.create` |
+| Payments › Beneficiaries › row › Send | `{payeeId}` | `payments.create` |
+| Payments › Ways to send money › Quick transfer | `{rail}` | `payments.create` |
+| Accounts › detail › Transfer from this account | `{accountId}` (prefills From) | `payments.create` |
+| `manage-beneficiary` result › Send money | `{payeeId}` | `payments.create` |
+| `schedule-payment` / Ways to send money › One-off date | none | `payments.create` |
+
+Launch values read: `accountId`, `payeeId`, `amount`, `rail`.
 
 #### 3. Screens
 
-**`payee` — "Who are you paying abroad?"** (entry; skipped when `payeeId` is passed). `beneficiaryPicker` `intl.payeeId` (region SWIFT), `allowAddNew`, `addNewJourney: "manage-beneficiary"`, `returnTo: "payee"`. Each row: initial, name, "Other countries (SWIFT) · {country}", masked account `BOTKJPJT · ••7890`, chip "Saved" or "Verified". Required, message "Choose who to pay." Empty: "You haven't saved anyone abroad yet." with **New payee**.
+`stepper` (planned): quick, review, code.
 
-New payee fields (09 section 3):
+**`quick`: "Quick transfer"** (entry). Intro "Everything on one page. You see the cost as you type." Button **Review payment**, busy text "Checking the payment with the bank…" (about 0.7 s). Live validation on every field.
 
-| Field | Block | Required | Validation | Error message (code) |
+| Field | Block | Required | Validation | Error message |
 |---|---|---|---|---|
-| Country | `select`: Canada, India, Japan, Australia (with currency) | Yes | One of the list; fixes the payee's currency | none |
-| Name on the account | `textInput`, 70 | Yes | 2 to 70 characters | "Enter the name on the account." (`PAYEE_NAME_REQUIRED`) |
-| SWIFT / BIC | `textInput`, 11, upper-cased | Yes | 8 or 11 characters: 4 letters, 2 letters, 2 letters or digits, optional 3 | "Enter the SWIFT/BIC code." (empty) / "A SWIFT/BIC has 8 or 11 letters and numbers." (`INVALID_BIC`) |
-| Account number or IBAN | `textInput`, 34 | Yes | 6 to 34 letters, digits, spaces or dashes | "Enter the account number or IBAN." (empty) / "That account number looks too short or too long." (`INVALID_ACCOUNT`) |
+| From account | `select`: USD accounts only, "{name} ••{last} · {available} available" | Yes | An account that can debit | `ACCOUNT_CANNOT_DEBIT` (planned) "You can't send money from this account right now. Choose another account." |
+| Who are you paying? | `cards`: each saved payee as "{nickname} ({name})" or the name, a line "{region} · {country} · {bank mask}" and a chip (Verified, Saved, or "New · {n} hours left"). A BankWorkx® customer is shown disabled with "BankWorkx® customer: use “To a BankWorkx® customer”" | Yes | A saved payee that is not a BankWorkx® customer | "Choose who to pay." / `PAYEE_NOT_CHECKED` "Check the payee before you continue." |
+| They receive | `amountInput` in the payee's currency; hint "In {currency}, the currency {first name}'s account uses. Available: {balance}." (before a payee is chosen: "Choose who to pay first. You type what they receive.") | Yes | Above zero; within the chosen rail's maximum; total within the available balance; total within 41,250.00 USD; for a new payee, at most 500.00 USD | "Enter an amount above zero." / `RAIL_LIMIT` "That's over the {rail} limit of {limit}. Choose another way to send it." / `INSUFFICIENT_FUNDS` "Not enough in the account: you'd pay {total} but {available} is available." / `DAILY_LIMIT_EXCEEDED` "That's over your remaining daily limit of $41,250.00." / `BENEFICIARY_COOLING_OFF` "That's over the $500.00 you can send to a new payee in the first 24 hours." |
+| How fast? | `cards` (one per rail of the payee's region): name, "{speed} · limit {limit}", fee ("Free" or $), an "Instant" chip. Dimmed and not selectable when the amount is over the rail's limit ("over the limit of {limit}") or the rail is off ("Not available right now"). The default is the payee region's first rail that fits; the person's choice is kept while it fits | Yes | A rail that fits and is available | `RAIL_NOT_AVAILABLE` "{rail} isn't available right now. Choose another way to send it." when none is left |
+| Who pays the bank charges? | `chips`: Shared, I pay all (+$15), They pay. Shown for SWIFT payees only. Hint by choice as in `personal-transfer` | No (default Shared) | One of three | none |
+| Reference | `textInput` "Optional"; hint: UK "Up to 18 characters (Faster Payments limit).", US "Called a memo. Up to 80 characters.", others "Up to 140 characters."; before a payee is chosen "Shown on their statement." | No | Region maximum (US 80, Europe 140, UK 18, Middle East 140, SWIFT 140); letters, numbers, spaces and `. , ' - / ( ) + : ?` | "Use {max} characters or fewer for this payee's bank." / "Use letters, numbers, spaces and . , ' - / ( ) + : ? only." |
+| Purpose of payment | `select` (Family support, Goods or services, Salary, Rent, Education, Savings or investment, Other). Shown for Middle East and SWIFT payees; hint "Required for payments to the Middle East and over SWIFT." | Yes where shown | One chosen | `PURPOSE_REQUIRED` "Choose a purpose for this payment." |
+| When | `chips` Now, Later (shown when option `allowLater`) | No | none | none |
+| Send on | date list, 30 days ahead, business days only; weekends skipped per country (Friday and Saturday for Saudi Arabia and Jordan, Saturday and Sunday otherwise); hint "Weekends and bank holidays are skipped. It is checked again on the day." | Yes, when Later | A listed date | "Choose a date." |
+| Repeat | `chips` Doesn't repeat, Every week, Every month (when Later) | No | none | none |
 
-**Continue** is disabled until every field is valid. It runs `bank.payees.validate`, then `bank.payees.check`.
+Live summary under the form: "Enter an amount to see what it costs." until an amount is typed; then, for a foreign currency, They receive, Rate "1 USD = {rate} {CUR} · held 60 s", Converted; then Fee, **You pay** (bold, top rule), Arrives (or "Scheduled for {date}"), "New payee allowance: $500.00 for the first {n} hours" for a new payee, and "Daily limit left: $41,250.00". The summary and the rail cards redraw on each keystroke without moving the cursor.
 
-**`payeeCheck` — "Check the payee"** (new payees only). Chip "Name check". SWIFT usually has no registry, so the result is `na`: grey "We couldn't check this name", body "The receiving bank doesn't support name checks for this account. Only continue if you trust {name}." Tick "I understand and want to continue." is required; **Continue** is disabled until it is ticked. If the sandbox registry knows the account the four outcomes of `personal-transfer` apply (match, close with **Use '{name}'**, none, na). Tick "Save this payee for next time" (on by default). Buttons **Continue**, **Change details**.
+Empty (no saved payees): icon, "You haven't saved anyone yet", "Add a payee once and paying them takes two taps." Button **Add a beneficiary** (`manage-beneficiary {mode: add}`).
 
-**`amount` — "Amount, charges and purpose"**.
+On **Review payment** the journey stops with a banner and a code in these cases: no payee (`PAYEE_NOT_CHECKED`), the rail down (`RAIL_NOT_AVAILABLE`), or a rule above (its code). It stores the quote time.
 
-| Field | Block | Required | Validation | Error message (code) |
-|---|---|---|---|---|
-| From | `accountPicker` `intl.fromAccountId`, USD accounts only | Yes | `canDebit` | "Choose an account to send from." |
-| They receive ({currency}) | `amountInput` in the payee's currency (JPY 0 decimals, others 2) | Yes | Greater than 0; **You pay** at most the available balance; **You pay** at most the remaining daily limit | "Enter an amount above zero." (`INVALID_AMOUNT`) / "Not enough in the account: you'd pay {total} but {available} is available." (`INSUFFICIENT_FUNDS`) / "That's over your remaining daily limit of {remaining}." (`DAILY_LIMIT_EXCEEDED`) / "We can't send {currency} to that country." (`CURRENCY_NOT_SUPPORTED`) |
-| How fast? | One tile: International (SWIFT), "1–3 business days · max none · $25.00" | Yes | If `unavailable: ["rail:swift"]`: "Not available right now" | "SWIFT isn't available right now. Choose another way to send it." (`RAIL_NOT_AVAILABLE`) |
-| Purpose of payment | `select`: Family support, Goods or services, Salary, Rent, Education, Savings or investment, Other | **Yes, always** | One of the list | "Choose a purpose for this payment." (`PURPOSE_REQUIRED`) |
-| Who pays the bank charges? | Three buttons (09 section 6): **Shared** (`SHA`), **I pay all (+$15)** (`OUR`), **They pay** (`BEN`) | Yes (default Shared) | One of three | "Choose who pays the charges." |
-| Reference | `textInput`, 140 | No | Allowed characters `. , ' - / ( ) + : ?`, letters, digits, space | none |
-| When? | **Now** / **Later** | Yes | Later needs a business day in the next 30 days (see `schedule-payment`) | "Choose a date." |
+**`review`: "Review payment"**. Big amount "You're sending {amount in their currency}" (or "Scheduled for {date}"), "to {name} · {bank mask}", chips Verified/Saved/New and the rail name. Notes: foreign currency "Rate held for 60 seconds from when you opened this screen. If it runs out, we show the new amount before anything is taken."; new payee "{name} is a new payee. For your security you can send up to $500.00 in their first {n} hours."; late demo "Goes out tomorrow: after the {cut-off} cut-off." Rows: From, To (name, bank), Country, Sent by, Rate, Fee, You pay, Arrives (or the date), Purpose, Reference, Charges (SWIFT), Repeats, Payee check ("Verified" or "Saved, not verified"). Small print "We screen payments against sanctions lists. Some may be held for a short review. Your code names the amount and the payee, and only works for this payment." Button **Confirm and send**. A foreign-currency quote older than 60 seconds: `QUOTE_EXPIRED`, a new quote is taken, the person confirms again.
 
-One line under the charge buttons: Shared "You pay our fee; they may pay their bank's fee."; I pay all "They receive the full amount. Extra $15 from you."; They pay "Charges are taken from what they receive."
+**Code prompt** (shared screen C): "Authorise {amount} to {name}", sub "Code sent to ••• 4410. It only works for this payment. Changing the amount or payee voids it."
 
-Summary card (live): **They receive** `{symbol}{amount}`, **Rate** "1 USD = {rate} {currency} · held for 60 s", **Converted** `$…`, **Fee** `$25.00` (`$40.00` for OUR), **You pay**, **Arrives** "1–3 business days". The quote is created when the amount screen opens (`bank.payments.quote`, planned) and held 60 seconds.
+**`result`** (terminal): same outcomes as `personal-transfer` (Sent, On its way, Scheduled, Held for review). Receipt rows: Sent by, They receive, Rate, Fee, You pay, Arrives or First payment, the rail's own reference, Payee check, Charges, Purpose. Buttons **Track payment** / **See scheduled payments**, **Send another** (this journey), **Done**. A scheduled payment is added to Scheduled with "Once · {date}", "Weekly · {date}" or "Monthly · {date}".
 
-Cut-off: 15:00 UTC for same-day release. After it the review says "Goes out tomorrow: after the 15:00 UTC cut-off."
-
-Alert (info): "Payments abroad take 1 to 3 business days. We'll show the exact date next." Button **Review**, disabled until the amount, purpose and (Later) date are valid.
-
-**`review` — "Review payment"**. Rows (Aiko Tanaka, JPY 150,000, Shared):
-
-| Row | Value |
-|---|---|
-| From | Main ••4410 |
-| To | Aiko Tanaka, `BOTKJPJT · ••7890` |
-| Country | Japan |
-| Sent by | International (SWIFT) |
-| Rate | 1 USD = 151.0 JPY |
-| Fee | $25.00 |
-| **You pay** | **$1,018.38** |
-| Arrives | 1–3 business days (for example Tue 3 Nov to Thu 5 Nov 2026 when sent on Mon 2 Nov, using the sandbox business-day calendar) |
-| Purpose | Family support |
-| Charges | SHA |
-| Reference | when typed |
-
-Rate hold: the alert "This rate is held for 60 seconds" with a live countdown. At 0 it becomes "The exchange rate changed. Check the new amount." (`QUOTE_EXPIRED`) and the button reads **Get a new rate**, which reprices (clearing consent and code) and goes back to `review`. Small print: "We screen payments against sanctions lists. Some may be held for a short review. The receiving bank may deduct its own fees." (for SHA and BEN). Consent (`intl-v2`, planned): "I confirm the details and the rate are correct, the purpose is true, and this payment is not for anyone I know is under sanctions." Button **Confirm and send** (Now) or **Schedule payment** (Later).
-
-**`otp`** shared C. Prompt: "Authorise ¥150,000 to Aiko Tanaka" with "Code sent to ••• 4410. It only works for this payment." Button **Send ¥150,000**. Changing the amount, payee or charges after the code is sent voids it (`STEP_UP_FAILED`). **`rateExpired`** (as above), **`locked`**, **`timeout`**, **`unavailable`**, **`failed`** shared C.
-
-**`success` — "Payment on its way"** (terminal; "Payment scheduled" for Later; "Payment held" when screened). Text "{amount} is on its way to {name}." Rows: Sent by, They receive, You pay, Arrives, **UETR** (a UUID v4), `BWX-nnnnnn`, Charges, Name check line when acknowledged. Buttons **Track payment**, **View receipt**, **Done**.
+**`locked`, `timeout`, `unavailable`, `failed`**: shared screens C.
 
 #### 4. Sandbox errors
 
-| Code | Message | Shows on | Button |
+| Code | Message the person sees | Shows on | Button |
 |---|---|---|---|
-| `OTP_INVALID` / `OTP_REQUIRED` | S-`OTP_INVALID` / S-`OTP_REQUIRED` | `otp` / `failed` | Try again / Back to code |
+| `PAYEE_NOT_CHECKED` | "Check the payee before you continue." | `quick` banner | choose a payee |
+| `RAIL_NOT_AVAILABLE` | "That way to send isn't available right now. Choose another." | `quick` | Choose another rail |
+| `RAIL_LIMIT` | "That is over the limit for this way to send. Choose another or send less." | `quick` | Change amount |
+| `INSUFFICIENT_FUNDS` | field text naming both numbers | `quick` | Change amount |
+| `DAILY_LIMIT_EXCEEDED` | field text | `quick` | Change amount |
+| `BENEFICIARY_COOLING_OFF` | field text | `quick` | Change amount |
+| `PURPOSE_REQUIRED` | "Choose a purpose for this payment." | `quick` | Edit |
+| `QUOTE_EXPIRED` | "The exchange rate changed. Check the new amount and confirm again." | `review` | Confirm again |
 | `STEP_UP_FAILED` | "We couldn't confirm this payment. Nothing was sent. Start again." | `locked` / `failed` | Start again |
-| `ACCOUNT_NOT_FOUND` | S-`ACCOUNT_NOT_FOUND` | `failed` | Choose account |
-| `INVALID_BIC` / `INVALID_ACCOUNT` | section 3 | `payee` | Edit |
-| `PAYEE_NOT_CHECKED` (planned) | "Check the payee before you continue." | `payeeCheck` | Check the payee |
-| `BENEFICIARY_COOLING_OFF` | "{name} is new. You can send up to ${left} in the first 24 hours." | `amount` | Change amount |
-| `CURRENCY_NOT_SUPPORTED` (existing) | "We can't send {currency} to that country." (sandbox: "We do not convert that currency pair") | `payee` | Choose payee |
-| `INVALID_AMOUNT` | "Enter an amount above zero." | `amount` | Change amount |
-| `RAIL_NOT_AVAILABLE` (planned) | "SWIFT isn't available right now. Choose another way to send it." | `amount` | Try again later |
-| `PURPOSE_REQUIRED` (planned) | "Choose a purpose for this payment." | `amount` | Edit |
-| `INSUFFICIENT_FUNDS` | "Not enough in the account: you'd pay {total} but {available} is available." (must cover amount, fee and the OUR extra) | `amount` / `failed` | Change amount |
-| `DAILY_LIMIT_EXCEEDED` (planned) | "That's over your remaining daily limit of {remaining}." | `amount` | Change amount |
-| `QUOTE_EXPIRED` (planned) | "The exchange rate changed. Check the new amount." | `rateExpired` | Get a new rate |
-| `PAYMENT_HELD` (planned) | "We're checking this payment and will tell you within one working day." | `success` | Done |
-| `PAYMENT_RETURNED` (planned) | "The payee's bank sent this payment back. The money is in your account." | notification | View payment |
-| `CORE_UNAVAILABLE` | S-`CORE_UNAVAILABLE` | `failed` | Try again |
-| `NOT_SUPPORTED` | S-`NOT_SUPPORTED` | `failed` | Back |
-| `TIMEOUT` / `SERVICE_UNAVAILABLE` (planned) | shared C | `timeout` / `unavailable` | Check Activity / Try again |
+| `PAYMENT_HELD` | "We're checking this payment and will tell you within one working day." | `result` (amber) | Back to Payments |
+| `TIMEOUT` | "We didn't get an answer in time. Check Activity before you try again, so you don't pay twice." | `timeout` | Check Activity |
+| `SERVICE_UNAVAILABLE` | "We couldn't reach the bank. Nothing was sent." | `unavailable` | Try again |
+| `JOURNEY_DISABLED` | "This isn't available at your bank." | on open | Back |
+
+Also `OTP_INVALID`, `OTP_REQUIRED`, `ACCOUNT_NOT_FOUND`, `CORE_UNAVAILABLE`, `NOT_SUPPORTED` as in the group rules. In the prototype a message without a code in brackets ("Enter an amount above zero.") is reported with the code `RAIL_LIMIT` in the banner (see contradictions).
 
 #### 5. Adapters
 
+Prototype: constants and engine simulation, as in `personal-transfer`. Sandbox contract:
+
 | Integration id | Adapter | Request | Response | Errors | Status |
 |---|---|---|---|---|---|
-| `accounts`, `payees`, `limits` | `bank.accounts.list`, `bank.beneficiaries.list`, `bank.limits.get` | as `personal-transfer` | as `personal-transfer` | `LIMIT_NOT_SET` | Existing |
-| `rate` | `bank.fx.rate` | `{from, to}` | `{from, to, midRate, rate, spreadPercent}` | `CURRENCY_NOT_SUPPORTED` | Existing (the sandbox uses its own fixed rate table, 09 section 5) |
-| `validate`, `check` | `bank.payees.validate`, `bank.payees.check` | as `personal-transfer`, region `swift` | as `personal-transfer` | `INVALID_BIC`, `INVALID_ACCOUNT`, `PAYEE_NAME_REQUIRED` | (planned) |
-| `quote` | `bank.payments.quote` | `{fromAccountId, payee or fields, receiveAmount, charges: "SHA"\|"OUR"\|"BEN", when?}` | `{quoteId, railId: "swift", rate, converted, fee, total, arrivesBetween[], expiresAt, ttlSeconds: 60}` | `INVALID_AMOUNT`, `CURRENCY_NOT_SUPPORTED`, `RAIL_NOT_AVAILABLE`, `INSUFFICIENT_FUNDS`, `DAILY_LIMIT_EXCEEDED`, `BENEFICIARY_COOLING_OFF`, `PURPOSE_REQUIRED`, `TIMEOUT`, `SERVICE_UNAVAILABLE` | (planned). Not money-moving; no OTP. Replaces `bank.international.quote` |
-| `otpSend`, `otpVerify` | `bank.otp.*` | as C | as C | `OTP_INVALID` | Existing |
-| `save` | `bank.payees.save` | as `personal-transfer` | as `personal-transfer` | validate codes, `PAYEE_NOT_CHECKED` | (planned) |
-| `pay` | `bank.payments.create` | `{quoteId, payeeId or fields, purpose, charges, reference?, when?, payeeCheck, acknowledged}` | `{reference (BWX-…), uetr, status: "processing"\|"scheduled"\|"held", newBalance, youPay, arrivesBetween[]}` | `OTP_REQUIRED`, `STEP_UP_FAILED`, `QUOTE_EXPIRED`, `QUOTE_USED`, `QUOTE_NOT_FOUND`, `INSUFFICIENT_FUNDS`, `DAILY_LIMIT_EXCEEDED`, `PURPOSE_REQUIRED`, `PAYMENT_HELD`, `CORE_UNAVAILABLE`, `TIMEOUT`, `SERVICE_UNAVAILABLE` | (planned). Money-moving; OTP. Replaces `bank.international.send` |
+| `accounts` | `bank.accounts.list` | none | accounts | none | Existing |
+| `payees` | `bank.beneficiaries.list` | none | map with `ageHours`; planned adds region, country, currency, check result | none | Existing, extended |
+| `quote` | `bank.payments.quote` | `{fromAccountId, payeeId, receiveAmount, railId?, when?, chargeBearer?, purpose?}` | `{quoteId, railId, rails[{id, fits, available}], rate, converted, fee, total, arrives, cutoffNote?, expiresAt (60 s)}` | `INVALID_AMOUNT`, `RAIL_LIMIT`, `RAIL_NOT_AVAILABLE`, `INSUFFICIENT_FUNDS`, `DAILY_LIMIT_EXCEEDED`, `BENEFICIARY_COOLING_OFF`, `PURPOSE_REQUIRED`, `TIMEOUT`, `SERVICE_UNAVAILABLE` | (planned) |
+| `otpSend`, `otpVerify` | `bank.otp.send`, `bank.otp.verify` | `{channel}`, `{code}` | `{sent, maskedPhone, channel}`, `{verified}` | `OTP_INVALID` | Existing |
+| `pay` | `bank.payments.create` | `{quoteId, payeeId, purpose?, reference?, when?, repeat?}` | `{reference (BWX-…), railReference, status, newBalance, youPay}` | `OTP_REQUIRED`, `STEP_UP_FAILED`, `QUOTE_EXPIRED`, `PURPOSE_REQUIRED`, `PAYMENT_HELD`, `CORE_UNAVAILABLE`, `TIMEOUT`, `SERVICE_UNAVAILABLE` | (planned). Money-moving; OTP |
 
-**Pricing worked examples.** The fee is $25.00; OUR adds $15.00. Aiko Tanaka, JPY 150,000 at 151.0: Converted $993.38. Shared: Fee $25.00, You pay **$1,018.38**, Main becomes **7,702.38**. I pay all: Fee $40.00, You pay **$1,033.38**, payee receives the full JPY 150,000. They pay: You pay $1,018.38 as for Shared in the sandbox, and the payee receives JPY 150,000 less the charges (a proposal; see section 10). Canada: CAD 1,000.00 at 1.360: Converted $735.29, You pay $760.29 (Shared). UETR example: `3f2b8c1e-5a47-4d1b-9c6e-7a1d2e8f4b90`.
+Conditions: `unavailable: ["rail:sinst"]` takes one rail down (the prototype switch is option `sinstDown`); `timeout: ["bank.payments.create"]`; `unavailable: ["bank.payments.create"]`; `latencyMs`.
+
+Worked examples (prototype; Current available 8,102.40):
+
+| Payee | Receive | Rail | Rate | Fee | You pay | Available after |
+|---|---|---|---|---|---|---|
+| Maya Chen | $120.00 | ACH | none | $0.00 | $120.00 | 7,982.40 |
+| Lena Fischer | EUR 200.00 | SEPA Credit Transfer | 0.926 | $0.00 | $215.98 | 7,886.42 |
+| Lena Fischer | EUR 200.00 | SEPA Instant | 0.926 | $0.50 | $216.48 | 7,885.92 |
+| James Whitfield | GBP 100.00 | Faster Payments | 0.781 | $0.00 | $128.04 | 7,974.36 |
+| Omar Haddad | AED 500.00 | Aani | 3.672 | $0.50 | $136.67 | 7,965.73 |
 
 #### 6. Permissions, step-up and limits
 
-`payments.create`; step-up `otp` on every payment. No per-payment rail maximum for SWIFT (09 section 2); the personal daily limit USD 50,000 applies on the USD amount after conversion (proposal, 09 section 9). Cooling-off rule A applies (USD 500 in 24 hours to a payee under 24 hours old). Purpose of payment is always required. Cut-off 15:00 UTC. Sanctions screening on every payment. Business context: `WRONG_CONTEXT`.
+`payments.create`; step-up `otp` on every payment (the "under USD 30 to a saved payee skips the code" idea in the research is a future option, not built). The code names the amount and payee; three wrong codes fail with `STEP_UP_FAILED` (sandbox rule; the prototype accepts any six digits). Daily limit 50,000 USD, 41,250.00 left in the demo. Rail maximums as in 09 section 2. Cooling-off (rule A): a payee under 24 hours old can receive at most 500.00 USD, enforced when option `coolingOff` is on. Sanctions screening on every payment. Business context: `WRONG_CONTEXT`. If option `allowInstant` is off, every instant rail is dimmed "Not available right now". A payee that is a BankWorkx® customer cannot be chosen here.
 
 #### 7. Result and links out
 
-Receipt: sender, payee, country, bank details (masked), They receive, rate, fee, charges option (SHA, OUR or BEN), You pay, purpose, UETR, `BWX-` reference, estimated arrival, name-check line when acknowledged, and "The receiving bank may deduct its own fees" for SHA and BEN. Notifications: in-app and SMS on send; later "Your payment to {name} arrived" (tracker status Settled); on return "The payee's bank sent this payment back. The money is in your account."; on hold "We're checking this payment and will tell you within one working day." Buttons: **Track payment**, **View receipt**, **Done**.
+Receipt as `personal-transfer` section 7. Notification N-22 (payment sent) or N-23 (abroad) from the Retail catalogue. Buttons: **Track payment**, **See scheduled payments**, **Send another**, **Done**. **Add a beneficiary** opens `manage-beneficiary` and, when the person saves, returns to this form.
 
 #### 8. Acceptance criteria
 
-- AC-1: A SWIFT payment to a saved payee shows They receive, Rate, Converted, Fee and You pay before any code is asked, then needs consent and a verified code, debits exactly **You pay** and returns a UETR.
-- AC-2: A new payee's country, BIC and account are validated with the exact messages and codes; Continue stays disabled while any is invalid.
-- AC-3: The name check normally gives `na`; the person must tick "I understand" before continuing; the tick is recorded on the payment.
-- AC-4: The charges choice changes **You pay** as in the pricing examples (`OUR` adds $15.00); the receipt records the choice.
-- AC-5: The purpose of payment is always required; the Review button stays disabled and `PURPOSE_REQUIRED` is returned by the bank without it.
-- AC-6: The rate is held for 60 seconds; an older quote cannot be sent and gives `QUOTE_EXPIRED`; **Get a new rate** reprices and clears the code.
-- AC-7: Arrival is shown as 1 to 3 business days; a payment after the 15:00 UTC cut-off says it goes out the next business day.
-- AC-8: Money moves only after a verified code, and **You pay** never exceeds the available balance or the remaining daily limit.
-- AC-9: A payee under 24 hours old is limited to $500.00 equivalent.
-- AC-10: The code prompt names the amount and the payee; three wrong codes end in `STEP_UP_FAILED`; nothing is created.
-- AC-11: A screening hit ends with the status "Held for review".
-- AC-12: A payment set for **Later** is not debited until its date and appears in Scheduled in the payee's currency.
-- AC-13: Timeout and unavailable states move no money and say so; SWIFT down shows "Not available right now".
+- AC-1: A payment to a saved payee in each region needs a verified code, debits exactly You pay, and returns the rail's own reference.
+- AC-2: The cost summary and the rail list update as the amount is typed and show They receive, Rate, Converted, Fee, You pay and Arrives for a foreign currency.
+- AC-3: A rail the amount does not fit is dimmed with its limit; the default moves to the first rail that fits.
+- AC-4: A rail that is off (SEPA Instant demo, or instant rails switched off) shows "Not available right now" and cannot be chosen; with no rail left the person gets `RAIL_NOT_AVAILABLE`.
+- AC-5: Purpose is required for the Middle East and SWIFT payees and absent for others; charges are asked for SWIFT only.
+- AC-6: The reference limit is 18 (UK), 80 (US), 140 (others), with the allowed characters only.
+- AC-7: A new payee (under 24 hours) is limited to 500.00 USD, with the allowance shown in the summary and a warning on the review.
+- AC-8: The review shows From, To, rail, rate, fee, You pay, arrival, purpose, reference and the payee check; a foreign-currency review older than 60 seconds gives `QUOTE_EXPIRED`.
+- AC-9: A same-day rail after its cut-off shows "Goes out tomorrow: after the {cut-off} cut-off." and a later arrival date.
+- AC-10: A held payment ends "Held for review" with money reserved, not debited.
+- AC-11: A payment set for Later moves no money until its date and appears in Scheduled.
+- AC-12: Three wrong codes end in `STEP_UP_FAILED`, nothing created; a timeout and an unavailable service move no money and say so.
+- AC-13: With no saved payees the person sees the empty state and can start `manage-beneficiary`; BankWorkx® customers are shown but cannot be chosen.
 
 #### 9. Scenarios
 
 | # | Covers | Persona / setup | Conditions | Steps and expected result |
 |---|---|---|---|---|
-| T-1 | AC-1, AC-4, AC-8 | `alex` | none | Saved Aiko Tanaka, Main, JPY 150,000, Shared, Family support, `482100`. Rows as in the example; You pay $1,018.38; Main 7,702.38; UETR (UUID v4) and `BWX-` reference. |
-| T-2 | AC-4 | `alex` | none | I pay all: You pay $1,033.38 and the receipt shows OUR. They pay: You pay $1,018.38, receipt shows BEN. |
-| T-3 | AC-1 | `alex` | none | Canada: CAD 1,000.00, Shared: Converted $735.29, You pay $760.29. |
-| T-4 | AC-2 | `alex` | none | New payee: BIC `ABC` gives `INVALID_BIC`; account `123` gives `INVALID_ACCOUNT`; BIC `BOTKJPJT`, account `1234567890`: Continue enabled. |
-| T-5 | AC-3 | `alex` | none | New payee Aiko Tanaka: grey `na` screen; Continue disabled until the tick; payment records `acknowledged: true`. |
-| T-6 | AC-5 | `alex` | none | No purpose: Review disabled with "Choose a purpose for this payment."; adapter call without purpose gives `PURPOSE_REQUIRED`. |
-| T-7 | AC-6 | `alex`, controllable `now` | none | Advance 61 s on review, confirm: `QUOTE_EXPIRED`; `rateExpired`; **Get a new rate** reprices; no debit. |
-| T-8 | AC-7 | `alex`, clock 16:00 UTC on a weekday | none | Review says "Goes out tomorrow: after the 15:00 UTC cut-off." and Arrives starts the next business day. |
-| T-9 | AC-8 | `alex` | none | JPY 1,400,000 (about $9,271.52 plus the fee): `INSUFFICIENT_FUNDS` naming both numbers; direct adapter call gives the same code. |
-| T-10 | AC-8 | `alex`, setup remaining daily limit 500.00 | none | JPY 100,000 ($662.25 plus $25.00): `DAILY_LIMIT_EXCEEDED`. |
-| T-11 | AC-9 | `alex` with a new SWIFT payee 2 hours old | none | $600 equivalent refused with the rule A message. |
-| T-12 | AC-10 | `alex` | none | Wrong code three times: `locked` / `STEP_UP_FAILED`; nothing created. |
-| T-13 | AC-11 | `alex` | none | Payee named `Test Sanctions`: status "Held for review" with the `PAYMENT_HELD` message. |
-| T-14 | AC-12 | `alex`, clock Mon 2 Nov 2026 | none | Later, Wed 4 Nov: Main unchanged; Scheduled shows "JPY 150,000 · next Wed 4 Nov". |
-| T-15 | AC-13 | `alex` | `timeout: ["bank.payments.create"]` | `timeout` screen; balance unchanged. |
-| T-16 | AC-13 | `alex` | `unavailable: ["bank.payments.create"]` | `unavailable` screen on submit; balance unchanged. |
-| T-17 | AC-13 | `alex` | `unavailable: ["rail:swift"]` | The SWIFT tile shows "Not available right now"; Review disabled; the bank gives `RAIL_NOT_AVAILABLE`. |
+| T-1 | AC-1 | `alex` | none | Maya Chen, $120.00, default rail ACH, review, any six digits: available 7,982.40; ACH trace number (15 digits). |
+| T-2 | AC-1, AC-2 | `alex` | none | Lena Fischer, EUR 200.00, SEPA Credit Transfer: Rate 1 USD = 0.926 EUR, Converted $215.98, Fee $0.00, You pay $215.98; `E2E` + 12 digits. Switch to SEPA Instant: Fee $0.50, You pay $216.48. |
+| T-3 | AC-1, AC-5 | `alex` | none | Omar Haddad, AED 500.00: Review payment without a purpose is refused; choose Family support: You pay $136.67 on Aani. |
+| T-4 | AC-3 | `alex` | none | Omar Haddad, AED 60,000.00: Aani is dimmed ("over the limit of AED 50,000"); UAEFTS is the default and selected. |
+| T-5 | AC-4 | `alex` | option `sinstDown` on | Lena Fischer: SEPA Instant dimmed "Not available right now"; SEPA Credit Transfer stays selected. With option `allowInstant` off, the same. |
+| T-6 | AC-6 | `alex` | none | James Whitfield: reference of 19 characters is refused ("Use 18 characters or fewer for this payee's bank."); Maya Chen accepts 80; `#` is refused. |
+| T-7 | AC-7 | `alex` | none | Save a new payee (any region), then Quick transfer: chip "New · 24 hours left", summary shows the allowance; $600.00 gives `BENEFICIARY_COOLING_OFF`; $400.00 passes. |
+| T-8 | AC-8 | `alex`, 61 seconds pass on review | none | Lena Fischer EUR 200: confirm gives `QUOTE_EXPIRED`; a new quote; confirm again works. |
+| T-9 | AC-9 | `alex` | option `lateDemo` on | Maya Chen, Same-day ACH: the review warns "Goes out tomorrow: after the 14:45 ET cut-off."; Arrives "Wed 4 Nov (after the cut-off)". RTP shows no warning. |
+| T-10 | AC-10 | `alex` | none | A payee named "Test Sanctions": result "Held for review"; available drops, ledger balance does not; the message is the `PAYMENT_HELD` text. |
+| T-11 | AC-11 | `alex` | none | Maya Chen $120.00, Later, a business day, Every week: balance unchanged; Scheduled lists "Weekly · {date}". |
+| T-12 | AC-12 | `alex` | none | Wrong code three times (sandbox): `STEP_UP_FAILED`; no payment; balance unchanged. |
+| T-13 | AC-12 | `alex` | `timeout: ["bank.payments.create"]`, `latencyMs: 10000` | `timeout` screen with "Check Activity before you try again"; balance unchanged. |
+| T-14 | AC-12 | `alex` | `unavailable: ["bank.payments.create"]` | `unavailable` screen; balance unchanged. |
+| T-15 | AC-12 | `alex` with `transferFails` | none | `CORE_UNAVAILABLE`: "We couldn't complete this right now. No money has left your account." |
+| T-16 | AC-13 | `alex`, payee list emptied | none | Empty state "You haven't saved anyone yet" with **Add a beneficiary**. A BankWorkx® customer payee is disabled with its pointer. |
+| T-17 | AC-2 | `alex` | none | Amount $30,000.00 for Maya Chen: default becomes Same-day ACH (ACH dimmed), and `INSUFFICIENT_FUNDS` shows "you'd pay $30,001.00 but $8,102.40 is available". |
 
 #### 10. Expected mutation-check survivors
 
-The purpose check exists in the form and in `bank.payments.create`; killed by T-6 (direct call). The "I pay all" arithmetic is killed by T-2. The daily-limit and balance checks exist in both layers; adapter-only mutants are killed by the direct calls in T-9 and T-10. Survivors: the country list (the picker offers only supported countries), the exact message text, the sandbox rates, and the BEN arithmetic (open question: the sandbox charges BEN the same as SHA to the sender; no scenario asserts what the payee receives).
+Per 09 section 15: message text, registry names, rates, rail order. Journey-specific: `DAILY_LIMIT_EXCEEDED` survives because the balance (8,102.40) is below the limit; a direct sandbox scenario with the limit set to 100.00 kills it. The charges choice survives (SWIFT payees are not seeded; a saved SWIFT payee is needed). The weekend lists by country survive unless a scenario checks Saudi Arabia or Jordan. The wrong-code lockout is a sandbox rule; the prototype cannot show it.
+
+---
+
+### ★ Abroad — `international-transfer`
+
+Catalog: `international-transfer`, workspace Personal, category Personal: Payments, core no, a bank can switch it off: yes (through option `type.intl` of `personal-transfer`; the "No cross-border" preset turns it off together with the SWIFT rail option `rail.swift`). Options: none of its own.
+
+Alias of `personal-transfer`: reached with `personal-transfer {type: international, country}` (or `rail: swift`, or region `intl`). The prototype's "Ways to send money" and `manage-beneficiary` still use the old slug, which is not registered there. The catalog option `type.intl` ("Offer “To another country” (SWIFT)") switches it off.
+
+What differs from the other types:
+- Seven countries: Canada, India, Japan, Australia, Switzerland, Singapore, Mexico (09 lists four). Payee form adds person or company, postal address (required), bank name, BIC with a country check, local codes (Canada transit, India IFSC, Australia BSB), IBAN for Switzerland, CLABE for Mexico, optional intermediary bank.
+- Name check is normally "could not check" (tick required). Amount screen adds purpose, relationship, source of funds from 10,000 USD, charges (Shared, I pay all +$15, They pay), reference "Details of payment" (140).
+- One rail, International (SWIFT): $25.00 fee, 1 to 3 business days, cut-off 15:00 UTC, UETR reference; rate held 60 seconds.
+- Full rules, scenarios and criteria are in `personal-transfer`.
 
 ---
 
 ### ★ Pay a bill — `pay-bill`
+
+Catalog: `pay-bill`, workspace personal, category Payments, core no, a bank can switch it off (yes). Options: `billFetch` "Look up the amount due from the biller (off: the person types the amount)" (default on); `allowPartial` "Allow the minimum and other amounts where the biller accepts them" (default on); `allowCrossCurrency` "Allow paying a bill from an account in another currency" (default on); `offerSaveBiller` "Offer to save the biller" (default on); `offerAutopay` "Offer auto-pay after the payment" (default on).
 
 #### 1. Summary
 
 | Field | Value |
 |---|---|
 | Slug | `pay-bill` |
-| Purpose | Look up a bill by the biller and the customer's reference number, see the amount due, and pay it from an account. |
+| Purpose | Find a biller in a directory of 30 billers in six countries, look up the bill with the customer's reference, pay all of it, the minimum or another amount from any own account, and optionally save the biller or set up auto-pay. |
 | Release / workspace | 1 / Personal |
-| Status | Existing, upgraded. `fixtures/pay-bill.ts` (slug `pay-a-bill`, id `jrn_pay_bill`, version 1, published, web and mobile, English and Urdu). The slug moves to `pay-bill`; `pay-a-bill` stays as an alias for Meezan. |
-| Channels | Web and mobile |
-| Starting pattern | `fixtures/pay-bill.ts` |
-| Who may use it | `payments.create` |
+| Status | Built in the prototype (`design/bankworkx-r1/src/journeys/34-pay-bill.js`, research `research/pay-bill.md`). Replaces the earlier spec, which had four planned USD billers and one 10 to 14 digit reference rule. The sandbox adapters (`bank.billers.list`, `bank.bills.lookup`, `bank.bills.pay`) still model the Meezan billers and must be extended (section 5). The old slug `pay-a-bill` stays as an alias for Meezan. |
+| Channels | Web and mobile (the prototype is responsive at 390 px and on desktop) |
+| Starting pattern | `fixtures/pay-bill.ts` for lookup, review, code and result; the directory, partial payment, currency conversion, save and auto-pay are new. |
+| Who may use it | Personal workspace, permission `payments.create` (the prototype checks nothing more for Personal). In the Business workspace the journey is refused with `WRONG_CONTEXT`. |
+| Launch parameters | `billerId` (a biller id from the directory, e.g. `metro`) and `ref` (the reference). The prototype's own test parameters are `{billerId: "metro", ref: "123456781234"}`. |
+| Shared reference | `09-payment-rails.md` section 4 (bills by region) and section 12 (codes). Where this block differs from 09, this block follows the prototype (see the report for the list). |
 
-**What exists today.** Entry `bill` (onEnter loads accounts and billers; `stepper` ["bill", "review", "otp"]; a `select` Biller from `ctx.billers`; a `textInput` Consumer number with placeholder "10 to 14 digits", pattern `^[0-9]{10,14}$` and message "Enter 10 to 14 digits"; an `accountPicker`; **Find my bill**, which calls `billLookup` and on failure shows the toast "We couldn't find that bill. Check the number and try again."). `review` (rows Biller, Consumer number, Due date, Amount due "PKR …", From, Fee "PKR 0"; consent `bills-v2` "I confirm I want to pay this bill"; **Confirm and send OTP**). `otp` (**Pay now**; wrong code toast "That code didn't match. Check the SMS and try again."; `lockAfter: 3, lockTo: "locked"`). `success` ("Bill paid"), `locked` ("Too many wrong codes"), `failed` ("Payment not completed"; "No money has left your account. Try again or contact support."). Existing billers (Meezan, Pakistan): K-Electric, LESCO (Electricity), SSGC (Gas), PTCL (Internet). The sandbox lookup invents the amount as `1000 + (last four digits mod 9000)` and the due date `2026-11-12`.
+**What the person does, in one line.** Choose a biller (or a saved bill), type the number on the bill, see the amount due, choose how much and from which account, choose optional extras, review, confirm with a code, get a receipt. Five steps then the code sheet then the result. The progress bar reads "Step n of 5 · Pay a bill".
 
-**The upgrade.** BankWorkx billers in USD (planned seed, below), grouped by category; the amount shown in the account's currency; currency matching; clear messages; the stepper; receipts. The full amount due is paid (no partial payment in Release 1).
+**The 30 billers** (all names are invented; the directory is the same on web and mobile).
 
-Planned BankWorkx billers for Alex: `metro_power` Metro Power (Electricity), `city_gas` CityGas (Gas), `fibernet` FiberNet (Internet), `blue_water` BlueWater (Water), all USD. The planned lookup scales the existing formula: amount = `(1000 + last4 mod 9000) / 20`, so reference `123456781234` (last four 1234) gives **$111.70**, due **12 Nov 2026**.
+| Id | Biller | Category | Country (currency) | Reference label | Format of the reference | Amount rule | Fee |
+|---|---|---|---|---|---|---|---|
+| `metro` | Metro Power | Utilities | United States (USD) | Account number | 12 digits | Any amount up to the amount due | Free |
+| `citygas` | CityGas | Utilities | United States | Account number | 10 digits | Any | Free |
+| `bluewater` | BlueWater | Utilities | United States | Account number | 10 digits | Any | Free |
+| `fibernet` | FiberNet | Telecom | United States | Account number | 10 digits | Any | Free |
+| `pulse` | Pulse Mobile | Telecom | United States | Mobile number | 10 digits | Any | Free |
+| `lakeview` | Lakeview County Tax | Government | United States | Parcel number | 10 digits | Full amount only | Free |
+| `northfield` | Northfield Auto Insurance | Insurance | United States | Policy number | `NF` then 8 digits | Full only | Free |
+| `northwind` | Northwind Card | Cards | United States | Card number | 16 digits | Minimum, full statement balance, or any amount from the minimum up to 1.8 times the amount due | Free |
+| `westbrook` | Westbrook University | Education | United States | Student ID | 8 digits | Any | Free |
+| `severn` | Severn Water | Utilities | United Kingdom (GBP) | Account number | 10 digits | Any | Free |
+| `brightline` | BrightLine Mobile | Telecom | United Kingdom | Phone number | 11 digits | Any | Free |
+| `riverside` | Riverside Council Tax | Government | United Kingdom | Council tax reference | 10 digits | Full only | Free |
+| `halden` | Halden Insurance | Insurance | United Kingdom | Policy number | `HL` then 8 digits | Full only | Free |
+| `dunmore` | Dunmore Card | Cards | United Kingdom | Card number | 16 digits | Minimum or any, as Northwind | Free |
+| `rheinwerke` | Rheinwerke Energie | Utilities | Europe (EUR) | Customer number | 10 digits | Any | Free |
+| `nordtel` | Nordtel | Telecom | Europe | Customer number | 9 digits | Any | Free |
+| `zuidveld` | Gemeente Zuidveld | Government | Europe | Tax reference | 12 digits | Full only | Free |
+| `alpen` | Alpenschutz Versicherung | Insurance | Europe | Policy number | `AV` then 8 digits | Full only | Free |
+| `gpw` | Gulf Power & Water | Utilities | UAE (AED) | Account number | 12 digits | Any | AED 1 |
+| `najm` | Najm Telecom | Telecom | UAE | Mobile number | 10 digits starting `05` | Any | AED 1 |
+| `traffic` | Emirate Traffic Fines | Government | UAE | Fine number | 10 digits | Full only | Free |
+| `gulfcard` | Gulf Card Services | Cards | UAE | Card number | 16 digits | Minimum or any | AED 1 |
+| `palm` | Palm Grove School | Education | UAE | Student number | 8 digits | Any | AED 1 |
+| `alnoor` | Al Noor Electricity | Utilities | Saudi Arabia (SAR) | SADAD bill number | 12 digits | Any (note shown: SADAD biller code 002) | SAR 1 |
+| `sahara` | Sahara Mobile | Telecom | Saudi Arabia | Mobile number | 10 digits starting `05` | Any | SAR 1 |
+| `najd` | Najd Municipality | Government | Saudi Arabia | Bill number | 10 digits | Full only | Free |
+| `amana` | Al Amana Insurance | Insurance | Saudi Arabia | Policy number | `AA` then 8 digits | Full only | SAR 1 |
+| `amman` | Amman Water Services | Utilities | Jordan (JOD) | Subscription number | 10 digits | Any | JOD 0.25 |
+| `petra` | Petra Mobile | Telecom | Jordan | Mobile number | 10 digits starting `07` | Any | JOD 0.25 |
+| `jotraffic` | Jordan Traffic Department | Government | Jordan | Fine number | 10 digits | Full only (note: government bills are free to pay) | Free |
+| `acad` | Amman Academy | Education | Jordan | Student number | 8 digits | Any | JOD 0.25 |
+
+How each country pays: United States "US bill pay", reaches the biller in 1 to 2 business days, receipt label "Payment confirmation"; United Kingdom "Faster Payments", within seconds, "FPS reference"; Europe "SEPA credit transfer", next business day, "End-to-end ID"; UAE "UAE bill payments (Aani)", within seconds, "Aani reference"; Saudi Arabia "SADAD", same day, "SADAD payment ID"; Jordan "eFAWATEERcom", same day, "eFAWATEERcom reference". Auto-pay is offered only for utilities, telecom, insurance and cards billers.
+
+**Sandbox demo values.** The last four digits of the reference choose the outcome, so a tester can reproduce every state (the field hint on the screen says the same). Spaces and hyphens in the reference are ignored.
+
+| Reference ends in | What happens |
+|---|---|
+| `0000` | `BILL_NOT_FOUND` |
+| `9999` | `BILL_ALREADY_PAID` (also after a bill has been paid in full in the same session) |
+| `5555` | `NO_AMOUNT_DUE` |
+| `1111` | `BILLER_UNAVAILABLE` |
+| `7777` | Overdue: due date 9 days ago (25 Oct 2026), a 5% late fee is added to the charges |
+| `3333` | The amount changes at the review step: it goes up by 12 units of the biller's currency once, and the journey shows `BILL_CHANGED` |
+| any other four digits `nnnn` | Amount due = (1000 + nnnn mod 9000) / 20 in USD, converted to the biller's currency and rounded to cents; due date = 3 Nov 2026 plus (nnnn mod 20) + 3 days; bill number `BL-{nnnn}-{2610 + nnnn mod 9}`; name on the bill "Alex Morgan" |
+
+Worked examples. Metro Power `123456781234`: amount due $111.70, due Fri 20 Nov 2026 (shown "Due 20 Nov 2026"; within 5 days it shows "Due in n days"), bill number `BL-1234-2611`. Northwind Card `4000123412341000`: amount due $100.00, minimum $10.00, most you can pay $180.00. Amman Water `2000001000`: amount due JOD 70.90, fee JOD 0.25, from the Current account you pay $100.35. Saved bills already in the sandbox: "Home electricity" (Metro Power `123456781234`), "Home internet" (FiberNet `5550012345`), "Dubai flat" (Gulf Power & Water `200011112222`). Sandbox accounts: Current ••4410 (available $8,102.40, balance $8,240.18), Savings ••7720 $14,310.00, Euro account ••3302 €2,150.40, Dirham account ••9981 AED 5,000.00. Sandbox rate base: USD 1 = EUR 0.926 = GBP 0.781 = AED 3.672 = SAR 3.75 = JOD 0.709. Remaining daily limit shown in the prototype: $41,250.00. Today is Tue 3 Nov 2026, 10:42 UTC. Code `482100` (the prototype keypad accepts any 6 digits; the sandbox wrong-code and lock rules are specified in section 4).
 
 #### 2. Entry points
 
 | Place › label | Passes in | Permission |
 |---|---|---|
 | Home › + Pay a bill | none | `payments.create` |
-| Payments › hub › Bills | `{billerId}` optional | `payments.create` |
-| Payments › tracker › payment (bill) › Repeat payment | `{paymentId}` (prefills biller and reference) | `payments.create` |
+| Payments › hub › Pay a bill | `{billerId}` optional | `payments.create` |
+| Payments › tracker › bill payment › Repeat payment | `{billerId, ref}` | `payments.create` |
+| Schedule a payment › saved bill (read-only link back) | none | `payments.create` |
+| Command bar "Pay a bill" | none | `payments.create` |
+
+The "Pay another bill" button on the receipt restarts the journey with no values. If `pay-bill` is switched off at the bank, every entry point disappears and a forced open shows "Not available at your bank" with "This isn't available at your bank. (JOURNEY_DISABLED)". If the person is in a Business workspace the screen shows "This belongs to your other banking. Switch workspace to continue. (WRONG_CONTEXT)".
 
 #### 3. Screens
 
-**`bill` — "Pay a bill"** (entry; existing, upgraded).
+Screens are the five steps of the engine (ids are the step titles), then the code sheet, then the result. A back button leaves the previous step's values in place. A step that calls the bank shows a spinner with its own text and then moves on or shows a red banner with the code and message on the same step.
 
-| Field | Block | Required | Validation | Error message |
+**Step 1: "Pay a bill"** (entry). Intro: "Choose who you're paying. Pick a saved bill or search the directory." Blocks: **Saved bills** card, then the **All billers** list.
+
+| Field | Block | Required | Validation | Message |
 |---|---|---|---|---|
-| Biller | `select` from `ctx.billers`, grouped by category | Yes | One of the list | "Choose a biller." |
-| Consumer number | `textInput` keyboard number, placeholder "10 to 14 digits" | Yes | `^[0-9]{10,14}$` (spaces are removed) | "Enter 10 to 14 digits" |
-| Pay from | `accountPicker` `bill.fromAccountId`, balances | Yes | Account that can debit, in the biller's currency | "Choose an account to pay from." / "{biller} bills are in {currency}. Choose a {currency} account." |
+| Search | text, max 40 characters | No | Matches biller name, category, country, payment method and reference label (case-insensitive) | none |
+| Type | chips: All, Utilities, Telecom, Government, Insurance, Cards, Education | No (default All) | One of the list | none |
+| Where | chips: All, United States, United Kingdom, Europe, UAE, Saudi Arabia, Jordan | No (default All) | One of the list | none |
+| Biller | list rows (letter icon, name, "Country · currency", chip "Selected" on the chosen one) | Yes | One biller chosen | "Choose a biller." |
 
-Button **Find my bill** (validate, `billLookup`, save `ctx.bill`, go to `review`). On failure: stays on the screen with the toast "We couldn't find that bill. Check the number and try again." (existing) and the field error "No bill found for this reference". Loading: spinner and "Looking up your bill…".
+Saved bills: each row shows the nickname, "Biller · ••last four", chip "Pay". Choosing a saved bill fills biller and reference and moves straight to step 2. With no saved bills: "No saved bills yet. Bills you save show here for one-tap payment." When Type is All the list is grouped under category headings (Utilities, Telecom, Government, Insurance, Cards, Education). Choosing a biller row also moves to step 2 at once. Empty search result: icon, **No billers found**, "Try another word, or choose All under Type and Where." Button: **Continue** (needs a biller; the rows already advance). Cancel (first step) leaves the journey.
 
-**`review` — "Review bill"** (existing, upgraded). Rows: Biller, Consumer number, Account holder ("Alex Morgan", from `payerName`), Due date (`12 Nov 2026`), **Amount due** ("$111.70"), From, Fee "$0.00". Alert (info): "You're paying the full amount due." Consent `bills-v2`: "I confirm I want to pay this bill". Button **Confirm and send code**.
+**Step 2: "Find your bill"**. Intro: "Enter the number printed on your bill. We'll ask the biller for the amount." A card shows the biller (name, "Category · Country · paid by {method}") with a **Change** button back to step 1.
 
-**`otp`** — shared C; button **Pay now** (existing label) or **Pay $111.70**. **`success` — "Bill paid"**: text "$111.70 to Metro Power", meta "Ref {reference}"; buttons **Track payment**, **View receipt**, **Pay another bill**, **Done**. **`locked`**, **`timeout`**, **`unavailable`**, **`failed`** — shared C.
+| Field | Block | Required | Validation | Message |
+|---|---|---|---|---|
+| {Reference label of the biller} (e.g. "Account number", "Mobile number", "Policy number") | text, max 24 characters, placeholder from the biller (e.g. "12 digits", "NF12345678") | Yes | Matches the biller's format after spaces and hyphens are removed (table in section 1) | Empty: "Enter the number from your bill." Wrong: "{label} should be {format}. (INVALID_REFERENCE)", e.g. "Account number should be 12 digits. (INVALID_REFERENCE)" |
+
+Hint under the field: "Should be {format}. Sandbox: ending 0000 not found, 9999 already paid, 7777 overdue, 3333 amount changes, 1111 biller down, 5555 nothing due." (the sandbox part is shown only in the sandbox). Button **Find my bill**; busy text "Looking up your bill…" (about 0.9 s). If the option `billFetch` is off, nothing is looked up: the journey goes on with an amount the person types (step 3 shows "This bank doesn't look up bills for {biller}. Type the amount from your bill." and the name on the bill reads "Not checked"). On a lookup failure the step shows the banner with the code and message from section 4 and stays put. The account for step 3 is chosen here: the first own account in the biller's currency if there is one (USD, EUR or AED), otherwise the first account; it never overrides an account the person already chose in the same currency.
+
+**Step 3: "Amount"**. Intro: "Choose how much to pay and which account to use." Top card (the bill): letter icon, biller name, "{label} {reference}", a status chip ("Overdue" red; "Due in n days" amber when 5 days or fewer; otherwise "Due {date}" green), then the big amount with caption "Amount due" (or "Left to pay" after a part payment), "Due {date}", rows Name on the bill, Bill number, Current charges (not after a part payment), Late fee (5%) when overdue, Minimum payment (card billers), Total balance (card billers, the most that can be paid).
+
+| Field | Block | Required | Validation | Message |
+|---|---|---|---|---|
+| How much? | cards: **Full amount due** ("Statement balance" for cards, "Rest of the bill" after a part payment), subtitle "Clears this bill.", amount on the right; **Minimum payment** (card billers only) "Keeps the account in good standing. Interest applies to the rest."; **Another amount** (billers that are not "full only") "Pay part of the bill now." (cards: "Between the minimum and the total balance.") | Yes (default Full) | Minimum and Another amount are greyed out when option `allowPartial` is off. Hidden when no lookup was done | none |
+| Amount | amount with the biller's currency symbol (USD `$`, EUR `€`, GBP `£`, AED, SAR, JOD as a code prefix), placeholder "0.00" | Yes, only when Another amount (or when no lookup) | More than 0, at most the maximum (the amount due; cards 1.8 times the amount due); card billers at least the minimum | Below the minimum: "The minimum for this bill is {x}. (AMOUNT_BELOW_MINIMUM)". Above: "This bill is {x}. You can't pay more than that. (AMOUNT_ABOVE_DUE)" |
+| Pay from | select of every own account, "{name} ••{last four} · {available}" with " · converted" added for accounts in another currency | Yes | Enough available money for the total in the account's currency; the same currency unless `allowCrossCurrency` is on; the amount converted to USD within the remaining daily limit | "Choose an account to pay from." Others as the live line below |
+| Note to yourself | text, max 40, placeholder "Optional, for example “October bill”" | No | none | none |
+
+Live summary under the fields (updates on every keystroke): "Paying {amount in biller currency}"; "Fee {x}" or "Free"; "Rate 1 {biller currency} = {rate} {account currency}" when converted; **You pay {amount in the account's currency}**; "Left on the bill after this {x}" when a lookup was done; "Reaches the biller {speed}". Before an amount is known: "Enter an amount to see the cost." The Continue button is disabled and the red line shows the first problem, in this order: wrong currency without `allowCrossCurrency` "{biller} bills are in {currency}. Choose a {currency} account. (BILL_CURRENCY_MISMATCH)"; "Not enough in the account: you'd pay {x} but {y} is available. (INSUFFICIENT_FUNDS)"; "That's over your remaining daily limit of $41,250.00. (DAILY_LIMIT_EXCEEDED)". The fee is in the biller's currency and is added to the amount before conversion. Button **Continue**.
+
+**Step 4: "Options"**. Intro: "Save time next month. Both are optional." Every field here is optional and each can be absent.
+
+| Field | Block | Shown when | Default | Validation |
+|---|---|---|---|---|
+| Save this bill | toggle, sub "Pay it in one tap from the top of this screen." | `offerSaveBiller` is on and this biller and reference are not already saved | On | none |
+| Name for this bill | text, max 30, placeholder "For example “Home electricity”" | Save is on | The biller's name | none |
+| Pay this bill automatically | toggle, sub "Each month, from the same account. Shows in Payments › Scheduled; change or cancel it any time." | `offerAutopay` is on and the biller supports auto-pay | Off | none |
+| When | chips "On the due date" / "2 days before" | Auto-pay is on | On the due date | none |
+| Never pay more than | amount in the biller's currency, hint "Auto-pay pays the full amount due. If a bill is higher than this, we skip it and tell you." | Auto-pay is on | 1.5 times the amount due, rounded up to the next 10 | Required while auto-pay is on (no custom message in the prototype; planned: "Enter a limit above zero.") |
+| Tell me when my next bill is ready | toggle, sub "A notification when the biller issues it." | Always | On | none |
+
+Button **Continue**.
+
+**Step 5: "Review"**. Intro: "Check the details. We'll send a code to confirm." Rows (a card): Biller; {Reference label}; Name on the bill ("Not checked" when no lookup); Amount; Fee ("Free"); Rate (when converted); **You pay**; From ("{name} ••{last four}"); "Reaches the biller" ("{speed} · {method}"); "Left on the bill" (after lookup); Auto-pay ("Monthly, up to {x}") when on; Note. Info text: "We send a code to ••• 4410 to confirm. Government bills have no extra fee. Payments to billers can't be called back once sent." (the government sentence only for government billers). Consent check (required): **I confirm I want to pay this bill**; if not ticked: "Tick the box to confirm." Button **Pay bill** (the engine label). Busy text "Confirming the amount is still due…" (0.8 s). A reference ending in `3333` raises `BILL_CHANGED` once here, the due amount is updated, and the person checks and confirms again.
+
+**Code sheet** (engine step-up, `confirm`). Title "Authorise {amount} to {biller}"; sub "Code sent to ••• 4410. It only works for this payment." A six-digit keypad, "Prototype: type any 6 digits". Product behaviour (existing sandbox): code `482100`; wrong code "That code isn't right. {n} tries left."; three wrong codes lock the payment (shared `locked` screen, "Too many wrong codes. Start again."). The prototype does not simulate wrong codes (planned).
+
+**Result.** Success: green tick, title **Bill paid**, text "{amount} to {biller}.", chip "Paid in full". After a part payment: title **Part paid**, chip "Part payment · {x} left". Receipt rows: Biller, {Reference label}, Name on the bill, Amount paid, Fee, Rate (when converted), Total from your account, From, {Region receipt label} (a 12-digit number), Paid on "3 Nov 2026", Reaches the biller, Still to pay (after lookup), Auto-pay ("Monthly, next {date}") when set up; then the BankWorkx® reference. Buttons: **Pay another bill** (restarts), **Schedule a bill** (`schedule-payment`), **View in Payments**, **Done**. The home balance animates from the old total to the new total.
+
+**Other states.** Timeout (sandbox "Backend will time out on submit"): banner `TIMEOUT` "We didn't get an answer in time. Check Activity before you try again, so you don't pay twice." on whichever step was calling (the lookup step uses the same wording because the journey is marked as moving money). Bank down (sandbox "Bank unavailable"): a sheet "We couldn't reach the bank / Nothing was sent and you haven't been charged. Try again in a moment. SERVICE_UNAVAILABLE" with **Try again** and **Cancel**. Product states for a failed money step (`failed`) are the shared screens of README 1.6.
 
 #### 4. Sandbox errors
 
-| Code | Message | Shows on | Button |
+| Code | Message the person sees | Where | Button |
 |---|---|---|---|
-| `BILLER_NOT_FOUND` (existing; sandbox "Unknown biller") | "Choose a biller from the list." | `bill` | Choose biller |
-| `BILL_NOT_FOUND` (existing; sandbox "No bill found for this reference") | "We couldn't find that bill. Check the number and try again." | `bill` | Edit number |
-| `BILL_ALREADY_PAID` (planned) | "This bill has already been paid." | `bill` | Back |
-| `BILL_CURRENCY_MISMATCH` (planned) | "{biller} bills are in {currency}. Choose a {currency} account." | `bill` | Choose account |
-| `OTP_INVALID` | S-`OTP_INVALID` (fixture wording kept on the toast: "That code didn't match. Check the SMS and try again.") | `otp`; after 3 `locked` | Try again / Start again |
-| `OTP_REQUIRED` | S-`OTP_REQUIRED` | `failed` | Back to code |
-| `ACCOUNT_NOT_FOUND` | S-`ACCOUNT_NOT_FOUND` | `failed` | Choose account |
-| `INSUFFICIENT_FUNDS` | S-`INSUFFICIENT_FUNDS` | `failed` | Change account |
-| `LIMIT_EXCEEDED` | S-`LIMIT_EXCEEDED` | `failed` | Close |
-| `CORE_UNAVAILABLE` | S-`CORE_UNAVAILABLE` | `failed` | Try again |
-| `NOT_SUPPORTED` | S-`NOT_SUPPORTED` | `failed` | Back |
-| `TIMEOUT` (planned) | "We didn't get an answer in time. Check Activity before you try again, so you don't pay twice." (the lookup says "This is taking longer than expected. Nothing was changed.") | `timeout` | Check Activity / Try again |
-| `SERVICE_UNAVAILABLE` (planned) | S-`SERVICE_UNAVAILABLE` | `unavailable` | Try again |
+| `BILLER_NOT_FOUND` | "Choose a biller from the list." | Step 2 banner | Change |
+| `BILL_NOT_FOUND` (ref ends `0000`) | "We couldn't find that bill. Check the number and try again." | Step 2 banner | Edit the number |
+| `BILL_ALREADY_PAID` (`9999`, or paid in full earlier) | "This bill has already been paid." | Step 2 banner | Back |
+| `NO_AMOUNT_DUE` (`5555`) | "There's nothing to pay on this bill right now." | Step 2 banner | Back |
+| `BILLER_UNAVAILABLE` (`1111`) | "The biller isn't answering right now. Nothing was changed. Try again in a few minutes." | Step 2 banner | Find my bill again |
+| `INVALID_REFERENCE` | "{label} should be {format}. (INVALID_REFERENCE)" | Step 2 field | Edit |
+| `AMOUNT_BELOW_MINIMUM` | "The minimum for this bill is {x}." | Step 3 field | Edit |
+| `AMOUNT_ABOVE_DUE` | "This bill is {x}. You can't pay more than that." | Step 3 field | Edit |
+| `BILL_CURRENCY_MISMATCH` | Live line: "{biller} bills are in {currency}. Choose a {currency} account." Journey table text: "That account is in a different currency from the bill. Choose a matching account." | Step 3 | Choose account |
+| `INSUFFICIENT_FUNDS` | Live line: "Not enough in the account: you'd pay {x} but {y} is available."; at commit: "Not enough in the account. Nothing was paid." | Step 3, or the failure banner | Change account |
+| `DAILY_LIMIT_EXCEEDED` | "That's over your remaining daily limit of $41,250.00." (journey text "That's over your remaining daily limit.") | Step 3 | Change amount |
+| `BILL_CHANGED` (`3333`) | "The amount due changed while you were reviewing. We've updated it below. Check it and confirm again." | Step 5 banner | Confirm again |
+| `OTP_INVALID`, `OTP_REQUIRED` | README 1.6 wording | Code sheet / failure | Try again / Back to code |
+| `ACCOUNT_NOT_FOUND`, `LIMIT_EXCEEDED`, `CORE_UNAVAILABLE`, `NOT_SUPPORTED` | README 1.6 wording | Failure (sandbox adapter codes) | As README |
+| `TIMEOUT` | "We didn't get an answer in time. Check Activity before you try again, so you don't pay twice." | Banner on the calling step | Check Activity / Try again |
+| `SERVICE_UNAVAILABLE` | "We couldn't reach the bank. Nothing was sent and you haven't been charged. Try again in a moment." | Sheet | Try again |
+| `JOURNEY_DISABLED`, `WRONG_CONTEXT` | "This isn't available at your bank." / "This belongs to your other banking. Switch workspace to continue." | Whole journey | Back / Switch |
+
+Note the difference between the sandbox's `LIMIT_EXCEEDED` (existing adapter code) and the prototype's `DAILY_LIMIT_EXCEEDED` (the 09 code). The prototype uses the 09 name.
 
 #### 5. Adapters
 
 | Integration id | Adapter | Request | Response | Errors | Status |
 |---|---|---|---|---|---|
-| `accounts` | `bank.accounts.list` | none | accounts | none | Existing |
-| `billers` | `bank.billers.list` | none | map of `{id, name, category}` (planned adds `currency`) | none | Existing |
-| `billLookup` | `bank.bills.lookup` | `{billerId, reference}` | `{billerName, reference, payerName, amount, dueDate}` | `BILLER_NOT_FOUND`, `BILL_NOT_FOUND` (planned: `BILL_ALREADY_PAID`, `TIMEOUT`, `SERVICE_UNAVAILABLE`) | Existing. Not money-moving; no OTP |
-| `otpSend`, `otpVerify` | `bank.otp.*` | as C | as C | `OTP_INVALID` | Existing |
-| `billPay` | `bank.bills.pay` | `{billerId, reference, amount, fromAccountId}` | `{reference (BILL-…), newBalance}` | `OTP_REQUIRED`, `CORE_UNAVAILABLE`, `ACCOUNT_NOT_FOUND`, `INSUFFICIENT_FUNDS`, `LIMIT_EXCEEDED` (planned: `BILL_CURRENCY_MISMATCH`, `INVALID_AMOUNT`, `TIMEOUT`, `SERVICE_UNAVAILABLE`) | Existing. Money-moving; OTP |
+| `accounts` | `bank.accounts.list` | none | accounts with `currency`, `available` | none | Existing |
+| `billers` | `bank.billers.list` | none | map of `{id, name, category}` today (Meezan billers, `packages/mock-bank-api/src/index.ts` `BILLERS`). Needed: `country`, `currency`, `referenceLabel`, `referencePattern`, `partial` ("full", "any", "min"), `fee`, `autopay` | none | Existing; the 30-biller directory is (planned) |
+| `billLookup` | `bank.bills.lookup` | `{billerId, reference}` | today `{billerName, reference, payerName, amount, dueDate}` (reference 10 to 14 digits, amount `1000 + last four mod 9000`, due `2026-11-12`). Needed: `{amount, lateFee, dueDate, holder, billNumber, minimum, maximum, remaining}` per the table of demo values | `BILLER_NOT_FOUND`, `BILL_NOT_FOUND` today; (planned) `BILL_ALREADY_PAID`, `NO_AMOUNT_DUE`, `BILLER_UNAVAILABLE`, `INVALID_REFERENCE`, `TIMEOUT`, `SERVICE_UNAVAILABLE`. Not money-moving; no code | Existing, to extend |
+| `savedBills` | `bank.bills.saved.list`, `bank.bills.saved.add` | `{}` / `{billerId, reference, nickname}` | saved bills | `SAVED_LIMIT` (planned) | (planned) |
+| `otpSend`, `otpVerify` | `bank.otp.send`, `bank.otp.verify` | as README | as README | `OTP_INVALID` | Existing |
+| `billPay` | `bank.bills.pay` | today `{amount, fromAccountId}`; needed `{billerId, reference, amount, fee, fromAccountId, memo}` | `{reference, newBalance}`; needed also `{remaining, paidInFull, regionReference}` | `OTP_REQUIRED`, `CORE_UNAVAILABLE`, `ACCOUNT_NOT_FOUND`, `INSUFFICIENT_FUNDS`, `LIMIT_EXCEEDED` today; (planned) `BILL_CHANGED`, `AMOUNT_BELOW_MINIMUM`, `AMOUNT_ABOVE_DUE`, `BILL_CURRENCY_MISMATCH`, `TIMEOUT`, `SERVICE_UNAVAILABLE` | Existing, to extend. Money-moving; code needed |
+| `autopay` | `bank.schedules.create` with `kind: "bill"` | `{billerId, reference, fromAccountId, frequency: "monthly", amountMode: "full-bill", cap, offsetDays}` | schedule (see `schedule-payment`) | as `schedule-payment` | (planned) |
 
 #### 6. Permissions, step-up and limits
 
-`payments.create`; step-up `otp`. Daily limit 50,000 USD (existing). No cooling-off (no beneficiary). Business context: `WRONG_CONTEXT`.
+Permission `payments.create`. Step-up `otp` on every bill payment (a bank may lower this for saved billers later; research question). Daily limit 50,000 USD per person; the prototype shows $41,250.00 left; the limit is tested on the USD value of amount plus fee. Billers have no cooling-off. Business workspace: `WRONG_CONTEXT`.
 
 #### 7. Result and links out
 
-Receipt: biller, consumer number, amount, due date, paid on, from, reference. Notifications: in-app and SMS "Bill paid: {biller} {amount}. Ref {reference}." Buttons: **Track payment**, **View receipt**, **Pay another bill** (restarts), **Done**.
+Receipt: as in section 3. Notifications: in-app and SMS "Bill paid: {biller} {amount}. Ref {reference}." (planned); if "Tell me when my next bill is ready" is on, a later notification when the biller issues the next bill (planned). The new transaction appears in Activity under the category Bills, named after the biller, for the USD value. Links out: **Pay another bill**, **Schedule a bill** (`schedule-payment`), **View in Payments**, **Done**. Auto-pay creates a normal entry in Payments › Scheduled that the person can change or cancel with `schedule-payment`. A paid-in-full bill cannot be looked up again (`BILL_ALREADY_PAID`); a part-paid bill shows "Left to pay" on the next lookup.
 
 #### 8. Acceptance criteria
 
-- AC-1: A valid biller and 10 to 14 digit number find a bill showing biller, amount and due date.
-- AC-2: A number that is not 10 to 14 digits is refused on the form with "Enter 10 to 14 digits"; a number the biller does not know shows the not-found message.
-- AC-3: The bill is paid only after consent and a verified code; the account is debited by exactly the amount due.
-- AC-4: The amount shown on the review is the amount the adapter was asked to pay.
-- AC-5: An account of another currency than the biller's cannot be used.
-- AC-6: Not enough money or a daily limit hit moves no money and says so.
-- AC-7: Three wrong codes stop the journey with nothing paid.
-- AC-8: Timeout and unavailable states pay nothing and say so.
+- AC-1: A reference in the biller's format finds the bill and shows biller, name on the bill, amount due, due date and bill number.
+- AC-2: A reference that does not match the biller's format is refused on the form with "{label} should be {format}. (INVALID_REFERENCE)" and the lookup is not called.
+- AC-3: A reference ending `0000`, `9999`, `5555` or `1111` shows `BILL_NOT_FOUND`, `BILL_ALREADY_PAID`, `NO_AMOUNT_DUE` or `BILLER_UNAVAILABLE` with the wording in section 4 and no money moves.
+- AC-4: The bill is paid only after consent and a verified code; the account is debited by exactly the "You pay" amount shown on the review.
+- AC-5: A "full only" biller offers only the full amount. A "minimum" biller (cards) offers the minimum, the full balance and another amount between the minimum and 1.8 times the amount due; another amount below the minimum or above the maximum is refused with the messages in section 3.
+- AC-6: After a part payment the next lookup of the same bill shows "Left to pay" with the remaining amount; after a full payment it answers `BILL_ALREADY_PAID`.
+- AC-7: A bill in another currency is converted at the rate shown, the fee is added before conversion, and with `allowCrossCurrency` off only a same-currency account can be chosen (`BILL_CURRENCY_MISMATCH`).
+- AC-8: Not enough money or an amount above the remaining daily limit stops the journey before the code and moves no money.
+- AC-9: If the biller changes the amount between lookup and payment (`3333`), the journey shows `BILL_CHANGED`, updates the amount and needs a fresh confirmation.
+- AC-10: Saving the biller adds a one-tap saved bill; auto-pay creates a monthly bill schedule with the chosen cap and timing that appears in Scheduled.
+- AC-11: With `billFetch` off, no lookup is made and the person types the amount.
+- AC-12: A timeout or an unavailable bank pays nothing and says so; with the journey switched off the bank answers `JOURNEY_DISABLED`.
 
 #### 9. Scenarios
 
 | # | Covers | Persona / setup | Conditions | Steps and expected result |
 |---|---|---|---|---|
-| T-1 | AC-1, AC-3, AC-4 | `alex` | none | Metro Power, `123456781234`, Main. Review: $111.70, due 12 Nov 2026. Code `482100`. Main 8,609.06; `BILL-…`. |
-| T-2 | AC-2 | `alex` | none | `12345`: form error; `0000000000` with an unknown biller id: `BILLER_NOT_FOUND`; a 9-digit number never calls the adapter. |
-| T-3 | AC-5 | `alex` | none | Pay a USD biller from EUR Travel: `BILL_CURRENCY_MISMATCH`. |
-| T-4 | AC-6 | `alex`, setup: balance 50.00 | none | Amount $111.70: `INSUFFICIENT_FUNDS` on `failed`; balance unchanged. With `usedToday` 49,950: `LIMIT_EXCEEDED`. |
-| T-5 | AC-7 | `alex` | none | Three wrong codes: `locked` with the existing text. |
-| T-6 | AC-8 | `alex` | `timeout: ["bank.bills.pay"]` | `timeout` screen; balance unchanged. |
-| T-7 | AC-8 | `alex` | `unavailable: ["bank.bills.lookup"]` | `unavailable` screen after **Find my bill**. |
+| T-1 | AC-1, AC-4 | `alex` | none | Metro Power, `123456781234`, Current. Bill: $111.70, due 20 Nov 2026, bill number `BL-1234-2611`. Review "You pay $111.70". Code `482100`. Current available 7,990.70, balance 8,128.48. Result "Bill paid", "Paid in full", "Payment confirmation" 12 digits. |
+| T-2 | AC-2 | `alex` | none | Metro Power, `12345`: "Account number should be 12 digits. (INVALID_REFERENCE)", Find my bill disabled, no lookup call. Northfield with `NF1234`: letters-then-digits message. Najm with `0612345678`: "Mobile number should be 10 digits starting 05." |
+| T-3 | AC-3 | `alex` | none | CityGas `1234560000` not found; `1234569999` already paid; `1234565555` nothing due; `1234561111` biller down. Each shows its banner, stays on step 2. |
+| T-4 | AC-5 | `alex` | none | Lakeview County Tax `9876543210` (any digits): only Full amount due offered. |
+| T-5 | AC-5, AC-6 | `alex` | none | Northwind Card `4000123412341000`: due $100.00, minimum $10.00. Another amount `5.00`: AMOUNT_BELOW_MINIMUM. `200.00`: AMOUNT_ABOVE_DUE. Pay `40.00`: part paid, "Part payment · $60.00 left". Look up again: "Left to pay $60.00". Pay `60.00`: lookup again gives BILL_ALREADY_PAID. |
+| T-6 | AC-7 | `alex` | `allowCrossCurrency` on | Amman Water `2000001000`, pay from Current: amount JOD 70.90, fee JOD 0.25, rate shown, you pay $100.35. |
+| T-7 | AC-7 | `alex` | `allowCrossCurrency` off | Same bill: Current is refused with BILL_CURRENCY_MISMATCH; a JOD account does not exist in the seed, so the journey cannot continue (expected). USD biller from Euro account refused. |
+| T-8 | AC-8 | `alex`, setup: Current available set to 50.00 | none | Metro Power `123456781234`: live line "Not enough in the account: you'd pay $111.70 but $50.00 is available. (INSUFFICIENT_FUNDS)"; Continue disabled. With the daily limit used up to 49,950: DAILY_LIMIT_EXCEEDED. |
+| T-9 | AC-9 | `alex` | none | CityGas `1234563333`: bill $216.65; on the review `BILL_CHANGED`, new amount $228.65; confirm again; debit is $228.65. |
+| T-10 | AC-3, AC-1 | `alex` | none | Severn Water `1234567777`: chip "Overdue", late fee line, due 25 Oct 2026. Current charges £342.74, late fee £17.14, amount due £359.88 (USD base 438.85 times 0.781). |
+| T-11 | AC-10 | `alex` | none | FiberNet `5550099999` is already paid; use `5550012346`: Save on, name "Home internet 2"; auto-pay on, 2 days before, cap default. After paying, the saved bill is at the top of step 1 and Payments › Scheduled holds "FiberNet (auto-pay)". |
+| T-12 | AC-11 | `alex` | `billFetch` off | Any valid reference: no bill card, "Name on the bill: Not checked", amount typed by hand. |
+| T-13 | AC-4 | `alex` | none | Three wrong codes (sandbox adapter rule): `locked`, nothing paid. Prototype keypad accepts any six digits, so this scenario runs against the bank adapters only. |
+| T-14 | AC-12 | `alex` | `timeout: ["bank.bills.pay"]` (prototype: Backend will time out on submit) | Confirm: banner TIMEOUT, balance unchanged. |
+| T-15 | AC-12 | `alex` | `unavailable: ["bank.bills.lookup"]` (prototype: Bank unavailable) | Find my bill: sheet SERVICE_UNAVAILABLE; Try again after the bank is back. |
+| T-16 | AC-12 | `alex` | `pay-bill` switched off | Home has no "+ Pay a bill"; a forced open shows JOURNEY_DISABLED. |
 
 #### 10. Expected mutation-check survivors
 
-`BILL_ALREADY_PAID` survives (the sandbox needs a paid-bill seed to produce it); add one reference ending in `9999` as already paid to kill it. `BILL_CURRENCY_MISMATCH` also has the form check, so a sandbox-only mutant survives T-3 (expected, UI layer catches it). Others: none expected.
+- The directory's reference patterns for the 24 billers other than Metro Power, Northfield and Najm are not all covered by a scenario; a mutant that loosens one survives unless each biller gets a table-driven test (planned).
+- The fee on UAE, Saudi and Jordan billers and the conversion rounding survive T-6 (one biller only).
+- `BILL_CURRENCY_MISMATCH` survives while no JOD, GBP or SAR account exists in the seed, because every non-matching case is also an `allowCrossCurrency` path (expected).
+- `DAILY_LIMIT_EXCEEDED` survives without the setup `usedToday` (the prototype's remaining limit is fixed).
+- The 5-day "Due in n days" chip survives (display only).
+- Wrong-code locking survives in the prototype (keypad accepts any six digits); it is killed only against the bank adapters.
 
 ---
 ### ★ Mobile top-up — `mobile-topup`
@@ -4330,190 +4780,191 @@ The range check exists in the form (`amountInput` validation) and the adapter; t
 
 ---
 
-### ★ Add, edit or delete a beneficiary — `manage-beneficiary`
+### ★ Add, edit or delete a payee — `manage-beneficiary`
+
+Catalog: `manage-beneficiary`, workspace Personal, category Personal: Payments, core no, a bank can switch it off: yes. Options (key, label, default): `nameCheck` "Run the name check (Verification of Payee, Confirmation of Payee)" (on); `allowCancelSchedules` "Let a person cancel scheduled payments while deleting a payee" (on); `labels` "Offer payee labels (Family, Friend, Landlord…)" (on).
 
 #### 1. Summary
 
 | Field | Value |
 |---|---|
 | Slug | `manage-beneficiary` |
-| Purpose | Save a person to pay (called a payee in the payment journeys), change their details, or remove them. Payee fields depend on the region (United States, Europe, United Kingdom, Middle East, Other countries). A new or changed payee goes through the name check and then the 24-hour cooling-off rule. Also the "New payee" step inside every transfer, returning to where the person was. |
+| Purpose | Save a person or company to pay, change their details, or remove them. Fields follow the kind of payee and the region; a new or changed payee goes through the name check and then the 24-hour, 500.00 USD cooling-off rule. |
 | Release / workspace | 1 / Personal |
-| Status | New (planned). The `beneficiaryPicker` block's `addNewJourney` and the `navigate` action's `toJourney` and `returnTo` exist in the schema (`packages/journey-schema/src/schema.ts`); wiring them in the engine is step 4. `bank.beneficiaries.list` exists in `packages/mock-bank-api`; the adapters named `bank.payees.*` are planned (09 section 13). |
+| Status | New. Built in the prototype (`design/bankworkx-r1/src/journeys/31-manage-beneficiary.js`); research `research/manage-beneficiary.md`. The prototype uses the older field checks of `90-payflow.js`, not the `TXF` table of `personal-transfer` (no address, account type or CliQ alias). Adding a payee inside a transfer is done by `personal-transfer` itself. |
 | Channels | Web and mobile |
-| Starting pattern | None; `fixtures/cab.ts` shows the pattern for input validation messages. |
-| Who may use it | `beneficiaries.manage` |
-| Shared reference | `09-payment-rails.md` sections 3 (fields), 4 (name check), 10 (cooling-off), 12 (codes), 14 (sample data). |
+| Starting pattern | `fixtures/cab.ts` for input messages |
+| Who may use it | The prototype checks `payments.create`; the module permission is `beneficiaries.manage` (contradiction, see report). |
+| Shared reference | 09 sections 3 (fields), 4 (name check), 10 (cooling-off), 12 (codes), 14 (sample data). |
+
+**Sandbox demo values.** BankWorkx® customers: 3301123308 Taylor Brooks, 3301554412 Jordan Keller. Saved payees: Maya Chen, Lena Fischer, James Whitfield, Omar Haddad. James Whitfield is used by the scheduled payment "Rent" (Monthly, 1 Dec, $1,450.00); "Savings top-up" (Weekly, Fri, $100.00) has no payee. Limit 50 payees. Sample payees (button **Fill with a sample payee**): US Priya Raman `021000021` / `987654321`; Europe Camille Dubois `FR14 2004 1010 0505 0001 3M02 606`; UK James Whitfield 20-00-00 / 55779911 (already saved, so `BENEFICIARY_EXISTS`); UAE Omar Haddad (already saved); Saudi Arabia Faisal Al-Harbi; Jordan Rania Haddad; abroad Aiko Tanaka `BOTKJPJT` / 1234567890; BankWorkx® 3301123308. Name check registry as in 09 section 14.
 
 #### 2. Entry points
 
 | Place › label | Passes in | Permission |
 |---|---|---|
-| Payments › beneficiaries › Add | `{mode: "add"}` | `beneficiaries.manage` |
-| Payments › beneficiaries › row › Edit / Delete | `{mode: "edit"\|"delete", beneficiaryId}` | `beneficiaries.manage` |
-| Journeys `internal-transfer`, `personal-transfer`, `international-transfer`, `schedule-payment`: "New payee" | `{mode: "add", kind, region?, returnTo: <screen id>}` | `beneficiaries.manage` |
-| Payments › hub › empty state › Add a beneficiary | `{mode: "add"}` | `beneficiaries.manage` |
-
-**How `returnTo` works.** The calling journey sends `navigate {toJourney: "manage-beneficiary", returnTo: "<its screen id>"}`. This journey runs, and its **Done** and **Cancel** buttons go back to that screen. On success it writes the new id to `ctx.lastBeneficiaryId`, and the calling screen's picker selects it. Nothing else of the caller's data is lost. When the person saves a payee from the name-check screen of `personal-transfer` ("Save this payee for next time"), the same save adapter runs without this journey's screens.
+| Payments › Beneficiaries › Add | `{mode: add}` (optional `kind`, `region`) | as above |
+| Payments › Beneficiaries › row › Edit / Delete | `{mode, beneficiaryId}` | as above |
+| Payments › Beneficiaries (no mode) | none: first screen asks what to do | as above |
+| A transfer › New payee | `{mode: add, kind, returnTo}` (returns to the same screen) | as above |
+| `single-transfer` empty state › Add a beneficiary | `{mode: add}` | as above |
 
 #### 3. Screens
 
-**`type` — "Who do you want to pay?"** (entry in add mode; skipped when `kind` is passed). `stepper` ["type", "details", "Payee check", "review", "otp"]. `select` tiles `ben.kind`: **BankWorkx customer** ("Free and instant"), **Another bank** ("US, Europe, UK or Middle East"), **Abroad** ("Other countries, over SWIFT"). Required, message "Choose a type." Button **Continue**.
+`stepper` (planned): mode, pick, type, details, check, review, code.
 
-**`details` — "Their details"** (entry in edit mode, with the fields filled). For **Another bank** and **Abroad** a region chip row shows **United States**, **Europe (SEPA)**, **United Kingdom**, **Middle East**, **Other countries (SWIFT)** (Abroad preselects the last). Fields by region (09 section 3 is the rule source; messages repeated here):
+**`mode`: "What would you like to do?"** (only when no mode was passed). `chips`: Add a payee, Edit a payee, Delete a payee.
 
-| Field | Region | Block | Required | Validation | Error message (code) |
-|---|---|---|---|---|---|
-| Name on the account | all | `textInput`, 70 | Yes | 2 to 70 characters | "Enter the name on the account." (`PAYEE_NAME_REQUIRED`) |
-| Nickname | all | `textInput` | No | Up to 24 characters | "Use 24 characters or fewer." |
-| BankWorkx account number | BankWorkx customer | `textInput` | Yes | `^[0-9]{10}$`; found by `bank.customers.lookup`; shows "Taylor B. · ••3308" for the person to confirm | "Enter the 10-digit BankWorkx account number." / "We can't find a BankWorkx account with that number. Check it and try again." (`CUSTOMER_NOT_FOUND`) |
-| Routing number (ABA) | US | `textInput`, 9 | Yes | 9 digits and the ABA checksum | "That routing number isn't valid. Check the 9 digits." (`INVALID_ROUTING`) |
-| Account number | US | `textInput`, 17 | Yes | 4 to 17 digits | "An account number has 4 to 17 digits." (`INVALID_ACCOUNT`) |
-| Account type | US | `select` Checking, Savings | Yes (default Checking) | One of two | none |
-| IBAN | Europe | `textInput` (spaces ignored, shown in groups of four) | Yes | mod-97 and length for the country; country in the SEPA list | "That IBAN doesn't look right. Check each character." (`INVALID_IBAN`) / "That IBAN isn't in the SEPA area. Use 'Other countries (SWIFT)'." (`NOT_SEPA`) |
-| Sort code | UK | `textInput`, 8 | Yes | 6 digits, dashes optional | "A sort code has 6 digits, like 20-00-00." (`INVALID_SORT_CODE`) |
-| Account number | UK | `textInput`, 8 | Yes | 8 digits | "A UK account number has 8 digits." (`INVALID_ACCOUNT`) |
-| Country | Middle East | `select` United Arab Emirates, Saudi Arabia, Jordan | Yes | One of three | none |
-| IBAN | Middle East | `textInput` | Yes | IBAN check; first two letters match the country (AE 23, SA 24, JO 30) | `INVALID_IBAN` / "That IBAN starts with AE, but you chose Saudi Arabia." (`COUNTRY_MISMATCH`) |
-| Country | Other (SWIFT) | `select` Canada, India, Japan, Australia | Yes | One of the list; fixes the currency | none |
-| SWIFT / BIC | Other (SWIFT) | `textInput`, 11, upper-cased | Yes | 8 or 11 characters, pattern in 09 section 3 | "A SWIFT/BIC has 8 or 11 letters and numbers." (`INVALID_BIC`) |
-| Account number or IBAN | Other (SWIFT) | `textInput`, 34 | Yes | 6 to 34 letters, digits, spaces or dashes | "That account number looks too short or too long." (`INVALID_ACCOUNT`) |
+**`pick`: "Choose a payee"** (edit and delete without an id). Intro "Pick the person you want to change." `cards` of saved payees: "{nickname} ({name})" or name, "{kind or region} · {country} · {mask} · {label}", chip Verified, Saved or "New · {n} hours left". Required, "Choose a payee." Empty: "You haven't saved anyone yet" / "Add someone to pay them in two taps."
 
-Masked display in the list and on the review: IBAN `DE89 •••• 3000`; UK `20-00-00 · ••9911`; US `ABA 021000021 · ••6789`; SWIFT `BOTKJPJT · ••7890`. Green notes below valid fields as in `personal-transfer`. Button **Check details** (validate field by field, then `bank.payees.validate`: duplicates and server checks, then `bank.payees.check`). In edit mode, **Save changes**. Alert (info) in edit mode when the name or account changes: "If you change the name or the account details, we check the payee again and {name} counts as a new payee for 24 hours. You can send up to $500.00 in that time." Editing only the nickname skips the check.
+**`type`: "Who do you want to pay?"** (add, unless `kind` was passed). `cards`, required, "Choose a type.": "BankWorkx® customer" (Free and instant), "Another bank" (US, Europe, UK or Middle East), "Abroad" (Other countries, over SWIFT).
 
-**`payeeCheck` — "Check the payee"** (add; edit when the name or account changed). The same screen and four outcomes as in `personal-transfer` (09 section 4), with the region's label: "Verification of Payee" (Europe), "Confirmation of Payee" (UK), "Account name check" (US), "Name check" (Middle East and Other countries). `match` continues; `close` shows "The name is close, but not exact" with **Use '{registered name}'** and needs the tick "I understand and want to continue."; `none` shows "The name doesn't match" and needs the tick; `na` shows "We couldn't check this name" and needs the tick. BankWorkx customers are matched against the customer record (always `match` or not found). The result is saved with the payee: `match` gives the chip **Verified**; `close` with the corrected name gives **Verified**; every other path (`close` or `none` or `na` accepted by tick) gives **Saved**.
+**`details`: "Their details"** (add and edit). Edit notice: "If you change the name or the account details, we check the payee again and {name} counts as a new payee for 24 hours. You can send up to $500.00 in that time. Changing only the nickname or label does neither." Button **Check details**, busy "Checking the details…" (0.7 s); **Fill with a sample payee**.
 
-**`review` — "Check before you save"**. Rows: Type, Region and country, Name, Nickname, Account (masked), Bank (when known), Name check ("Matches", "Close, you continued", "Doesn't match, you continued", "Couldn't be checked"). Consent (`termsVersion` "beneficiary-v2", planned): "I confirm these details are correct and I know the person". Alert (warning, always): "For your security, you can send up to $500.00 to a new payee in the first 24 hours." Button **Save and send code** (nickname-only edits skip OTP and show **Save changes**).
+| Field | Block | Required | Validation | Error message |
+|---|---|---|---|---|
+| Where is the account? | `chips` United States, Europe (SEPA), United Kingdom, Middle East (add, kind Another bank) | Yes | One chosen | none |
+| Country | `select` (Middle East: UAE, Saudi Arabia, Jordan; abroad: Canada, India, Japan, Australia, Switzerland, Singapore, Mexico) | Yes | One chosen | none |
+| BankWorkx® account number (customer) | `textInput`, 10 digits, hint "Try 3301123308 or 3301554412"; shows "✓ Found: {first name} {initial}. · ••{last 4}" | Yes | 10 digits and exists | "Enter the 10-digit BankWorkx® account number." / `CUSTOMER_NOT_FOUND` "We can't find a BankWorkx® account with that number. Check it and try again." |
+| Name on the account | `textInput`, 70 | Yes (not customers) | 2 or more characters | `PAYEE_NAME_REQUIRED` "Enter the name on the account." |
+| Nickname | `textInput`, 24, "Optional, for example “Mum”"; hint "Up to 24 characters. Only you see it." | No | 24 characters | "Use 24 characters or fewer." |
+| Label | `chips` Family, Friend, Landlord, Business, Other (option `labels`) | No | none | none |
+| Routing number (ABA) | `textInput` 9 (US) | Yes | 9 digits, ABA checksum; green "✓ Valid routing number · {bank}" | `INVALID_ROUTING` "That routing number isn't valid. Check the 9 digits." |
+| Account number (US) | `textInput` 17 | Yes | 4 to 17 digits | `INVALID_ACCOUNT` "An account number has 4 to 17 digits." |
+| Account type (US) | `chips` Checking, Savings | No | default Checking | none |
+| IBAN (Europe, Middle East) | `textInput`; hint "Spaces are fine." | Yes | mod-97, length; Europe: SEPA country; Middle East: starts with the chosen country | `INVALID_IBAN`, `NOT_SEPA` "That IBAN isn't in the SEPA area. Use “Other countries (SWIFT)”.", `COUNTRY_MISMATCH` "That IBAN starts with {cc}, but you chose {country}." |
+| Sort code (UK) | `textInput` 8, "20-00-00" | Yes | 6 digits | `INVALID_SORT_CODE` "A sort code has 6 digits, like 20-00-00." |
+| Account number (UK) | `textInput` 8 | Yes | 8 digits | `INVALID_ACCOUNT` "A UK account number has 8 digits." |
+| SWIFT / BIC (abroad) | `textInput` 11 | Yes | 8 or 11 characters | `INVALID_BIC` "A SWIFT/BIC has 8 or 11 letters and numbers." |
+| Account number or IBAN (abroad) | `textInput` 34 | Yes | 6 to 34 letters, digits, spaces, dashes | `INVALID_ACCOUNT` "That account number looks too short or too long." |
 
-**`otp`** — shared C; prompt "Authorise saving {name}"; button **Save payee**. Required for add, and for edit when the name or account changes. Not required for a nickname edit, or for delete.
+Empty required fields show: "Enter the IBAN.", "Enter the 6-digit sort code.", "Enter the 8-digit account number.", "Enter the 9-digit routing number.", "Enter the account number.", "Enter the SWIFT/BIC code.", "Enter the account number or IBAN." On **Check details**: more than 50 payees gives `BENEFICIARY_LIMIT`; the same details as another saved payee give `BENEFICIARY_EXISTS`; then the name check runs if needed. Editing: the kind and region cannot change.
 
-**`confirmDelete` — "Delete {name}?"** (entry in delete mode). `dialog` block: text "You won't be able to send money to {name} from your saved list. Payments already sent are not affected." Buttons **Delete** (destructive; calls `remove`) and **Keep** (exit). If the payee is used by an active schedule the delete is blocked (`BENEFICIARY_IN_USE`).
+**`check`: "Check the payee"** (add; edit only when the name or account details changed). Same four results and wording as `personal-transfer` section 3 (match, close with **Use “{name}”**, none, na), with the label of the region ("BankWorkx® customer record" for customers, whose result is always match). Required tick "I understand and want to continue" unless match ("Check the payee before you continue." `PAYEE_NOT_CHECKED`). With option `nameCheck` off the result is "couldn't check" (`na`) for every bank payee.
 
-**`success` — "Saved" / "Changes saved" / "Payee deleted"** (terminal). Add: text "{name} is saved as {Verified or Saved}. For your security you can send up to $500.00 in the first 24 hours." Meta "Ref {reference}". Buttons **Send money** (opens `personal-transfer`, or `international-transfer` for SWIFT, with `{payeeId}`), **Done** (back to `returnTo` or Payments › beneficiaries). Delete: "{name} was removed from your payees."
+**`review`: "Check before you save"** (add and edit). Warning "For your security, you can send up to $500.00 to a new payee in the first 24 hours." Rows: Type, Region, Name, Nickname, Label, Account, Bank, Name check (Matches, Close you continued, Doesn't match you continued, Couldn't be checked, Not repeated). Consent "I confirm these details are correct and I know this person" (required, "Tick to confirm."). Button **Save and send code**; an edit with only nickname or label changed shows **Save changes** and asks for no code.
 
-**`locked`**, **`timeout`**, **`unavailable`**, **`failed`** — shared C ("Nothing was changed.").
+**`delete`: "Delete payee"**. Card with the payee and "You won't be able to send money to {name} from your saved list. Payments already sent are not affected." If scheduled payments use the payee they are listed; with option `allowCancelSchedules` a switch "Also cancel these scheduled payments" ("They will not run again. Payments already sent are not affected."), without it "Cancel these in Payments › Scheduled first." Not ticked: `BENEFICIARY_IN_USE` "{name} is used by {n} scheduled payment(s). Cancel it first." Button **Delete payee**; no code is asked. Unknown id: "Payee not found" / `BENEFICIARY_NOT_FOUND`.
 
-*The list (Payments › beneficiaries).* Each row: initial, name, region name (and country for Middle East and Other countries), masked account, the chip **Verified** (green) or **Saved** (grey), and "New · {n} hours left" while under 24 hours old. Rows are grouped by region. Empty: "You haven't saved anyone yet." with **Add a beneficiary**.
+**Code prompt** (add and sensitive edit): "Authorise saving {name}", "Code sent to ••• 4410. It only works for this change."
 
-Loading, empty and error states: the form shows a spinner on the button while checking; the check screen shows "Checking the name…" for up to 3 seconds, then `na` with "We couldn't check this name" if the check call times out.
+**`result`**: add: "Saved" / "{name} is saved as Verified (or Saved). For your security you can send up to $500.00 in the first 24 hours."; rows Payee, Account, Bank, Name check, Limit "$500.00 for 24 hours"; buttons **Send money** (to the transfer journey for the payee, with the payee id), **Back to the payment** (when opened from a transfer) or **Payments**. Edit: "Changes saved"; a sensitive change says "{name} is a new payee again for 24 hours. You can send up to $500.00 in that time." with chip "Checked again"; otherwise "{name} was updated." Delete: "Payee deleted" / "{name} was removed from your payees." with rows Payee, Account, Scheduled payments cancelled. A payee is Verified only after a match (or a close match corrected with Use); otherwise Saved.
+
+**`locked`, `timeout`, `unavailable`, `failed`**: shared screens C (timeout: "This is taking longer than expected. Nothing was changed."; unavailable: "We couldn't reach the bank. Nothing was changed.").
 
 #### 4. Sandbox errors
 
-| Code | Message | Shows on | Button |
+| Code | Message the person sees | Shows on | Button |
 |---|---|---|---|
-| `PAYEE_NAME_REQUIRED` (planned) | "Enter the name on the account." | `details` | Edit |
-| `CUSTOMER_NOT_FOUND` (planned) | "We can't find a BankWorkx account with that number. Check it and try again." | `details` | Edit number |
-| `INVALID_IBAN` / `NOT_SEPA` / `COUNTRY_MISMATCH` (planned) | section 3 | `details` | Edit |
-| `INVALID_ROUTING` / `INVALID_SORT_CODE` / `INVALID_ACCOUNT` / `INVALID_BIC` (planned) | section 3 | `details` | Edit |
-| `PAYEE_NOT_CHECKED` (planned) | "Check the payee before you continue." | `payeeCheck` | Check the payee |
-| `BENEFICIARY_EXISTS` (planned) | "You already saved {name} with these details." | `details` | Edit |
-| `BENEFICIARY_LIMIT` (planned) | "You can save up to 50 payees. Delete one to add another." | `type` | Back |
-| `BENEFICIARY_NOT_FOUND` (planned) | "We can't find that payee." | `failed` | Back |
-| `BENEFICIARY_IN_USE` (planned) | "{name} is used by {n} scheduled payment(s). Cancel them first." | `failed` | View scheduled (Payments › scheduled) |
+| `PAYEE_NAME_REQUIRED`, `INVALID_IBAN`, `NOT_SEPA`, `COUNTRY_MISMATCH`, `INVALID_ROUTING`, `INVALID_SORT_CODE`, `INVALID_ACCOUNT`, `INVALID_BIC` | texts in section 3 | `details` field | fix the field |
+| `CUSTOMER_NOT_FOUND` | "We can't find a BankWorkx® account with that number. Check it and try again." | `details` | fix the field |
+| `PAYEE_NOT_CHECKED` | "Check the payee before you continue." | `check` | tick the box |
+| `BENEFICIARY_EXISTS` | "You already saved this payee with these details." | `details` banner | Back |
+| `BENEFICIARY_LIMIT` | "You can save up to 50 payees. Delete one to add another." | `details` banner | Back |
+| `BENEFICIARY_NOT_FOUND` | "We can't find that payee." | `delete` / save | Payments |
+| `BENEFICIARY_IN_USE` | "This payee is used by a scheduled payment. Cancel it first." | `delete` | Back |
 | `STEP_UP_FAILED` | "We couldn't confirm this change. Nothing was saved. Start again." | `locked` | Start again |
-| `OTP_INVALID` / `OTP_REQUIRED` | S-`OTP_INVALID` / S-`OTP_REQUIRED` | `otp` / `failed` | Try again / Back to code |
-| `CORE_UNAVAILABLE` | "We couldn't complete this right now. Nothing was changed." | `failed` | Try again |
-| `NOT_SUPPORTED` | S-`NOT_SUPPORTED` | `failed` | Back |
-| `TIMEOUT` / `SERVICE_UNAVAILABLE` (planned) | "This is taking longer than expected. Nothing was changed." / standard unavailable | `timeout` / `unavailable` | Try again |
+| `TIMEOUT` | "This is taking longer than expected. Nothing was changed." | `timeout` | Try again |
+| `SERVICE_UNAVAILABLE` | "We couldn't reach the bank. Nothing was changed." | `unavailable` | Try again |
 
 #### 5. Adapters
 
 | Integration id | Adapter | Request | Response | Errors | Status |
 |---|---|---|---|---|---|
-| `beneficiaries` | `bank.beneficiaries.list` | none | map with `ageHours` (planned adds `kind`, `region`, `country`, `currency`, `maskedAccount`, `nickname`, `checkResult`, `verified`, `coolingOffUntil`, `allowanceLeft`, `usedBy`) | none | Existing, extended |
-| `lookup` | `bank.customers.lookup` | `{accountNumber}` | `{customerId, displayName, maskedNumber, currency}` | `CUSTOMER_NOT_FOUND` | (planned) |
-| `validate` | `bank.payees.validate` | `{region, country?, fields…, beneficiaryId?}` | `{ok, fieldErrors, bankName?, normalised{iban, sort, routing, bic}}` | `PAYEE_NAME_REQUIRED`, `INVALID_ROUTING`, `INVALID_ACCOUNT`, `INVALID_IBAN`, `NOT_SEPA`, `COUNTRY_MISMATCH`, `INVALID_SORT_CODE`, `INVALID_BIC`, `BENEFICIARY_EXISTS`, `BENEFICIARY_LIMIT` | (planned). Not money-moving; no OTP |
-| `check` | `bank.payees.check` | `{region, name, account key}` | `{result: "match"\|"close"\|"none"\|"na", registeredName?, label}` | `TIMEOUT`, `SERVICE_UNAVAILABLE` | (planned). Not money-moving; no OTP |
-| `otpSend`, `otpVerify` | `bank.otp.*` | as C | as C | `OTP_INVALID` | Existing |
-| `save` | `bank.payees.save` | `{region, fields…, checkResult, acknowledged, nickname?}` | `{payeeId, verified, addedAt, coolingOffUntil, reference}` | all validate codes, `PAYEE_NOT_CHECKED`, `OTP_REQUIRED`, `CORE_UNAVAILABLE`, `TIMEOUT`, `SERVICE_UNAVAILABLE` | (planned). Not money-moving; **requires OTP** (it opens a route for money). Replaces `bank.beneficiaries.create` |
-| `update` | `bank.beneficiaries.update` | `{payeeId, fields…, checkResult?, acknowledged?}` | `{payeeId, verified, addedAt (reset when name or account changed), coolingOffUntil}` | as `save` plus `BENEFICIARY_NOT_FOUND`; OTP only when name or account change | (planned) |
-| `remove` | `bank.beneficiaries.delete` | `{payeeId}` | `{deleted: true}` | `BENEFICIARY_NOT_FOUND`, `BENEFICIARY_IN_USE`, `TIMEOUT`, `SERVICE_UNAVAILABLE` | (planned). No OTP |
+| `payees` | `bank.beneficiaries.list` | none | map with `ageHours` | none | Existing |
+| `validate` | `bank.payees.validate` | `{kind, region, country?, fields…}` | `{ok, fieldErrors, bankName?}` | field codes | (planned) |
+| `check` | `bank.payees.check` | `{region, name, account key}` | `{result, registeredName?, label}` | `TIMEOUT`, `SERVICE_UNAVAILABLE` | (planned) |
+| `save` | `bank.payees.save` | `{kind, region, fields…, nickname, label, checkResult, acknowledged}` | `{payeeId, addedAt, coolingOffUntil}` | validate codes, `BENEFICIARY_EXISTS`, `BENEFICIARY_LIMIT`, `PAYEE_NOT_CHECKED` | (planned). OTP |
+| `update` | `bank.payees.update` | `{payeeId, fields…}` | `{payeeId, addedAt}` | as save, `BENEFICIARY_NOT_FOUND` | (planned). OTP only for sensitive changes |
+| `remove` | `bank.payees.delete` | `{payeeId, cancelSchedules?}` | `{removed, schedulesCancelled}` | `BENEFICIARY_NOT_FOUND`, `BENEFICIARY_IN_USE` | (planned). No OTP |
+| `otpSend`, `otpVerify` | `bank.otp.send`, `bank.otp.verify` | `{channel}`, `{code}` | `{sent, maskedPhone}`, `{verified}` | `OTP_INVALID` | Existing |
+
+Prototype stores a BankWorkx® customer as a US-region record (routing 021000021, account = customer number) so the transfer flows keep working.
 
 #### 6. Permissions, step-up and limits
 
-`beneficiaries.manage`. Step-up `otp` for add and for edits of the name or account; `none` for nickname-only edits and deletes. Maximum 50 payees. Cooling-off (09 section 10, `BENEFICIARY_COOLING_OFF`): every new payee, and any payee whose name or account changed, can receive at most USD 500 in 24 hours; the allowance left is shown on the payment's amount screen. A name change re-runs the name check (09 section 10, "Name mismatch").
+Permission as in the summary. A code is needed to add and to change the name or account details; changing only the nickname or label, and deleting, need none. Cooling-off 24 hours, 500.00 USD, restarts on add and on a sensitive edit. Maximum 50 payees. Business context: `WRONG_CONTEXT`.
 
 #### 7. Result and links out
 
-Receipt: none (a payee is not a payment); the reference is shown for support. Notification: SMS and in-app "{name} was added as a payee. If this wasn't you, contact us now." (also sent on edit of the name or account and on delete). Buttons: **Send money**, **Done**.
+As the result screen above. Notification N-29b "Beneficiary added / changed / deleted". Buttons: **Send money**, **Back to the payment**, **Payments**.
 
 #### 8. Acceptance criteria
 
-- AC-1: A payee in each region (BankWorkx customer, US, Europe, UK, Middle East, Other countries) can be added after valid details, the name check, consent and a verified code; it then appears in the list with its region, a chip and `ageHours` 0.
-- AC-2: Invalid routing, IBAN, sort code, account number, BIC and country-mismatched IBAN are refused with the exact messages and codes; **Check details** stays disabled.
-- AC-3: The name check runs on add and when the name or account is edited; `match` continues freely; `close`, `none` and `na` need the tick; "Use '{name}'" corrects the name.
-- AC-4: A payee shows **Verified** only when the check was `match` (or `close` corrected with "Use"); otherwise it shows **Saved**.
-- AC-5: Adding the same details twice is refused (`BENEFICIARY_EXISTS`).
-- AC-6: A new payee is limited to $500.00 for 24 hours (cooling-off) and the person is told so on the review and the result.
-- AC-7: Changing the name or account restarts the 24 hours, re-runs the check and asks for a code; changing only the nickname does none of these.
-- AC-8: A payee used by an active scheduled payment cannot be deleted.
-- AC-9: Opened from a transfer, the journey returns to the same screen with the new payee selected.
-- AC-10: Three wrong codes stop the journey and nothing is saved.
-- AC-11: Timeout and unavailable states save nothing and say so.
-- AC-12: The list shows each payee's region and masked account.
+- AC-1: A payee of each kind (BankWorkx® customer, US, Europe, UK, UAE, Saudi Arabia, Jordan, abroad) can be saved after valid details, the name check, consent and a verified code, and then appears in the list with its region, mask and chip.
+- AC-2: Invalid routing, IBAN, sort code, account, BIC, a non-SEPA IBAN and a country-mismatched IBAN are refused with the exact messages and codes.
+- AC-3: The name check runs on add and on a sensitive edit; match continues freely; close, none and na need the tick; Use corrects the name.
+- AC-4: A payee is Verified only after match (or corrected close); otherwise Saved; abroad payees are never Verified.
+- AC-5: The same details twice give `BENEFICIARY_EXISTS`; the 51st payee gives `BENEFICIARY_LIMIT`.
+- AC-6: A new or sensitively changed payee is limited to 500.00 USD for 24 hours, and the review and result say so.
+- AC-7: Changing only the nickname or label asks for no check and no code and does not restart the 24 hours.
+- AC-8: A payee used by a scheduled payment cannot be deleted unless the person cancels the schedules (when the option allows).
+- AC-9: Opened from a transfer, the journey returns to it.
+- AC-10: Three wrong codes save nothing; timeout and unavailable states save nothing and say so.
+- AC-11: With `nameCheck` off every bank payee shows "couldn't check"; with `labels` off no label is offered.
 
 #### 9. Scenarios
 
 | # | Covers | Persona / setup | Conditions | Steps and expected result |
 |---|---|---|---|---|
-| T-1 | AC-1, AC-4, AC-6 | `alex` | none | Add Lena Fischer (Europe, `DE89 3704 0044 0532 0130 00`): green check; tick; code `482100`. List shows "Europe (SEPA) · DE89 •••• 3000", chip Verified, `ageHours` 0 and the cooling-off chip. |
-| T-2 | AC-1 | `alex` | none | Add Maya Chen (US, ABA 021000021, account 123456789), James Whitfield (UK, 20-00-00, 55779911), Omar Haddad (Middle East, UAE, `AE07 0331 2345 6789 0123 456`), Aiko Tanaka (Other, Japan, `BOTKJPJT`, 1234567890): each is saved; Aiko shows **Saved**, the others **Verified**. |
-| T-3 | AC-2 | `alex` | none | US routing `123456789` gives `INVALID_ROUTING`; Europe IBAN `DE89 3704 0044 0532 0130 01` gives `INVALID_IBAN`; a GB IBAN under Europe gives `NOT_SEPA`; UK sort code `20-00` gives `INVALID_SORT_CODE`; Saudi Arabia with an AE IBAN gives `COUNTRY_MISMATCH`; BIC `ABC` gives `INVALID_BIC`. |
-| T-4 | AC-3, AC-4 | `alex` | none | Name "Lena Fisher", her IBAN: amber; Continue needs the tick, or **Use 'Lena Fischer'** turns it green and the payee shows Verified. Name "Bob Smith": red; saved only after the tick; chip Saved. |
-| T-5 | AC-3 | `alex` | none | An unknown UK account: grey "We couldn't check this name"; tick required; saved with chip Saved. |
-| T-6 | AC-5 | `alex` | none | Add Jamie Lee's Northwind account again: `BENEFICIARY_EXISTS`. |
-| T-7 | AC-7 | `alex`, `now` advanced 2 days | none | Edit Lena Fischer's IBAN: name check re-runs, needs a code, `addedAt` resets, chip shows. Edit only the nickname: no check, no code, `addedAt` unchanged. |
-| T-8 | AC-7 | `alex` | none | Edit the name to "Lena Fisher": check runs again (close); the notice about 24 hours shows. |
-| T-9 | AC-8 | `alex` with a schedule for Jamie | none | Delete Jamie: `BENEFICIARY_IN_USE`; after cancelling the schedule, delete works. |
-| T-10 | AC-9 | `alex` | none | From `personal-transfer`'s `payee` screen add a payee; back on `payee` the new one is chosen. |
-| T-11 | AC-10 | `alex` | none | Three wrong codes on add: `locked`; list unchanged. |
-| T-12 | AC-11 | `alex` | `timeout: ["bank.payees.save"]` | `timeout` copy "This is taking longer than expected. Nothing was changed."; list unchanged. |
-| T-13 | AC-11 | `alex` | `unavailable: ["bank.payees.validate"]` | `unavailable` screen on **Check details**. |
-| T-14 | AC-3 | `alex` | `timeout: ["bank.payees.check"]` | The check screen falls back to grey `na`; the tick is required. |
-| T-15 | AC-12 | `alex` | none | The list shows region and masked account for every seeded payee. |
+| T-1 | AC-1, AC-4, AC-6 | `alex` | none | Add Europe, "Camille Dubois", her IBAN: green; consent; any six digits. Saved, chip Verified, "$500.00 for 24 hours". |
+| T-2 | AC-1 | `alex` | none | Add BankWorkx® customer 3301123308: found Taylor Brooks (if not already saved; else `BENEFICIARY_EXISTS`); 0000000000 gives `CUSTOMER_NOT_FOUND`. Add abroad Aiko Tanaka: saved as Saved. |
+| T-3 | AC-2 | `alex` | none | US routing `123456789` gives `INVALID_ROUTING`; Europe `DE89 3704 0044 0532 0130 01` `INVALID_IBAN`; a GB IBAN `NOT_SEPA`; UK `20-00` `INVALID_SORT_CODE`; Saudi Arabia with an AE IBAN `COUNTRY_MISMATCH`; BIC `ABC` `INVALID_BIC`. |
+| T-4 | AC-3, AC-4 | `alex` | none | "Lena Fisher" with her IBAN: amber, Use turns it green, Verified; "Bob Smith": red, saved only after the tick, chip Saved. |
+| T-5 | AC-3, AC-11 | `alex` | option `nameCheck` off | Any bank payee: grey "couldn't check", tick required, chip Saved. |
+| T-6 | AC-5 | `alex` | none | Add James Whitfield's UK details again: `BENEFICIARY_EXISTS`. |
+| T-7 | AC-6, AC-7 | `alex` | none | Edit Lena's IBAN: check re-runs, code asked, chip "New · 24 hours left". Edit only the nickname: no check, no code, no chip. |
+| T-8 | AC-8 | `alex` | none | Delete James Whitfield: `BENEFICIARY_IN_USE`; tick "Also cancel these scheduled payments": deleted, "Scheduled payments cancelled 1". With option `allowCancelSchedules` off the switch is absent and the delete stays blocked. |
+| T-9 | AC-9 | `alex` | none | From `single-transfer` empty state add a payee: result button returns to the form. |
+| T-10 | AC-10 | `alex` | none | Three wrong codes on add (sandbox): `locked`; list unchanged. |
+| T-11 | AC-10 | `alex` | `timeout: ["bank.payees.save"]`, `latencyMs: 10000` | Timeout copy "This is taking longer than expected. Nothing was changed."; list unchanged. |
+| T-12 | AC-10 | `alex` | `unavailable: ["bank.payees.validate"]` | `unavailable` screen on **Check details**; list unchanged. |
+| T-13 | AC-5 | `alex`, 50 payees seeded | none | The 51st gives `BENEFICIARY_LIMIT`. |
 
 #### 10. Expected mutation-check survivors
 
-`BENEFICIARY_LIMIT` survives (needs 50 seeded entries; add a seeded variant if wanted). The IBAN length table survives for countries not used in scenarios (only Germany, the UAE and the GB case are tested); the reason is "scenario covers a few countries". The exact message text and the sandbox registry names are fixture data. The Verified-versus-Saved chip for `close` after "Use" is killed by T-4. Others: none expected.
+The wrong-code lockout is a sandbox rule the prototype does not simulate. The IBAN length table survives for countries not used in scenarios. Message text and registry names are fixture data. `BENEFICIARY_LIMIT` survives without 50 seeded payees (T-13 kills it if seeded).
 
 ---
 
 ### ★ Schedule a payment — `schedule-payment`
+
+Catalog: `schedule-payment`, workspace personal, category Payments, core no, a bank can switch it off (yes). Options: `allowOwn` "Allow schedules between own accounts" (default on); `allowBills` "Allow scheduling a saved bill (full balance or minimum due)" (default on); `allowPrevDay` "Let the person choose “previous business day” for closed days" (default on); `allowRetry` "Offer “try once more next business day” when there isn't enough money" (default on); `allowSkip` "Offer “skip only the next payment” when cancelling" (default on); `strictCutoff` "Close changes at 09:00 the business day before (default 18:00)" (default off).
 
 #### 1. Summary
 
 | Field | Value |
 |---|---|
 | Slug | `schedule-payment` |
-| Purpose | Pay a payee in the United States, Europe, the United Kingdom, the Middle East or abroad (SWIFT), or move money between own accounts, later (once), or on a repeat (weekly, monthly), or as an open-ended standing order. The amount is in the payee's currency; the rate and the checks are redone on the day. Also changes an existing schedule. |
+| Purpose | Pay a payee, one of the customer's own accounts, or a saved bill on a future date or on a repeat (once, weekly, every 2 weeks, monthly, quarterly), with an end rule, a choice for closed days, a choice for "not enough money", and reminders. The same journey changes a schedule (mode `edit`) and cancels or skips one (mode `cancel`). |
 | Release / workspace | 1 / Personal |
-| Status | New (planned). |
+| Status | Built in the prototype (`design/bankworkx-r1/src/journeys/35-schedule-payment.js`, research `research/schedule-payment.md`). Replaces the earlier spec, which had four kinds (once, weekly, monthly, standing order) and was a separate journey for cancelling. `cancel-standing-order` is now an alias (below). |
 | Channels | Web and mobile |
-| Starting pattern | `fixtures/local-transfer.ts` for payee, amount and review; adds the schedule screen with `datePicker` (planned block). |
-| Who may use it | `payments.schedule` and `payments.create` |
-| Shared reference | `09-payment-rails.md` section 8 (when: now, later, repeating), 2 (rails and cut-offs), 5 (FX), 9 (limits and SCA), 10 (cooling-off, screening), 12 (codes). `personal-transfer` and `international-transfer` have the same **Later** control; this journey is the full form and the place to change a schedule. |
+| Starting pattern | `fixtures/local-transfer.ts` for the payee and the rail; the schedule form, the calendar and the cut-off are new. |
+| Who may use it | Permission `payments.schedule` (the prototype checks only this one; creating also needs the payee to exist). |
+| Modes and launch parameters | New: no parameters (optional `payeeId` or `savedBillId` fill "To"). Change: `{scheduleId}` (mode `edit` is the default when a `scheduleId` is given). Cancel or skip: `{scheduleId, mode: "cancel"}`. |
+| Shared reference | `09-payment-rails.md` sections 2 (rails and cut-offs), 5 (FX), 8 (when and repeats), 9 (limits), 12 (codes). Where this block differs from 09 section 8, this block follows the prototype (see the report). |
 
-**The four kinds.**
+**Rules that are the same in every mode.** Nothing is taken when the schedule is made. On each date the bank checks the balance, the limits, the rate and the payee again and pays at 06:00 UTC. After two failed payments in a row the schedule is paused. Changing or cancelling is possible until 18:00 on the business day before the next payment (09:00 if `strictCutoff` is on). On the day itself the schedule is "Running now" and cannot be changed (`SCHEDULE_RUNNING`). A person can have up to 20 active schedules. Cancelling asks for no code; creating and changing ask for one.
 
-| Kind | What it does | Ends |
-|---|---|---|
-| Once | One payment on a chosen date | After that date |
-| Weekly | Every 7 days on the weekday of the first date | Must end: on an end date or after a number of payments (up to 104) |
-| Monthly | Every month on the day of the first date (29 to 31 becomes the last day in short months) | Must end: on an end date or after a number of payments (up to 24) |
-| Standing order | A fixed monthly payment on a day from 1 to 28 | Runs until cancelled; an end date is optional |
+**Frequencies and limits.** Once; every week (up to 104 payments); every 2 weeks (up to 52); every month (up to 60); every 3 months (up to 40). Monthly and quarterly runs keep the day of the first date and use the last day of a shorter month (31 Jan runs 28 Feb, 31 Mar, 30 Apr). The first date is from tomorrow to 12 months ahead.
 
-The payment page of 09 offers "Doesn't repeat / Every week / Every month" on **Later**; they map to Once, Weekly and Monthly here. Bills (`pay-bill`) cannot be scheduled in Release 1. Payments abroad can: the rate is not fixed in advance, it is quoted again on the day.
+**Closed days (synthetic calendars).** Every region treats 9 Nov 2026 as a closed day ("Sandbox closed day") so a tester can see a move. Weekends are Saturday and Sunday in the United States, United Kingdom, Europe and UAE, and Friday and Saturday in Saudi Arabia and Jordan. Holidays include: US 11 Nov Veterans Day, 26 Nov Thanksgiving, 25 Dec; UK 25 and 28 Dec, 1 Jan, 26 and 29 Mar 2027; Europe 25 and 26 Dec, 1 Jan, 26 and 29 Mar, 1 May 2027; UAE 2 and 3 Dec, 1 Jan; Saudi Arabia 22 Feb 2027; Jordan 25 Dec, 1 Jan, 25 May 2027. A payment on a closed day goes on the next business day, or the previous one if the person chose that and `allowPrevDay` is on.
 
-**Business-day calendar (sandbox proposal; 09 section 8 says only "weekends and the holiday list for the region").**
+**Sandbox demo values.** Today is Tue 3 Nov 2026, 10:42 UTC. Eight schedules are already in the list:
 
-| Region | Weekend | Sandbox holidays (synthetic) |
-|---|---|---|
-| United States | Saturday, Sunday | 9 Nov 2026 (sandbox closed day), 26 Nov 2026 |
-| Europe | Saturday, Sunday | 9 Nov 2026, 25 Dec 2026 |
-| United Kingdom | Saturday, Sunday | 9 Nov 2026, 25 Dec 2026 |
-| UAE | Saturday, Sunday | 9 Nov 2026 |
-| Saudi Arabia, Jordan | Friday, Saturday | 9 Nov 2026 |
-| Other countries (SWIFT) | Saturday, Sunday | 9 Nov 2026 |
+| Id | Pays | How often | Next | Notes |
+|---|---|---|---|---|
+| `SCH-1001` | Rent, Harbor Estates ••8841 (ACH) | Monthly, $1,450.00 | Tue 1 Dec 2026 | 11 paid; reminder 3 days before |
+| `SCH-1002` | Savings top-up, own account Savings ••7720 | Weekly, $100.00 | Fri 6 Nov 2026 | 40 paid |
+| `SCH-1003` | Northfield Auto Insurance (bill, full balance, never more than $400.00) | Quarterly | Wed 4 Nov 2026 | Changes close today 18:00; with `strictCutoff` on, `SCHEDULE_CUTOFF_PASSED` |
+| `SCH-1004` | Peak Fitness (ACH) | Monthly, $39.99 | Tue 3 Nov 2026 | "Running now": change or cancel gives `SCHEDULE_RUNNING` |
+| `SCH-1005` | Lena Fischer, Europe (SEPA Credit Transfer) | Monthly, €200.00 | Mon 16 Nov 2026 | 5 of 12 paid |
+| `SCH-1006` | Maya Chen, United States (ACH) | Once, $250.00 | Thu 12 Nov 2026 | 11 Nov is Veterans Day, so changes close Tue 10 Nov 18:00 |
+| `SCH-1007` | James Whitfield, United Kingdom (Faster Payments) | Every 2 weeks, £100.00 | Fri 13 Nov 2026 | Ends 26 Mar 2027; closed days move to the previous business day |
+| `SCH-1008` | Omar Haddad, UAE (Aani) | Monthly, AED 500.00 | Fri 20 Nov 2026 | Paused; "if not enough money" = skip and pause |
+
+Also an ended schedule `SCH-0900` ("Old gym") that gives `SCHEDULE_NOT_ACTIVE`, and any unknown id gives `SCHEDULE_NOT_FOUND`. Payees: Maya Chen (US), Lena Fischer (Europe), James Whitfield (UK), Omar Haddad (UAE). Saved bills for the "A saved bill" kind are the ones from `pay-bill`. A tester reproduces the 20-schedule limit by adding twelve more schedules to the eight above. For a closed-day move choose Monday 9 Nov 2026.
 
 #### 2. Entry points
 
@@ -4521,245 +4972,178 @@ The payment page of 09 offers "Doesn't repeat / Every week / Every month" on **L
 |---|---|---|
 | Payments › scheduled › New | none | `payments.schedule` |
 | Payments › scheduled › row › Change | `{scheduleId}` | `payments.schedule` |
+| Payments › scheduled › row › Cancel | `{scheduleId, mode: "cancel"}` | `payments.schedule` |
 | Home › Upcoming payment › Edit | `{scheduleId}` | `payments.schedule` |
-| Payments › beneficiaries › row › Send money ▸ "Schedule instead" | `{payeeId}` | `payments.schedule` |
-| `personal-transfer` / `international-transfer` › When? › Later | the filled payment | `payments.schedule` |
+| Payments › beneficiaries › Schedule instead | `{payeeId}` | `payments.schedule` |
+| Pay a bill › receipt › Schedule a bill | none | `payments.schedule` |
+| Payments › tracker › payment (Scheduled) › Cancel | `{scheduleId, mode: "cancel"}` | `payments.schedule` |
+
+If `schedule-payment` is switched off, all of these disappear and a forced open gives `JOURNEY_DISABLED`. Cancelling is not a separate catalog entry any more: `cancel-standing-order` links resolve to this journey in cancel mode.
 
 #### 3. Screens
 
-**`payee` — "What are you scheduling?"** (entry in new mode). `stepper` ["payee", "plan", "review", "otp"]. onEnter: `accounts`, `payees`, `limits`.
+Step order by mode: **New**: `what`, `plan`, `rules`, `review`, code sheet, result. **Change**: `load`, `plan`, `rules`, `review`, code sheet, result. **Cancel**: `load`, `cancel`, result (no code). The progress bar counts only the steps that apply ("Step n of 4" for new and change, "Step n of 2" for cancel).
 
-| Field | Block | Required | Validation | Error message |
+**`load`: "Change a payment" / "Cancel a payment"** (change and cancel only). Intro: "Check this is the payment you mean." Card: payee name and detail, a chip (Active, Running now, Paused, Cancelled, Ended), rows Amount ("$1,450.00", "Full balance of the bill" or "Minimum due on the bill"), How often, Next payment (the day it really goes), Payments left ("Until you cancel" or a number), Paid so far, Sent by (rail), and a lock line: "Changes for the {date} payment close at 18:00 {today or date}." or "This payment can't be changed right now." Button **Change this payment** or **Continue to cancel**; busy "Getting your scheduled payment…" (0.7 s). Errors on this step: `SCHEDULE_NOT_FOUND`, `SCHEDULE_NOT_ACTIVE` (cancelled or ended), `SCHEDULE_RUNNING` (running now, or the next date is today or earlier), `SCHEDULE_CUTOFF_PASSED` (message adds the time: "The cut-off for the Wed 4 Nov payment passed at 09:00 today. Change or cancel it after it runs to affect the one after.").
+
+**`what`: "What are you scheduling?"** (new only). Intro: "Pick who gets the money and which account it comes from."
+
+| Field | Block | Required | Validation | Message |
 |---|---|---|---|---|
-| Pay | `select` chips: To a payee, Between my accounts | Yes | One of two | "Choose what to schedule." |
-| Payee | `beneficiaryPicker` (every region, SWIFT included; rows show region and masked account and the chip Verified or Saved), `allowAddNew` with `returnTo: "payee"` | Yes if To a payee | Saved payees only (a new payee must be saved and checked first in `manage-beneficiary`) | "Choose who to pay." |
-| To account | `accountPicker` | Yes if Between my accounts | Own account other than From, same currency as From (R1) | "Choose two different accounts in the same currency." |
-| From | `accountPicker` (USD accounts) | Yes | `canDebit` | "Choose an account to pay from." |
+| I want to pay | chips: A payee; My other account (if `allowOwn`); A saved bill (if `allowBills`) | Yes (default A payee) | One of the list; changing it clears "To" | none |
+| From | select, "{name} ••{last four} · {available}" | Yes | An own account. For "My other account" it must differ from "To" | "Choose an account to pay from." / "Choose two different accounts. (SAME_ACCOUNT)" |
+| To | cards. Payee: every saved payee with country and bank detail and the payee's currency. Own account: the other accounts in the same currency as From, others greyed with "different currency". Saved bill: the saved bills with biller and last four digits and currency | Yes | Chosen | "Choose who to pay." |
 
-Button **Continue**. In edit mode this screen is skipped; the payee and From account are shown read-only on `plan` ("To change who you pay, cancel this and make a new one.").
+With "A saved bill" and none saved: **No saved bills yet** / "Pay a bill first and choose “Save this bill”. Then you can schedule it here." Button **Continue**.
 
-**`plan` — "When and how much?"**
+**`plan`: "When and how much?"** (new and change). A card shows who is paid (a chip "Locked" in change mode with "To change who you pay or the account, cancel this and make a new one."), a hint "Instant payments go out at 06:00 UTC on the day." or "Goes out on the day, before the cut-off for {rail}.", and "Closed days for {region}: {weekend}; next holidays: {three upcoming}. (Sandbox calendar.)". In change mode a lock line shows when changes close.
 
-| Field | Block | Required | Validation | Error message |
+| Field | Block | Required | Validation | Message |
 |---|---|---|---|---|
-| They receive ({payee currency}) | `amountInput` in the payee's currency (the From currency for own accounts) | Yes | Greater than 0; within the currency's decimals; at most the rail maximum; **You pay** (estimate) at most the daily limit | "Enter an amount above zero." / "That's over the {rail} limit of {limit}. Choose another way to send it." (`RAIL_LIMIT`) / "That's over your remaining daily limit of {remaining}." (`DAILY_LIMIT_EXCEEDED`) |
-| How fast? | Rail tiles for the payee's region (09 section 2), same list as `personal-transfer` | Yes | A rail the amount does not fit is dimmed. Instant rails go out at 06:00 UTC on the date | "{rail} isn't available right now. Choose another way to send it." (`RAIL_NOT_AVAILABLE`) |
-| Purpose of payment | `select` (09 section 7) | Middle East, SWIFT | One of the list | "Choose a purpose for this payment." (`PURPOSE_REQUIRED`) |
-| Charges (SWIFT only) | `SHA`, `OUR`, `BEN` buttons | SWIFT | One of three | "Choose who pays the charges." |
-| How often | `select` chips: Once, Weekly, Monthly, Standing order | Yes | One of four | "Choose how often." |
-| First payment | `datePicker` (planned), label "First payment" (for Once: "Payment date") | Yes | A business day for the payee's region from tomorrow (3 Nov 2026) to 12 months ahead (2 Nov 2027); weekends and holidays of that region are disabled; for a payee under 24 hours old not earlier than `coolingOffUntil` | "Choose a date from tomorrow." / "Choose a date within the next 12 months." / "That day is not a business day for {region}. The next one is {date}." / "{name} was added {n} hours ago. Choose a first payment date from {date}." |
-| Day of the month | `select` 1 to 28 | Standing order only | Integer 1 to 28 | "Choose a day from 1 to 28." |
-| Ends | `select` rows: On a date, After a number of payments, Never (standing order only) | Yes for Weekly and Monthly | Never only for Standing order | "Choose when it ends." |
-| End date | `datePicker` (planned) | If On a date | After the first payment; at most 24 months after it (standing order: 10 years) | "The end date must be after the first payment." / "Choose an end date within 24 months." |
-| Number of payments | `textInput` number | If After a number | Weekly 2 to 104; Monthly 2 to 24 | "Enter a number from 2 to {max}." |
-| Reference | `textInput`: 80 (US), 18 (UK), 140 (others) | No (companies require it in `schedule-business-payment`) | The field refuses extra characters; allowed characters as in 09 section 7 | none |
+| Amount | chips (saved bill only): Fixed amount; Full balance of the bill; Minimum due (card billers) | Yes | One of the list | none |
+| They receive ({currency}) | amount with the payee's currency symbol, placeholder "0.00" (fixed amount only) | Yes | Above 0, within the rail maximum in the payee's currency, and the USD value within the remaining daily limit ($41,250.00) | "That's over the {rail} limit of {symbol}{limit}. Choose another way to send it. (RAIL_LIMIT)" / "That's over your remaining daily limit of $41,250.00. (DAILY_LIMIT_EXCEEDED)" |
+| Never pay more than | amount (bill amount modes only), placeholder "Optional", hint "The bill is looked up on the day. If it is higher than this, we skip it and tell you." | No | none | none |
+| How fast? | cards, one per rail of the payee's region, with arrival time, maximum, fee and an "Instant" chip; a rail the amount does not fit is greyed (new payee schedules with more than one rail only) | Yes when shown | A rail whose maximum is at least the amount | none |
+| Purpose of payment | select: Family support, Goods or services, Salary, Rent, Education, Savings or investment, Other (Middle East and international payees only) | Yes when shown | One of the list | "Choose a purpose for this payment. (PURPOSE_REQUIRED)" |
+| How often | chips: Once, Every week, Every 2 weeks, Every month, Every 3 months | Yes (default Every month) | Choosing Once sets "It ends" to Never | none |
+| Payment date / First payment / Next payment date (change) | select of every day from tomorrow for 365 days; closed days are marked "· closed: {reason}" | Yes | After today, within 12 months | "Choose a date from tomorrow." / "Choose a date from tomorrow. (DATE_TOO_SOON)" / "Choose a date within the next 12 months. (DATE_TOO_FAR)". Hint: "{date} is a closed day ({reason}). It will go on {date}." or "A business day. It goes out on this date." |
+| If a payment date is a closed day, pay on the | chips: Next business day; Previous business day (shown if `allowPrevDay`) | Yes (default Next) | none | none |
+| It ends | chips: Never; On a date; After a number of payments (not for Once) | Yes (default Never) | none | none |
+| Last payment on | select of the run dates after the first (up to 60), "Payment n · date" | Yes when "On a date" | A run date after the first | "Choose when it ends." / "Choose a last payment date after the first. (END_BEFORE_START)" |
+| Number of payments | number | Yes when "After a number of payments" | Whole number from 2 to 104 weekly, 52 every 2 weeks, 60 monthly, 40 every 3 months | "Enter how many payments." / "Enter a number from 2 to {max}. (INVALID_COUNT)" |
+| Reference | text, optional; max 80 (US payee), 18 (UK), 140 (other payees), 40 (own accounts), 30 (bills) | No | The field stops extra characters | none |
 
-Summary card (live): **They receive**, **Rate** ("1 USD = {rate} {currency} today. The rate is set again on the day."), **Converted** (estimate), **Fee**, **You pay (estimate)**, and "Next payments: Mon 16 Nov, Wed 16 Dec, Sat 16 Jan→Mon 18 Jan…" where a date that falls on a closed day shows the day it will really go (the next business day). Alerts: a first date that is not a business day cannot be picked (the day is disabled); a payee under 24 hours shows the cooling-off warning; Empty accounts: "You need an account to pay from." Button **Review schedule**.
+Live summary: They receive (a fixed amount, "Full bill, about {x}" or "Set on the day"); Rate "1 {your currency} = {rate} {payee currency} today. Set again on the day." (other currency); Fee; **You pay (estimate)**; "Next payments" showing the next three run dates, each with the real day when a closed day moves it "(closed: {reason})"; Total ("Until you cancel" or "n payments · total"); Last payment. A grey hint appears when today's available balance is lower than the payment: "That's fine: we check again on the day." Button **Continue**.
 
-**`review` — "Review schedule"**. Rows: Pay (payee, region, masked account), From, They receive, Sent by (rail), How often, First payment, Last payment (or "Until you cancel"), Total payments ("12 payments · €2,400.00"), Estimated cost ("about $2,591.80 at today's rate"), Purpose and Charges when they apply, Reference. Alerts (info): "We take the money at 06:00 UTC on each date and check everything again: the balance, your limits, the rate and the payee. If a payment can't go, we tell you and don't try again unless you ask. After two failed payments in a row, the schedule is paused." and, for a same-day rail, "It goes out only if it is sent before the {time} cut-off; the 06:00 UTC run is before it." Small print: "We screen payments against sanctions lists. Some may be held for a short review." Consent (`termsVersion` "schedules-v2", planned): "I authorise BankWorkx to make these payments on the dates shown until I cancel or it ends." Button **Confirm and send code**.
+**`rules`: "If something goes wrong"**. Intro: "We check everything again on the day: balance, limits, the rate and the payee."
 
-**`otp`** — shared C; prompt "Authorise a schedule of {amount} to {name}" with "Code sent to ••• 4410. It only works for this schedule."; button **Schedule payment** (or **Save changes** in edit mode). **`success` — "Payment scheduled"** (terminal): text "{They receive} to {payee}, {how often}, starting {date}.", meta "Ref {reference}"; edit mode "Schedule updated". Buttons **View scheduled**, **Done**. **`locked`**, **`timeout`**, **`unavailable`**, **`failed`** — shared C (wording for this journey: "Nothing was scheduled." instead of "No money has left your account.").
+| Field | Block | Required | Options |
+|---|---|---|---|
+| If there isn't enough money | cards | Yes (default skip) | **Skip it and tell me** ("Nothing is taken. The next one still runs."); **Try once more on the next business day** ("One retry. If it fails again it is skipped."; greyed unless `allowRetry`); **Skip it and pause the schedule** ("You resume it when you are ready.") |
+| Remind me | chips | Yes (default 1 day before) | No reminder; 1 day before; 3 days before |
+| In the app / By SMS to ••• 4410 / By email | toggles (when a reminder is on) | No | App on by default, SMS and email off |
+| Warn me if the account is short | toggle, sub "The reminder says so when the balance is below the payment." (when a reminder is on) | No | On by default |
 
-**The Scheduled list (Payments › scheduled).** Each row: payee name, region and rail, **the amount in the payee's currency** (for example "€200.00", "£100.00", "AED 500.00", "¥150,000"), how often, next date, and a status chip (Active, Paused, Failed last time, Ended). Footer line: "Amounts are in the payee's currency. The cost in dollars is worked out on the day." Empty: "Nothing scheduled." with **New**. Row actions: **Change**, **Skip next** (planned), **Cancel** (`cancel-standing-order`).
+**`review`: "Review schedule"**. Intro: "Check the details. We'll send a code to confirm." Busy "Checking with the bank…" (0.8 s). Rows: Pay (name and detail); From (new); Amount; How often; Payment date or First payment (with "(moved from {date})"); Last payment and Number of payments (repeating); Sent by ("{rail}" plus " · 06:00 UTC" for instant rails); Estimated cost each time ("{x} (rate set on the day)"); Purpose; Reference; If there isn't enough money; Reminder. In change mode a second card **What changes** lists each changed item as "old  →  new" (Amount, How often, Next payment, Reference, Not enough money, and "Status Paused → Active") or "Nothing has changed". Info: "We take the money at 06:00 UTC on each date and check it again. If a payment can't go, we tell you. After two failed payments in a row, the schedule is paused. You can change or cancel until 18:00 on the business day before." Consent (required): **I authorise BankWorkx® to make these payments from my account on the dates shown**; "Tick the box to confirm." Button **Schedule payment** (new) or **Save changes** (change). Bank checks at this step: `SCHEDULE_LIMIT` (20 active), `BENEFICIARY_NOT_FOUND`, `RAIL_LIMIT`, `DAILY_LIMIT_EXCEEDED`, `SAME_ACCOUNT`, and for a change `SCHEDULE_CUTOFF_PASSED` again.
 
-**What can be changed (edit mode).** Amount, how often, next payment date, end, reference, purpose, charges. Not the payee, the rail's region, or the From account. A change asks for a code. A Paused schedule is resumed by saving it with a date from tomorrow.
+**Code sheet.** New: "Authorise a schedule of {amount} to {payee}" (or "the full bill" / "the minimum due"); change: "Authorise the change to your payment to {payee}"; sub "Code sent to ••• 4410. It only works for this schedule." Same code rules as `pay-bill` (code `482100`; the prototype keypad accepts any six digits).
 
-**When a payment runs (system).** At 06:00 UTC on the date. If that day has become closed for the region, the run moves to the next business day. On the day it:
-1. checks the payee is still valid and not held (re-runs `bank.payees.validate`; the name check is not repeated);
-2. quotes the rate again (`bank.payments.quote`), so **You pay** may differ from the estimate;
-3. checks the balance, the daily limit, the rail (available, amount fits, same-day cut-off) and the cooling-off allowance;
-4. screens the payment; a hit gives status "Held for review".
-Success: a payment appears in the tracker with the schedule reference and the rail's reference. Failure (`INSUFFICIENT_FUNDS`, `DAILY_LIMIT_EXCEEDED`, `RAIL_NOT_AVAILABLE`, `RAIL_LIMIT`, `INVALID_*` for a payee changed or closed): nothing is sent, the run is marked Failed, and a notification says why ("Your scheduled payment to {name} didn't go because {reason}. Open Scheduled to retry it or change it."). There is no automatic retry; **Retry now** in Scheduled starts a single new attempt. A repeating schedule carries on with its next date after a failed run; a second failed run in a row sets the status to Paused.
+**`cancel`: "Cancel this payment?"** (cancel only). Intro: "Cancelling stops the payments you choose. Payments already sent are not affected." The `load` card repeats.
+
+| Field | Block | Required | Validation |
+|---|---|---|---|
+| What to cancel | cards: **All future payments** ("The schedule ends today.") or **Only the next payment** ("Skip {date}. The schedule carries on after that.") | Yes (default All); shown only if `allowSkip`, the schedule repeats, and more than one payment is left | one of the two |
+| Why? (optional) | select: I don't need it any more; The amount was wrong; I'm paying another way; Other | No | none |
+
+Lock line: "No code is needed to cancel: it can only reduce what leaves your account." Button **Cancel this payment**; busy "Cancelling…". Errors: `SCHEDULE_NOT_ACTIVE`, `SCHEDULE_RUNNING`, `SCHEDULE_CUTOFF_PASSED`.
+
+**Results.** New: **Payment scheduled**, "{amount} to {payee}, {how often}, starting {date}.", chip "Scheduled"; rows Pay, From, Amount, How often, First payment, Last payment, Number of payments, Sent by, If there isn't enough money, Reminder, Schedule (`SCH-` and 5 digits); buttons **View scheduled**, **Schedule another**. Change: **Schedule updated**, "Your payment to {payee} now runs {how often}, next on {date}.", chip "Active" (a paused schedule becomes Active); buttons **View scheduled**. Cancel all: **Payment cancelled**, "No more payments will go to {payee}.", chip "Cancelled"; rows Pay, Amount, How often, Payments sent, Would have paid next, Cancelled on "3 Nov 2026", Reason, Schedule; buttons **Back to scheduled**, **Schedule a new payment**. Skip next: **Next payment skipped**, "The {date} payment to {payee} won't go. The schedule carries on from {date}.", chip "Skipped one"; buttons **Back to scheduled**. A cancelled schedule moves to the archive (later opens give `SCHEDULE_NOT_ACTIVE`).
+
+**Other states.** Sandbox "Backend will time out on submit" shows banner `TIMEOUT` on a calling step ("Nothing was changed." because scheduling is not itself money-moving). "Bank unavailable" shows the sheet "We couldn't reach the bank". Both only apply to steps that call the bank (`load`, `review`, `cancel`).
 
 #### 4. Sandbox errors
 
 | Code | Message | Shows on | Button |
 |---|---|---|---|
-| `BENEFICIARY_NOT_FOUND` (planned) | "We can't find that payee. Choose another." | `payee` | Choose payee |
-| `BENEFICIARY_COOLING_OFF` (planned) | "{name} was added {n} hours ago. Choose a first payment date from {date}." | `plan` | Change date |
-| `ACCOUNT_NOT_FOUND` | S-`ACCOUNT_NOT_FOUND` | `payee` | Choose account |
-| `ACCOUNT_CANNOT_DEBIT` (planned) | "You can't pay from {account} right now. Choose another account." | `payee` | Choose account |
-| `INVALID_AMOUNT` | "Enter an amount above zero." | `plan` | Change amount |
-| `RAIL_LIMIT` (planned) | "That's over the {rail} limit of {limit}. Choose another way to send it." | `plan` | Change rail |
-| `RAIL_NOT_AVAILABLE` (planned) | "{rail} isn't available right now. Choose another way to send it." | `plan` / notification | Change rail |
-| `DAILY_LIMIT_EXCEEDED` (planned) | "That's over your remaining daily limit of {remaining}." | `plan` | Change amount |
-| `INSUFFICIENT_FUNDS` | "Not enough in the account: you'd pay {total} but {available} is available." (on a run) | notification | Open Scheduled |
-| `PURPOSE_REQUIRED` (planned) | "Choose a purpose for this payment." | `plan` | Edit |
-| `DATE_IN_PAST` (planned) | "Choose a date from tomorrow." | `plan` | Change date |
-| `DATE_TOO_FAR` (planned) | "Choose a date within the next 12 months." | `plan` | Change date |
-| `DATE_NOT_BUSINESS_DAY` (planned) | "That day is not a business day for {region}. The next one is {date}." | `plan` | Change date |
-| `END_BEFORE_START` (planned) | "The end date must be after the first payment." | `plan` | Change date |
-| `END_TOO_FAR` (planned) | "Choose an end date within 24 months." | `plan` | Change date |
-| `SCHEDULE_LIMIT` (planned) | "You can have up to 20 active scheduled payments. Cancel one to add another." | `payee` | View scheduled |
-| `SCHEDULE_NOT_FOUND` (planned) | "We can't find that scheduled payment." | `failed` | Back to scheduled |
-| `SCHEDULE_NOT_ACTIVE` (planned) | "This scheduled payment has ended or been cancelled. Make a new one." | `failed` | New schedule |
-| `PAYMENT_HELD` (planned) | "We're checking this payment and will tell you within one working day. You don't need to do anything." | notification, Scheduled | Done |
-| `STEP_UP_FAILED` | "We couldn't confirm this schedule. Nothing was scheduled. Start again." | `locked` | Start again |
-| `OTP_INVALID` / `OTP_REQUIRED` | S-`OTP_INVALID` / S-`OTP_REQUIRED` | `otp` / `failed` | Try again / Back to code |
-| `CORE_UNAVAILABLE` | "We couldn't complete this right now. Nothing was scheduled." | `failed` | Try again |
-| `NOT_SUPPORTED` | S-`NOT_SUPPORTED` | `failed` | Back |
-| `TIMEOUT` / `SERVICE_UNAVAILABLE` (planned) | "This is taking longer than expected. Nothing was scheduled. Check Scheduled before trying again." / standard unavailable | `timeout` / `unavailable` | Check Scheduled / Try again |
+| `SCHEDULE_NOT_FOUND` | "We can't find that scheduled payment." | `load` | Back to scheduled |
+| `SCHEDULE_NOT_ACTIVE` | "This scheduled payment has already ended or been cancelled." | `load`, `cancel` | Back to scheduled |
+| `SCHEDULE_RUNNING` | "This payment is being processed right now and can't be changed or cancelled. Change it tomorrow to affect the next one." | `load`, `cancel` | Back |
+| `SCHEDULE_CUTOFF_PASSED` | "The cut-off for the next payment has passed. Change or cancel it after it runs to affect the one after." (the prototype adds the exact time) | `load`, `review`, `cancel` | Back |
+| `SCHEDULE_LIMIT` | "You can have up to 20 scheduled payments. Cancel one to add another." | `review` | Back to scheduled |
+| `PURPOSE_REQUIRED` | "Choose a purpose for this payment." | `plan` field | Choose purpose |
+| `RAIL_LIMIT` | "That's over the {rail} limit of {symbol}{limit}. Choose another way to send it." | `plan` | Choose another speed |
+| `DAILY_LIMIT_EXCEEDED` | "That's over your remaining daily limit of $41,250.00." | `plan` | Change amount |
+| `SAME_ACCOUNT` | "Choose two different accounts." | `what` | Choose account |
+| `DATE_TOO_SOON` | "Choose a date from tomorrow." | `plan` | Choose date |
+| `DATE_TOO_FAR` | "Choose a date within the next 12 months." | `plan` | Choose date |
+| `INVALID_COUNT` | "Enter a number from 2 to {max}." | `plan` | Edit |
+| `END_BEFORE_START` | "Choose a last payment date after the first." | `plan` | Edit |
+| `BENEFICIARY_NOT_FOUND` | "We can't find that payee. Choose another." | `review` | Choose payee |
+| `NOT_SUPPORTED` | "This kind of payment can't be scheduled." | `what` | Back |
+| `OTP_INVALID`, `OTP_REQUIRED`, `CORE_UNAVAILABLE` | README 1.6 wording | Code sheet / failure | As README |
+| `TIMEOUT` | "This is taking longer than expected. Nothing was changed." | Banner on the calling step | Try again |
+| `SERVICE_UNAVAILABLE` | "We couldn't reach the bank." sheet | Sheet | Try again |
+| `JOURNEY_DISABLED` | "This isn't available at your bank." | Whole journey | Back |
 
 #### 5. Adapters
 
+Nothing in the sandbox handles schedules yet (`bank.schedules.*` do not exist in `packages/mock-bank-api/src/index.ts`); the prototype keeps schedules in memory. All schedule adapters are (planned).
+
 | Integration id | Adapter | Request | Response | Errors | Status |
 |---|---|---|---|---|---|
-| `accounts`, `payees`, `limits` | `bank.accounts.list`, `bank.beneficiaries.list`, `bank.limits.get` | as other transfers | as other transfers | `LIMIT_NOT_SET` | Existing |
-| `quote` | `bank.payments.quote` | `{fromAccountId, payeeId, receiveAmount, railId, when}` | indicative `{rate, converted, fee, total, arrives, businessDay}`; not held for a schedule | as `personal-transfer` | (planned) |
-| `get` | `bank.schedules.get` | `{scheduleId}` | the schedule | `SCHEDULE_NOT_FOUND` | (planned) |
-| `otpSend`, `otpVerify` | `bank.otp.*` | as C | as C | `OTP_INVALID` | Existing |
-| `create` | `bank.schedules.create` | `{kind: "once"\|"weekly"\|"monthly"\|"standing", fromAccountId, toKind: "payee"\|"own", payeeId?, toAccountId?, railId, receiveAmount, currency, purpose?, charges?, startOn, dayOfMonth?, endsOn?, count?, reference?}` | `{scheduleId, reference (SCH-…), status: "active", nextRunOn, lastRunOn, remainingRuns, totalInPayeeCurrency}` | `BENEFICIARY_NOT_FOUND`, `BENEFICIARY_COOLING_OFF`, `ACCOUNT_NOT_FOUND`, `ACCOUNT_CANNOT_DEBIT`, `INVALID_AMOUNT`, `RAIL_LIMIT`, `RAIL_NOT_AVAILABLE`, `DAILY_LIMIT_EXCEEDED`, `PURPOSE_REQUIRED`, `DATE_IN_PAST`, `DATE_TOO_FAR`, `DATE_NOT_BUSINESS_DAY`, `END_BEFORE_START`, `END_TOO_FAR`, `SCHEDULE_LIMIT`, `OTP_REQUIRED`, `STEP_UP_FAILED`, `CORE_UNAVAILABLE`, `TIMEOUT`, `SERVICE_UNAVAILABLE` | (planned). `moneyMoving: false` (money moves on each run); **requires OTP** |
-| `update` | `bank.schedules.update` | `{scheduleId, receiveAmount?, kind?, startOn?, endsOn?, count?, purpose?, charges?, reference?}` | the schedule | `SCHEDULE_NOT_FOUND`, `SCHEDULE_NOT_ACTIVE` plus the date and amount codes, `OTP_REQUIRED` | (planned). Requires OTP |
-| (system) | `bank.schedules.runDue` | `{now}` (sandbox and tests only) | runs due payments through `bank.payments.create`; `{ran[], failed[{scheduleId, code}]}` | none | (planned). Lets scenarios advance time |
-| (system) | `bank.schedules.retry` | `{scheduleId}` | one new attempt | as `runDue` | (planned) |
-
-Worked example: Alex, Monthly, **€200.00** to Lena Fischer (Europe, SEPA Credit Transfer) from Main, first payment **Mon 16 Nov 2026**, 12 payments. Total 12 payments · €2,400.00 (about $2,591.80 at 0.926). The last payment, Sat 16 Oct 2027, goes out on the next business day, Mon 18 Oct. Nothing leaves Main until 16 Nov; on that date `runDue` quotes the rate again, takes $215.98 (at 0.926) and creates a payment with an `E2E…` reference. US variant: Maya Chen, $120.00 monthly, first 4 Nov 2026 (ACH). Middle East variant: Faisal Al-Harbi (Saudi Arabia, sarie instant), SAR 300.00, first Sun 8 Nov 2026, which is a business day there (the picker disables Fri and Sat for Saudi Arabia and Jordan, and Sat and Sun for the UAE).
+| `accounts`, `payees`, `limits` | `bank.accounts.list`, `bank.beneficiaries.list`, `bank.limits.get` | none | as other transfers | `LIMIT_NOT_SET` | Existing |
+| `quote` | `bank.fx.quote` | `{from, to, amount}` | indicative rate, not held | `INVALID_AMOUNT` | Existing |
+| `calendar` | `bank.calendar.get` | `{region, from, to}` | closed days | none | (planned) |
+| `list`, `get` | `bank.schedules.list`, `bank.schedules.get` | `{}` / `{scheduleId}` | schedule: payee or bill, amount mode, cap, frequency, next date, closed-day policy, end rule, runs, status, "not enough money" rule, reminders, `canChangeUntil` | `SCHEDULE_NOT_FOUND`, `SCHEDULE_NOT_ACTIVE` | (planned) |
+| `create` | `bank.schedules.create` | `{kind: "payee"\|"own"\|"bill", fromAccountId, payeeId?, toAccountId?, savedBillId?, amountMode, amount?, cap?, railId, purpose?, frequency, firstOn, closedDayPolicy, end: {type, date?, count?}, reference?, onNoFunds, reminders}` | `{scheduleId (SCH-…), status: "active", nextRunOn, runsLeft}` | `SCHEDULE_LIMIT`, `BENEFICIARY_NOT_FOUND`, `ACCOUNT_NOT_FOUND`, `SAME_ACCOUNT`, `INVALID_AMOUNT`, `RAIL_LIMIT`, `DAILY_LIMIT_EXCEEDED`, `PURPOSE_REQUIRED`, `DATE_TOO_SOON`, `DATE_TOO_FAR`, `INVALID_COUNT`, `END_BEFORE_START`, `OTP_REQUIRED`, `CORE_UNAVAILABLE`, `TIMEOUT`, `SERVICE_UNAVAILABLE` | (planned). `moneyMoving: false` (money moves on each run); code needed |
+| `update` | `bank.schedules.update` | `{scheduleId, ...fields above except payee and account}` | the schedule; a paused schedule becomes active | the codes of `create` plus `SCHEDULE_NOT_FOUND`, `SCHEDULE_NOT_ACTIVE`, `SCHEDULE_RUNNING`, `SCHEDULE_CUTOFF_PASSED` | (planned). Code needed |
+| `cancel` | `bank.schedules.cancel` | `{scheduleId, scope: "all"\|"next", reason?}` | `{status: "cancelled"\|"active", nextRunOn?, cancelledOn}` | `SCHEDULE_NOT_FOUND`, `SCHEDULE_NOT_ACTIVE`, `SCHEDULE_RUNNING`, `SCHEDULE_CUTOFF_PASSED`, `TIMEOUT`, `SERVICE_UNAVAILABLE` | (planned). `moneyMoving: false`; no code |
+| (system) | `bank.schedules.runDue` | `{now}` (sandbox only) | runs due schedules through the payment adapters at 06:00 UTC; two failures pause a schedule | none | (planned). Lets a scenario move time forward |
 
 #### 6. Permissions, step-up and limits
 
-`payments.schedule` to create, change and cancel; `payments.create` to choose a payee. Step-up `otp` (dynamic linking names the amount and payee). Up to 20 active schedules. Daily limit, rail maximum, balance and cooling-off checked at creation (against estimates) and again on each run. Cut-offs apply on the day (09 section 2). Companies: the same rules plus approval before the date (09 section 8, `NOT_APPROVED_IN_TIME`) belong to `schedule-business-payment`. Business context: `WRONG_CONTEXT`.
+`payments.schedule`. Step-up `otp` to create or change (the code names the amount and the payee); `none` to cancel or skip (stated reason: it can only reduce what leaves the account). Up to 20 active schedules. Balance, limits, rate and payee are checked on every run, and the daily limit is tested on the USD value. A change closes at 18:00 on the business day before the next payment (09:00 with `strictCutoff`); on the payment day `SCHEDULE_RUNNING`. The Business workspace refuses the journey with `WRONG_CONTEXT`.
 
 #### 7. Result and links out
 
-Receipt (planned): a schedule confirmation with payee, region, rail, amount in the payee's currency, frequency, dates, reference. Notifications: on creation; 2 days before each payment ("{payee} will be paid {amount} on {date}"); after each run (with the rail's reference); on a failed run (reason and **Retry now**); on pause; on a hold. Buttons: **View scheduled**, **Done**. Home › Upcoming payments shows it.
+Receipts as in section 3. Notifications (planned): the reminder (1 or 3 days before, by the chosen channels, with a low-balance warning when on); "Payment sent" after each run; "Payment skipped, not enough money" or "Schedule paused" after a failure; "Schedule changed" and "Schedule cancelled" confirmations. The Payments tab shows each schedule as "Frequency · next date · n left · Paused · Running now". Links out: **View scheduled**, **Schedule another**, **Back to scheduled**, **Schedule a new payment**.
 
 #### 8. Acceptance criteria
 
-- AC-1: A Once, Weekly, Monthly or Standing schedule is created only after consent and a verified code, and moves no money at creation.
-- AC-2: The first payment date must be a business day for the payee's region, from tomorrow and within 12 months; weekends and the region's holidays cannot be picked; the end date must be after it and within 24 months (standing: optional).
-- AC-3: Weekly and Monthly must have an end; Standing may have none.
-- AC-4: A payee added under 24 hours ago cannot be scheduled earlier than the end of the 24 hours.
-- AC-5: On the run date the money moves at the rate of the day, a payment appears in the tracker with the rail's reference, and the schedule's remaining runs fall by one.
-- AC-6: On the day, a balance, limit, rail or payee problem stops the payment, sends a notification with the reason, does not retry by itself, and two failed runs in a row pause the schedule.
-- AC-7: A same-day rail's cut-off is respected on the day; an instant rail that is down on the day fails with `RAIL_NOT_AVAILABLE`.
-- AC-8: The Scheduled list shows each amount in the payee's currency, with the next date and rail.
-- AC-9: Changing a schedule needs a code; the payee and From account cannot be changed.
-- AC-10: The review shows the payment count, the total in the payee's currency and an estimate in dollars.
-- AC-11: Purpose is required for the Middle East and SWIFT; charges are chosen for SWIFT.
-- AC-12: Three wrong codes stop the journey (`STEP_UP_FAILED`); nothing is scheduled.
-- AC-13: A screening hit on the day gives status "Held for review" and a notification.
-- AC-14: Timeout and unavailable states create nothing and say so.
+- AC-1: A schedule can be made once, weekly, every 2 weeks, monthly or every 3 months for a payee, an own account, or a saved bill, only after consent and a verified code, and nothing is taken at that time.
+- AC-2: The first date must be from tomorrow and within 12 months; a closed first date is shown with the day it will really go, and the next three run dates are shown before review.
+- AC-3: A monthly schedule on the 29th to 31st uses the last day of shorter months; the end rule "on a date" lists only real run dates and "after a number" accepts 2 to the frequency's maximum.
+- AC-4: A closed day moves the payment to the next business day, or to the previous one when the person chose that and `allowPrevDay` is on.
+- AC-5: An amount over the rail's maximum or over the remaining daily limit is refused before review; a payee in the Middle East or abroad needs a purpose.
+- AC-6: The "if there isn't enough money" choice and the reminder choices are saved and shown on the review and the receipt; "try once more" is unavailable when `allowRetry` is off.
+- AC-7: A saved bill can be scheduled for the full balance or the minimum due with an optional "never more than" cap.
+- AC-8: A change keeps who and which account fixed, shows what changes, needs a code, resumes a paused schedule, and is refused after the cut-off (`SCHEDULE_CUTOFF_PASSED`) or on the payment day (`SCHEDULE_RUNNING`).
+- AC-9: Cancelling needs no code, can cancel all future payments or (with `allowSkip`) only the next one, and an already cancelled or ended schedule gives `SCHEDULE_NOT_ACTIVE`.
+- AC-10: More than 20 active schedules are refused (`SCHEDULE_LIMIT`).
+- AC-11: A timeout or an unavailable bank changes nothing and says so; with the journey off the bank answers `JOURNEY_DISABLED`.
 
 #### 9. Scenarios
 
 | # | Covers | Persona / setup | Conditions | Steps and expected result |
 |---|---|---|---|---|
-| T-1 | AC-1, AC-10 | `alex`, `now` 2 Nov 2026 | none | Monthly €200.00, Lena Fischer, first 16 Nov 2026, 12 payments, tick, `482100`. Review shows "12 payments · €2,400.00"; Main unchanged at 8,720.76. |
-| T-2 | AC-2 | `alex` | none | First date 2 Nov: "Choose a date from tomorrow."; 3 Nov 2027: "Choose a date within the next 12 months."; end before start: "The end date must be after the first payment." |
-| T-3 | AC-2 | `alex` | none | UK payee: Sat 7 Nov and Mon 9 Nov 2026 are disabled; Saudi payee: Fri 6 Nov and Sat 7 Nov are disabled and Sun 8 Nov is allowed; forcing 7 Nov at the adapter for the UK gives `DATE_NOT_BUSINESS_DAY`. |
-| T-4 | AC-3 | `alex` | none | Monthly with Ends empty: "Choose when it ends."; Standing order with Never: accepted. |
-| T-5 | AC-4 | `alex`, `now` 2 Nov 10:00 UTC, Casey added 07:00 | none | First date 3 Nov: refused ("Choose a first payment date from 4 Nov 2026"); 4 Nov accepted. |
-| T-6 | AC-5 | `alex` | none | After T-1, `runDue` with `now` 16 Nov 2026 06:00 UTC: rate 0.926, Main 8,504.78; tracker has a payment with `E2E…`; remaining runs 11. |
-| T-7 | AC-5 | `alex`, Maya Chen $120.00 monthly from 4 Nov | none | `runDue` 4 Nov: Main 8,600.76; ACH trace number in the tracker. |
-| T-8 | AC-6 | `alex`, balance set to 100.00 | none | `runDue` on 16 Nov fails (`INSUFFICIENT_FUNDS`, no automatic retry; notification sent with the reason); the next run on 16 Dec fails: status Paused. |
-| T-9 | AC-6 | `alex` | none | **Retry now** after top-up on the failed run: one new attempt succeeds. |
-| T-10 | AC-7 | `alex`, UAE payee on Aani | `unavailable: ["rail:aani"]` at the run | `runDue`: failed with `RAIL_NOT_AVAILABLE`; notification. |
-| T-11 | AC-7 | `alex`, US payee on Same-day ACH, clock set after 14:45 ET | none | `runDue` is called with `now` at 20:00 UTC (after the cut-off): the payment goes out on the next business day, as in `personal-transfer` T-14. |
-| T-12 | AC-8 | `alex` | none | Scheduled shows "€200.00 · every month · next Mon 16 Nov", "£100.00" for a UK schedule and "AED 500.00" for a UAE one; no dollar amount in the row. |
-| T-13 | AC-9 | `alex` | none | Edit amount to €250.00: needs a code; the payee field is read-only; the payee's `addedAt` untouched. |
-| T-14 | AC-11 | `alex` | none | SWIFT payee without a purpose: `PURPOSE_REQUIRED`; Middle East likewise; charges default SHA. |
-| T-15 | AC-12 | `alex` | none | Wrong code three times: `locked` / `STEP_UP_FAILED`; Scheduled unchanged. |
-| T-16 | AC-13 | `alex`, payee named `Test Sanctions` saved by fixture | none | `runDue`: status "Held for review"; notification with the `PAYMENT_HELD` message; no settle. |
-| T-17 | AC-14 | `alex` | `timeout: ["bank.schedules.create"]` | `timeout` screen; scheduled list unchanged. |
-| T-18 | AC-14 | `alex` | `unavailable: ["bank.schedules.create"]` | `unavailable` screen; list unchanged. |
+| T-1 | AC-1, AC-2 | `alex` | none | New, A payee, Lena Fischer, from Current, €200.00, Every month, first Mon 16 Nov 2026, ends After 12 payments. Summary shows three dates and "12 payments · €2,400.00", last payment Sat 16 Oct 2027 moved to Mon 18 Oct. Code `482100`. Result "Payment scheduled", `SCH-` and 5 digits; Current balance unchanged. |
+| T-2 | AC-2, AC-4 | `alex` | none | New, Maya Chen, $120.00, Once, date Mon 9 Nov 2026: hint says it will go Tue 10 Nov. Choose Previous business day: it goes Fri 6 Nov. |
+| T-3 | AC-3 | `alex` | none | Monthly, first Sun 31 Jan 2027, Maya Chen: the three dates are 31 Jan (moved to Mon 1 Feb, closed: weekend), 28 Feb (moved to Mon 1 Mar) and 31 Mar. End "On a date" lists only these run dates; End "After a number" with `1` and `61` gives INVALID_COUNT ("Enter a number from 2 to 60. (INVALID_COUNT)"). |
+| T-4 | AC-5 | `alex` | none | Omar Haddad, AED 60,000: RAIL_LIMIT on the 50,000 Aani limit; choose the other rail or lower the amount. Without a purpose: PURPOSE_REQUIRED. |
+| T-5 | AC-6 | `alex` | `allowRetry` off | The "try once more" card is greyed. |
+| T-6 | AC-7 | `alex` | none | A saved bill, Full balance, never more than $400.00, Quarterly: review says "Full balance of the bill". |
+| T-7 | AC-8 | `alex` | none | Change `SCH-1005` (set amount €250.00): "What changes" lists `Amount €200.00 → €250.00`. Change `SCH-1008`: "Status Paused → Active". Change `SCH-1004`: `SCHEDULE_RUNNING`. |
+| T-8 | AC-8 | `alex` | `strictCutoff` on | Change `SCH-1003`: `SCHEDULE_CUTOFF_PASSED` ("passed at 09:00 today"). With `strictCutoff` off the same change opens (cut-off 18:00 today). |
+| T-9 | AC-9 | `alex` | none | Cancel `SCH-1002`, choose Only the next payment: "Next payment skipped", next payment Fri 13 Nov. Cancel `SCH-1006`: "Payment cancelled"; open `SCH-1006` again: `SCHEDULE_NOT_ACTIVE`. Open `SCH-0900`: `SCHEDULE_NOT_ACTIVE`; open `SCH-9999`: `SCHEDULE_NOT_FOUND`. No code is asked. |
+| T-10 | AC-10 | `alex`, setup: 12 more active schedules | none | Review of a 21st: `SCHEDULE_LIMIT`. |
+| T-11 | AC-11 | `alex` | `timeout: ["bank.schedules.create"]` | Review: banner TIMEOUT "Nothing was changed."; the list is unchanged. |
+| T-12 | AC-11 | `alex` | `unavailable: ["bank.schedules.get"]` | Open Change: sheet SERVICE_UNAVAILABLE. |
+| T-13 | AC-11 | `alex` | `schedule-payment` off | "Payments › scheduled › New" is hidden; forced open: JOURNEY_DISABLED. |
 
 #### 10. Expected mutation-check survivors
 
-The date-range and business-day checks sit in the `datePicker` limits as well as the adapter; adapter-only mutants are killed by direct calls in T-2 and T-3. `SCHEDULE_LIMIT` (20) survives unless 20 are seeded. The "last day of the month" rule for the 29th to the 31st survives (no scenario crosses a short month); list it. The region calendars survive beyond the cases in T-3 (UAE, US and Jordan weekends and the holiday list are fixture data). The same-day cut-off on the run day is killed only by T-11. Others: none expected.
+- Calendar content other than 9 Nov and the US and Saudi weekend rules survives (only a few holidays are tested).
+- Reminder channels (SMS, email) survive: the prototype saves them but nothing sends them.
+- The 60-date cap on the "Last payment on" list and the maximum counts for fortnightly and quarterly survive without a test per frequency.
+- `NOT_SUPPORTED` survives (the prototype has no way to reach it).
+- The two-failures-in-a-row pause survives until `bank.schedules.runDue` exists (planned).
 
 ---
 
 ### ★ Cancel a standing order — `cancel-standing-order`
 
-#### 1. Summary
+Catalog: `cancel-standing-order`, workspace personal, category Payments, core no, a bank can switch it off (only by switching off `schedule-payment`, which it is part of). Options: those of `schedule-payment`; the only one that touches this alias is `allowSkip` ("Offer “skip only the next payment” when cancelling", default on).
 
-| Field | Value |
-|---|---|
-| Slug | `cancel-standing-order` |
-| Purpose | Stop a standing order, a recurring payment or a not-yet-run scheduled payment, so no further payments are made. |
-| Release / workspace | 1 / Personal |
-| Status | New (planned). |
-| Channels | Web and mobile |
-| Starting pattern | None. A short confirm-and-result flow. |
-| Who may use it | `payments.schedule` |
+Alias of `schedule-payment`: reached by launching `schedule-payment` with `{scheduleId, mode: "cancel"}` from Payments › scheduled › row › Cancel (any frequency, including what used to be called a standing order), from Payments › tracker › payment (Scheduled) › Cancel, or from the old `cancel-standing-order` link, which opens that journey in cancel mode. The Meezan and older links keep the slug `cancel-standing-order` as an alias.
 
-The name keeps "standing order", and the journey works for every kind of schedule from `schedule-payment`.
+What differs from the full journey:
 
-#### 2. Entry points
-
-| Place › label | Passes in | Permission |
-|---|---|---|
-| Payments › scheduled › standing order › Cancel | `{scheduleId}` | `payments.schedule` |
-| Payments › scheduled › row (any kind) › Cancel | `{scheduleId}` | `payments.schedule` |
-| Payments › tracker › payment (Scheduled) › Cancel | `{scheduleId}` | `payments.schedule` |
-
-#### 3. Screens
-
-**`confirm` — "Cancel this payment?"** (entry). Blocks: `reviewSummary`, `select` (reason), `alert`, two `button`s. onEnter: `get` (loads `{scheduleId}`).
-
-| Field | Block | Required | Validation | Error message |
-|---|---|---|---|---|
-| Reason | `select` rows: I don't need it any more; The amount was wrong; I'm paying another way; Other | No | One of the list | none |
-
-Copy: title "Cancel this payment?". Summary rows: Pay (payee), From, Amount, How often, Next payment, Payments left ("11" or "Until you cancel"). Alert (warning): "Cancelling stops all future payments. Payments already sent are not affected." Buttons **Cancel this payment** (destructive; calls `cancel`) and **Keep it** (exit). No code is asked: cancelling can only reduce what leaves the account.
-
-**`success` — "Payment cancelled"** (terminal). Text "No more payments will go to {payee}." Meta "Last payment: {date}" when there was one, and "Ref {reference}". Buttons **Back to scheduled**, **Done**.
-
-**`failed`**, **`timeout`**, **`unavailable`** — shared C with the non-money wording ("Nothing was changed.").
-
-Loading: skeleton summary until `get` answers; button spinner on cancel. Error: unknown id shows "We can't find that scheduled payment." with **Back to scheduled**.
-
-#### 4. Sandbox errors
-
-| Code | Message | Shows on | Button |
-|---|---|---|---|
-| `SCHEDULE_NOT_FOUND` (planned) | "We can't find that scheduled payment." | `failed` | Back to scheduled |
-| `SCHEDULE_NOT_ACTIVE` (planned) | "This scheduled payment has already ended or been cancelled." | `failed` | Back to scheduled |
-| `SCHEDULE_RUNNING` (planned) | "This payment is being processed right now and can't be cancelled. Cancel it tomorrow to stop the next one." | `failed` | Back to scheduled |
-| `NOT_SUPPORTED` | S-`NOT_SUPPORTED` | `failed` | Back |
-| `TIMEOUT` (planned) | "This is taking longer than expected. Nothing was changed. Check Scheduled before trying again." | `timeout` | Check Scheduled |
-| `SERVICE_UNAVAILABLE` (planned) | standard message | `unavailable` | Try again |
-
-#### 5. Adapters
-
-| Integration id | Adapter | Request | Response | Errors | Status |
-|---|---|---|---|---|---|
-| `get` | `bank.schedules.get` | `{scheduleId}` | schedule with payee, amounts, dates | `SCHEDULE_NOT_FOUND` | (planned) |
-| `cancel` | `bank.schedules.cancel` | `{scheduleId, reason?}` | `{scheduleId, status: "cancelled", cancelledOn, reference}` | `SCHEDULE_NOT_FOUND`, `SCHEDULE_NOT_ACTIVE`, `SCHEDULE_RUNNING`, `NOT_SUPPORTED`, `TIMEOUT`, `SERVICE_UNAVAILABLE` | (planned). `moneyMoving: false`, `requiresOtp: false` |
-
-#### 6. Permissions, step-up and limits
-
-`payments.schedule`; step-up `none` (stated reason: cancelling reduces risk). The sandbox refuses cancelling a run already started on the day (after 06:00 UTC).
-
-#### 7. Result and links out
-
-Receipt: none. Notification: "Your scheduled payment to {payee} was cancelled." (in-app and SMS). Buttons: **Back to scheduled**, **Done**. Home › Upcoming payments no longer shows it.
-
-#### 8. Acceptance criteria
-
-- AC-1: Confirming cancels the schedule: status Cancelled, no further payments run.
-- AC-2: Payments already sent stay in the tracker and are not reversed.
-- AC-3: No code is asked and no balance changes.
-- AC-4: Cancelling an already-cancelled or ended schedule shows the exact message.
-- AC-5: A run that has started today cannot be cancelled.
-- AC-6: Timeout and unavailable states leave the schedule active and say so.
-
-#### 9. Scenarios
-
-| # | Covers | Persona / setup | Conditions | Steps and expected result |
-|---|---|---|---|---|
-| T-1 | AC-1, AC-2, AC-3 | `alex` with the T-1 monthly schedule from `schedule-payment`, one run done | none | Cancel: status Cancelled; `runDue` on 16 Dec runs nothing; tracker still shows the 16 Nov payment; balances unchanged by the cancel. |
-| T-2 | AC-4 | `alex` | none | Cancel the same id twice: second gives "This scheduled payment has already ended or been cancelled." |
-| T-3 | AC-5 | `alex`, `now` 16 Nov 2026 06:30 UTC | none | `SCHEDULE_RUNNING`. |
-| T-4 | AC-6 | `alex` | `timeout: ["bank.schedules.cancel"]` | `timeout` screen; schedule still Active. |
-| T-5 | AC-6 | `alex` | `unavailable: ["bank.schedules.cancel"]` | `unavailable` screen; schedule still Active. |
-
-#### 10. Expected mutation-check survivors
-
-None expected. (`requiresOtp: false` is a decision, not a gap.)
+- Screens are `load` ("Cancel a payment", "Continue to cancel") and `cancel` ("Cancel this payment?"), then the result. There is no code; the progress bar reads "Step n of 2".
+- The scope card (**All future payments** or **Only the next payment**) is shown only when `allowSkip` is on, the schedule repeats and more than one payment is left; with `allowSkip` off cancelling always ends the schedule.
+- Results: "Payment cancelled" (chip "Cancelled", rows Pay, Amount, How often, Payments sent, Would have paid next, Cancelled on, Reason, Schedule) or "Next payment skipped".
+- Errors: `SCHEDULE_NOT_FOUND`, `SCHEDULE_NOT_ACTIVE`, `SCHEDULE_RUNNING`, `SCHEDULE_CUTOFF_PASSED` (section 4 of `schedule-payment`). Acceptance criterion and scenarios: AC-9 and T-9 of `schedule-payment`.
 
 ---
-
 ## Personal: Cards
 
 The Cards tab holds two kinds of card, and the spec keeps them apart:
@@ -4769,7 +5153,7 @@ The Cards tab holds two kinds of card, and the spec keeps them apart:
 | **BankWorkx card** (debit, credit, virtual) | A card BankWorkx issues to Alex. It has a status, limits, controls, a PIN, transactions and can be replaced or disputed. | **Not modelled** (planned) |
 | **Saved card** (an outside card used to add money) | A card from any bank that Alex saves so `add-money` can pull money from it. | **Existing**: `SavedCard` in `packages/mock-bank-api/src/finance.ts` (`id`, `network`, `last4`, `holder`, `expiry`, `nickname`, `isDefault`), listed by `bank.cards.list`, saved by `bank.cards.add` |
 
-The journeys `activate-card`, `freeze-card`, `card-controls`, `virtual-card`, `replace-card`, `card-pin` and `dispute-transaction` work on **BankWorkx cards** and need the planned domain below. `add-card` works on **saved cards** and exists today.
+The journeys `cards`, `activate-card`, `freeze-card` (alias of `card-controls`), `card-controls`, `virtual-card`, `replace-card`, `card-pin` and `dispute-transaction` work on **BankWorkx cards** and need the planned domain below. `add-card` works on **saved cards** and exists today.
 
 ### Planned sandbox domain: cards (planned)
 
@@ -4896,356 +5280,469 @@ Standard screens used by the card journeys (so the journeys can stay short):
 
 ---
 
-### ★ Activate card — `activate-card`
+### ★ Cards — `cards`
+
+**Catalog:** slug `cards`, workspace `personal`, category Cards (Personal: Cards), core no, can a bank switch it off: yes (a screen, a basic entry kept in the Lean preset). Options (all default on): **Show spending summary** (`showSpend`); **Show recent card transactions** (`showTx`); **Show digital wallet row** (`showWallet`); **Show saved cards row (for add money)** (`showSaved`). Research: `research/cards.md`. Built in `design/bankworkx-r1/src/journeys/24-cards.js`, which also holds the shared card data `CRD` used by `card-controls` and `activate-card`.
+
+This block is the specification of the Cards tab. It supersedes the tables "Shell: Card carousel", "Shell: Card detail", "Shell: Card transactions" and "Shell: Controls overview" above for the behaviour that is built; keep them as the production data-source notes and the planned `cards` sandbox domain.
 
 #### 1. Summary
 
-| Item | Value |
+| Field | Value |
 |---|---|
-| Slug | `activate-card` |
-| Purpose | Turn on a new card that arrived by post, and prompt the person to set its PIN |
-| Release | 1 |
-| Workspace | Personal |
-| Status | New (draft). Needs the planned cards domain |
-| Channels | Web, mobile |
-| Starting pattern | Confirm-then-code (details → one-time code → result) |
-| Who may use it | Personal context holding `cards.manage` |
+| Slug | `cards` |
+| Purpose | Show every card as a picture with its status, the right balance for its kind, quick actions that fit its status, a controls summary, digital wallets, spending this month and recent card transactions. |
+| Release / workspace | 1 / Personal |
+| Status | Built in the prototype as a screen (`view: true`, tab `card`). Freezing from the quick action is the one write here. |
+| Channels | Web (two columns under the carousel) and mobile (one column) |
+| Starting pattern | None |
+| Who may use it | Anyone signed in to Personal with `accounts.view`. |
 
 #### 2. Entry points
 
-| Place › label | Passed | Permission |
+| Place › label | Passes in | Permission |
 |---|---|---|
-| Cards › carousel › Activate | `{cardId}` | `cards.manage` |
-| Notification › Card activation reminder | `{cardId}` | `cards.manage` |
-| Card detail › Activate (inactive card only) | `{cardId}` | `cards.manage` |
-| Deep link `/personal/j/activate-card?cardId=card_7745` | `{cardId}` | `cards.manage` |
-
-Without `{cardId}` the first screen shows a card choice listing only inactive cards.
+| Tab bar › Cards; left rail › Cards | none | `accounts.view` |
+| Home › quick action › Cards | none | `accounts.view` |
+| ⌘K command bar › Cards | none | `accounts.view` |
+| `activate-card`, `card-controls`, `replace-card` results › Go to cards | `{cardId}` (selects that card) | `accounts.view` |
 
 #### 3. Screens
 
-**Screen `details` — "Activate your card".** Blocks: `stepper` (`details`, `code`), `alert` info, `select` (only when `cardId` is missing), `textInput` x2, `button`. `onEnter`: `callApi cards` (`bank.cards.issued`) into `ctx.cards`.
+One screen. Body order: heading, carousel, selected card header, status banner, then two columns: left (balance, quick actions, card transactions), right (controls summary, spending, wallets). Below: saved cards row and the prototype's sandbox links.
 
-| Field | Block | Required | Rule | Error message |
-|---|---|---|---|---|
-| Card | `select` (`rows`, source `ctx.cards`, inactive only) | Yes, hidden when passed in | Must be an inactive card | "Choose the card you want to activate." |
-| Last 4 digits of the card number | `textInput` (bind `act.last4`, pattern `^[0-9]{4}$`) | Yes | Exactly 4 digits | "Enter the last 4 digits printed on your card." |
-| Expiry date | `textInput` (bind `act.expiry`, pattern `^(0[1-9]|1[0-2])/[0-9]{2}$`, placeholder "MM/YY") | Yes | MM/YY | "Enter the expiry as MM/YY." |
+**Carousel.** Each card is a picture: "BankWorkx®", network name in capitals (`VISA DEBIT`, `MASTERCARD`), `•••• •••• •••• {last4}`, `{VIRTUAL · }{HOLDER} · {MM/YY}` and a corner label (`Frozen` with a snowflake, `Not activated`, `Blocked`, `Expired`, `Replaced`; nothing when active). Frozen cards are drawn grey, blocked, expired or replaced cards darker still. Tapping a card selects it (outline). Only the last four digits are ever shown; there is no show-number button here.
 
-Copy: alert "Only activate a card that you have in your hands. If the envelope was open, don't use the card: call us instead." Helper under last 4: "Find it on the front of the card." Button "Continue" (`validate`, then `callApi otpSend`, navigate `code`).
-States: loading shows card-row skeleton; if no inactive card exists, `empty` text "You have no cards waiting to be activated." with button "Back to cards" (`exit`).
+**Selected card header.** "{nickname} ••{last4}", "{Virtual }{network} {debit|credit} · expires {MM/YY}", and a status chip (Active, Inactive, Frozen, Blocked, Expired, Replaced).
 
-**Screen `code` — "Confirm with your code".** Standard one-time code screen. Button "Activate card" calls `otpVerify`, then `activate` (`bank.cards.activate`), then navigates to `done`.
+**Balance block** (depends on the kind):
 
-**Screen `done` (terminal) — "Card activated".** `result` success, text "Your card ending {{act.last4}} is ready to use.", meta "Ref {{result.reference}}"; `alert` info "Set a PIN now so you can use cash machines and shops that ask for it."; buttons "Set my PIN" (`navigate toJourney card-pin`, `{cardId}`, `returnTo` card detail), "Go to card" (`exit`).
+| Kind | Content |
+|---|---|
+| Debit | "Spends from {account name} ••{last}", the account's available balance, "Available balance · ledger {balance}" |
+| Credit | "Available credit" (big), a used-share bar, Credit limit, Statement balance, Minimum payment, "Next payment due {date}" with a chip "In {n} days", button **Pay now** (opens a card-payment journey; a toast in the prototype) |
+| Virtual | "Linked to {parent card}", Spend limit "{amount} a month", Spent this month, and "Full number and security code are shown only inside the virtual card journey, after you confirm it is you." |
 
-**Screens `locked`, `failed`**: the standard ones.
+**Status banner** (one at most):
+
+| Status | Banner |
+|---|---|
+| Inactive | "Waiting to be activated. Only activate a card you have in your hands." and a button **Activate card** (`activate-card {cardId}`). If activation is locked: "Activation is locked after 3 wrong tries. (ACTIVATION_LOCKED)" and no button (the sandbox shows an Unlock link) |
+| Frozen | "This card is frozen. New purchases and cash withdrawals are blocked. Refunds still arrive." and **Unfreeze card** (`card-controls {cardId, mode: "unfreeze"}`) |
+| Blocked or expired | "This card is {blocked\|expired}. It can't be used again." and **Replace card** (`replace-card {cardId, reason: "lost"}`) |
+
+**Quick actions** (buttons that start journeys; a button is not drawn when its journey is switched off or not permitted):
+
+| Status | Actions |
+|---|---|
+| Active | **Freeze** (instant, no code), **Controls** (`card-controls {cardId, mode: "all"}`), **PIN** (`card-pin`, not for virtual cards), **Replace** (`replace-card`, not for virtual cards), **Add to wallet** (`card-controls {cardId, mode: "wallet"}`) |
+| Frozen | **Unfreeze**, **Replace** |
+| Inactive (not locked) | **Activate** |
+| Blocked or expired | **Replace** |
+
+**Freeze** acts at once: status becomes frozen, a toast says "Card frozen. New purchases and cash withdrawals are blocked.", the picture goes grey, and the linked card in the shared model is marked frozen. It makes the card safer, so no code. Only an active card can be frozen: otherwise "Only an active card can be frozen. (CARD_NOT_ACTIVE)". If the service is down the error sheet appears and nothing changes.
+
+**Controls summary** (right column): title **Controls** and a **Change** button (active cards only). Chips: Contactless On/Off, Online On/Off, Cash machines On/Off (only when the card has a cash ceiling), "Abroad: Everywhere", "Abroad: On for your trip" or "Abroad: Off". Bars: "Spent today {amount} of {daily limit}", "Spent this month {amount} of {monthly limit}", "Cash today {amount} of {limit}" (cash cards only). A line: "Per purchase limit {amount} · contactless without PIN up to {amount}". Trips: "Trips: {country} {from} to {to}".
+
+**Spending** (option `showSpend`): "Spending this month", the month total, "{from} to {to} · {n} categories", and the top four categories with bars. No spending: "No spending on this card yet."
+
+**Digital wallets** (option `showWallet`): per wallet "{app} · {device}", "Token ending {tok} · added {date}", chip Active or Suspended; **Add to wallet** (active cards). Empty: "This card isn't in a phone wallet yet." A wallet token's last four differ from the card's last four.
+
+**Card transactions** (option `showTx`): title, filter chips **All**, **Pending**, **Posted**, then rows "{merchant}", "{Today|date} · {In shop|Online|Cash machine}{ · country when not US}", signed amount (refunds in green with +), chip Pending. Tapping a row expands: Status, Time, Paid with ("Card ••9021" or "Apple Pay ••4471"), Original amount (foreign purchases, for example "GBP 331.20"), Reference, and for posted money-out items a **Report a problem** button (`dispute-transaction {cardId, transactionId}`); for pending items the text "You can report a problem once this has posted." Empty for the card: "No card spending yet" / "Purchases and cash withdrawals made with this card show here."; an empty filter: "Nothing here" with **Clear filter**.
+
+**Saved cards row** (option `showSaved`): "Cards you saved to add money", for example "Visa ••4242 · Alex Morgan · 08/28" with chip Default, and **Add a card** (`add-card`).
+
+| Control | Rule | Message |
+|---|---|---|
+| Selected card | Must be one of the person's cards | "We can't find that card. (CARD_NOT_FOUND)" |
+| Transaction filter | All, Pending, Posted | none |
+
+**States:** Loading: two card skeletons (300 by 184), a block skeleton and three rows for 600 ms. Empty (a new customer): "You don't have a BankWorkx® card yet", "Ask for a debit card, or open a virtual card once you have one." with **Find out how** (Explore › Products › Cards); the saved cards row still shows ("No saved cards yet."). Error: "We couldn't load your cards", "Nothing was changed on your cards. Try again in a moment." `SERVICE_UNAVAILABLE` and **Try again** (800 ms reload). Timeout after 10 seconds: the same card with "This is taking longer than expected. Nothing was changed." (planned).
 
 #### 4. Sandbox errors
 
-| Code | Message the person sees | Screen | Button |
+| Code | Message | Shows on | Button |
 |---|---|---|---|
-| `CARD_NOT_FOUND` | "We can't find that card. Choose another." | `failed` | Choose card (to `details`) |
-| `CARD_ALREADY_ACTIVE` | "This card is already active. You can start using it." | `failed` | Go to card |
-| `ACTIVATION_MISMATCH` | "The last 4 digits or the expiry don't match this card. Check them and try again." | `details` (inline `alert` error) | Try again |
-| `CARD_BLOCKED` | "This card was blocked and can't be activated. Ask for a replacement." | `failed` | Replace card (`replace-card`) |
-| `OTP_INVALID` | Standard S-`OTP_INVALID` (README 1.6) | `code` | Try again |
-| `OTP_REQUIRED` | Standard S-`OTP_REQUIRED` | `code` | Back to code |
-| `TIMEOUT` | "This is taking longer than expected. Nothing was changed on your card." | `failed` | Try again |
-| `SERVICE_UNAVAILABLE` | Standard S-`SERVICE_UNAVAILABLE` | `failed` | Try again |
-| `PERMISSION_DENIED` | Standard S-`PERMISSION_DENIED` | `failed` | Back |
-| `WRONG_CONTEXT` | Standard S-`WRONG_CONTEXT` | `failed` | Switch |
+| `CARD_NOT_FOUND` | "We can't find that card." | Whole screen | Back to cards |
+| `SERVICE_UNAVAILABLE` | "We couldn't load your cards. Nothing was changed." | Whole screen, or error sheet on Freeze | Try again |
+| `CARD_NOT_ACTIVE` | "Only an active card can be frozen." | Toast on Freeze | none |
+| `ACTIVATION_LOCKED` | "Activation is locked after 3 wrong tries." | Inactive card banner | none (call us, or wait 30 minutes) |
+| `TIMEOUT` (planned) | "This is taking longer than expected. Nothing was changed." | Whole screen | Try again |
 
 #### 5. Adapters
 
 | Integration id | Adapter | Request | Response | Errors | Status |
 |---|---|---|---|---|---|
-| `cards` | `bank.cards.issued` | none | cards record | `NOT_SUPPORTED` | (planned) |
-| `otpSend` | `bank.otp.send` | `{channel: "sms"}` | `{sent, maskedPhone, channel}` | none | Existing |
-| `otpVerify` | `bank.otp.verify` | `{code}` | `{verified: true}` | `OTP_INVALID` | Existing |
-| `activate` | `bank.cards.activate` | `{cardId, last4, expiry}` | `{cardId, status: "active", reference}` | see section 4 | (planned) |
-
-Not money-moving; `requiresOtp: true`.
+| `cards` | `bank.cards.list` | none | map of saved cards (`id`, `nickname`, `last4`, `isDefault`) | none | Existing (`packages/mock-bank-api/src/index.ts`); it lists only cards saved for adding money |
+| `cardsOverview` | `bank.cards.overview` | none | BankWorkx® cards with `kind`, `network`, `status`, `accountId`, `credit` (limit, available, statement balance, minimum due, due date), `controls`, `limits`, `ceilings`, `used`, `trips`, `wallets[]` | `SERVICE_UNAVAILABLE`, `TIMEOUT` | (planned). The prototype keeps this in its own model `CRD` |
+| `cardTransactions` | `bank.cards.transactions` | `{cardId, status?}` | rows with merchant, amount, status, channel, country, category, `via`, `originalAmount` | `CARD_NOT_FOUND` | (planned) |
+| `cardFreeze` | `bank.cards.freeze` | `{cardId}` | `{cardId, status: "frozen"}` | `CARD_NOT_ACTIVE`, `CARD_NOT_FOUND`, `SERVICE_UNAVAILABLE` | (planned). No step-up because it only protects |
 
 #### 6. Permissions, step-up and limits
 
-`cards.manage`. Step-up level `otp`. No limits. Check 3 (sandbox): `bank.cards.activate` refuses without a verified code (`OTP_REQUIRED`).
+`accounts.view` to see; `cards.manage` (planned) for Freeze and the buttons that start `card-controls`, `card-pin`, `replace-card`. Step-up: none for Freeze; the opened journeys apply their own. Card data rules: only the last four digits and the expiry are shown; the security code is never stored or shown (PCI). No limits.
 
 #### 7. Result and links out
 
-Result `done`. Receipt: none (not a payment); the card detail shows "Activated 3 Nov 2026". Notification raised: "Your card ending {{last4}} is now active" (in-app and push). Buttons: "Set my PIN" → `card-pin` with `returnTo` card detail; "Go to card" → Card detail.
+No result or receipt; a toast confirms Freeze. Notifications raised: "Your card ••{last4} was frozen" (push and email). Links out: `activate-card`, `card-controls` (modes `all`, `unfreeze`, `wallet`), `card-pin`, `replace-card`, `dispute-transaction`, `add-card`, a card-payment journey (planned), Explore › Products › Cards.
 
 #### 8. Acceptance criteria
 
-- AC-1: An inactive card becomes active only when the last 4 digits and the expiry match.
-- AC-2: A wrong last 4 or expiry leaves the card inactive and tells the person what to check.
-- AC-3: Activation needs a verified one-time code.
-- AC-4: Three wrong codes lock the journey and leave the card inactive.
-- AC-5: An already active card cannot be activated again and the person is told.
-- AC-6: A blocked card cannot be activated and the person is offered a replacement.
-- AC-7: After success the person is offered to set a PIN.
-- AC-8: A timeout or an unavailable service leaves the card inactive and says nothing was changed.
+- AC-1: All of the person's cards show in the carousel with the last four digits, holder, expiry and a status label; a frozen card is grey with "Frozen", an inactive one says "Not activated".
+- AC-2: The balance block matches the kind: debit shows the linked account's available and ledger balance, credit shows available credit, limit, statement balance, minimum payment and due date, virtual shows its parent card and monthly limit.
+- AC-3: The quick actions match the status exactly as in the table in section 3; no virtual card shows PIN or Replace.
+- AC-4: Freeze changes an active card to frozen at once without a code, shows the confirmation, and the carousel and banner update; a card that is not active cannot be frozen.
+- AC-5: A frozen card offers Unfreeze (which goes through a code in `card-controls`) and never shows Freeze.
+- AC-6: An inactive card shows the activation banner and the Activate button; a card locked by three wrong tries shows `ACTIVATION_LOCKED` and no button.
+- AC-7: The controls summary shows the card's real switches, used-against-limit bars and the abroad mode; Change opens `card-controls` in mode `all`.
+- AC-8: Transactions filter by All, Pending and Posted; an expanded posted purchase offers Report a problem and a pending one explains it must post first; a wallet payment shows the token ending, not the card's last four.
+- AC-9: Each of the four options removes its own section and nothing else.
+- AC-10: A new customer sees "You don't have a BankWorkx® card yet"; a service failure shows the error card with Try again, and a timeout shows the standard message.
 
 #### 9. Scenarios
 
-| # | Covers | Persona and setup | Steps and expected outcome |
-|---|---|---|---|
-| T-1 | AC-1, AC-3, AC-7 | `alex`; `cardId` `card_7745` | Enter `7745`, `11/29`, code `482100`. Card is `active`; result "Card activated"; "Set my PIN" visible |
-| T-2 | AC-2 | `alex` | Enter `1111`. `ACTIVATION_MISMATCH` shown on `details`; card stays `inactive`; no code sent |
-| T-3 | AC-3 | `alex` | Call `activate` without verifying the code. `OTP_REQUIRED` |
-| T-4 | AC-4 | `alex` | Enter `999999` three times. `locked` screen; card `inactive` |
-| T-5 | AC-5 | `alex`; `cardId` `card_9021` | `CARD_ALREADY_ACTIVE`; message shown |
-| T-6 | AC-6 | `alex`; setup card `card_7745` as `blocked` | `CARD_BLOCKED`; "Replace card" button opens `replace-card` |
-| T-7 | AC-8 | `alex`; conditions `timeout: ["bank.cards.activate"]` | After the delay the standard timeout message; card `inactive` |
-| T-8 | AC-8 | `alex`; conditions `unavailable: ["bank.cards.activate"]` | `SERVICE_UNAVAILABLE` message at once; card `inactive` |
+Sandbox demo values: four cards. `card_9021` Visa debit "Everyday debit" ••9021, 09/29, active, spends from Current ••4410 (available $8,102.40, ledger $8,240.18), wallet Apple Pay · Alex's iPhone 16, token 4471; limits per purchase $2,000, daily $3,000, monthly $15,000, cash $800, tap $100; used today $4.80, month $539.00; gambling blocked. `card_3318` Mastercard credit "Aurora credit" ••3318, 03/28, limit $5,000.00, available $3,640.20, statement $1,359.80, minimum $45.00, due 28 Nov 2026 (in 25 days), wallet Google Wallet · Pixel 9, token 8820. `card_7745` Visa debit "Spare debit" ••7745, 11/29, inactive, spends from Savings. `card_v1` virtual Visa "Online shopping" ••6150, 10/27, parent `card_9021`, $300 a month, $86.40 used. Today is Tue 3 Nov 2026. Card transactions on `card_9021` include pending "Brightside Coffee" -$4.80, "Northwind Market" -$64.20 (Apple Pay ••4471), "Skyline Travel Co." -$420.00 online from GB (GBP 331.20) and "Refund, Lakeside Outfitters" +$38.00. The prototype links "Show as a new customer", "Simulate a load error" and "Reset cards".
+
+| # | Covers | Persona / setup | Conditions | Steps and expected result |
+|---|---|---|---|---|
+| T-1 | AC-1, AC-2 | `alex` | none | Open Cards. Four cards. Select each: debit shows $8,102.40 available and ledger $8,240.18; credit shows $3,640.20, due 28 Nov 2026 "In 25 days"; virtual shows "Linked to Everyday debit ••9021". |
+| T-2 | AC-3 | `alex` | none | Active debit: Freeze, Controls, PIN, Replace, Add to wallet. Virtual: no PIN or Replace. Spare debit: Activate only. |
+| T-3 | AC-4, AC-5 | `alex` | none | Freeze Everyday debit: confirmation toast, grey card, banner with Unfreeze, actions Unfreeze and Replace. Freezing again is not offered. |
+| T-4 | AC-6 | `alex` | activation locked on `card_7745` (three wrong tries in `activate-card`) | Banner shows `ACTIVATION_LOCKED`, no Activate button. |
+| T-5 | AC-7 | `alex` | none | Controls chips: Contactless On, Online On, Cash machines On, "Abroad: Everywhere"; bars "$4.80 of $3,000.00" and "$539.00 of $15,000.00". Change opens `card-controls`. |
+| T-6 | AC-8 | `alex` | none | Filter Pending: one row. Expand "Northwind Market": "Apple Pay ••4471" and a Report a problem button. Expand pending coffee: the "post first" text. |
+| T-7 | AC-9 | `alex` | each of `showSpend`, `showTx`, `showWallet`, `showSaved` off in turn | The matching section is gone. |
+| T-8 | AC-10 | `sam` ("Show as a new customer") | `empty: ["bank.cards.overview"]` | Empty state and Find out how. |
+| T-9 | AC-10 | `alex` | `unavailable: ["bank.cards.overview"]` (prototype: Simulate a load error) | Error card with `SERVICE_UNAVAILABLE`; Try again reloads. |
+| T-10 | AC-10 | `alex` | `timeout: ["bank.cards.overview"]`, `latencyMs: 10000` (planned) | The timeout message after 10 seconds. |
+| T-11 | AC-4 | `alex` | `unavailable: ["bank.cards.freeze"]` (prototype: Service down on) | Freeze shows the error sheet; the card stays active. |
 
 #### 10. Expected mutation-check survivors
 
-- Removing the Luhn-style or length check on last 4: **None expected** (T-2 uses a mismatch).
-- Removing the `pattern` on `act.expiry` in the journey: survives, because `bank.cards.activate` returns `ACTIVATION_MISMATCH` for a malformed expiry anyway (another layer stops it).
-- Raising `maxAttempts` from 3: killed by T-4.
+The rule that only active cards can be frozen is checked on the screen (the Freeze button is hidden for other statuses) and in the adapter (planned), so removing only the adapter check survives; expected. The 10-second timeout state has no prototype layer. All others: none expected.
 
 ---
 
-### ★ Freeze card — `freeze-card`
+### ★ Activate card — `activate-card`
+
+**Catalog:** slug `activate-card`, workspace `personal`, category Cards (Personal: Cards), core no, can a bank switch it off: yes (basic entry, kept in the Lean preset). Options (both default on): **Ask for the 3-digit security code** (`askCvv`); **Let the customer set the PIN during activation** (`pinAtActivation`). Research: `research/activate-card.md`. Built in `design/bankworkx-r1/src/journeys/26-activate-card.js`; shared card data `CRD` is in `24-cards.js`.
 
 #### 1. Summary
 
-| Item | Value |
+| Field | Value |
 |---|---|
-| Slug | `freeze-card` |
-| Purpose | Freeze a card for a while, unfreeze it, or block it for good |
-| Release | 1 |
-| Workspace | Personal |
-| Status | New (draft). Needs the planned cards domain |
-| Channels | Web, mobile |
-| Starting pattern | One journey with three modes (`freeze`, `unfreeze`, `block`) chosen by the passed `action` |
-| Who may use it | Personal context holding `cards.manage` |
-
-Freezing is protective, so it takes one tap and no code. Anything that makes a card usable again (unfreeze) or ends it for good (block) needs the one-time code.
+| Slug | `activate-card` |
+| Purpose | Turn on a new card the customer has in their hands: prove it with the last 4 digits, the expiry and (option) the security code, optionally choose a PIN, confirm with a one-time code, and then offer wallet and controls. |
+| Release / workspace | 1 / Personal |
+| Status | Built in the prototype (`money: false`, submit "Activate card", busy "Activating your card…" 900 ms). |
+| Channels | Web and mobile |
+| Starting pattern | None |
+| Who may use it | Anyone signed in to Personal with `cards.manage` (planned; the prototype uses `accounts.view`). |
 
 #### 2. Entry points
 
-| Place › label | Passed | Permission |
+| Place › label | Passes in | Permission |
 |---|---|---|
-| Cards › card › Freeze | `{cardId, action: "freeze"}` | `cards.manage` |
-| Cards › card › Unfreeze | `{cardId, action: "unfreeze"}` | `cards.manage` |
-| Cards › card › Block card | `{cardId, action: "block"}` | `cards.manage` |
-| `replace-card` (stolen) | `{cardId, action: "block"}` with `returnTo` | `cards.manage` |
+| Cards › carousel › banner button **Activate card**, and quick action **Activate** (inactive card only) | `{cardId}` | `cards.manage` |
+| Notification "Activate your new card" | `{cardId}` | `cards.manage` |
+| Deep link `/personal/j/activate-card?cardId=card_7745` | `{cardId}` optional | `cards.manage` |
 
-Without `action` the first screen asks which of the three (tiles).
+With no `cardId` and more than one inactive card a picker comes first; with one it is chosen for the person; with none the journey stops with `NO_INACTIVE_CARD`. The button is hidden while activation is locked.
 
 #### 3. Screens
 
-**Screen `choose` — "What do you want to do?"** (skipped when `action` is passed). `select` tiles, bind `fz.action`:
+**`pick`: "Which card?"** (only when no `cardId` and more than one card waits). Field **Card** (select "{nickname} ••{last4}", required, message "Choose the card you want to activate."). Next runs the gate checks (errors below).
 
-| Tile | Label | Help text |
-|---|---|---|
-| `freeze` | "Freeze for now" | "Stops all spending on this card. You can unfreeze it any time." |
-| `unfreeze` | "Unfreeze" | "Lets you use the card again." |
-| `block` | "Block for good" | "Ends this card for ever. You'll need a new card." |
+**`details`: "Activate your card"**, intro "Enter the details printed on the card." A warning card: "Only activate a card that you have in your hands. If the envelope was open, don't use the card: call us instead." and a card row (colour, "{nickname} ••{last4}", "{network} {kind}", status chip).
 
-Only tiles that fit the card's status show (an active card offers Freeze and Block; a frozen card offers Unfreeze and Block; a blocked card shows no tiles and the empty text "This card is already blocked. Ask for a replacement." with button "Replace card"). Button "Continue" (`validate`, navigate by action: `freeze` → `confirmFreeze`, `unfreeze` → `confirmUnfreeze`, `block` → `confirmBlock`).
-
-**Screen `confirmFreeze` — "Freeze this card?"** `reviewSummary` (Card "{{card.name}}", Effect "No spending, cash or online payments until you unfreeze"), `alert` info "Payments already taken are not affected. Regular payments you set up with the card may fail while it is frozen." Buttons "Freeze card" (`callApi freeze`, on success `navigate done`), "Cancel" (`exit`).
-
-**Screen `confirmUnfreeze` — "Unfreeze this card?"** `reviewSummary` (Card, Effect "You can spend with this card again"). Button "Continue" (`callApi otpSend`, navigate `code`); "Cancel".
-
-**Screen `confirmBlock` — "Block this card for good?"** `alert` warning "This can't be undone. We'll cancel the card and any virtual cards linked to it." `reviewSummary` (Card; Linked virtual cards "{{card.virtualCount}} will also be blocked"). Field:
-
-| Field | Block | Required | Rule | Error message |
+| Field | Block | Required | Validation | Message |
 |---|---|---|---|---|
-| Reason | `select` (`rows`: "I lost it", "It was stolen", "I don't need it", "Something else") bind `fz.reason` | Yes | One of the four | "Choose a reason." |
-| Type BLOCK to confirm | `textInput` bind `fz.confirmWord`, pattern `^BLOCK$` | Yes | Exactly `BLOCK` | "Type BLOCK in capital letters to continue." |
+| Last 4 digits of the card number | text, 4 characters, placeholder `0000`, hint "Find it on the front of the card." plus "{n} tries left." after a wrong try | Yes | `^[0-9]{4}$` | "Enter the last 4 digits printed on your card." |
+| Expiry date | text, 5 characters, `MM/YY`, half width | Yes | `^(0[1-9]\|1[0-2])/[0-9]{2}$`; not before the current month (Nov 2026) | "Enter the expiry as MM/YY." / "That date has passed. Check the expiry on your card. (EXPIRY_PAST)" |
+| Security code | password, 3 digits, `•••`, half width, shown only when `askCvv` is on, hint "On the back of the card. We use it once to check the card and never keep it." | Yes (when shown) | `^[0-9]{3}$` | "Enter the 3-digit code from the back of the card." |
 
-Buttons "Continue" (`validate`, `callApi otpSend`, navigate `code`), "Cancel".
+Button **Continue**, busy "Checking your card…" 800 ms. Checks on Next, in order: the card exists (`CARD_NOT_FOUND`); the gate (below); the details match (last 4 and expiry equal the card's, and the security code is not `000`). The security code field is cleared after every attempt, right or wrong. On a mismatch the message is always the same, never saying which detail was wrong: "The details don't match this card. Check them and try again. (ACTIVATION_MISMATCH)", and the hint then shows the tries left. The third mismatch sets the card's activation lock: "Too many wrong tries. Activation is locked. Call us or try again in 30 minutes. Nothing was changed on your card. (ACTIVATION_LOCKED)". A right answer resets the counter.
 
-**Screen `code` — "Confirm with your code".** Standard. Button label "Unfreeze card" or "Block card" by mode (two buttons with `visibleWhen`). On success calls `unfreeze` or `block`, then `done`.
+Gate checks (also on `pick`): no card waiting: "You have no cards waiting to be activated. (NO_INACTIVE_CARD)"; status active or frozen: "This card is already active. You can start using it. (CARD_ALREADY_ACTIVE)"; status blocked, expired or replaced: "This card was blocked and can't be activated. Ask for a replacement. (CARD_BLOCKED)"; locked: "Activation is locked after 3 wrong tries. Call us or try again in 30 minutes. (ACTIVATION_LOCKED)".
 
-**Screen `done` (terminal).** Three variants by mode (`visibleWhen`):
+**`pin`: "Set your PIN"** (only when `pinAtActivation` is on), intro "You'll use it at cash machines and in shops that ask for it."
 
-| Mode | Title | Text | Buttons |
-|---|---|---|---|
-| freeze | "Card frozen" | "Your card ending {{card.last4}} is frozen. Nobody can spend with it." | "Unfreeze" (to `confirmUnfreeze`), "Go to card" |
-| unfreeze | "Card unfrozen" | "Your card ending {{card.last4}} works again." | "Go to card" |
-| block | "Card blocked" | "Your card ending {{card.last4}} is blocked for good." meta "Ref {{result.reference}}" | "Get a new card" (`navigate toJourney replace-card`, `{cardId}`, `returnTo` card detail), "Go to cards" |
+| Field | Block | Required | Shown when | Validation | Message |
+|---|---|---|---|---|---|
+| When? | chips Set it now, Later | No (Set it now) | always | none | none |
+| New PIN | password, 4 characters, placeholder "4 digits", hint "4 digits. Not 1111 or 1234, not your birth year, birthday, or digits from your card or phone." | Yes | Set it now | exactly 4 digits and not weak (rules below) | per rule |
+| Repeat PIN | password, 4 characters | Yes | Set it now | equals New PIN | "The two PINs don't match." |
 
-`locked` and `failed` as standard.
+Weak PIN rules and their messages: not 4 digits "Use exactly 4 digits. (PIN_INVALID)"; all the same digit "Choose a PIN that is harder to guess. Don't repeat one digit, like 1111. (PIN_WEAK)"; a straight run up or down "Choose a PIN that is harder to guess. Don't use a run like 1234 or 4321. (PIN_WEAK)"; pairs "Choose a PIN that is harder to guess. Don't use pairs like 1212 or 1122. (PIN_WEAK)"; the birth year (sandbox 1990) "Don't use your birth year. (PIN_WEAK)"; the birth day and month in either order (0412, 1204) "Don't use your birthday. (PIN_WEAK)"; the card's last four, the phone's last four (0142) or the account's last four (4410) "Don't use digits from your card, account or phone number. (PIN_WEAK)"; a short common list (2580, 0852, 1357, 2468, 6969, 1004) "That PIN is very common. Choose another. (PIN_WEAK)". A note: with "Set it now" - "Your PIN is sent to the card system scrambled. BankWorkx® can't read it, never shows it and never sends it by message."; with "Later" - "You can set it later in Cards › PIN. Until then, cash machines and chip-and-PIN shops won't accept the card. Taps and online payments still work if they are on."
+
+**`code`: "Confirm with your code"**, intro "We sent a 6-digit code to the phone ending 0142." Field **One-time code** (text, 6 digits, required, placeholder "6 digits", hint "{n} tries left. Prototype code: 482100."), message "Enter the 6-digit code.". Button **Activate card**, busy "Activating your card…" 900 ms. On Next the card must still be inactive (else `CARD_ALREADY_ACTIVE`). Wrong code: "That code isn't right. Check the text message and try again. (OTP_INVALID)"; the third wrong code: "Too many wrong codes. Nothing was changed on your card. Go back to start again. (OTP_LOCKED)". The prototype accepts `482100` and `000000`.
+
+**Result**: title "Card activated", text "Your card ending {last4} is ready to use.", chip "Active". Rows: Card ("{nickname} ••{last4}"), Status (Active), Activated (3 Nov 2026), PIN ("Set" or "Not set yet"), Online purchases ("On" or "Off. Turn on in Controls", from the card's own setting), Tap to pay ("Works after your first chip and PIN purchase or cash withdrawal"), Security code ("Not kept"). Buttons: **Add to Apple Wallet or Google Pay** (`card-controls {cardId, mode: "wallet"}`), **Set limits and controls** (`card-controls {cardId, mode: "all"}`), **Set my PIN** (`card-pin {cardId}`, only when no PIN was set), **Go to cards**.
+
+**States:** loading is the busy spinner on Continue and Activate; empty is `NO_INACTIVE_CARD`; leaving before the code activates nothing and discards the typed values; timeout "This is taking longer than expected. Nothing was changed on your card."; unavailable "This service isn't available right now. Nothing was changed. Please try again in a few minutes."
 
 #### 4. Sandbox errors
 
-| Code | Message | Screen | Button |
+| Code | Message | Shows on | Button |
 |---|---|---|---|
-| `CARD_NOT_FOUND` | "We can't find that card. Choose another." | `failed` | Back to cards |
-| `CARD_NOT_ACTIVE` | "This card can't be frozen because it isn't active yet." | `failed` | Activate card (`activate-card`) |
-| `CARD_ALREADY_FROZEN` | "This card is already frozen." | `failed` | Go to card |
-| `CARD_NOT_FROZEN` | "This card isn't frozen." | `failed` | Go to card |
-| `CARD_ALREADY_BLOCKED` | "This card is already blocked. Ask for a replacement." | `failed` | Replace card |
-| `OTP_INVALID` / `OTP_REQUIRED` | Standard | `code` | Try again / Back to code |
-| `TIMEOUT` | "This is taking longer than expected. Nothing was changed on your card." | `failed` | Try again |
-| `SERVICE_UNAVAILABLE` | Standard | `failed` | Try again |
-| `PERMISSION_DENIED`, `WRONG_CONTEXT`, `SESSION_EXPIRED` | Standard | `failed` | Back / Switch / Sign in |
+| `CARD_NOT_FOUND` | "We can't find that card. Choose another." | `details` | Choose card |
+| `NO_INACTIVE_CARD` | "You have no cards waiting to be activated." | `pick` / `details` | Go to cards |
+| `CARD_ALREADY_ACTIVE` | "This card is already active. You can start using it." | `details`, `code` | Go to cards |
+| `CARD_BLOCKED` | "This card was blocked and can't be activated. Ask for a replacement." | `details` | Replace card |
+| `ACTIVATION_MISMATCH` | "The details don't match this card. Check them and try again." | `details` | Try again |
+| `ACTIVATION_LOCKED` | "Too many wrong tries. Activation is locked. Call us or try again in 30 minutes. Nothing was changed on your card." | `details` | Contact us |
+| `EXPIRY_PAST` | "That date has passed. Check the expiry on your card." | `details` | Edit |
+| `PIN_INVALID` | "A PIN has exactly 4 digits." | `pin` | Edit |
+| `PIN_WEAK` | "Choose a PIN that is harder to guess." (with the specific line above) | `pin` | Edit |
+| `OTP_REQUIRED` | "Confirm with your one-time code first." | `code` | Back to code |
+| `OTP_INVALID` | "That code isn't right. Check the text message and try again." | `code` | Try again |
+| `OTP_LOCKED` | "Too many wrong codes. Nothing was changed on your card. Go back to start again." | `code` | Start again |
+| `STEP_UP_REQUIRED` | "For your security, confirm it's you first." | `code` | Confirm |
+| `TIMEOUT` | "This is taking longer than expected. Nothing was changed on your card." | engine error | Try again |
+| `SERVICE_UNAVAILABLE` | "This service isn't available right now. Nothing was changed. Please try again in a few minutes." | engine error | Try again |
 
 #### 5. Adapters
 
 | Integration id | Adapter | Request | Response | Errors | Status |
 |---|---|---|---|---|---|
-| `card` | `bank.cards.get` | `{cardId}` | card | `CARD_NOT_FOUND` | (planned) |
-| `freeze` | `bank.cards.freeze` | `{cardId}` | `{status: "frozen"}` | `CARD_NOT_FOUND`, `CARD_NOT_ACTIVE`, `CARD_ALREADY_FROZEN` | (planned) |
-| `unfreeze` | `bank.cards.unfreeze` | `{cardId}` | `{status: "active"}` | `CARD_NOT_FOUND`, `CARD_NOT_FROZEN`, `OTP_REQUIRED` | (planned) |
-| `block` | `bank.cards.block` | `{cardId, reason}` | `{status: "blocked", reference}` | `CARD_NOT_FOUND`, `CARD_ALREADY_BLOCKED`, `OTP_REQUIRED` | (planned) |
-| `otpSend`, `otpVerify` | `bank.otp.send`, `bank.otp.verify` | as in the card note | | `OTP_INVALID` | Existing |
+| `cardsWaiting` | `bank.cards.listInactive` | none | cards with `status: "inactive"` | none | (planned). The existing `bank.cards.list` returns only saved cards (`packages/mock-bank-api/src/index.ts`) |
+| `verifyCard` | `bank.cards.verifyActivation` | `{cardId, last4, expiry, cvv?}` | `{verified, triesLeft}` | `CARD_NOT_FOUND`, `CARD_ALREADY_ACTIVE`, `CARD_BLOCKED`, `ACTIVATION_MISMATCH`, `ACTIVATION_LOCKED`, `EXPIRY_PAST` | (planned). The security code is checked and dropped, never stored |
+| `otpSend` | `bank.otp.send` | `{phone}` | `{sent}` | none | Existing |
+| `otpVerify` | `bank.otp.verify` | `{code}` | `{verified}` | `OTP_INVALID` (carries `attempt`), `OTP_LOCKED` | Existing (`lockAfter: 3`) |
+| `activateCard` | `bank.cards.activate` | `{cardId, pin?}` (PIN sent scrambled to the card system) | `{cardId, status: "active", activatedAt, pinSet}` | `CARD_ALREADY_ACTIVE`, `PIN_INVALID`, `PIN_WEAK`, `OTP_REQUIRED`, `STEP_UP_REQUIRED`, `TIMEOUT`, `SERVICE_UNAVAILABLE` | (planned). Not money-moving |
 
 #### 6. Permissions, step-up and limits
 
-`cards.manage`. Freeze: step-up `none`. Unfreeze and block: `otp`. Check 3: the sandbox refuses unfreeze and block without a verified code. No limits.
+`cards.manage` (planned). Step-up: the one-time code in the last step (6 digits, 3 tries, resend after 30 s in production). Limits: 3 wrong sets of card details lock activation for that card (30 minutes in the message; the prototype lifts it only through the sandbox Unlock link); 3 wrong codes end the attempt. Card data rules: the security code and the PIN are never stored or echoed; the receipt says "Not kept". In a market that retires text codes the bank may swap the code step for app approval.
 
 #### 7. Result and links out
 
-Result variants above. Receipt only for block (reference). Notifications: "Card ending {{last4}} frozen" / "unfrozen" / "blocked" (in-app and push, all three). Links out: card detail, `replace-card`, `activate-card`.
+Result as in section 3. Receipt: the result rows. Notifications raised: "Your card ••{last4} is active" (push and email), "PIN set" when applicable. Links out: `card-controls` (wallet, all), `card-pin`, Cards. A replacement card's activation ends the old card at that moment and says so on the receipt (planned).
 
 #### 8. Acceptance criteria
 
-- AC-1: Freezing an active card works without a one-time code and changes its status to frozen.
-- AC-2: Unfreezing needs a verified one-time code.
-- AC-3: Blocking needs the typed word BLOCK and a verified one-time code, and cannot be undone.
-- AC-4: Blocking a card also blocks its virtual cards.
-- AC-5: A frozen or blocked card shows only the actions that still apply.
-- AC-6: Freezing an inactive card is refused with a clear message.
-- AC-7: After a block the person is offered a replacement.
-- AC-8: Three wrong codes stop an unfreeze or block and leave the status unchanged.
-- AC-9: A timeout or unavailable service leaves the status unchanged and says so.
+- AC-1: With the right last 4 digits and expiry (and security code when asked) and the right one-time code, an inactive card becomes active, and the Cards screen shows it as Active.
+- AC-2: A wrong detail shows the same neutral message ("The details don't match this card"), never which detail, with the tries left; the third wrong try locks activation and the Activate button disappears.
+- AC-3: The security code is hidden as typed, cleared after every attempt, never shown on the result, and the field is absent when `askCvv` is off.
+- AC-4: The expiry must be MM/YY and not in the past; a past date is refused on the form.
+- AC-5: With `pinAtActivation` on the person can set a 4-digit PIN now (twice) or choose Later; weak PINs are refused with the specific message; with it off there is no PIN step and the result offers **Set my PIN**.
+- AC-6: Three wrong one-time codes end with `OTP_LOCKED` and the card stays inactive; the right code (`482100`) activates.
+- AC-7: An already active or frozen card, a blocked or expired card, and a user with no waiting card each get their own message and no activation.
+- AC-8: The result states whether the PIN is set, whether online purchases are on, that taps work after the first chip-and-PIN use, and offers the wallet and controls.
+- AC-9: On a timeout or an unavailable service the card stays inactive and the person is told nothing was changed.
 
 #### 9. Scenarios
 
-| # | Covers | Persona and setup | Outcome |
-|---|---|---|---|
-| T-1 | AC-1, AC-5 | `alex`, `card_9021`, `action freeze` | Status `frozen`, no code asked; card detail shows Unfreeze and Block only |
-| T-2 | AC-2 | `alex`; `card_9021` frozen | Unfreeze without a code is `OTP_REQUIRED`; with `482100` status `active` |
-| T-3 | AC-3, AC-7 | `alex`, `card_9021`, `action block` | Typing `block` fails with the validation message; `BLOCK` + code gives `blocked`; "Get a new card" shown |
-| T-4 | AC-4 | `alex`; `card_9021` has a virtual card | After block the virtual card is `blocked` |
-| T-5 | AC-6 | `alex`; `card_7745` (inactive), `freeze` | `CARD_NOT_ACTIVE` message |
-| T-6 | AC-8 | `alex`; unfreeze | Wrong code `111111` three times: `locked`; status still `frozen` |
-| T-7 | AC-9 | conditions `timeout: ["bank.cards.freeze"]` | Standard timeout text; status `active` |
-| T-8 | AC-9 | conditions `unavailable: ["bank.cards.block"]` | `SERVICE_UNAVAILABLE`; status unchanged |
+Sandbox demo values: `card_7745` Spare debit ••7745, expiry `11/29`, inactive, spends from Savings; the right security code is any three digits except `000`. Holder data for the PIN rules: birth year 1990, birthday 12 April (0412 / 1204), phone ending 0142, account ending 4410. Good PIN: `7391`. Weak PINs: `1111`, `1234`, `4321`, `1212`, `1990`, `0412`, `7745`, `0142`, `2580`. One-time code `482100` (also `000000`). Test launch `{cardId: "card_7745", smoke: 1}` fills everything. Today is Tue 3 Nov 2026.
+
+| # | Covers | Persona / setup | Conditions | Steps and expected result |
+|---|---|---|---|---|
+| T-1 | AC-1, AC-3, AC-5, AC-8 | `alex` | none | Open Activate on Spare debit. Enter `7745`, `11/29`, `123`, Continue; PIN Set it now `7391` twice; code `482100`. Result "Card activated", PIN "Set", Online purchases "Off. Turn on in Controls", Security code "Not kept". Cards shows Active. |
+| T-2 | AC-2 | `alex` | none | Wrong last 4 (`1111`) then wrong expiry then wrong code `000`: each shows "The details don't match this card" and "2 tries left", "1 tries left"; the third shows `ACTIVATION_LOCKED`; the Cards banner shows the lock and no Activate button. The security code field is empty after each try. |
+| T-3 | AC-4 | `alex` | none | Expiry `10/26`: "That date has passed. Check the expiry on your card." `13/29`: "Enter the expiry as MM/YY." |
+| T-4 | AC-5 | `alex` | none | Each weak PIN in the list shows its own message; `7391` with a different repeat: "The two PINs don't match." Choose Later: note about cash machines; result PIN "Not set yet" and button **Set my PIN**. |
+| T-5 | AC-5, AC-3 | `alex` | options `pinAtActivation` off, `askCvv` off | No security code field; no PIN step; result offers **Set my PIN**. |
+| T-6 | AC-6 | `alex` | none | Valid details, code `111111` three times: `OTP_INVALID` twice with tries left, then `OTP_LOCKED`; the card is still inactive. |
+| T-7 | AC-7 | `alex` | none | Open with `card_9021` (active): `CARD_ALREADY_ACTIVE`. Mark a card blocked (setup): `CARD_BLOCKED` with Replace. Activate the only waiting card, then open again: `NO_INACTIVE_CARD`. |
+| T-8 | AC-9 | `alex` | `timeout: ["bank.cards.activate"]`, `latencyMs: 10000` (planned; prototype: Timeout on) | Timeout message; card still inactive. |
+| T-9 | AC-9 | `alex` | `unavailable: ["bank.cards.activate"]` (prototype: Service down on) | Unavailable message; card still inactive. |
 
 #### 10. Expected mutation-check survivors
 
-- Dropping `lockAfter` in `block`'s `code` screen: killed by T-6 (same screen).
-- Removing the typed-word `pattern` on the screen: survives only if `bank.cards.block` also checks a `confirm` field. Decision: the sandbox does **not** (the word is a UI guard), so T-3 must prove it at the journey level; the mutant is killed, none expected.
-- Removing the freeze-needs-no-code behaviour (adding a code): killed by T-1.
+The "never say which detail was wrong" rule has one source; a mutation that returns a different message for the expiry survives only if no scenario asserts the message text; T-2 asserts it, so none expected. `STEP_UP_REQUIRED` is not produced by the sandbox and survives. The 30-minute automatic unlock is not modelled in the prototype (only the Unlock link), so a mutation of its duration survives; expected. The mismatch rule exists on the form (shape) and in `bank.cards.verifyActivation` (planned); removing only the shape check for the 4-digit pattern survives T-2 because the adapter still refuses.
 
 ---
 
 ### ★ Card limits and controls — `card-controls`
 
+**Catalog:** slug `card-controls`, workspace `personal`, category Cards (Personal: Cards), core no, can a bank switch it off: yes (basic entry, kept in the Lean preset). Options: **Offer a gambling block (off where gambling is barred by law)** (`offerGambling`, default off); **Offer the magnetic stripe switch** (`allowMagstripe`, default off); **Let customers lower the contactless limit** (`allowTapLimit`, default on); **A freeze still allows existing recurring payments** (`frozenAllowsRecurring`, default on). Research: `research/card-controls.md`. Built in `design/bankworkx-r1/src/journeys/25-card-controls.js`; shared card data `CRD` is in `24-cards.js`.
+
+This block also covers `freeze-card` (freeze and unfreeze are the first step here) and holds the card limits; see the alias block for `freeze-card` after this one.
+
 #### 1. Summary
 
-| Item | Value |
+| Field | Value |
 |---|---|
 | Slug | `card-controls` |
-| Purpose | Choose where and how much a card can be used: online, contactless, abroad, cash machines, per purchase and per day |
-| Release | 1 |
-| Workspace | Personal |
-| Status | New (draft). Needs the planned cards domain |
-| Channels | Web, mobile |
-| Starting pattern | Edit-and-review: change settings, see what changes, confirm (code only when loosening) |
-| Who may use it | Personal context holding `cards.manage` |
+| Purpose | Freeze or unfreeze a card, set spending limits, switch channels on or off, control use abroad with optional trip dates, block types of shop, choose alerts, and add or remove phone wallets, in one review. Tightening applies at once; loosening asks for a one-time code. |
+| Release / workspace | 1 / Personal |
+| Status | Built in the prototype (`money: false`, submit "Save changes", busy "Saving to your card…" 800 ms). |
+| Channels | Web and mobile |
+| Starting pattern | None (a wizard of short steps with a review that lists only what changes) |
+| Who may use it | Anyone signed in to Personal with `cards.manage` (planned; the prototype uses `accounts.view`). |
 
 #### 2. Entry points
 
-| Place › label | Passed | Permission |
+| Place › label | Passes in | Permission |
 |---|---|---|
-| Cards › card › Limits and controls | `{cardId}` | `cards.manage` |
-| Controls overview › row | `{cardId}` | `cards.manage` |
-| Card detail › controls summary › Change | `{cardId}` | `cards.manage` |
-| Deep link `/personal/j/card-controls?cardId=card_9021` | `{cardId}` | `cards.manage` |
+| Cards › selected card › Controls or Change | `{cardId, mode: "all"}` | `cards.manage` |
+| Cards › quick actions › Unfreeze, and the frozen banner | `{cardId, mode: "unfreeze"}` | `cards.manage` |
+| Cards › quick actions › Add to wallet; wallet row | `{cardId, mode: "wallet"}` | `cards.manage` |
+| Controls overview › a row | `{cardId, mode: "limits"\|"where"\|"merchants"\|"alerts"}` | `cards.manage` |
+| `activate-card` result › Add to Apple Wallet or Google Pay / Set limits and controls | `{cardId, mode: "wallet"\|"all"}` | `cards.manage` |
+| Deep link `/personal/j/card-controls?cardId=card_9021` | `{cardId, mode}` (default `all`) | `cards.manage` |
+
+Other values of `mode`: `freeze` starts with the freeze switch on. With no `cardId` a card picker comes first and the first active non-virtual card is preselected.
 
 #### 3. Screens
 
-**Screen `edit` — "Limits and controls".** `onEnter`: `callApi card` (`bank.cards.get`) into `ctx.card`; the form fields are pre-filled from it (`ctrl.*`). Blocks: `sectionHeader` "Where it works", four `toggle`, `sectionHeader` "How much", three `amountInput`, `alert`, `button`.
+Steps run in this order and each shows only when it applies. A section other than status and wallets shows only for an **active** card and only when `mode` is `all` or that section's name. Wallets show for modes `all` and `wallet` for active or frozen cards.
 
-| Field | Block | Required | Rule | Error message |
-|---|---|---|---|---|
-| Online purchases | `toggle` bind `ctrl.online` | Yes | none | none |
-| Contactless | `toggle` bind `ctrl.contactless` | Yes | none | none |
-| Abroad | `toggle` bind `ctrl.abroad` | Yes | none | none |
-| Cash machines | `toggle` bind `ctrl.atm` (hidden for credit cards that have no cash limit) | Yes | none | none |
-| Per purchase limit | `amountInput` bind `ctrl.perTransaction` (currency of the card) | Yes | 0.01 to ceiling and not above the daily purchase limit | "Enter an amount from 0.01 to {{ctx.card.ceilings.perTransaction}}." / "A single purchase can't be more than your daily limit." |
-| Daily purchases limit | `amountInput` bind `ctrl.dailyPurchases` | Yes | 0.01 to ceiling | "Enter an amount from 0.01 to {{ctx.card.ceilings.dailyPurchases}}." |
-| Daily cash limit | `amountInput` bind `ctrl.dailyAtm` (debit only) | Yes | 0 to ceiling | "Enter an amount from 0 to {{ctx.card.ceilings.dailyAtm}}." |
+**`pick`: "Which card?"** (only when no `cardId` was passed). Field **Card** (select "{nickname} ••{last4} · {status}", required, message "Choose the card you want to change."). The gate refuses a card that is not changeable (see errors).
 
-Helper texts: abroad "Turn on before you travel. Turn it off when you're back."; per purchase "The most you can pay in one go."; daily purchases "Resets at midnight (UTC)."; daily cash "Cash taken out today: {{ctx.card.limits.dailyAtm.usedToday}}". Alert info "Making a limit smaller or turning a control off takes effect straight away. Making it bigger or turning something on needs a code." Button "Review changes" (`validate`; navigates to `review`). If nothing changed, the button is disabled and the helper reads "Change something to continue."
-States: loading skeleton toggles and fields; a frozen/blocked/inactive card shows `alert` warning "This card is {{status}}. You can change its controls after it's active." and the form is read-only with button "Go to card".
+**`freeze`: "Card status"** (modes `all`, `freeze`, `unfreeze`). Intro "Freeze the card if you can't find it. You can undo it any time." (unfreeze mode: "Unfreezing makes this card easier to use, so we will ask for a code."). A card row (picture colour, "{nickname} ••{last4}", "{Virtual }{network} {kind} · expires {MM/YY}", status chip).
 
-**Screen `review` — "Review changes".** `reviewSummary` lists **only the rows that changed**, as "Abroad: Off → On", "Daily purchases: 3,000.00 → 4,000.00". Below it an `alert`: when loosening (`visibleWhen ctrl.loosened`) "These changes make your card easier to use, so we'll ask for a code." else "These changes make your card safer, so no code is needed." Buttons: "Save changes" (tightening only: `callApi update`, navigate `done`), "Continue" (loosening: `callApi otpSend`, navigate `code`), "Edit" (back to `edit`). The journey works out `ctrl.loosened` by comparing the form with `ctx.card` (a `setData` before `review`).
+| Field | Block | Required | Shown when | Rule | Message |
+|---|---|---|---|---|---|
+| Freeze this card | toggle, "Blocks new purchases and cash withdrawals straight away. Refunds still arrive." | No (current state) | always | The card is active (to freeze) or frozen (to unfreeze) | "You can change controls once the card is active. (CARD_NOT_ACTIVE)" / "This card isn't frozen. (CARD_NOT_FROZEN)" / "This card is already frozen. (CARD_ALREADY_FROZEN)" |
+| Why? (optional) | chips Not sure, Misplaced, Suspicious payment, Lost or stolen, Not using it | No | freezing an active card | none | none |
 
-**Screen `code`**: standard; button "Save changes" calls `otpVerify`, then `update`, then `done`.
+If "Lost or stolen" is chosen a notice reads "If it may be lost or stolen, block it for good. A frozen card can be unfrozen by anyone who knows your sign-in. A blocked card can't." with **Block and replace** (`replace-card {reason: "lost"}`). A note on every freeze: "A freeze does not stop: refunds and credits{, and payments you already set up (subscriptions, bills)}. It does stop {new purchases, cash withdrawals and phone wallet payments | every purchase, cash withdrawal, wallet payment and recurring payment}. Banks differ here; this is how BankWorkx® works." The bracketed wording follows `frozenAllowsRecurring`.
 
-**Screen `done` (terminal) — "Controls updated".** `result` success, text "{{result.summary}}" (for example "Abroad is on. Daily purchases are 4,000.00."), meta "Ref {{result.reference}}"; buttons "Go to card", "Done". `locked` and `failed` standard (Try again → `edit`).
+**`limits`: "Spending limits"**, intro "Set how much can be spent. Bank ceilings are shown under each box." All amounts have a $ prefix.
+
+| Field | Required | Rule | Hint |
+|---|---|---|---|
+| Per purchase (`perTx`) | Yes | 0 or more, 2 decimals at most; not above the card's ceiling; not above Daily | "The most you can pay in one go. Bank ceiling {ceiling}." |
+| Daily purchases (`daily`) | Yes | same; not above Monthly | "Resets at midnight (UTC). Used today: {used}. Ceiling {ceiling}." |
+| Monthly spending (`monthly`) | Yes | same | "Used this month: {used}. Ceiling {ceiling}." |
+| Daily cash withdrawals (`atm`) | No (0 allowed) | shown only when the card has a cash ceiling above 0; 0 stops cash | "Cash taken today: {used}. Ceiling {ceiling}. Use 0 to stop cash withdrawals." |
+| Contactless without PIN (`tap`) | No (0 allowed) | shown only when `allowTapLimit` is on and the card's tap ceiling is above 0 | "A tap above this amount asks for your PIN. Cannot be more than {ceiling}. Phone wallet payments use your phone's own check." |
+
+| Check | Message |
+|---|---|
+| Not a number, or below 0 | "Use an amount of 0 or more, with 2 decimal places at most. (LIMIT_INVALID)" |
+| Above the ceiling | "The most this card allows {for one purchase\|per day\|per month\|for cash\|without a PIN} is {ceiling}. Choose a smaller amount. (LIMIT_ABOVE_CEILING)" |
+| Per purchase above daily | "A single purchase can't be more than your daily limit. (LIMIT_ORDER)" |
+| Daily above monthly | "Your daily limit can't be more than your monthly limit. (LIMIT_ORDER)" |
+
+Note under the fields: "Making a limit smaller takes effect straight away. Making it bigger needs a code. If you set a daily limit below what you spent today, it applies from tomorrow."
+
+**`where`: "Where it works"**, intro "Switch off what you don't use. Fewer switches on means fewer ways for a thief."
+
+| Field | Block | Required | Shown when | Rule | Message |
+|---|---|---|---|---|---|
+| Contactless | toggle, "Tap to pay in shops." | No | always | none | none |
+| Online purchases | toggle, "Websites and apps. You may be asked to approve in the app." | No | always | none | none |
+| Cash machines | toggle, "Withdraw cash with your PIN." | No | card has a cash ceiling | none | none |
+| Magnetic stripe | toggle, "Only for shops that cannot read the chip. Keep off unless you need it." | No | `allowMagstripe` on | none | none |
+| Use abroad | chips Off, For a trip, Everywhere ("Turn on before you travel. Turn it off when you are back.") | No | always | none | none |
+| Country | select: United Arab Emirates, Saudi Arabia, Jordan, United Kingdom, France, Germany, Spain, Turkey, Egypt, United States, Iran | No (needed with dates) | "For a trip" | not a restricted country (Iran in the sandbox) | "We can't turn on this card in that country. (COUNTRY_RESTRICTED)" |
+| From, To | date, today to today plus 120 days | No (needed with the country) | "For a trip" | end not before start; at most 90 days; not overlapping another trip | "The end date is before the start date. (TRAVEL_DATES_INVALID)" / "A trip can last up to 90 days. (TRAVEL_DATES_INVALID)" / "This overlaps another trip. (TRAVEL_DATES_INVALID)" |
+
+A list "Your trips" shows existing trips with **Remove** / **Undo** (removing a trip is a tightening). A partly filled trip blocks Next with "Add the country and both dates for the trip, or clear them."
+
+**`merchants`: "Types of shop"**, intro "Block kinds of spending you never want on this card." Toggles: **Block crypto exchanges** ("Buying digital coins with this card."), **Block money transfers and cash-like spending** ("Wire services, prepaid top-ups, quasi-cash."), **Block adult content**, **Block gambling** ("Betting and casinos.", only with `offerGambling` on). With `offerGambling` off a row reads "Gambling / Blocked by your bank. This can't be changed here." with a "Blocked by bank" chip.
+
+**`alerts`: "Alerts"**, intro "Get a message when something happens on this card." Toggles: **Every purchase** ("A push message each time."), **Big purchases** ("Only above the amount you choose.") with **Alert me from** (amount, required while on, 1 to 100,000; "Enter an amount above zero." / "The most is $100,000.00."), **Purchases abroad**, **Cash withdrawals** (cash cards only), **Online purchases**, **Declined payments** ("So you know when a payment didn't go through."), **Near a limit** ("When you reach 80% of a daily or monthly limit."). Alerts never need a code.
+
+**`wallets`: "Digital wallets"**, intro "Phones and watches that can pay with this card." A card lists each wallet ("{app} · {device}", "Token ending {tok} · added {date}") with **Remove** (becomes "Will be removed" with **Undo**). Text: "Your phone stores a stand-in number (a token), not your card number. Receipts from wallet payments show the token ending, not ••{last4}. Removing a token stops that phone only." Fields: **Add to a wallet** (chips Not now, Apple Pay, Google Pay; active cards only; hint "Adding a wallet makes the card easier to use, so we will ask for a code.") and **Which device?** (select "Alex's iPhone 16", "Alex's iPad", "Pixel 9"; required once a wallet is chosen; message "That wallet isn't available on this device. (WALLET_NOT_SUPPORTED)" for Apple Pay on Android or Google Pay on iOS).
+
+**`review`: "Review changes"**, intro "Only what changes is listed." A card "What will change" with one row per change, "Before → After", and a chip **Safer** or **Needs code**. Below, either "These changes make your card easier to use, so we'll ask for a code. A mix of safer and easier counts as easier." (button **Continue**) or "These changes make your card safer, so no code is needed. They take effect straight away." (button **Save changes**). No changes: "Nothing to save yet", "Go back and change a switch or a limit.", and the button stays off with "You haven't changed anything yet. (NO_CHANGES)". When the card has become blocked, expired or inactive meanwhile the check on Next fails with `CARD_NOT_ACTIVE`.
+
+What counts as easier to use (needs a code): unfreezing; raising any limit; switching contactless, online, cash machines or magnetic stripe on; raising Use abroad (Off to trip to Everywhere); adding a trip; removing a shop-type block; adding a wallet. Everything else is safer and instant: freezing; lowering a limit; switching off; lowering Use abroad; removing a trip; adding a shop-type block; removing a wallet; any alert change.
+
+**`code`: "Confirm with your code"** (only when something loosens), intro "We sent a 6-digit code to the phone ending 0142." Field **One-time code** (text, 6 digits, required, hint "{n} tries left. Prototype code: 482100."), message "Enter the 6-digit code.". Button **Save changes**, busy "Checking your code…" 700 ms. Wrong code: "That code isn't right. Check the text message and try again. (OTP_INVALID)" and the tries left; the third wrong code ends with "Too many wrong codes. Nothing was changed on your card. Go back to start again. (OTP_LOCKED)". The prototype also accepts `000000`.
+
+**Result.** Title "Card frozen" (only the status changed, now frozen; text "New purchases and cash withdrawals are blocked. You can unfreeze it any time."), "Card active again" (text "Your card works again."), "Wallet added" (text "Token ending {tok} is on the device. Receipts from it show that ending, not ••{last4}."), or "Controls updated" (text "{n} change(s) saved{ straight away}."). Status chip "Confirmed with code" or "Saved at once". Rows: Card, one row per change ("{label}: Before → After"), Code needed (Yes or No), Card now (Frozen or Active). Buttons **Go to cards** and, after a "Lost or stolen" freeze, **Block and replace**.
+
+**States:** Loading is the 800 ms "Saving to your card…"; the empty state is the review's "Nothing to save yet"; errors use the engine banner with the code's message. A timeout shows "This is taking longer than expected. Nothing was changed on your card." and unavailable "This service isn't available right now. Nothing was changed. Please try again in a few minutes."
 
 #### 4. Sandbox errors
 
-| Code | Message | Screen | Button |
+| Code | Message | Shows on | Button |
 |---|---|---|---|
-| `CARD_NOT_FOUND` | "We can't find that card. Choose another." | `failed` | Back to cards |
-| `CARD_NOT_ACTIVE` | "You can change controls once the card is active." | `failed` | Go to card |
-| `LIMIT_INVALID` | "One of the limits isn't valid. Use an amount of 0 or more, with {{decimals}} decimal places at most." | `edit` | Fix it |
-| `LIMIT_ABOVE_CEILING` | "The most this card allows is {{ceiling}} for {{limit name}}. Choose a smaller amount." | `edit` | Fix it |
-| `OTP_REQUIRED` | "Confirm with your one-time code first." (only when loosening) | `code` | Back to code |
-| `OTP_INVALID` | Standard | `code` | Try again |
-| `TIMEOUT`, `SERVICE_UNAVAILABLE` | "This is taking longer than expected. Nothing was changed on your card." / standard | `failed` | Try again |
-| `PERMISSION_DENIED`, `WRONG_CONTEXT` | Standard | `failed` | Back / Switch |
+| `CARD_NOT_FOUND` | "We can't find that card. Choose another." | `pick`, or Next on `review` | Choose card |
+| `CARD_NOT_ACTIVE` | "You can change controls once the card is active." (blocked, expired or replaced: "This card is {status} and can't be changed. Ask for a replacement.") | `pick`, `freeze`, `review` | Back / Replace card |
+| `CARD_NOT_FROZEN` | "This card isn't frozen." | `freeze` | Back |
+| `CARD_ALREADY_FROZEN` | "This card is already frozen." | `freeze` | Back |
+| `LIMIT_INVALID` | "One of the limits isn't valid. Use an amount of 0 or more, with 2 decimal places at most." | `limits` | Edit |
+| `LIMIT_ABOVE_CEILING` | "One limit is above what this card allows. Choose a smaller amount." | `limits` | Edit |
+| `LIMIT_ORDER` | "A purchase limit can't be more than the daily limit, and the daily limit can't be more than the monthly limit." | `limits` | Edit |
+| `COUNTRY_RESTRICTED` | "We can't turn on this card in that country." | `where` | Edit |
+| `TRAVEL_DATES_INVALID` | "Check the trip dates. A trip can last up to 90 days and can't overlap another trip." | `where` | Edit |
+| `WALLET_NOT_SUPPORTED` | "That wallet isn't available on this device. Apple Pay works on iPhone and iPad, Google Pay on Android." | `wallets` | Edit |
+| `NO_CHANGES` | "You haven't changed anything yet." | `review` | Back |
+| `OTP_REQUIRED` | "Confirm with your one-time code first." | `code` | Back to code |
+| `OTP_INVALID` | "That code isn't right. Check the text message and try again." | `code` | Try again |
+| `OTP_LOCKED` | "Too many wrong codes. Nothing was changed on your card. Go back to start again." | `code` | Start again |
+| `STEP_UP_REQUIRED` | "For your security, confirm it's you first." | `code` | Confirm |
+| `TIMEOUT` | "This is taking longer than expected. Nothing was changed on your card." | engine error | Try again |
+| `SERVICE_UNAVAILABLE` | "This service isn't available right now. Nothing was changed. Please try again in a few minutes." | engine error | Try again |
 
 #### 5. Adapters
 
 | Integration id | Adapter | Request | Response | Errors | Status |
 |---|---|---|---|---|---|
-| `card` | `bank.cards.get` | `{cardId}` | card with controls, limits, ceilings | `CARD_NOT_FOUND` | (planned) |
-| `update` | `bank.cards.controls.update` | `{cardId, controls: {online, contactless, abroad, atm}, limits: {perTransaction, dailyPurchases, dailyAtm}}` | `{controls, limits, loosened, reference, summary}` | see section 4 | (planned) |
-| `otpSend`, `otpVerify` | existing OTP adapters | | | `OTP_INVALID` | Existing |
+| `cardGet` | `bank.cards.get` | `{cardId}` | card with `status`, `limits`, `ceilings`, `used`, `controls`, `blocked`, `trips`, `alerts`, `wallets` | `CARD_NOT_FOUND` | (planned) |
+| `otpSend` | `bank.otp.send` | `{phone}` | `{sent}` | none | Existing |
+| `otpVerify` | `bank.otp.verify` | `{code}` | `{verified}` | `OTP_INVALID` (carries `attempt`), `OTP_LOCKED` | Existing (`lockAfter: 3`) |
+| `updateControls` | `bank.cards.updateControls` | `{cardId, frozen, reason, limits, controls, abroad, trip, blocked, alerts, removeWallets[], addWallet{app, device}, code?}` | `{cardId, status, changes[], tokenLast4?, codeUsed}` | `CARD_NOT_FOUND`, `CARD_NOT_ACTIVE`, `CARD_NOT_FROZEN`, `CARD_ALREADY_FROZEN`, `LIMIT_INVALID`, `LIMIT_ABOVE_CEILING`, `LIMIT_ORDER`, `COUNTRY_RESTRICTED`, `TRAVEL_DATES_INVALID`, `WALLET_NOT_SUPPORTED`, `NO_CHANGES`, `OTP_REQUIRED`, `STEP_UP_REQUIRED`, `TIMEOUT`, `SERVICE_UNAVAILABLE` | (planned). Not money-moving. The adapter, not the screen, decides whether a code is needed, so a client cannot skip it |
 
-`moneyMoving: false`. `requiresOtp`: only when the update loosens something (the sandbox compares the request with the stored values).
+The card model (`status` `active`, `inactive`, `frozen`, `blocked`, `expired`, `replaced`; `mode` `off`, `trip`, `on`) is in the planned sandbox domain "cards" above.
 
 #### 6. Permissions, step-up and limits
 
-`cards.manage`. Step-up: `none` to tighten, `otp` to loosen. Limits are the card ceilings (section 3). The sandbox, not the screen, decides what counts as loosening (check 3).
+`cards.manage` (planned). Step-up: a one-time code only for loosening changes; tightening, alerts and wallet removal need none. Code: 6 digits, 3 tries, then `OTP_LOCKED` (nothing is changed, the person starts again). Limits: each limit capped by the card's bank ceiling (debit seed: per purchase $10,000, daily $15,000, monthly $50,000, cash $1,500, tap $100; credit seed: $5,000 each, no cash); trips at most 90 days, no overlap; big-purchase alert 1 to 100,000. All changes are written to a change log for audit.
 
 #### 7. Result and links out
 
-Result `done`. No receipt. Notification: "Controls changed on card ending {{last4}}: {{summary}}". Links: card detail, Controls overview.
+Result as in section 3. Receipt: the result rows. Notifications raised: "Controls changed on card ••{last4}" (push, with the list of changes), "Your card ••{last4} was frozen" or "unfrozen", "Wallet added: {app} on {device}". Links out: **Go to cards** (`setTab('card')`), **Block and replace** (`replace-card {cardId, reason: "lost"}`).
 
 #### 8. Acceptance criteria
 
-- AC-1: Turning a control off or lowering a limit saves without a one-time code.
-- AC-2: Turning a control on or raising a limit needs a verified one-time code.
-- AC-3: A limit above the card's ceiling is refused and the ceiling is named.
-- AC-4: A per purchase limit above the daily purchases limit is refused.
-- AC-5: The review lists only what changed.
-- AC-6: A frozen, blocked or inactive card cannot be changed.
-- AC-7: Three wrong codes discard the change.
-- AC-8: A timeout or unavailable service saves nothing and says so.
-- AC-9: Mixed changes (one tighter, one looser) are treated as loosening and need the code.
+- AC-1: Freezing an active card needs no code, takes effect immediately, and the card then shows as frozen on the cards screen.
+- AC-2: Unfreezing a frozen card needs a one-time code and returns the card to active.
+- AC-3: Each limit is refused with the exact message when it is invalid, above the card's ceiling, or out of order (per purchase above daily, daily above monthly); a cash limit of 0 stops cash withdrawals.
+- AC-4: Lowering a limit, switching a channel off, adding a shop-type block, lowering Use abroad, removing a trip or a wallet, and changing alerts save at once with no code, and the review marks them **Safer**.
+- AC-5: Raising a limit, switching a channel on, raising Use abroad, adding a trip, removing a shop-type block or adding a wallet needs a code; a mix of safer and easier changes needs a code.
+- AC-6: A trip needs a country and both dates; Iran is refused (`COUNTRY_RESTRICTED`); a trip longer than 90 days, ending before it starts, or overlapping another is refused.
+- AC-7: Three wrong codes end with `OTP_LOCKED` and nothing is changed; the right code (`482100`) saves.
+- AC-8: A card that is inactive, blocked, expired or replaced cannot be changed and the person is pointed to Activate or Replace.
+- AC-9: With nothing changed the review says so and nothing can be saved (`NO_CHANGES`).
+- AC-10: Apple Pay on an Android device and Google Pay on an iPhone are refused (`WALLET_NOT_SUPPORTED`); a successful add shows a token ending that differs from the card's last four.
+- AC-11: With `offerGambling` off gambling shows as "Blocked by your bank" and cannot be changed; with `allowMagstripe` off there is no stripe switch; with `allowTapLimit` off there is no contactless limit field; `frozenAllowsRecurring` changes the wording of the freeze note.
+- AC-12: A "Lost or stolen" freeze shows the block-for-good notice and a **Block and replace** button on the result.
+- AC-13: On a timeout or an unavailable service nothing changes on the card and the person is told so.
 
 #### 9. Scenarios
 
-| # | Covers | Persona and setup | Outcome |
-|---|---|---|---|
-| T-1 | AC-1, AC-5 | `alex`, `card_9021`; turn `contactless` off, lower daily purchases to 1,000 | Review shows 2 rows; no code; saved |
-| T-2 | AC-2 | `alex`, `card_3318`; turn `abroad` on | Code asked; `OTP_REQUIRED` if skipped; with `482100` saved |
-| T-3 | AC-3 | `alex`, `card_9021`; daily ATM 5,000 | `LIMIT_ABOVE_CEILING` naming 1,500.00 |
-| T-4 | AC-4 | `alex`; per purchase 3,500 with daily 3,000 | Validation message "A single purchase can't be more than your daily limit." |
-| T-5 | AC-6 | `alex`; `card_9021` frozen | Form read-only; adapter answers `CARD_NOT_ACTIVE` if forced |
-| T-6 | AC-7 | `alex`; loosening, code `111111` x3 | `locked`; limits unchanged |
-| T-7 | AC-9 | `alex`; `abroad` on and `online` off | Treated as loosening: code asked |
-| T-8 | AC-8 | conditions `timeout: ["bank.cards.controls.update"]` | Timeout text; nothing saved |
-| T-9 | AC-8 | conditions `unavailable: ["bank.cards.controls.update"]` | `SERVICE_UNAVAILABLE`; nothing saved |
+Sandbox demo values: `card_9021` Everyday debit ••9021 (active; per purchase $2,000, daily $3,000, monthly $15,000, cash $800, tap $100; used today $4.80; contactless, online and cash machines on; magnetic stripe off; abroad "Everywhere"; gambling blocked; wallet Apple Pay · Alex's iPhone 16, token 4471). `card_3318` credit ••3318 (active; ceilings $5,000, no cash). `card_7745` Spare debit ••7745 (inactive). One-time code `482100` (and `000000`). Test launch: `{cardId: "card_9021", mode: "all", smoke: 1}` fills the code and lowers the daily limit to 2,500.
+
+| # | Covers | Persona / setup | Conditions | Steps and expected result |
+|---|---|---|---|---|
+| T-1 | AC-1, AC-4 | `alex` | none | Mode `freeze` on `card_9021`: switch on, review shows "Card status Active → Frozen" with **Safer**, button Save changes, no code. Result "Card frozen", status chip "Saved at once"; Cards shows the grey card. |
+| T-2 | AC-2, AC-7 | `alex`, card frozen | none | Mode `unfreeze`: review chip **Needs code**; wrong code shows `OTP_INVALID` and "2 tries left"; `482100` saves; result "Card active again", "Confirmed with code". |
+| T-3 | AC-3 | `alex` | none | Daily 16000: "The most this card allows per day is $15,000.00. Choose a smaller amount."; Per purchase 3500 with daily 3000: `LIMIT_ORDER`; Daily 20000 with monthly 15000: `LIMIT_ORDER`; "-5": `LIMIT_INVALID`; cash 0 accepted. |
+| T-4 | AC-4 | `alex` | none | Daily 2500 and Online off and Block crypto on and Alert near a limit off: all **Safer**, no code step, result "Controls updated". |
+| T-5 | AC-5 | `alex` | none | Monthly 20000 (and Contactless off): review shows one **Needs code**; code step appears. |
+| T-6 | AC-6 | `alex` | none | Use abroad "For a trip": Iran gives `COUNTRY_RESTRICTED`; 1 Dec 2026 to 3 Mar 2027 (92 days) gives the 90-day message; end before start gives the date message; a valid France trip saves with a code and appears in Cards "Trips". |
+| T-7 | AC-7 | `alex` | none | Raise a limit; enter `111111` three times: `OTP_LOCKED`, nothing changed. |
+| T-8 | AC-8 | `alex` | open with `card_7745` | `CARD_NOT_ACTIVE` "You can change controls once the card is active." |
+| T-9 | AC-9 | `alex` | none | Open and go straight to review: "Nothing to save yet"; the button is off. |
+| T-10 | AC-10 | `alex` | none | Wallets step: Apple Pay and Pixel 9 gives `WALLET_NOT_SUPPORTED`; Apple Pay and Alex's iPad adds a token; the result says the token ending. Remove the existing wallet: safer, no code. |
+| T-11 | AC-11 | `alex` | options `offerGambling` on, `allowMagstripe` on, `allowTapLimit` off, `frozenAllowsRecurring` off | Merchant step shows the gambling switch; where shows the stripe switch; limits shows no contactless field; the freeze note says recurring payments are stopped. |
+| T-12 | AC-12 | `alex` | none | Freeze with reason "Lost or stolen": notice and **Block and replace** on the result. |
+| T-13 | AC-13 | `alex` | `timeout: ["bank.cards.updateControls"]`, `latencyMs: 10000` (planned; prototype: Timeout on) | Timeout message "Nothing was changed on your card"; card unchanged. |
+| T-14 | AC-13 | `alex` | `unavailable: ["bank.cards.updateControls"]` (prototype: Service down on) | Unavailable message; card unchanged. |
 
 #### 10. Expected mutation-check survivors
 
-- Journey-level `max` on the daily ATM amount field: survives because the sandbox returns `LIMIT_ABOVE_CEILING` (another layer stops it).
-- Flipping the loosening test (`>` to `>=`): killed by T-1 and T-2.
-- "Mixed changes" mutant (treating a mixed change as tightening): killed by T-7.
+Whether a change needs a code is decided on the screen (the code step) and (planned) in `bank.cards.updateControls`, so removing only the screen's rule survives T-5 when the adapter answers `OTP_REQUIRED`; expected. `STEP_UP_REQUIRED` cannot be produced by the sandbox and survives. The 90-day trip check is on the date field and (planned) in the adapter; expected. The magnetic stripe and tap-limit options have no scenario beyond T-11; if a mutation flips their default it survives T-1 to T-10 and is killed only by T-11.
+
+---
+
+### ★ Freeze card — `freeze-card`
+
+**Catalog:** slug `freeze-card`, workspace `personal`, category Cards (Personal: Cards), core no, can a bank switch it off: yes. Options: none of its own; the freeze rules are the options of `card-controls` (`frozenAllowsRecurring`).
+
+**Alias of `card-controls`:** reached from the **Freeze** quick action on the Cards screen (an instant freeze with no journey), from the **Unfreeze** action and the frozen banner (`card-controls` with `mode: "unfreeze"`), and from the first step "Card status" of `card-controls` (`mode: "freeze"` or `"all"`). There is no separate catalog entry in the prototype, so switching off `card-controls` removes Unfreeze and the controls while the Cards screen can still freeze. What differs from the earlier standalone spec:
+
+- Freezing is instant and needs no code (it only protects); unfreezing needs a one-time code (6 digits, 3 tries) because it makes the card easier to use.
+- Reasons are optional chips (Not sure, Misplaced, Suspicious payment, Lost or stolen, Not using it); "Lost or stolen" shows a notice and **Block and replace** (`replace-card`) because a frozen card can be unfrozen by anyone who knows the sign-in.
+- What a freeze does not stop (refunds and credits; optionally existing recurring payments) is shown on the screen and set by the bank option `frozenAllowsRecurring`.
+- Card limits are no longer a separate topic: they are the "Spending limits" step of `card-controls` (per purchase, daily, monthly, cash, contactless), each capped by a bank ceiling, with lowering instant and raising behind a code.
+- Error codes: `CARD_NOT_ACTIVE`, `CARD_NOT_FROZEN`, `CARD_ALREADY_FROZEN`, `OTP_INVALID`, `OTP_LOCKED`. Adapters `bank.cards.freeze` (instant, from `cards`) and `bank.cards.updateControls` (planned). Acceptance criteria AC-1, AC-2 and AC-12 and scenarios T-1, T-2, T-12 of `card-controls` cover it.
 
 ---
 

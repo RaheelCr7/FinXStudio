@@ -33,15 +33,30 @@ Business differences: the payee list shows only whitelisted suppliers (a new sup
 | Europe (SEPA) | `sct` | SEPA Credit Transfer | Next business day | EUR | 1,000,000 | 0.00 | 15:00 CET (for next day) | End-to-end ID |
 | Europe (SEPA) | `sinst` | SEPA Instant | Within 10 seconds, 24/7 | EUR | 100,000 | 0.50 | none | UETR |
 | United Kingdom | `fps` | Faster Payments | Seconds, 24/7 | GBP | 1,000,000 | 0.00 | none | FPS reference |
-| United Kingdom | `chaps` | CHAPS | Same day | GBP | no limit | 25.00 | 17:00 UK | CHAPS reference |
+| United Kingdom | `chaps` | CHAPS | Same day | GBP | no limit | 25.00 | 17:40 UK (customer deadline; the scheme runs to 18:00) | CHAPS reference |
 | United Kingdom | `bacs` | Bacs | 3 business days | GBP | 20,000 | 0.00 | none | Bacs reference |
-| UAE | `aani` | Aani instant payment | Seconds, 24/7 | AED | 50,000 | 0.50 | none | Aani reference |
+| UAE | `aani` | Aani instant payment | Seconds, 24/7 | AED | 10,000 per payment (50,000 a day) | 0.50 | none | Aani reference |
 | UAE | `uaefts` | UAEFTS transfer | Same day | AED | no limit | 2.00 | 15:00 UAE | UAEFTS reference |
 | Saudi Arabia | `sarieI` | sarie instant | Seconds, 24/7 | SAR | 20,000 | 0.50 | none | sarie reference |
 | Saudi Arabia | `sarie` | SARIE transfer | Same day | SAR | no limit | 2.00 | 15:00 Riyadh | SARIE reference |
 | Jordan | `cliq` | CliQ instant payment | Seconds, 24/7 | JOD | 10,000 | 0.30 | none | CliQ reference |
 | Jordan | `jopacc` | JoPACC transfer | Next business day | JOD | no limit | 1.00 | 14:00 Amman | JoPACC reference |
 | Other countries | `swift` | International (SWIFT) | 1–3 business days | per country | no limit | 25.00 (+15.00 if the sender pays all charges) | 15:00 UTC | UETR |
+
+Research notes on the limits above (summarised, verify before real use): the RTP network allows up to $10 million per payment, FedNow's network ceiling is higher than the 500,000 shown here, which is a bank default; SEPA Instant has had no legal ceiling since October 2025, so 100,000 is a bank default; the UAE Central Bank FAQ gives Aani as AED 10,000 per transaction and 50,000 per day.
+
+### Scheme figures found in research versus sandbox defaults
+
+The limits and cut-offs in the table are **the bank's own defaults in the sandbox**, not the scheme maximums. The research for the journeys found these real figures; the sandbox keeps its lower defaults so tests are reproducible, and a real bank sets its own:
+
+| Rail | Sandbox default | What the research found |
+|---|---|---|
+| RTP® / FedNow® | 500,000 per payment | The RTP network allows up to $10 million per payment; FedNow's default network limit is $500,000. Banks set lower customer limits. |
+| SEPA Instant | 100,000 per payment | No legal ceiling since October 2025; 100,000 is a common bank default. |
+| Aani (UAE) | 50,000 AED per payment | A Central Bank FAQ gives AED 10,000 per transaction and AED 50,000 per day. Treat 50,000 as a daily figure in a real bank. |
+| CHAPS | customer cut-off 17:00 UK | The scheme's customer deadline is about 17:40 UK; banks cut off earlier. |
+| Saudi and Jordan rails | as in the table | No public scheme figures were found. Marked "check". |
+
 
 Rules:
 - **Default rail.** The first rail in the region's list that fits the amount: US `ach`, SEPA `sct`, UK `fps`, UAE `aani`, Saudi `sarieI`, Jordan `cliq`, SWIFT `swift`. If the amount is above that rail's maximum, the default moves to the first rail that fits. The person can always pick another that fits.
