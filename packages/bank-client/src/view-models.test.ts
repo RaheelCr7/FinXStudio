@@ -64,7 +64,10 @@ describe("dashboard view-models", () => {
 describe("accounts, budgets and wallet view-models", () => {
   it("merges own accounts and linked banks", () => {
     const items = accountItems(alex(), fin());
-    expect(items.map((i) => i.bank)).toEqual(["BankWorkx", "BankWorkx", "Summit Federal"]);
+    expect(items.map((i) => i.bank)).toEqual(["BankWorkx", "BankWorkx", "BankWorkx", "BankWorkx", "Summit Federal"]);
+  });
+  it("does not add euros and dirhams into the dollar total", () => {
+    expect(totalBalance(alex(), { linked: [] })).toBeCloseTo(8720.76 + 15254.37);
   });
   it("searches and groups transactions", () => {
     const t = fin().transactions;

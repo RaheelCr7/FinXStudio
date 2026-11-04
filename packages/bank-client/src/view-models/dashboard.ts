@@ -7,9 +7,10 @@ export const displayName = (persona: Pick<Persona, "name">) => persona.name.spli
 export const firstName = (persona: Pick<Persona, "name">) => persona.name.split(" ")[0] ?? "";
 export const initials = (persona: Pick<Persona, "name">) => persona.name.split(" ").map((x) => x[0]).slice(0, 2).join("");
 
-/** Everything the customer has: own accounts plus linked banks, leaving out credit lines. */
+/** Everything the customer has: own accounts plus linked banks, leaving out credit lines. Accounts in another currency than the first are not added in (there is no rate to add them at). */
 export function totalBalance(persona: Pick<Persona, "accounts">, fin: Pick<Finance, "linked">): number {
-  return persona.accounts.reduce((s, x) => s + x.balance, 0) + fin.linked.reduce((s, x) => s + (x.kind === "Credit" ? 0 : x.balance), 0);
+  const base = persona.accounts[0]?.currency;
+  return persona.accounts.filter((x) => x.currency === base).reduce((s, x) => s + x.balance, 0) + fin.linked.reduce((s, x) => s + (x.kind === "Credit" ? 0 : x.balance), 0);
 }
 export const hasAccounts = (persona: Pick<Persona, "accounts">, fin: Pick<Finance, "linked">) => persona.accounts.length + fin.linked.length > 0;
 
