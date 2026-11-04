@@ -77,7 +77,7 @@ export const personalTransferScenarios: NonNullable<Journey["scenarios"]> = [
       screen("amount"), text("Taylor Brooks"), text("BankWorkx® customer"),
       set({ "pt.amount": 100 }), press("Continue"),
       screen("review"), text("Instant"), text("In seconds"), text("Free"), text("$100"), noText("Send on"), balance("acc_main", 8720.76),
-      ...confirm, text("Authorise $100 to Taylor Brooks"), ...code(), press("Send $100"),
+      ...confirm, text("Authorise $100.00 to Taylor Brooks"), ...code(), press("Send $100.00"),
       screen("result"), text("Sent"), text("Delivered"), balance("acc_main", 8620.76), used(100),
     ],
   },
@@ -218,14 +218,14 @@ export const personalTransferScenarios: NonNullable<Journey["scenarios"]> = [
       press("Review"), text("Standard"), text("1 to 2 business days"), text("Free"), text("$100"),
       press("Change amount"), press("Continue"), set({ "pt.speed": "instant" }), press("Review"),
       text("Instant"), text("$0.25"), text("$100.25"),
-      ...confirm, text("Authorise $100 to Jamie Lee"), ...code(), press("Send $100"),
+      ...confirm, text("Authorise $100.00 to Jamie Lee"), ...code(), press("Send $100.00"),
       screen("result"), text("Sent"), text("Delivered"), text("$100.25"), balance("acc_main", 8620.51), used(100), press("Track payment"),
     ],
   },
   {
     id: "T-17", name: "A payment to another bank at Standard: On its way, arrives in 1 to 2 business days, the balance moves by the amount", covers: ["AC-10"], ...base,
     steps: [
-      ...saved(DOMESTIC, "Jam (Jamie Lee)"), ...pay(100, "Send $100"),
+      ...saved(DOMESTIC, "Jam (Jamie Lee)"), ...pay(100, "Send $100.00"),
       screen("result"), text("On its way"), text("1 to 2 business days"), text("Ref TRX-"), balance("acc_main", 8620.76), used(100),
       press("Send another"), screen("type"),
     ],
@@ -324,9 +324,9 @@ export const personalTransferScenarios: NonNullable<Journey["scenarios"]> = [
       set({ "pt.when": "later" }), text("Send on"), text("Repeat"), text("Tue 3 Nov"), text("Mon 9 Nov"), noText("Sat 7 Nov"), noText("Sun 8 Nov"),
       press("Review"), screen("options"), error("pt.sendOn"),
       set({ "pt.sendOn": "2026-11-09", "pt.repeat": "monthly" }), press("Review"),
-      screen("review"), text("Scheduled for Mon 9 Nov"), text("First payment"), text("Every month"), ...confirm, text("Authorise $100 to Jamie Lee"),
-      ...code("12"), press("Schedule $100"), screen("otp"), error("Enter all 6 digits"),
-      ...code("111111"), press("Schedule $100"), screen("otp"), ...code(), press("Schedule $100"),
+      screen("review"), text("Scheduled for Mon 9 Nov"), text("First payment"), text("Every month"), ...confirm, text("Authorise $100.00 to Jamie Lee"),
+      ...code("12"), press("Schedule $100.00"), screen("otp"), error("Enter all 6 digits"),
+      ...code("111111"), press("Schedule $100.00"), screen("otp"), ...code(), press("Schedule $100.00"),
       screen("result"), text("Scheduled"), text("Scheduled for Mon 9 Nov"), text("First payment"), press("See scheduled payments"),
       ...unchanged,
       bank("bank.schedules.list", "sch_new1.text", "Jamie Lee · Every month, Mon 9 Nov, $100.00"),
@@ -336,7 +336,7 @@ export const personalTransferScenarios: NonNullable<Journey["scenarios"]> = [
     id: "T-49", name: "A later payment that the bank cannot take: nothing is set up", covers: ["AC-8", "AC-13"], ...base, conditions: { unavailable: ["bank.payments.create"] },
     steps: [
       ...saved(DOMESTIC, "Jam (Jamie Lee)"), set({ "pt.amount": 100 }), press("Continue"), set({ "pt.when": "later", "pt.sendOn": "2026-11-09" }), press("Review"),
-      ...confirm, ...code(), press("Schedule $100"), screen("unavailable"), text("Nothing was changed."), ...unchanged,
+      ...confirm, ...code(), press("Schedule $100.00"), screen("unavailable"), text("Nothing was changed."), ...unchanged,
       bank("bank.schedules.list", "sch_rent.name", "Rent"),
     ],
   },
@@ -350,7 +350,7 @@ export const personalTransferScenarios: NonNullable<Journey["scenarios"]> = [
   {
     id: "T-29", name: "A payee that screening holds: Held for review, no balance change, no daily limit used, nobody saved", covers: ["AC-10", "AC-11"], ...base,
     steps: [
-      ...typed("Test Sanctions", "021000021", "555566667"), ...pay(100, "Send $100"),
+      ...typed("Test Sanctions", "021000021", "555566667"), ...pay(100, "Send $100.00"),
       screen("result"), text("Held for review"), text("We’re checking this payment and will tell you within one working day."), noText("Delivered"), noText("On its way"),
       ...unchanged, press("Back to Payments"),
     ],
@@ -358,8 +358,8 @@ export const personalTransferScenarios: NonNullable<Journey["scenarios"]> = [
   {
     id: "T-30", name: "Save this payee left ticked: saved as a new payee, and what was sent counts against its $500.00", covers: ["AC-11"], ...base,
     steps: [
-      ...typed(), ...pay(300, "Send $300"),
-      screen("result"), text("On its way"), text("Priya Raman is saved as a new payee for 24 hours."), balance("acc_main", 8420.76),
+      ...typed(), ...pay(300, "Send $300.00"),
+      screen("result"), text("On its way"), text("Priya Raman is saved. In their first 24 hours you can send them up to $500.00 in total."), balance("acc_main", 8420.76),
       press("Send another"), press(DOMESTIC), text("Priya Raman"), text("New · 24 hours left"), press("Priya Raman"),
       set({ "pt.amount": 201 }), press("Continue"), screen("problem"), text("You can send up to $200.00 more now"),
     ],
@@ -367,8 +367,8 @@ export const personalTransferScenarios: NonNullable<Journey["scenarios"]> = [
   {
     id: "T-31", name: "Save this payee unticked: not saved, but the next payment to the same account is still held to the allowance", covers: ["AC-11"], ...base,
     steps: [
-      ...typed(), set({ "pt.amount": 300 }), press("Continue"), press("Review"), set({ "pt.save": false }), ...confirm, ...code(), press("Send $300"),
-      screen("result"), text("On its way"), noText("is saved as a new payee"), balance("acc_main", 8420.76),
+      ...typed(), set({ "pt.amount": 300 }), press("Continue"), press("Review"), set({ "pt.save": false }), ...confirm, ...code(), press("Send $300.00"),
+      screen("result"), text("On its way"), noText("is saved. In their first 24 hours"), balance("acc_main", 8420.76),
       press("Send another"), press(DOMESTIC), noText("Priya Raman"), press("New payee"),
       set({ "pt.name": "Priya Raman", "pt.routing": "021000021", "pt.account": "987654321" }), press("Continue"),
       set({ "pt.amount": 201 }), press("Continue"), screen("problem"), text("You can send up to $200.00 more now"),
@@ -378,9 +378,9 @@ export const personalTransferScenarios: NonNullable<Journey["scenarios"]> = [
     id: "T-32", name: "The price of a payment abroad lasts 60 seconds: after that a new price with the exchange-rate message, nothing sent, confirm again", covers: ["AC-9"], ...base,
     steps: [
       ...saved(ABROAD, "Marco Rossi"), ...toReview(100, { "pt.purpose": "Rent" }), text("1 USD = 0.926 EUR"),
-      ...confirm, ...code(), { advance: 61 }, press("Send €100"),
+      ...confirm, ...code(), { advance: 61 }, press("Send €100.00"),
       screen("review"), text("The exchange rate changed. Check the new amount and confirm again."), text("1 USD = 0.926185 EUR"), text("$132.97"), ...unchanged,
-      ...confirm, ...code(), press("Send €100"),
+      ...confirm, ...code(), press("Send €100.00"),
       screen("result"), text("On its way"), balance("acc_main", 8587.79), used(107.97),
     ],
   },
@@ -388,9 +388,9 @@ export const personalTransferScenarios: NonNullable<Journey["scenarios"]> = [
     id: "T-33", name: "Within the 60 seconds the price stays; in the same currency there is no rate to go stale", covers: ["AC-9"], ...base,
     steps: [
       ...saved(ABROAD, "Marco Rossi"), ...toReview(100, { "pt.purpose": "Rent" }),
-      ...confirm, ...code(), { advance: 59 }, press("Send €100"), screen("result"), text("On its way"), noText("exchange rate changed"),
+      ...confirm, ...code(), { advance: 59 }, press("Send €100.00"), screen("result"), text("On its way"), noText("exchange rate changed"),
       press("Send another"), ...saved(DOMESTIC, "Jam (Jamie Lee)"), ...toReview(50),
-      ...confirm, ...code(), { advance: 3600 }, press("Send $50"), screen("result"), text("On its way"),
+      ...confirm, ...code(), { advance: 3600 }, press("Send $50.00"), screen("result"), text("On its way"),
     ],
   },
   {
@@ -423,28 +423,28 @@ export const personalTransferScenarios: NonNullable<Journey["scenarios"]> = [
     steps: [
       ...saved(DOMESTIC, "Jam (Jamie Lee)"), ...toReview(100),
       press("Confirm and send code"), screen("review"), error("Tick the confirmation first"),
-      ...confirm, screen("otp"), press("Send $100"), screen("otp"), error("Enter all 6 digits"), ...unchanged,
+      ...confirm, screen("otp"), press("Send $100.00"), screen("otp"), error("Enter all 6 digits"), ...unchanged,
     ],
   },
   {
     id: "T-38", name: "Three wrong codes stop the payment and no money moves", covers: ["AC-12"], ...base,
     steps: [
       ...saved(DOMESTIC, "Jam (Jamie Lee)"), ...toReview(100), ...confirm, ...code("111111"),
-      press("Send $100"), screen("otp"), press("Send $100"), screen("otp"), press("Send $100"),
+      press("Send $100.00"), screen("otp"), press("Send $100.00"), screen("otp"), press("Send $100.00"),
       screen("locked"), text("Too many wrong codes"), text("No money has left your account."), ...unchanged, press("Start again"), screen("type"),
     ],
   },
   {
     id: "T-39", name: "The bank does not answer the payment in time: Check Activity first, nothing applied", covers: ["AC-13"], ...base, conditions: { timeout: ["bank.payments.create"], latencyMs: 10000 },
     steps: [
-      ...saved(DOMESTIC, "Jam (Jamie Lee)"), ...pay(100, "Send $100"),
+      ...saved(DOMESTIC, "Jam (Jamie Lee)"), ...pay(100, "Send $100.00"),
       screen("timeout"), text("We didn't get an answer in time"), text("Check Activity before you try again, so you don't pay twice"), press("Check Activity"), ...unchanged,
     ],
   },
   {
     id: "T-40", name: "The payment service is not available: nothing sent, and Try again goes back to the review", covers: ["AC-13"], ...base, conditions: { unavailable: ["bank.payments.create"] },
     steps: [
-      ...saved(DOMESTIC, "Jam (Jamie Lee)"), ...pay(100, "Send $100"),
+      ...saved(DOMESTIC, "Jam (Jamie Lee)"), ...pay(100, "Send $100.00"),
       screen("unavailable"), text("Service not available"), text("Nothing was changed."), ...unchanged,
       press("Try again"), screen("review"),
     ],
@@ -452,7 +452,7 @@ export const personalTransferScenarios: NonNullable<Journey["scenarios"]> = [
   {
     id: "T-41", name: "The core fails after the code: no money has left the account", covers: ["AC-13"], ...base, conditions: { transferFails: true },
     steps: [
-      ...saved(DOMESTIC, "Jam (Jamie Lee)"), ...pay(100, "Send $100"),
+      ...saved(DOMESTIC, "Jam (Jamie Lee)"), ...pay(100, "Send $100.00"),
       screen("failed"), text("We couldn't complete this right now."), text("No money has left your account."), ...unchanged, press("Start again"), screen("type"),
     ],
   },

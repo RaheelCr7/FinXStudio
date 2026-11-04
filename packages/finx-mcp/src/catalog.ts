@@ -171,7 +171,7 @@ const EXPRESSIONS = {
   literals: ["numbers", "'text' or \"text\"", "true", "false", "null", "Infinity"],
   functions: ["min(a, b, ...)", "max(a, b, ...)", "abs(x)", "round(x)", "floor(x)", "ceil(x)", "len(x)", "isEmpty(x)"],
   paths: "Dotted paths such as transfer.amount or ctx.limits.daily, and lookups with brackets such as ctx.accounts[transfer.fromAccountId].balance. A missing value is simply empty, never an error. == is a loose comparison.",
-  templates: "{{ expression }} or {{ expression | formatter }}. Formatters: money (amounts with thousands separators, up to two decimals), money2 (always two decimals, for prices), upper. A missing value renders as empty text. Do not use templates in bind, source, pattern or ids.",
+  templates: "{{ expression }} or {{ expression | formatter }}. Formatters: money (amounts with thousands separators, up to two decimals), money2 (always two decimals; money2:USD adds the symbol), upper. A missing value renders as empty text. Do not use templates in bind, source, pattern or ids.",
   notAvailable: ["no assignment", "no ??", "no method calls (only the functions above)", "no string concatenation in rules (use templates in text instead)"],
   examples: ["transfer.amount > (ctx.limits.daily - ctx.limits.usedToday)", "bill.amount >= 50 && bill.amount <= 5000", "ctx.accounts[topup.fromAccountId].balance", "!isEmpty(bill.reference)"],
 };

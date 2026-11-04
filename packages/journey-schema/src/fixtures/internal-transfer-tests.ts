@@ -30,7 +30,7 @@ export const internalTransferScenarios: NonNullable<Journey["scenarios"]> = [
     id: "T-2", name: "With no saved customer it opens at the search; a customer found by mobile number gets $50, free and instant", covers: ["AC-1", "AC-2"], ...base, persona: "alexglobal",
     steps: [
       screen("details"), text("Find them by"), ...jordan, set({ "pt.amount": 50 }), press("Continue"),
-      screen("review"), text("Instant"), text("Free"), noText("Send on"), ...confirm, ...code(), text("Authorise $50 to Jordan Keller"), press("Send $50"),
+      screen("review"), text("Instant"), text("Free"), noText("Send on"), ...confirm, ...code(), text("Authorise $50.00 to Jordan Keller"), press("Send $50.00"),
       screen("result"), text("Sent"), text("Delivered"), balance("acc_main", 8670.76),
       // Jordan was saved with the payment, as a new payee: the next payment starts at the saved customers
       press("Send another"), screen("payee"), text("Jordan Keller"), text("New · 24 hours left"),
@@ -55,14 +55,14 @@ export const internalTransferScenarios: NonNullable<Journey["scenarios"]> = [
     id: "T-6", name: "Three wrong codes stop the payment and no money moves", covers: ["AC-2"], ...base,
     steps: [
       press("Taylor Brooks"), set({ "pt.amount": 20 }), press("Continue"), ...confirm, ...code("111111"),
-      press("Send $20"), screen("otp"), press("Send $20"), screen("otp"), press("Send $20"), screen("locked"), text("No money has left your account."), ...unchanged,
+      press("Send $20.00"), screen("otp"), press("Send $20.00"), screen("otp"), press("Send $20.00"), screen("locked"), text("No money has left your account."), ...unchanged,
     ],
   },
   {
     id: "T-7", name: "The lookup is not available, or the payment does not answer in time: nothing sent", covers: ["AC-2"], ...base, conditions: { unavailable: ["bank.payees.lookup"], timeout: ["bank.payments.create"], latencyMs: 10000 },
     steps: [
       press("New payee"), set({ "pt.mobile": "+1 202 555 0177" }), press("Continue"), screen("unavailable"), text("Nothing was changed."), press("Try again"), screen("details"),
-      press("Back"), press("Taylor Brooks"), set({ "pt.amount": 20 }), press("Continue"), ...confirm, ...code(), press("Send $20"),
+      press("Back"), press("Taylor Brooks"), set({ "pt.amount": 20 }), press("Continue"), ...confirm, ...code(), press("Send $20.00"),
       screen("timeout"), text("Check Activity before you try again"), ...unchanged,
     ],
   },

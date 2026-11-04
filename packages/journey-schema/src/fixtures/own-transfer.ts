@@ -138,14 +138,14 @@ export const ownTransfer: Journey = {
         },
         {
           type: "amountInput", bind: "own.amount", currency: ENTERED, label: "Amount",
-          helper: `Entered in ${ENTERED}. Available in {{${FROM}.name}}: {{${FROM}.balance | money:${FROM}.currency}}.`,
+          helper: `Entered in ${ENTERED}. Available in {{${FROM}.name}}: {{${FROM}.balance | money2:${FROM}.currency}}.`,
           validation: {
             min: 1,
             // what they send cannot be more than they have (the fee is checked by the bank with the rate); when they type what they get, the bank checks
             max: `own.dir == 'get' ? 999999999 : ${FROM}.balance`,
             messages: {
               min: "The smallest amount is 1.00.",
-              max: `There isn't enough money in {{${FROM}.name}}. Available: {{${FROM}.balance | money:${FROM}.currency}}, and the fee is {{(own.fx ? round(own.amount * 0.2) / 100 : 0) | money:${FROM}.currency}}.`,
+              max: `There isn't enough money in {{${FROM}.name}}. Available: {{${FROM}.balance | money2:${FROM}.currency}}, and the fee is {{(own.fx ? round(own.amount * 0.2) / 100 : 0) | money2:${FROM}.currency}}.`,
             },
           },
         },
@@ -154,9 +154,9 @@ export const ownTransfer: Journey = {
         {
           type: "reviewSummary", visibleWhen: `${SAME} && own.amount > 0`,
           rows: [
-            { label: "You send", value: `{{own.amount | money:${FROM}.currency}}` },
-            { label: "Fee", value: `{{0 | money:${FROM}.currency}}` },
-            { label: "They get", value: `{{own.amount | money:${FROM}.currency}}` },
+            { label: "You send", value: `{{own.amount | money2:${FROM}.currency}}` },
+            { label: "Fee", value: `{{0 | money2:${FROM}.currency}}` },
+            { label: "They get", value: `{{own.amount | money2:${FROM}.currency}}` },
             { label: "Arrives", value: "Now" },
           ],
         },
@@ -182,10 +182,10 @@ export const ownTransfer: Journey = {
           rows: [
             { label: "From", value: acct("own.from") },
             { label: "To", value: acct("own.to") },
-            { label: "You send", value: `{{own.amount | money:${FROM}.currency}}` },
-            { label: "Fee", value: `{{0 | money:${FROM}.currency}}` },
-            { label: "Total taken", value: `{{own.amount | money:${FROM}.currency}}` },
-            { label: "They get", value: `{{own.amount | money:${FROM}.currency}}` },
+            { label: "You send", value: `{{own.amount | money2:${FROM}.currency}}` },
+            { label: "Fee", value: `{{0 | money2:${FROM}.currency}}` },
+            { label: "Total taken", value: `{{own.amount | money2:${FROM}.currency}}` },
+            { label: "They get", value: `{{own.amount | money2:${FROM}.currency}}` },
             { label: "Arrives", value: "Now" },
             { label: "Note", value: "{{own.note ? own.note : '-'}}" },
           ],
@@ -199,12 +199,12 @@ export const ownTransfer: Journey = {
           rows: [
             { label: "From", value: acct("own.from") },
             { label: "To", value: acct("own.to") },
-            { label: "You send", value: "{{ctx.quote.from.amount | money:ctx.quote.from.currency}}" },
+            { label: "You send", value: "{{ctx.quote.from.amount | money2:ctx.quote.from.currency}}" },
             { label: "Rate (mid-market)", value: "1 {{ctx.quote.from.currency}} = {{ctx.quote.rate}} {{ctx.quote.to.currency}}" },
             { label: "Margin on the rate", value: "None" },
-            { label: "{{opt.fxFee == false ? 'Fee' : 'Fee (0.20%)'}}", value: "{{ctx.quote.fee | money:ctx.quote.from.currency}}" },
-            { label: "Total taken", value: "{{ctx.quote.total | money:ctx.quote.from.currency}}" },
-            { label: "You get", value: "{{ctx.quote.to.amount | money:ctx.quote.to.currency}}" },
+            { label: "{{opt.fxFee == false ? 'Fee' : 'Fee (0.20%)'}}", value: "{{ctx.quote.fee | money2:ctx.quote.from.currency}}" },
+            { label: "Total taken", value: "{{ctx.quote.total | money2:ctx.quote.from.currency}}" },
+            { label: "You get", value: "{{ctx.quote.to.amount | money2:ctx.quote.to.currency}}" },
             { label: "Arrives", value: "Now" },
           ],
         },
@@ -235,8 +235,8 @@ export const ownTransfer: Journey = {
     {
       id: "otp", title: "Enter your code",
       blocks: [
-        { type: "text", variant: "title", text: "Authorise converting {{ctx.quote.from.amount | money:ctx.quote.from.currency}} to {{ctx.quote.to.amount | money:ctx.quote.to.currency}}", visibleWhen: FX },
-        { type: "text", variant: "title", text: `Authorise moving {{own.amount | money:${FROM}.currency}} to {{${TO}.name}}`, visibleWhen: SAME },
+        { type: "text", variant: "title", text: "Authorise converting {{ctx.quote.from.amount | money2:ctx.quote.from.currency}} to {{ctx.quote.to.amount | money2:ctx.quote.to.currency}}", visibleWhen: FX },
+        { type: "text", variant: "title", text: `Authorise moving {{own.amount | money2:${FROM}.currency}} to {{${TO}.name}}`, visibleWhen: SAME },
         { type: "text", variant: "caption", text: "It only works for this transfer." },
         {
           type: "otp", bind: "otp.code", length: 6, maxAttempts: 3, resendAfterSeconds: 30, keypad: true,
@@ -244,7 +244,7 @@ export const ownTransfer: Journey = {
           onResend: [{ type: "callApi", integration: "otpSend", input: { channel: "sms" }, saveAs: "ctx.otp", onError: toRoute }],
         },
         {
-          type: "button", variant: "primary", visibleWhen: SAME, label: `Move {{own.amount | money:${FROM}.currency}}`,
+          type: "button", variant: "primary", visibleWhen: SAME, label: `Move {{own.amount | money2:${FROM}.currency}}`,
           actions: [
             { type: "validate" },
             { type: "callApi", integration: "otpVerify", input: { code: "{{otp.code}}" }, onError: { showToast: "That code isn't right.", stay: true, lockAfter: 3, lockTo: "locked" } },
@@ -253,7 +253,7 @@ export const ownTransfer: Journey = {
           ],
         },
         {
-          type: "button", variant: "primary", visibleWhen: FX, label: "Convert {{ctx.quote.from.amount | money:ctx.quote.from.currency}}",
+          type: "button", variant: "primary", visibleWhen: FX, label: "Convert {{ctx.quote.from.amount | money2:ctx.quote.from.currency}}",
           actions: [
             { type: "validate" },
             { type: "callApi", integration: "otpVerify", input: { code: "{{otp.code}}" }, onError: { showToast: "That code isn't right.", stay: true, lockAfter: 3, lockTo: "locked" } },
@@ -297,7 +297,7 @@ export const ownTransfer: Journey = {
         {
           type: "result", tone: "error", visibleWhen: "ctx.error.code == 'INSUFFICIENT_FUNDS'",
           title: `There isn't enough money in {{${FROM}.name}}.`,
-          text: `Available: {{${FROM}.balance | money:${FROM}.currency}}. The fee is added to what you send.`,
+          text: `Available: {{${FROM}.balance | money2:${FROM}.currency}}. The fee is added to what you send.`,
         },
         { type: "button", label: "Change amount", variant: "primary", actions: [{ type: "navigate", to: "amount" }] },
       ],
@@ -305,17 +305,17 @@ export const ownTransfer: Journey = {
     {
       id: "success", title: "Done", kind: "terminal",
       blocks: [
-        { type: "result", tone: "success", title: "Money moved", visibleWhen: SAME, text: `{{own.amount | money:${FROM}.currency}} moved from {{${FROM}.name}} to {{${TO}.name}}.`, meta: "Done · instant · Ref {{own.result.reference}}" },
-        { type: "result", tone: "success", title: "Converted", visibleWhen: FX, text: "{{ctx.quote.from.amount | money:ctx.quote.from.currency}} became {{ctx.quote.to.amount | money:ctx.quote.to.currency}}.", meta: "Ref {{own.result.reference}}" },
+        { type: "result", tone: "success", title: "Money moved", visibleWhen: SAME, text: `{{own.amount | money2:${FROM}.currency}} moved from {{${FROM}.name}} to {{${TO}.name}}.`, meta: "Done · instant · Ref {{own.result.reference}}" },
+        { type: "result", tone: "success", title: "Converted", visibleWhen: FX, text: "{{ctx.quote.from.amount | money2:ctx.quote.from.currency}} became {{ctx.quote.to.amount | money2:ctx.quote.to.currency}}.", meta: "Ref {{own.result.reference}}" },
         {
           type: "reviewSummary", visibleWhen: SAME,
           rows: [
             { label: "From", value: acct("own.from") },
             { label: "To", value: acct("own.to") },
-            { label: "You sent", value: `{{own.amount | money:${FROM}.currency}}` },
-            { label: "Fee", value: `{{0 | money:${FROM}.currency}}` },
-            { label: "Total taken", value: `{{own.amount | money:${FROM}.currency}}` },
-            { label: "You received", value: `{{own.amount | money:${FROM}.currency}}` },
+            { label: "You sent", value: `{{own.amount | money2:${FROM}.currency}}` },
+            { label: "Fee", value: `{{0 | money2:${FROM}.currency}}` },
+            { label: "Total taken", value: `{{own.amount | money2:${FROM}.currency}}` },
+            { label: "You received", value: `{{own.amount | money2:${FROM}.currency}}` },
             { label: "Arrived", value: "Now" },
             { label: "Note", value: "{{own.note ? own.note : '-'}}" },
           ],
@@ -325,11 +325,11 @@ export const ownTransfer: Journey = {
           rows: [
             { label: "From", value: acct("own.from") },
             { label: "To", value: acct("own.to") },
-            { label: "You sent", value: "{{ctx.quote.from.amount | money:ctx.quote.from.currency}}" },
+            { label: "You sent", value: "{{ctx.quote.from.amount | money2:ctx.quote.from.currency}}" },
             { label: "Rate (mid-market, no margin)", value: "1 {{ctx.quote.from.currency}} = {{ctx.quote.rate}} {{ctx.quote.to.currency}}" },
-            { label: "Fee", value: "{{ctx.quote.fee | money:ctx.quote.from.currency}}" },
-            { label: "Total taken", value: "{{ctx.quote.total | money:ctx.quote.from.currency}}" },
-            { label: "You received", value: "{{ctx.quote.to.amount | money:ctx.quote.to.currency}}" },
+            { label: "Fee", value: "{{ctx.quote.fee | money2:ctx.quote.from.currency}}" },
+            { label: "Total taken", value: "{{ctx.quote.total | money2:ctx.quote.from.currency}}" },
+            { label: "You received", value: "{{ctx.quote.to.amount | money2:ctx.quote.to.currency}}" },
             { label: "Rate reference", value: "{{ctx.quote.quoteId}}" },
             { label: "Arrived", value: "Now" },
           ],

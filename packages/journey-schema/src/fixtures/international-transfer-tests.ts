@@ -114,9 +114,9 @@ export const internationalTransferScenarios: NonNullable<Journey["scenarios"]> =
     id: "T-9", name: "After 60 seconds the price is stale: a new price with the exchange-rate message, nothing sent, confirm again", covers: ["AC-6"], ...base,
     steps: [
       press("Marco Rossi"), ...toReview(100, { "pt.purpose": "Rent" }), text("1 USD = 0.926 EUR"),
-      ...confirm, ...code(), { advance: 61 }, press("Send €100"),
+      ...confirm, ...code(), { advance: 61 }, press("Send €100.00"),
       screen("review"), text("The exchange rate changed. Check the new amount and confirm again."), text("1 USD = 0.926185 EUR"), text("$132.97"), ...unchanged,
-      ...confirm, ...code(), press("Send €100"),
+      ...confirm, ...code(), press("Send €100.00"),
       screen("result"), text("On its way"), balance("acc_main", 8587.79),
     ],
   },
@@ -124,7 +124,7 @@ export const internationalTransferScenarios: NonNullable<Journey["scenarios"]> =
     id: "T-10", name: "Within the 60 seconds the price stays and the payment goes", covers: ["AC-6"], ...base,
     steps: [
       press("Marco Rossi"), ...toReview(100, { "pt.purpose": "Rent" }),
-      ...confirm, ...code(), { advance: 59 }, press("Send €100"), screen("result"), text("On its way"), noText("exchange rate changed"), balance("acc_main", 8587.76),
+      ...confirm, ...code(), { advance: 59 }, press("Send €100.00"), screen("result"), text("On its way"), noText("exchange rate changed"), balance("acc_main", 8587.76),
     ],
   },
   {
@@ -139,7 +139,7 @@ export const internationalTransferScenarios: NonNullable<Journey["scenarios"]> =
     id: "T-12", name: "Three wrong codes stop the payment and no money moves", covers: ["AC-8"], ...base,
     steps: [
       press("Marco Rossi"), ...toReview(100, { "pt.purpose": "Rent" }), ...confirm, ...code("111111"),
-      press("Send €100"), screen("otp"), press("Send €100"), screen("otp"), press("Send €100"), screen("locked"), text("No money has left your account."), ...unchanged,
+      press("Send €100.00"), screen("otp"), press("Send €100.00"), screen("otp"), press("Send €100.00"), screen("locked"), text("No money has left your account."), ...unchanged,
     ],
   },
   {
@@ -147,7 +147,7 @@ export const internationalTransferScenarios: NonNullable<Journey["scenarios"]> =
     steps: [
       press("Marco Rossi"), ...toReview(100, { "pt.purpose": "Rent" }),
       press("Confirm and send code"), screen("review"), error("Tick the confirmation first"),
-      ...confirm, screen("otp"), press("Send €100"), screen("otp"), error("Enter all 6 digits"), ...unchanged,
+      ...confirm, screen("otp"), press("Send €100.00"), screen("otp"), error("Enter all 6 digits"), ...unchanged,
     ],
   },
   {
@@ -178,7 +178,7 @@ export const internationalTransferScenarios: NonNullable<Journey["scenarios"]> =
     id: "T-17", name: "A payee that screening holds: Held for review, no balance change, no daily limit used", covers: ["AC-9"], ...base, persona: "alexglobal",
     steps: [
       set({ "pt.country": "DE", "pt.name": "Test Sanctions", "pt.account": "DE89 3704 0044 0532 0130 00", "pt.swift": "COBADEFFXXX" }), press("Continue"),
-      ...toReview(100, { "pt.purpose": "Rent" }), ...confirm, ...code(), press("Send €100"),
+      ...toReview(100, { "pt.purpose": "Rent" }), ...confirm, ...code(), press("Send €100.00"),
       screen("result"), text("Held for review"), noText("Delivered"), noText("On its way"), ...unchanged,
     ],
   },
@@ -214,9 +214,9 @@ export const internationalTransferScenarios: NonNullable<Journey["scenarios"]> =
       set({ "pt.when": "later" }), text("Send on"), text("Repeat"), text("Tue 3 Nov"), text("Mon 9 Nov"), noText("Sat 7 Nov"), noText("Sun 8 Nov"),
       press("Review"), screen("options"), error("pt.sendOn"),
       set({ "pt.sendOn": "2026-11-09", "pt.repeat": "monthly" }), press("Review"),
-      screen("review"), text("Scheduled for Mon 9 Nov"), text("First payment"), text("Every month"), ...confirm, text("Authorise €100 to Marco Rossi"),
-      ...code("12"), press("Schedule €100"), screen("otp"), error("Enter all 6 digits"),
-      ...code("111111"), press("Schedule €100"), screen("otp"), ...code(), press("Schedule €100"),
+      screen("review"), text("Scheduled for Mon 9 Nov"), text("First payment"), text("Every month"), ...confirm, text("Authorise €100.00 to Marco Rossi"),
+      ...code("12"), press("Schedule €100.00"), screen("otp"), error("Enter all 6 digits"),
+      ...code("111111"), press("Schedule €100.00"), screen("otp"), ...code(), press("Schedule €100.00"),
       screen("result"), text("Scheduled"), text("Scheduled for Mon 9 Nov"), ...unchanged,
       press("See scheduled payments"),
     ],
@@ -225,7 +225,7 @@ export const internationalTransferScenarios: NonNullable<Journey["scenarios"]> =
     id: "T-31", name: "A later payment that the bank cannot take: nothing is set up", covers: ["AC-11", "AC-10"], ...base, conditions: { unavailable: ["bank.payments.create"] },
     steps: [
       press("Marco Rossi"), set({ "pt.amount": 100, "pt.purpose": "Rent" }), press("Continue"), set({ "pt.when": "later", "pt.sendOn": "2026-11-09" }), press("Review"),
-      ...confirm, ...code(), press("Schedule €100"), screen("unavailable"), text("Nothing was changed."), ...unchanged,
+      ...confirm, ...code(), press("Schedule €100.00"), screen("unavailable"), text("Nothing was changed."), ...unchanged,
     ],
   },
   {
@@ -238,21 +238,21 @@ export const internationalTransferScenarios: NonNullable<Journey["scenarios"]> =
   {
     id: "T-20", name: "The bank does not answer the payment in time: Check Activity first, nothing applied", covers: ["AC-10"], ...base, conditions: { timeout: ["bank.payments.create"], latencyMs: 10000 },
     steps: [
-      press("Marco Rossi"), ...toReview(100, { "pt.purpose": "Rent" }), ...confirm, ...code(), press("Send €100"),
+      press("Marco Rossi"), ...toReview(100, { "pt.purpose": "Rent" }), ...confirm, ...code(), press("Send €100.00"),
       screen("timeout"), text("Check Activity before you try again, so you don't pay twice"), ...unchanged,
     ],
   },
   {
     id: "T-21", name: "The payment service is not available: nothing sent, and Try again goes back to the review; a failing core sends nothing either", covers: ["AC-10"], ...base, conditions: { unavailable: ["bank.payments.create"] },
     steps: [
-      press("Marco Rossi"), ...toReview(100, { "pt.purpose": "Rent" }), ...confirm, ...code(), press("Send €100"),
+      press("Marco Rossi"), ...toReview(100, { "pt.purpose": "Rent" }), ...confirm, ...code(), press("Send €100.00"),
       screen("unavailable"), text("Nothing was changed."), ...unchanged, press("Try again"), screen("review"),
     ],
   },
   {
     id: "T-22", name: "The core fails after the code: no money has left the account", covers: ["AC-10"], ...base, conditions: { transferFails: true },
     steps: [
-      press("Marco Rossi"), ...toReview(100, { "pt.purpose": "Rent" }), ...confirm, ...code(), press("Send €100"),
+      press("Marco Rossi"), ...toReview(100, { "pt.purpose": "Rent" }), ...confirm, ...code(), press("Send €100.00"),
       screen("failed"), text("No money has left your account."), ...unchanged,
     ],
   },
