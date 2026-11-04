@@ -161,3 +161,24 @@ describe("the project's bank API", () => {
     expect(app.persona.id).toBe("acme");
   });
 });
+
+describe("switching where Alex banks", () => {
+  it("opens a company only after step-up, clears what belongs to the place left, and keeps language and tabs", async () => {
+    const a = make("bankworkx");
+    a.login(); await a.loadSession();
+    expect(a.getState().session?.contexts.map((c) => c.id)).toEqual(["personal", "alpha", "beta"]);
+    a.setLang("ur"); a.setTab("wallet"); a.openSheet("menu"); a.openBudget("b1");
+    await expect(a.switchContext("alpha")).rejects.toMatchObject({ code: "STEP_UP_REQUIRED" });
+    expect(a.getState().workspace).toBe("personal");
+    await a.stepUp("000000");
+    await a.switchContext("alpha");
+    expect(a.getState()).toMatchObject({ contextId: "alpha", workspace: "business", sheet: null, budgetId: null, lang: "ur", tab: "dashboard" });
+    a.setTab("accounts");
+    await expect(a.switchContext("personal")).resolves.toBeUndefined();
+    expect(a.getState()).toMatchObject({ workspace: "personal", tab: "wallet", lang: "ur" });
+  });
+  it("leaves customers with one place alone", async () => {
+    const a = make("bankworkx"); a.selectPersona("sam"); a.login(); await a.loadSession();
+    expect(a.getState().session).toBeNull();
+  });
+});

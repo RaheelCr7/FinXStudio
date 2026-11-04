@@ -133,6 +133,11 @@ export type BrandLook = {
   font?: string;
 };
 
+/** Where a signed-in person is banking: their own accounts, or a company they act for. */
+export type Workspace = "personal" | "business";
+/** The parts of a bank's look that can differ per workspace. Anything unset follows the bank's own. */
+export type WorkspaceTheme = Partial<Pick<BrandDef, "preset" | "accent" | "look" | "radius" | "components">>;
+
 /** What a bank is, as stored in brands.json (and edited in Studio). Everything else about its look is derived from this. */
 export type BrandDef = {
   name: string; shortName: string; slug: string; bundleId: string; scheme: string;
@@ -144,6 +149,8 @@ export type BrandDef = {
   radius?: Partial<Record<"sm" | "md" | "lg" | "xl", number>>;
   /** Sizes of the shared components (field, button, bar, row, keypad) when the bank's design differs from the defaults. */
   components?: ComponentTokenOverrides;
+  /** A different look for personal and business banking (the bank configures both; nothing here is fixed). Unset: one look everywhere. */
+  workspaces?: Partial<Record<Workspace, WorkspaceTheme>>;
   /** Where the project runs, the languages it offers and the legal entities it covers. Anything unset follows the bank's currency and locale (see projectShape). */
   channels?: Channel[];
   languages?: string[];
@@ -193,7 +200,9 @@ const PRESET_BASE: Record<Preset, { light: Record<string, string>; dark: Record<
 const PRESET_ACCENT: Record<Preset, string> = { meezan: "#0F6E56", bankworkx: "#3155CE" };
 
 /** A full light and dark theme for a bank: the preset's palette with the bank's own accent colour applied. */
-export function resolveBrand(id: BrandId, def: BrandDef): Brand {
+export function resolveBrand(id: BrandId, def: BrandDef, workspace?: Workspace): Brand {
+  const ws = workspace ? def.workspaces?.[workspace] : undefined;
+  if (ws) def = { ...def, ...ws, radius: { ...(ws.radius ?? def.radius) }, workspaces: undefined };
   const base = PRESET_BASE[def.preset];
   const make = (mode: "light" | "dark"): Theme => {
     const c: Record<string, string> = { ...base[mode] };

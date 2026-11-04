@@ -9,4 +9,5 @@ export * from "./view-models/wallet";
 export * from "./view-models/invest";
 export * from "./view-models/catalog";
 export * from "./view-models/home";
+export * from "./view-models/session";
 export * from "./app";

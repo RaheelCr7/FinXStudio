@@ -25,7 +25,61 @@
     "locale": "en-US",
     "assets": "./assets/bankworkx",
     "background": "#F6F4FC",
-    "splashDark": "#0D1022"
+    "splashDark": "#0D1022",
+    "workspaces": {
+      "personal": {
+        "preset": "bankworkx",
+        "accent": "#3155CE",
+        "look": {
+          "pageBg": "#F4F7FD"
+        },
+        "radius": {
+          "sm": 12,
+          "md": 16,
+          "lg": 24,
+          "xl": 30
+        },
+        "components": {
+          "button": {
+            "height": 52
+          },
+          "row": {
+            "height": 64,
+            "radius": 18
+          }
+        }
+      },
+      "business": {
+        "preset": "meezan",
+        "accent": "#0B6B4F",
+        "look": {
+          "chrome": "bar",
+          "fields": "outlined",
+          "bar": "#1F2A27",
+          "pageBg": "#F1F3F2"
+        },
+        "radius": {
+          "sm": 4,
+          "md": 6,
+          "lg": 8,
+          "xl": 10
+        },
+        "components": {
+          "button": {
+            "height": 46
+          },
+          "field": {
+            "height": 46
+          },
+          "row": {
+            "height": 50
+          },
+          "bar": {
+            "height": 54
+          }
+        }
+      }
+    }
   },
   "cab": {
     "name": "CAB",

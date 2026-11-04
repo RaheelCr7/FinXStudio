@@ -1,7 +1,8 @@
 import { MockBank, isProviderId, personasFor, type Persona } from "@finx/mock-bank-api";
-import type { Preset } from "@finx/ui-kit";
+import type { Preset, Workspace } from "@finx/ui-kit";
 import { slugIs, type CatalogResult, type Live, type createLive } from "./live";
 import { usd } from "./format";
+import { workspaceOf, type SessionView } from "./view-models/session";
 
 export type TabId = "dashboard" | "accounts" | "budgets" | "wallet";
 export type Sheet = null | "fab" | "menu" | "notes";
@@ -29,6 +30,13 @@ export type AppState = {
   /** The slug of the journey being fetched, while it loads. */
   opening: string | null;
   studioUrl: string;
+  /** What the bank says this person can bank as (null for customers with one place, and before sign-in). */
+  session: SessionView | null;
+  /** Where they are banking now: "personal" or a company's context id. */
+  contextId: string;
+  workspace: Workspace;
+  /** The last tab open in each workspace, kept across switches. */
+  tabs: Partial<Record<Workspace, TabId>>;
 };
 
 export type BankAppDeps = {
@@ -65,6 +73,7 @@ export class BankApp {
     this.state = {
       screen: "login", personaId, lang: "en", tab: "dashboard", budgetId: null, investView: null, sheet: null, subId: null, paying: false, toast: null, tick: 0,
       catalog: { entries: deps.live.bundledEntries(), source: "bundled" }, active: null, opening: null, studioUrl: deps.studioUrl,
+      session: null, contextId: "personal", workspace: "personal", tabs: {},
     };
   }
 
@@ -89,8 +98,31 @@ export class BankApp {
   // ---- signing in and out ------------------------------------------------------------------------------------------
   selectPersona(id: string) { this.set({ personaId: id }); this.freshBank(); this.set({ tick: this.state.tick + 1 }); }
   login() {
-    this.set({ screen: "app", tab: "dashboard" });
+    this.set({ screen: "app", tab: "dashboard", contextId: "personal", workspace: "personal", tabs: {} });
+    void this.loadSession();
     void this.refreshCatalog();
+  }
+  /** Asks the bank where this person can bank. Customers with only their own accounts have no session view. */
+  async loadSession() {
+    try { this.set({ session: (await this.current.call("bank.session.get")) as SessionView }); } catch { this.set({ session: null }); }
+  }
+  /** Confirms it is the person before a company opens. Throws the bank's error (OTP_INVALID) for a wrong code. */
+  async stepUp(code: string) { await this.current.call("bank.session.stepUp", { code }); }
+  /**
+   * Moves to another place to bank. The bank decides (STEP_UP_REQUIRED, CONTEXT_NOT_FOUND). On success everything that could
+   * belong to the place left is cleared: the journey in progress, open sheets, the budget or stock being viewed, and notices.
+   * Language and the last tab of each workspace are kept.
+   */
+  async switchContext(contextId: string) {
+    const session = (await this.current.call("bank.session.switch", { contextId })) as SessionView;
+    const workspace = workspaceOf(session.contexts.find((c) => c.id === session.active));
+    if (this.timer) { clearTimeout(this.timer); this.timer = null; }
+    const tabs = { ...this.state.tabs, [this.state.workspace]: this.state.tab };
+    this.set({
+      session, contextId: session.active, workspace, tabs, tab: tabs[workspace] ?? "dashboard",
+      screen: "app", active: null, opening: null, sheet: null, budgetId: null, investView: null, subId: null, paying: false, toast: null,
+      tick: this.state.tick + 1,
+    });
   }
   logout() {
     this.freshBank();

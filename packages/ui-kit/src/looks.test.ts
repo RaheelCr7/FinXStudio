@@ -61,3 +61,25 @@ describe("look report", () => {
     expect(light.find((c) => c.id === "button")!.ok).toBe(false);
   });
 });
+
+describe("workspace themes", () => {
+  const bw = brandDefs.bankworkx!;
+  it("gives personal and business their own look and leaves the bank's own alone", () => {
+    const p = resolveBrand("bankworkx", bw, "personal"), b = resolveBrand("bankworkx", bw, "business");
+    expect(p.preset).toBe("bankworkx");
+    expect(b.preset).toBe("meezan");
+    expect(b.look?.chrome).toBe("bar");
+    expect(b.radius.md).toBeLessThan(p.radius.md);
+    expect(resolveBrand("bankworkx", bw).radius.md).toBe(14);
+    expect(resolveBrand("bankworkx", bw, undefined).look).toBeUndefined();
+  });
+  it("passes the contrast and tap-target checks in both workspaces", () => {
+    for (const ws of ["personal", "business"] as const) {
+      const def = { ...bw, ...bw.workspaces![ws]! } as BrandDef;
+      expect(lookReport(def).filter((c) => !c.ok), ws).toEqual([]);
+    }
+  });
+  it("uses the bank's look when a workspace has no theme", () => {
+    expect(resolveBrand("meezan", brandDefs.meezan!, "business")).toEqual(resolveBrand("meezan", brandDefs.meezan!));
+  });
+});
