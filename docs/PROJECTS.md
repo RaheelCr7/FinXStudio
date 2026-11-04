@@ -45,3 +45,7 @@ A journey has an optional `apps` list holding project ids. A journey with none l
 - A project is English-only unless its journeys add languages. Starting journeys keep the currency they were written in until edited.
 - Roles, approval before publish and per-project environments are not built.
 - Customer data for a new project uses the sandbox customers of its look. Real core banking comes later through adapters.
+
+## Bank API
+
+Each project chooses which bank API it runs against, on the **Bank API** page (needs the projects permission). Today there are two simulated APIs: the **Reference bank** (the default, stored as nothing) and **Bank B** (its own endpoints, field names and error codes, reached through a mapping file). The setting is `bankApi` in the project's entry in `packages/ui-kit/src/brands.json` and is read by Studio's phone preview and screenshots, the web banking app and the phone app, so a corporate customer's company sits behind that API there. The page's **Run their tests** button runs the tests of every journey in the project against the API you picked, without saving anything, to answer "would my journeys still work if I switched?". Connecting directly to a real bank's API, through Quantum Fabric, and Middleware X are shown as "coming later". Individual tests still name their own bank API when they need to (the proof page runs both).

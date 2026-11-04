@@ -2,7 +2,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { MousePointerClick, Moon, RotateCcw, Sparkles, Sun } from "lucide-react";
 import type { Journey } from "@finx/journey-schema";
-import { MockBank, defaultPersonaFor, personasFor } from "@finx/mock-bank-api";
+import { MockBank, defaultPersonaFor, isProviderId, personasFor } from "@finx/mock-bank-api";
 import { brands, type Brand } from "@finx/ui-kit";
 import { useProjects } from "./Projects";
 import { blockAt } from "@/lib/pick";
@@ -22,6 +22,8 @@ export function Preview({ journey, onPick, picked, onAsk, select = false, onSele
   // A journey previews with the look and sandbox customers of the project (bank app) it belongs to; none listed means Meezan
   const { byId } = useProjects();
   const brand: Brand = byId(journey.apps?.[0] ?? "meezan")?.brand ?? brands.meezan!;
+  // the bank API the project runs against (the reference sandbox unless its Bank API setting says otherwise)
+  const bankApi = byId(journey.apps?.[0] ?? "meezan")?.bankApi;
   const people = personasFor(brand.preset, brand.id);
   const [persona, setPersona] = useState(defaultPersonaFor(people, journey.integrations).id);
   const [lang, setLang] = useState("en");
@@ -31,9 +33,9 @@ export function Preview({ journey, onPick, picked, onAsk, select = false, onSele
   const fit = useRef<HTMLDivElement>(null);
   const live = useDebounced(journey, 450);
   const adapter = useMemo(() => {
-    const bank = new MockBank(persona);
+    const bank = new MockBank(persona, { corpProvider: isProviderId(bankApi) ? bankApi : undefined });
     return (id: string, input: Record<string, any>) => bank.call(id, input);
-  }, [persona, seed]);
+  }, [persona, seed, bankApi]);
   const restart = () => setSeed((s) => s + 1);
   // runs played here are recorded (screens, mistakes, failures; never answers), batched so typing is never slowed down
   const queue = useRef<unknown[]>([]);

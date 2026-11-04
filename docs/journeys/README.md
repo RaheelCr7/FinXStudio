@@ -8,14 +8,14 @@ Brand rule: the product is written **BankWorkx®**. All people, companies, numbe
 
 | File | Module | Release | Workspace | Depth |
 |---|---|---|---|---|
-| [01-retail.md](01-retail.md) | 1. Retail (pre-login, sign-in, security, Personal "Aurora") | 1 | Public + Personal | Full |
-| [02-sme.md](02-sme.md) | 2. SME (Business "Graphite") and the combined Alex Morgan demo | 1 | Business | Full |
-| [03-wealth.md](03-wealth.md) | 3. Wealth | 2 | Personal (Wealth section) | Structure + planned parts |
-| [04-corporate.md](04-corporate.md) | 4. Corporate | 2 | Business | Structure + planned parts |
-| [05-trade-finance.md](05-trade-finance.md) | 5. Trade Finance | 3 | Business | Structure + planned parts |
-| [06-cash-liquidity.md](06-cash-liquidity.md) | 6. Cash & Liquidity | 3 | Business | Structure + planned parts |
-| [07-supply-chain-finance.md](07-supply-chain-finance.md) | 7. Supply Chain Finance | 4 | Business | Structure + planned parts |
-| [08-factoring.md](08-factoring.md) | 8. Factoring | 4 | Business | Structure + planned parts |
+| [01-retail.md](01-retail.md) | 1. Retail (pre-login, sign-in, security, Personal "Aurora"): 47 journeys | 1 | Public + Personal | Full |
+| [02-sme.md](02-sme.md) | 2. SME (Business "Graphite") and the combined Alex Morgan demo: 15 journeys | 1 | Business | Full |
+| [03-wealth.md](03-wealth.md) | 3. Wealth: 10 journeys | 2 | Personal (Wealth section) | Structure + planned parts |
+| [04-corporate.md](04-corporate.md) | 4. Corporate: 11 journeys | 2 | Business | Structure + planned parts |
+| [05-trade-finance.md](05-trade-finance.md) | 5. Trade Finance: 12 journeys | 3 | Business | Structure + planned parts |
+| [06-cash-liquidity.md](06-cash-liquidity.md) | 6. Cash & Liquidity: 11 journeys | 3 | Business | Structure + planned parts |
+| [07-supply-chain-finance.md](07-supply-chain-finance.md) | 7. Supply Chain Finance: 11 journeys | 4 | Business | Structure + planned parts |
+| [08-factoring.md](08-factoring.md) | 8. Factoring: 12 journeys | 4 | Business | Structure + planned parts |
 
 Release 1 (modules 1 and 2) is at full depth: every screen, field, message, adapter and test. Releases 2–4 use the same structure, and name the sandbox domains, adapters (marked *planned*) and new components each needs.
 
@@ -73,7 +73,7 @@ A **shell screen** is specified to the same depth: purpose, route (web and mobil
 - Plain language, no jargon, sentence case. A button names the action ("Send $120.00"), not "Submit".
 - Amounts use the account's currency and its decimal places (`packages/ui-kit` `currencyInfo`, `roundMoney`).
 - Dates: `12 Nov 2026`; times 24-hour with the bank's time zone (UTC in the sandbox).
-- Every money-moving journey has, in order: review screen, consent (`consent` block, `mustBeTrue`), one-time code (`otp` block, 6 digits, 3 attempts, resend after 30 s), result.
+- Every money-moving journey has, in order: review screen, consent (`consent` block, `mustBeTrue`), one-time code (`otp` block, 6 digits, 3 attempts, resend after 30 s), result. Today's fixtures resend after 60 s; the upgrades move to 30 s.
 - Accessibility: each field has a visible label; errors are announced; tap targets 44 pt; reduced motion respected.
 - Languages: English first. Journeys carry `locale.supported: ["en"]` in Release 1; the CAB access journeys show the pattern for Arabic.
 
@@ -106,9 +106,14 @@ Journeys list their own messages in the *Sandbox errors* table. The messages bel
 | `STEP_UP_REQUIRED` | (planned) | "For your security, confirm it's you first." | Confirm |
 | `SESSION_EXPIRED` | (planned) | "You were signed out for your security. Sign in again to continue. Nothing you were doing was saved." | Sign in |
 
+Further planned codes used by the module files: `STEP_UP_FAILED`, `LOCKED`, `INVALID_PIN`, `DEVICE_LIMIT`, `RATE_LIMITED`, `BENEFICIARY_COOLING_OFF`, `FILE_*` (file checks), `REPAIR_NOT_ALLOWED`, `NOTHING_TO_REPAIR`, `NOT_YOUR_TURN`, `SELECTION_TOO_LARGE`, `EMPTY_SELECTION`. Step-up stays valid for 300 s; wrong passwords and PINs share one counter of 3.
+
 Corporate codes (existing, `corporate.ts`, shown through `ctx.error.message`): `NOT_AUTHORISED`, `SELF_APPROVAL`, `ALREADY_APPROVED`, `BENEFICIARY_NOT_WHITELISTED`, `LIMIT_USER_EXCEEDED`, `LIMIT_COMPANY_EXCEEDED`, `CURRENCY_NOT_SUPPORTED`, `PAYMENT_NOT_PENDING`, `PAYMENT_NOT_FOUND`, `USER_NOT_FOUND`, `EMPTY_BATCH`, `BATCH_TOO_LARGE`, `NO_VALID_LINES`, `INVALID_PERIOD`, `PAYROLL_ALREADY_RUN`; row codes `DUPLICATE_LINE`, `NOT_AN_EMPLOYEE`, `ABOVE_SALARY_CAP`. Their wording is in `docs/CORPORATE.md`.
 
 ### 1.7 The synthetic cast (sandbox seed, planned unless marked)
+
+**Business seed values** (one table so every file agrees; proposed, to be confirmed in step 2): Alpha and Beta both USD; Alex's daily limit at Alpha 250,000.00; company daily limit 1,000,000.00 at each company (bank ceiling 2,000,000.00); two approvers above 50,000.00; step-up amount 25,000.00; batch cap 20; file cap 256 KB; idle timeout 300 s with a 60 s warning; up to 5 trusted devices. Personal: cooling-off cap $500.00 equivalent in 24 hours for a beneficiary under 24 hours old.
+
 
 | Who | Detail |
 |---|---|
@@ -116,6 +121,9 @@ Corporate codes (existing, `corporate.ts`, shown through `ctx.error.message`): `
 | **Sam Rivera** (`sam`, existing) | New customer, nothing yet. Onboarding and empty states. |
 | **Alpha Trading LLC** (`alpha`, planned, built on `CorporateSandbox`) | Currency USD. Alex is **Maker** (can start payments, cannot approve). Other users: `dana` (approver), `lee` (approver), `ravi` (admin). |
 | **Beta Services Ltd** (`beta`, planned) | Currency USD. Alex is **Approver** (cannot start payments). Other users: `priya` (maker), `omar` (maker), `noor` (admin). Beta has a payment started by `priya` that waits for Alex. |
+| **Jordan Lee** (`jordan`, planned) | Existing customer not yet registered for digital banking. Phone +1 415 555 0177, account `7700002208`, code 482100. Alex's account number for the already-registered path is `7700004410`. |
+| **Demo sign-in extras** (planned) | `demo.locked`, `demo.expired`, `demo.inactive` for the lockout, expired and not-active paths. |
+| **More Business users** (planned) | `sofia` (second approver at Beta, needed for sequential and parallel scenarios); `tess_m` (Maker at Alpha); Release 2–4 casts (`elena` for Wealth; Northwind Group with `maya`, `tomas`, `ines`, `kofi`, `lena` for Corporate) are in their module files. |
 | **Demo users link** | The sign-in screen's "Demo users" link lists the personas with what each shows. |
 
 Existing sandbox rules that the specs rely on: one-time code `482100` (and `000000` always accepted); `bank.otp.verify` counts failures; card numbers must pass the Luhn check (`4242 4242 4242 4242` and `5555 5555 5555 4444` pass); adding money $1–$50,000; budgets $10–$100,000; top-up 50–5,000 (existing PKR rule, to be generalised per currency); corporate rules in `docs/CORPORATE.md` (maker-checker, whitelist, limits, threshold, cut-off 16:00 UTC, weekends and 9 Nov 2026 closed).
@@ -190,7 +198,9 @@ Dense and professional; split list-plus-detail on web; tables become card lists 
 | Admin | Users; roles; account permissions; limits; signatory groups; audit trail | `manage-user`, `change-limits`, `edit-signatory-group` |
 | More | Business profile; service requests; messages; notifications; settings | `business-service-request`; stretch `kyb-onboarding` |
 
-Release 1 journey count: **Retail 47, SME 15 (14 + 1 stretch)** (counts are repeated in the module files and checked at the end of this README).
+**Tabs added in Releases 2–4** (see the module files): Wealth is a segment inside Save & Borrow plus a Home widget in Personal (a sixth tab does not fit the phone tab bar). In Business: *Group* (entity hierarchy, Module 4), *Trade* (Module 5), *Cash* (Module 6) and *Finance* (Modules 7 and 8, sections Supply chain and Factoring). The Approvals inbox gets a Type filter (Payments, Trade, Treasury, Supply chain, Factoring) and new item kinds: `scf_financing`, `scf_repayment`, `factoring_advance`, `reserve_release`, `repurchase`, `pass_on`. Whether the phone tab bar can hold these is an open question.
+
+Release 1 journey count: **Retail 47, SME 15 (14 + 1 stretch)**, checked against the module files (section 6).
 
 ---
 
@@ -237,6 +247,16 @@ A permission is a dotted name returned by `bank.session.get` for the **active co
 | `biz.admin.signatories` | Edit signatory groups | Admin |
 | `biz.audit.view` | Read the audit trail | Admin, Approver |
 | `biz.requests.create` | Business service requests | Maker, Admin |
+
+**Business roles** in the sandbox today are `initiator` (shown as Maker) and `approver`; Release 1 adds `admin` (planned).
+
+**Permissions added by later modules** (each module file lists its own, with the launch points):
+- Wealth (Personal): `wealth.view`, `wealth.profile.manage`, `wealth.advice.accept`, `wealth.trade`, `wealth.treasury`, `wealth.documents`, `wealth.contact`.
+- Corporate: `biz.group.view`, `biz.payments.highvalue`, `biz.intragroup.initiate`, `biz.files.upload`, `biz.files.view`, `biz.h2h.manage`, `biz.admin.matrix`, `biz.delegations.manage`, `biz.beneficiaries.manage`, `biz.beneficiaries.approve`, `biz.standing.manage`, `biz.admin.entitlements`, `biz.reports.view`, `biz.reports.schedule`.
+- Trade: `biz.trade.view`, `.initiate`, `.amend`, `.documents`, `.finance`.
+- Cash: `biz.cash.view`, `.link`, `.forecast`, `.request`, `.transfer`, `.structure`, `.rules`; `biz.treasury.fx`, `biz.treasury.invest`.
+- Supply chain: `biz.scf.view`, `.programme.manage`, `.suppliers.manage`, `.terms.accept`, `.finance.request`, `.offers.manage`, `.repay`; `biz.invoices.upload`, `biz.invoices.approve`.
+- Factoring: `biz.factoring.view`, `.apply`, `.fund`, `.repurchase`, `.dispute`, `.report`; `biz.invoices.assign`.
 
 Separation of duties (existing sandbox rule): nobody approves what they started (`SELF_APPROVAL`). The Alex demo relies on it: at Alpha he is Maker without `biz.approvals.approve`; at Beta he is Approver without `biz.payments.initiate`.
 
@@ -371,8 +391,60 @@ Switching clears the active journey, cached data, open sheets, search, filters, 
 
 ---
 
+### 5.5 Launch points added by the module files
+The module files carry the full entry-point tables; these are the additions to the tables above, so the apps' one list is complete. Slugs in the tables above that differ from existing fixtures: see the slug mapping below.
+
+| Place | Launch point | Journey | Passes | Permission |
+|---|---|---|---|---|
+| Public › Landing › Explore | Loan calculator / Deposit calculator | `loan-calculator` / `deposit-calculator` | `{productId}` | none |
+| Public › Landing | Account locked? | `unlock-account` | `{username}` | none |
+| Public › Sign-in screen | Help | `contact-support` | – | none |
+| Public › Application tracker | Continue application / Upload documents | `open-account` | `{applicationId}` | none |
+| Public › Application tracker | Activate digital banking | `register-digital-banking` | `{applicationId}` | none |
+| Personal › Accounts › detail | Ask about this account | `new-message` | `{accountId}` | `messages.send` |
+| Personal › Accounts › transaction history | Export | `account-statement` | `{accountId}` | `accounts.statement` |
+| Personal › Accounts › detail | Transfer between my accounts | `own-transfer` | `{accountId}` | `payments.create` |
+| Personal › Payments › beneficiaries › row | Schedule instead | `schedule-payment` | `{beneficiaryId}` | `payments.schedule` |
+| Personal › Home › Insights › Budgets tile | New budget | `create-budget` | `{category}` | `accounts.manage` |
+| Personal › Home | See all your money | `connect-account` | – | `accounts.manage` |
+| Personal › More › profile | Request a change | `service-request` | `{type: "name-change"}` | `messages.send` |
+| Personal › More › help | Send a secure message | `new-message` | `{topic}` | `messages.send` |
+| Personal › More › login history › row | This wasn't me | `new-message` | `{topic: "security"}` | `messages.send` |
+| Personal › Cards › card | Open virtual card | `virtual-card` | `{cardId}` | `cards.manage` |
+| Personal journeys | `freeze-card` → `replace-card`; `replace-card` → `dispute-transaction` | as named | `{cardId}` | `cards.manage` / `cards.dispute` |
+| Business › Payments › scheduled | Stop | `schedule-business-payment` | `{scheduleId}` | `biz.payments.schedule` |
+| Business › tracker / `bulk-payment` result / notification | Repair rejected lines | `repair-bulk-lines` | `{paymentId}` | `biz.payments.bulk` |
+| Business › Payments › bulk and payroll history | New run | `payroll-run` | `{period}` | `biz.payroll.run` |
+| Business › Approvals › inbox | Reject several | `approve-payments` | `{paymentIds}` | `biz.approvals.approve` |
+| Business › Approvals › inbox | Supplier awaiting approval | `approve-payments` (item kind Supplier) | `{supplierId}` | `biz.approvals.approve` |
+| Business › Accounts › statements / reports | New statement or report / Create | `business-statement` | `{accountId}` | `biz.accounts.export` |
+| Business › Accounts › detail | Request a chequebook | `business-service-request` | `{type}` | `biz.requests.create` |
+| Business › Admin › users › row | Disable / Enable / Resend invite | `manage-user` | `{userId}` | `biz.admin.users` |
+| Business › Admin › account permissions | Edit roles | `manage-user` | `{userId}` | `biz.admin.users` |
+| Business › Admin › users › row | Change limit | `change-limits` | `{userId}` | `biz.admin.limits` |
+| Business › Admin › signatory groups | New group | `edit-signatory-group` | – | `biz.admin.signatories` |
+| Business › Admin › limits | Ask the bank for a higher ceiling | `business-service-request` | `{type: "limit_review"}` | `biz.requests.create` |
+| Business › More › profile | Request a change | `business-service-request` | `{type}` | `biz.requests.create` |
+| Business › More › settings | Open in Personal | context switch | – | context |
+
+In 5.3 the passed value of *Admin › limits › Change* is `{userId}` only (account-level limits are out of Release 1).
+
+**Slug mapping to existing fixtures.** Personal: `fund-transfer-local` → `personal-transfer`, `convert-currency` → `own-transfer`, `pay-a-bill` → `pay-bill`. Business: `corporate-payment` → `supplier-payment`, `corporate-approval` → `approve-payments`, `withdraw-a-payment` → `withdraw-payment` (`bulk-payment` and `payroll-run` unchanged). Old slugs stay as aliases for Meezan. Public deep links use `/public/j/<slug>`.
+
+Modules 3–8 launch points are in each module file (section "Entry points" of each journey and its link-map table).
+
 ## 6. Release 1 count check
-Retail 47 + SME 15 = 62 journeys. The files carry their own counts; the report of step 0 lists them.
+Retail 47 + SME 15 = 62 journeys, checked by counting the `### ★` headings in the files. Releases 2–4: Wealth 10, Corporate 11, Trade Finance 12, Cash & Liquidity 11, Supply Chain Finance 11, Factoring 12 (67).
 
 ## 7. How the proof works (existing)
 `acceptance` (AC-n) and `scenarios` (T-n, with `covers`, optional `setup`, `now`, `provider`, steps and `expectBank`) travel with the journey. `finx_run_scenarios` reports each criterion proved, failing or uncovered. `finx_mutation_check` breaks the journey and the bank rules one at a time; a mutant is killed when a scenario fails; survivors are listed in `packages/finx-mcp/src/scenarios.test.ts` with the reason. See `docs/CORPORATE.md`.
+
+## 8. Open questions (collected from all files)
+Each module file also ends with its own list. The ones that change several files:
+1. **Timeout semantics.** Should sandbox `TIMEOUT` apply the change or not? Specified as *not applied*, with copy that tells the person to check Activity before retrying money steps. Raised by every module.
+2. **OTP resend** 60 s (fixtures) vs 30 s (this spec).
+3. **Seed numbers** (limits, thresholds, fees, rates, tenors, step-up amounts, day counts) are proposals, not from code. Confirm before step 2.
+4. **Navigation space.** Does the phone tab bar fit Group, Trade, Cash and Finance, or do they sit under More or a segment?
+5. **Naming clashes.** Existing `bank.cards.*` and `bank.deposit.create` mean saved cards and add-money; the planned issued-card and term-deposit domains use `bank.cards.issued…` and `bank.deposits.*`; business deposits use `corp.deposit.*`.
+6. **Approval engine.** One shared approvals inbox for payments, trade, treasury, supply chain and factoring, or separate calls?
+7. **Engine OTP counter** counts only an integration named `otpVerify`; journeys with two verify screens (for example `update-profile`) need this confirmed.

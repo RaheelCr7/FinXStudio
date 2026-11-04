@@ -11,6 +11,12 @@ export interface CorporateProvider extends CorporateBankAdapter {
 }
 export type ProviderId = "reference" | "bank-b";
 export const PROVIDERS: ProviderId[] = ["reference", "bank-b"];
+/** What each bank API is, for the places that let a person choose one. */
+export const PROVIDER_INFO: Record<ProviderId, { name: string; description: string }> = {
+  reference: { name: "Reference bank (sandbox)", description: "FinX's own simulated bank: the neutral operations and error codes the journeys are written in." },
+  "bank-b": { name: "Bank B (sandbox)", description: "A second simulated bank with its own endpoints, field names, amounts as strings and numbered error codes, reached through a mapping file. Proves a journey needs no change for a different bank API." },
+};
+export const isProviderId = (v: unknown): v is ProviderId => typeof v === "string" && (PROVIDERS as string[]).includes(v);
 
 /** A corporate bank reached through a mapping file: the neutral operations become that bank's API calls, and its answers and errors come back in neutral form. */
 export class MappedCorporateProvider implements CorporateProvider {

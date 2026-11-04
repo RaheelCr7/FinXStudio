@@ -152,9 +152,11 @@ export type BrandDef = {
   currencies?: string[];
   customCurrencies?: CurrencyInfo[];
   entities?: Entity[];
+  /** Which bank API the project runs against, by id (see PROVIDER_INFO in mock-bank-api). Unset means the reference sandbox. */
+  bankApi?: string;
 };
 export type BrandId = string;
-export type Brand = { id: BrandId; name: string; preset: Preset; light: Theme; dark: Theme; radius: Record<keyof typeof radius, number>; currency: string; locale: string; look?: BrandLook; components?: ComponentTokenOverrides };
+export type Brand = { id: BrandId; name: string; preset: Preset; light: Theme; dark: Theme; radius: Record<keyof typeof radius, number>; currency: string; locale: string; look?: BrandLook; components?: ComponentTokenOverrides; /** The bank API this project runs against (unset: the reference sandbox). */ bankApi?: string };
 
 // ---- colour helpers ---------------------------------------------------------------------------------------------------
 const toRgb = (hex: string): [number, number, number] => { const n = parseInt(hex.slice(1), 16); return [(n >> 16) & 255, (n >> 8) & 255, n & 255]; };
@@ -209,7 +211,7 @@ export function resolveBrand(id: BrandId, def: BrandDef): Brand {
     }
     return { name: `${id}-${mode}`, colors: c };
   };
-  return { id, name: def.name, preset: def.preset, light: make("light"), dark: make("dark"), radius: { ...base.radius, ...(def.radius ?? {}) }, currency: def.currency, locale: def.locale, ...(def.look ? { look: def.look } : {}), ...(def.components ? { components: def.components } : {}) };
+  return { id, name: def.name, preset: def.preset, light: make("light"), dark: make("dark"), radius: { ...base.radius, ...(def.radius ?? {}) }, currency: def.currency, locale: def.locale, ...(def.look ? { look: def.look } : {}), ...(def.bankApi ? { bankApi: def.bankApi } : {}), ...(def.components ? { components: def.components } : {}) };
 }
 
 /** Every bank in brands.json. Journeys and the engine never change per bank; only this does. */

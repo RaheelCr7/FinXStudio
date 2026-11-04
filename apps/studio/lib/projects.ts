@@ -2,6 +2,7 @@ import { promises as fs } from "node:fs";
 import path from "node:path";
 import { spawnSync } from "node:child_process";
 import { PRESETS, accentProblem, applyLook, countryByCode, knownCurrency, lookById, projectShape, resolveBrand, resolveComponentTokens, validateShape, type ProjectShape, type Brand, type BrandDef, type ComponentTokenOverrides } from "@finx/ui-kit";
+import { PROVIDERS, isProviderId } from "@finx/mock-bank-api";
 import { StoreError } from "./store";
 import { brandsFile } from "./brand-ids";
 
@@ -225,6 +226,22 @@ export async function updateProjectComponents(id: string, input: unknown): Promi
   await fs.writeFile(tmp, JSON.stringify({ ...all, [id]: updated }, null, 2) + "\n");
   await fs.rename(tmp, file);
   return { project: toProject(id, updated), previous };
+}
+
+/** Sets which bank API a project runs against. "reference" (the default) is stored as nothing, so brands.json stays small. */
+export async function updateProjectBankApi(id: string, input: unknown): Promise<{ project: Project; previous: string }> {
+  const all = await read();
+  const def = all[id];
+  if (!def) throw new StoreError(404, `No project called ${id}`);
+  const value = (input as { bankApi?: unknown } | null)?.bankApi;
+  if (!isProviderId(value)) throw new StoreError(400, `Choose one of: ${PROVIDERS.join(", ")}`);
+  const { bankApi: previous, ...rest } = def;
+  const updated: BrandDef = value === "reference" ? rest : { ...rest, bankApi: value };
+  const file = brandsFile();
+  const tmp = `${file}.${process.pid}.tmp`;
+  await fs.writeFile(tmp, JSON.stringify({ ...all, [id]: updated }, null, 2) + "\n");
+  await fs.rename(tmp, file);
+  return { project: toProject(id, updated), previous: previous ?? "reference" };
 }
 
 /** The app icons come from the accent colour. If Python or Pillow is missing, the build script makes them later. */

@@ -18,7 +18,7 @@ const tab = { fontVariant: ["tabular-nums" as const] };
 function MeezanShell() {
   const { c, r: radius } = useTheme();
   // Who is signed in, the Studio catalog, the journey in progress and the language live in @finx/bank-client, shared with the web app.
-  const [app] = useState(() => new BankApp({ preset: BRAND_INFO.preset, live, studioUrl: DEFAULT_STUDIO_URL }));
+  const [app] = useState(() => new BankApp({ preset: BRAND_INFO.preset, bankApi: BRAND_INFO.bankApi, live, studioUrl: DEFAULT_STUDIO_URL }));
   const s = useBankApp(app);
   const { screen, personaId, lang, tick, catalog, active } = s;
   useEffect(() => { loadStudioUrl().then((u) => app.setStudioUrl(u)); return () => app.dispose(); }, [app]);

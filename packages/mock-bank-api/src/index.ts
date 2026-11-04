@@ -10,7 +10,7 @@ export * from "./finance";
 export { CAB_PROFILES, CAB_CURRENCY, PASSWORD_RULES, passwordProblems, type CabProfile } from "./cab";
 export { BankError } from "./errors";
 export * from "./invest";
-export { createCorporateProvider, MappedCorporateProvider, PROVIDERS, type CorporateProvider, type ProviderId } from "./corporate-provider";
+export { createCorporateProvider, MappedCorporateProvider, PROVIDERS, PROVIDER_INFO, isProviderId, type CorporateProvider, type ProviderId } from "./corporate-provider";
 export { BankBApi, ApiError } from "./corporate-b";
 export { applyRule, build, mapError, type MappingSpec } from "./mapping";
 export { MAX_BULK_LINES, SALARY_CAP_FACTOR, type CorpEmployee, type BatchCheck, type BulkLineInput, type BulkLineResult, ACME, CorporateSandbox, type CorporateBankAdapter, type CorpCompany, type Flaws, type CorpPayment, type CorpUser, type CorpRole, type InitiateInput } from "./corporate";
