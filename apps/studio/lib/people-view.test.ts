@@ -4,7 +4,7 @@ import { avatarTone, effectiveActions, initials, recentBy, roleHeld, summarise }
 
 const dana = { id: "dana", name: "Dana Lee", role: "designer", access: { meezan: "reviewer" } };
 const alex = { id: "alex", name: "Alex Morgan", role: "admin" };
-const sam = { id: "sam", name: "Sam Patel", role: "developer" };
+const sam = { id: "sam", name: "Sam Keller", role: "developer" };
 const projects = [{ id: "meezan" }, { id: "bankworkx" }];
 
 describe("people view helpers", () => {

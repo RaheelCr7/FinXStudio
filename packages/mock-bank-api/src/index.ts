@@ -54,22 +54,22 @@ export const CARRIERS = [{ id: "jazz", name: "Jazz" }, { id: "zong", name: "Zong
 
 export const personas: Record<string, Persona> = {
   ayesha: {
-    id: "ayesha", brand: "meezan", name: "Ayesha Rahman", phone: "+92 300 1234471",
+    id: "ayesha", brand: "meezan", name: "Amira Saleh", phone: "+92 300 1234471",
     accounts: [
       { id: "acc_current", name: "Current", maskedNumber: "••7710", iban: "PK36 MEZN 0000 1234 5678 7710", balance: 184250, currency: "PKR", status: "active", canDebit: true },
       { id: "acc_savings", name: "Savings", maskedNumber: "••2204", iban: "PK12 MEZN 0000 1234 5678 2204", balance: 1250000, currency: "PKR", status: "active", canDebit: true },
     ],
     beneficiaries: [
-      { id: "ben_4821", displayName: "Ahmed Khan", bank: "HBL", maskedNumber: "••4821", addedAt: Date.now() - 90 * day },
-      { id: "ben_1190", displayName: "Sana Malik", bank: "UBL", maskedNumber: "••1190", addedAt: Date.now() - 40 * day },
+      { id: "ben_4821", displayName: "Ahmed Al Nuaimi", bank: "HBL", maskedNumber: "••4821", addedAt: Date.now() - 90 * day },
+      { id: "ben_1190", displayName: "Salma Bouzid", bank: "UBL", maskedNumber: "••1190", addedAt: Date.now() - 40 * day },
     ],
     limits: { daily: 50000, usedToday: 0 },
     behaviour: { otpCode: "482100", kyc: "verified" },
   },
   bilal: {
-    id: "bilal", brand: "meezan", name: "Bilal Raza (transfer fails)", phone: "+92 301 5550192",
+    id: "bilal", brand: "meezan", name: "Youssef Mansouri (transfer fails)", phone: "+92 301 5550192",
     accounts: [{ id: "acc_current", name: "Current", maskedNumber: "••3301", iban: "PK50 MEZN 0000 7777 0000 3301", balance: 92000, currency: "PKR", status: "active", canDebit: true }],
-    beneficiaries: [{ id: "ben_9001", displayName: "Hira Builders", bank: "MCB", maskedNumber: "••9001", addedAt: Date.now() - 12 * day }],
+    beneficiaries: [{ id: "ben_9001", displayName: "Horizon Builders", bank: "MCB", maskedNumber: "••9001", addedAt: Date.now() - 12 * day }],
     limits: { daily: 50000, usedToday: 40000 },
     behaviour: { otpCode: "111111", transferFails: true, kyc: "verified" },
   },
@@ -113,21 +113,21 @@ export const personas: Record<string, Persona> = {
     behaviour: { otpCode: "123456", kyc: "verified" },
   },
   zara: {
-    id: "zara", brand: "meezan", name: "Zara Ali (KYC rejected)", phone: "+92 333 2000123",
+    id: "zara", brand: "meezan", name: "Zoe Whitfield (KYC rejected)", phone: "+92 333 2000123",
     accounts: [],
     beneficiaries: [],
     limits: { daily: 25000, usedToday: 0 },
     behaviour: { otpCode: "123456", kyc: "rejected" },
   },
   hina: {
-    id: "hina", brand: "meezan", name: "Hina Qureshi (accounts in four currencies)", phone: "+92 321 5550144",
+    id: "hina", brand: "meezan", name: "Hana Al Mazrouei (accounts in four currencies)", phone: "+92 321 5550144",
     accounts: [
       { id: "acc_pkr", name: "Current", maskedNumber: "••5521", iban: "PK41 MEZN 0000 5555 0000 5521", balance: 320000, currency: "PKR", status: "active", canDebit: true },
       { id: "acc_usd", name: "Dollar savings", maskedNumber: "••8830", iban: "PK77 MEZN 0000 5555 0000 8830", balance: 4200.5, currency: "USD", status: "active", canDebit: true },
       { id: "acc_aed", name: "Dirham account", maskedNumber: "••1147", iban: "PK19 MEZN 0000 5555 0000 1147", balance: 15000, currency: "AED", status: "active", canDebit: true },
       { id: "acc_kwd", name: "Dinar account", maskedNumber: "••9042", iban: "PK63 MEZN 0000 5555 0000 9042", balance: 120.75, currency: "KWD", status: "active", canDebit: true },
     ],
-    beneficiaries: [{ id: "ben_4821", displayName: "Ahmed Khan", bank: "HBL", maskedNumber: "••4821", addedAt: Date.now() - 90 * day }],
+    beneficiaries: [{ id: "ben_4821", displayName: "Ahmed Al Nuaimi", bank: "HBL", maskedNumber: "••4821", addedAt: Date.now() - 90 * day }],
     limits: { daily: 50000, usedToday: 0 },
     limitsByCurrency: { USD: { daily: 2000, usedToday: 0 }, AED: { daily: 7000, usedToday: 0 }, KWD: { daily: 300, usedToday: 0 } },
     behaviour: { otpCode: "482100", kyc: "verified" },

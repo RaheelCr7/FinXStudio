@@ -11,7 +11,7 @@ const files = (v = "1"): GeneratedFile[] => [
   { path: "src/custom/README.md", content: "yours\n", tag: "custom" },
   { path: ".env.example", content: "A=1\n", tag: "extendable" },
 ];
-const who = { name: "Sam Patel", id: "sam" };
+const who = { name: "Sam Keller", id: "sam" };
 let root: string;
 beforeEach(() => { root = mkdtempSync(path.join(tmpdir(), "finx-ws-")); process.env.FINX_WORKSPACES_DIR = root; });
 

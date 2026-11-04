@@ -110,7 +110,7 @@ Run these on a phone or the emulator after each build that goes to testers. The 
 
 1. The app opens on the sign-in screen with the bank's icon, and nothing sits under the status bar or the gesture bar.
 2. Log in. Home shows *Live from Studio* with the published journeys and the Studio address.
-3. Send to beneficiary: pick an account and a beneficiary, type an amount (the Continue button stays above the keyboard), confirm, enter a wrong code (*Incorrect code*), then the right one (Ayesha's sandbox code is 482100). The receipt shows a reference, and home shows the new balance and daily limit used.
+3. Send to beneficiary: pick an account and a beneficiary, type an amount (the Continue button stays above the keyboard), confirm, enter a wrong code (*Incorrect code*), then the right one (Amira's sandbox code is 482100). The receipt shows a reference, and home shows the new balance and daily limit used.
 4. Android's back key steps back through a journey and closes it from the first screen. With the keyboard open, it closes the keyboard first.
 5. اردو switches to Urdu, right to left, in the shell and in journeys.
 6. Studio server: an address that does not answer shows a clear message and keeps the old one. The right address, even without `http://`, says *Connected*.

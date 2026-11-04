@@ -11,7 +11,7 @@ const file = () => path.join(process.env.FINX_DATA_DIR ?? path.join(process.cwd(
 const SEED: Person[] = [
   { id: "alex", name: "Alex Morgan", role: "admin" },
   { id: "dana", name: "Dana Lee", role: "designer" },
-  { id: "sam", name: "Sam Patel", role: "developer" },
+  { id: "sam", name: "Sam Keller", role: "developer" },
   { id: "riya", name: "Riya Khan", role: "reviewer" },
 ];
 

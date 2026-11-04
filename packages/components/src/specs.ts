@@ -165,7 +165,7 @@ catalog.push(
       { name: "meta", type: "string", description: "A reference or time, in a small pill." },
     ],
     states: [
-      { name: "Success", props: { tone: "success", title: "Money sent", text: "Ayesha will receive it in a few seconds.", meta: "Ref FX-20481" } },
+      { name: "Success", props: { tone: "success", title: "Money sent", text: "Amira will receive it in a few seconds.", meta: "Ref FX-20481" } },
       { name: "Error", props: { tone: "error", title: "Payment failed", text: "Nothing was taken from your account." } },
       { name: "Title only", props: { tone: "success", title: "Done" } },
     ],
@@ -175,7 +175,7 @@ catalog.push(
     name: "SummaryList", group: "Lists", Component: SummaryList, purpose: "Label and value pairs, for the review step before money moves.",
     props: [{ name: "rows", type: "{ label, value }[]", description: "One line each; the value is right-aligned and uses tabular figures." }],
     states: [
-      { name: "Review", props: { rows: [{ label: "From", value: "Current ••4321" }, { label: "To", value: "Ayesha Khan" }, { label: "Amount", value: "PKR 5,000" }] } },
+      { name: "Review", props: { rows: [{ label: "From", value: "Current ••4321" }, { label: "To", value: "Amira Khan" }, { label: "Amount", value: "PKR 5,000" }] } },
       { name: "Long value", props: { rows: [{ label: "Reference", value: LONG }, { label: "Fee", value: "PKR 0" }] } },
     ],
     a11y: ["A description list (dl), so a screen reader pairs each label with its value."],

@@ -29,8 +29,8 @@ describe("pickers", () => {
   });
 
   it("lists beneficiaries with their bank", () => {
-    renderBlock("beneficiaryPicker", { bind: "t.b", items: [{ id: "k", displayName: "Ahmed Khan", bank: "HBL", maskedNumber: "••99" }], allowAddNew: true });
-    expect(screen.getByRole("radio", { name: "Ahmed Khan" })).toBeTruthy();
+    renderBlock("beneficiaryPicker", { bind: "t.b", items: [{ id: "k", displayName: "Ahmed Al Nuaimi", bank: "HBL", maskedNumber: "••99" }], allowAddNew: true });
+    expect(screen.getByRole("radio", { name: "Ahmed Al Nuaimi" })).toBeTruthy();
     expect(screen.getByText("HBL · ••99")).toBeTruthy();
     expect(screen.getByText("+ Add new beneficiary")).toBeTruthy();
   });

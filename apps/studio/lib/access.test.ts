@@ -80,7 +80,7 @@ describe("custom roles", () => {
     await expect(access.updateRole("admin", { label: "Boss" })).rejects.toMatchObject({ status: 409 });
     await expect(access.deleteRole("designer", [])).rejects.toMatchObject({ status: 409 });
     await access.createRole({ label: "QA", actions: ["edit"] });
-    await expect(access.deleteRole("qa", ["Sam Patel"])).rejects.toMatchObject({ status: 409, message: expect.stringContaining("Sam Patel") });
+    await expect(access.deleteRole("qa", ["Sam Keller"])).rejects.toMatchObject({ status: 409, message: expect.stringContaining("Sam Keller") });
     await expect(access.deleteRole("nope", [])).rejects.toMatchObject({ status: 404 });
     await access.deleteRole("qa", []);
     expect((await access.listRoles()).some((r) => r.id === "qa")).toBe(false);
@@ -129,7 +129,7 @@ describe("approval rules per project", () => {
 });
 
 describe("the activity log", () => {
-  const dana = { id: "dana", name: "Dana Lee" }, sam = { id: "sam", name: "Sam Patel" };
+  const dana = { id: "dana", name: "Dana Lee" }, sam = { id: "sam", name: "Sam Keller" };
   it("lists newest first and filters by person, project and kind", async () => {
     await activity.record({ actor: dana, action: "journey.publish", target: "Invest", projectIds: ["bankworkx"], at: "2026-01-01T10:00:00Z" });
     await activity.record({ actor: sam, action: "person.role", target: "Riya", at: "2026-01-01T11:00:00Z" });

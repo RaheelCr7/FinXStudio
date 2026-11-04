@@ -353,7 +353,7 @@ export const bulkPayment = {
           "press": "Check"
         },
         {
-          "press": "Row 3: Indus Logistics · The amount is not valid for this account's currency"
+          "press": "Row 3: Nile Logistics · The amount is not valid for this account's currency"
         },
         {
           "expectScreen": "start"
@@ -362,7 +362,7 @@ export const bulkPayment = {
           "press": "Check"
         },
         {
-          "press": "Row 4: Crescent Textiles · Same payee, amount and reference as an earlier line"
+          "press": "Row 4: Atlas Textiles · Same payee, amount and reference as an earlier line"
         },
         {
           "expectScreen": "start"
@@ -402,19 +402,19 @@ export const bulkPayment = {
           "expectText": "PKR 10.12"
         },
         {
-          "press": "Row 1: Crescent Textiles · The amount is not valid for this account's currency"
+          "press": "Row 1: Atlas Textiles · The amount is not valid for this account's currency"
         },
         {
           "press": "Check"
         },
         {
-          "press": "Row 2: Indus Logistics · The amount is not valid for this account's currency"
+          "press": "Row 2: Nile Logistics · The amount is not valid for this account's currency"
         },
         {
           "press": "Check"
         },
         {
-          "press": "Row 3: Karachi Packaging · The amount is not valid for this account's currency"
+          "press": "Row 3: Dubai Packaging · The amount is not valid for this account's currency"
         },
         {
           "expectScreen": "start"

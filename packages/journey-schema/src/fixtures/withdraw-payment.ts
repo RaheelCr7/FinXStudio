@@ -186,7 +186,7 @@ export const withdrawPayment = {
           "expectScreen": "start"
         },
         {
-          "press": "PKR 100,000 to Indus Logistics"
+          "press": "PKR 100,000 to Nile Logistics"
         },
         {
           "expectScreen": "review"
@@ -391,7 +391,7 @@ export const withdrawPayment = {
           "press": "Continue"
         },
         {
-          "press": "PKR 100,000 to Indus Logistics"
+          "press": "PKR 100,000 to Nile Logistics"
         },
         {
           "expectScreen": "review"
@@ -493,7 +493,7 @@ export const withdrawPayment = {
           "press": "Continue"
         },
         {
-          "press": "PKR 250,000 to Indus Logistics"
+          "press": "PKR 250,000 to Nile Logistics"
         },
         {
           "press": "Withdraw and send code"
@@ -577,7 +577,7 @@ export const withdrawPayment = {
           "press": "Continue"
         },
         {
-          "press": "PKR 250,000 to Indus Logistics"
+          "press": "PKR 250,000 to Nile Logistics"
         },
         {
           "press": "Withdraw and send code"
@@ -664,7 +664,7 @@ export const withdrawPayment = {
           "press": "Continue"
         },
         {
-          "press": "PKR 250,000 to Indus Logistics"
+          "press": "PKR 250,000 to Nile Logistics"
         },
         {
           "press": "Withdraw and send code"
@@ -736,7 +736,7 @@ export const withdrawPayment = {
           "press": "Continue"
         },
         {
-          "press": "PKR 250,000 to Indus Logistics"
+          "press": "PKR 250,000 to Nile Logistics"
         },
         {
           "expectScreen": "review"
@@ -858,7 +858,7 @@ export const withdrawPayment = {
           "press": "Continue"
         },
         {
-          "press": "PKR 2,000,000 to Indus Logistics"
+          "press": "PKR 2,000,000 to Nile Logistics"
         },
         {
           "expectText": "1 of 2"
@@ -969,7 +969,7 @@ export const withdrawPayment = {
           "press": "Continue"
         },
         {
-          "press": "PKR 250,000 to Indus Logistics"
+          "press": "PKR 250,000 to Nile Logistics"
         },
         {
           "press": "Withdraw and send code"
@@ -1022,7 +1022,7 @@ export const withdrawPayment = {
           "press": "Back to the list"
         },
         {
-          "press": "PKR 100,000 to Indus Logistics"
+          "press": "PKR 100,000 to Nile Logistics"
         },
         {
           "expectScreen": "review"
@@ -1072,7 +1072,7 @@ export const withdrawPayment = {
           "press": "Continue"
         },
         {
-          "press": "PKR 500,000 to Indus Logistics"
+          "press": "PKR 500,000 to Nile Logistics"
         },
         {
           "press": "Withdraw and send code"
@@ -1189,7 +1189,7 @@ export const withdrawPayment = {
           "press": "Continue"
         },
         {
-          "press": "PKR 100,000 to Indus Logistics"
+          "press": "PKR 100,000 to Nile Logistics"
         },
         {
           "expectScreen": "review"
@@ -1315,7 +1315,7 @@ export const withdrawPayment = {
           "press": "Continue"
         },
         {
-          "press": "PKR 100,000 to Indus Logistics"
+          "press": "PKR 100,000 to Nile Logistics"
         },
         {
           "expectScreen": "review"
@@ -1441,7 +1441,7 @@ export const withdrawPayment = {
           "press": "Continue"
         },
         {
-          "press": "PKR 100,000 to Indus Logistics"
+          "press": "PKR 100,000 to Nile Logistics"
         },
         {
           "expectScreen": "review"

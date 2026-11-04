@@ -12,7 +12,7 @@ Step 1 of the corporate payment proof (plan, Stage 1). A simulated corporate ban
 | `hassan`, `layla` | approver | |
 | `nadia` | initiator and approver | 500,000 |
 
-Accounts: Operations (PKR) and a Dollar account (USD). Approved beneficiaries: Crescent Textiles, Indus Logistics, Karachi Packaging. Company daily limit 8,000,000; cut-off 16:00 (UTC); a payment above 1,000,000 needs two different approvers; the demo bank is closed on weekends and 9 November 2026.
+Accounts: Operations (PKR) and a Dollar account (USD). Approved beneficiaries: Atlas Textiles, Nile Logistics, Dubai Packaging. Company daily limit 8,000,000; cut-off 16:00 (UTC); a payment above 1,000,000 needs two different approvers; the demo bank is closed on weekends and 9 November 2026.
 
 ## The rules
 - **Maker-checker:** an initiator starts a payment, an approver approves it. **Nobody approves what they started**, even a person who holds both roles (`SELF_APPROVAL`). The same approver cannot approve twice (`ALREADY_APPROVED`).

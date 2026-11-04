@@ -47,12 +47,12 @@ describe.each(PROVIDERS)("corporate journeys on the %s bank API", (p) => {
     const r = await startPayment(x, "sara", { amount: 250_000, reference: "INV-77" });
     expect(r.current).toBe("review");
     expect(rows(r)).toContainEqual({ label: "From", value: "Operations ••6100" });
-    expect(rows(r)).toContainEqual({ label: "To", value: "Crescent Textiles" });
+    expect(rows(r)).toContainEqual({ label: "To", value: "Atlas Textiles" });
     expect(rows(r)).toContainEqual({ label: "Amount", value: "PKR 250,000" });
     expect(rows(r)).toContainEqual({ label: "Approvers needed", value: "1" });
     await confirmWithCode(r, "Verify and send for approval");
     expect(r.current).toBe("success");
-    expect(result(r)[0].text).toContain("PKR 250,000 to Crescent Textiles now waits for 1 approver(s)");
+    expect(result(r)[0].text).toContain("PKR 250,000 to Atlas Textiles now waits for 1 approver(s)");
     const [id] = Object.keys(await x.bank.call("corp.payments.pending", { userId: "hassan" }));
     expect(result(r)[0].meta).toBe(`Payment ${id} · value date 2026-11-03`);
     expect((await x.bank.call("corp.company.get", { userId: "sara" })).accounts.acme_ops.balance).toBe(25_000_000);
@@ -70,7 +70,7 @@ describe.each(PROVIDERS)("corporate journeys on the %s bank API", (p) => {
     const x = setup();
     const r = await startPayment(x, "hassan", { amount: 1000 });
     expect(r.current).toBe("denied");
-    expect(result(r)[0].text).toBe("Only an initiator can use this. You are signed in as Hassan Raza.");
+    expect(result(r)[0].text).toBe("Only an initiator can use this. You are signed in as Hassan Mahfouz.");
   });
 
   it("stops an amount above the person's own daily limit before it goes anywhere", async () => {
@@ -113,7 +113,7 @@ describe.each(PROVIDERS)("corporate journeys on the %s bank API", (p) => {
     const r = await approver(x, "hassan");
     expect(r.current).toBe("start");
     const [row]: any[] = (r.view().blocks.find((b) => b.type === "menu") as any).items;
-    expect(row.label).toBe("PKR 250,000 to Indus Logistics");
+    expect(row.label).toBe("PKR 250,000 to Nile Logistics");
     expect(row.text).toBe("INV-9 · started by sara · 0 of 1 approved");
     await tapRow(r, "PKR 250,000");
     expect(r.current).toBe("review");

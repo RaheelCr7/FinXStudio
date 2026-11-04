@@ -23,7 +23,7 @@ describe("Bank B speaks its own language", () => {
     const api = new BankBApi(ACME); api.now = () => T;
     const e: any = (() => { try { api.request("payments.create", { initiator: "omar", debit: { accountNo: "acme_ops" }, creditor: { ref: "sup_textile" }, amount: { value: "600000" } }); } catch (x) { return x; } })();
     expect(e).toBeInstanceOf(ApiError);
-    expect(e).toMatchObject({ code: "ERR-4291", status: 429, detail: "Staff per-day cap breached", params: { userName: "Omar Siddiqui" } });
+    expect(e).toMatchObject({ code: "ERR-4291", status: 429, detail: "Staff per-day cap breached", params: { userName: "Omar Belkacem" } });
   });
 });
 
@@ -183,7 +183,7 @@ describe("bulk payments", () => {
   it("reads a pasted file: header, blanks, spaces and a reference with a comma", async () => {
     const bank = new MockBank("acme"); bank.now = () => T;
     const c = await bank.call("corp.bulk.check", { userId: "sara", fromAccountId: "acme_ops", file: "beneficiary,amount,reference\n\n sup_textile , 25000 , INV-1, part 2\nsup_logistics,\nsup_packaging,18_000.50,INV-3\n" });
-    expect(Object.values(c.lines).map((l: any) => [l.n, l.payee, l.amount, l.reference, l.ok])).toEqual([[1, "Crescent Textiles", 25000, "INV-1, part 2", true], [2, "Indus Logistics", NaN, "", false], [3, "Karachi Packaging", 18000.5, "INV-3", true]]);
+    expect(Object.values(c.lines).map((l: any) => [l.n, l.payee, l.amount, l.reference, l.ok])).toEqual([[1, "Atlas Textiles", 25000, "INV-1, part 2", true], [2, "Nile Logistics", NaN, "", false], [3, "Dubai Packaging", 18000.5, "INV-3", true]]);
     expect(Object.keys(c.problems)).toEqual(["2"]);
     expect(c).toMatchObject({ validCount: 2, total: 43_000.5, requiredApprovers: 1, currency: "PKR" });
     await expect(bank.call("corp.bulk.submit", { userId: "sara", fromAccountId: "acme_ops", file: "sup_textile,1000" })).rejects.toMatchObject({ code: "OTP_REQUIRED" });
@@ -238,7 +238,7 @@ describe("payroll runs", () => {
   it("reads a pasted file and shows employee names, and the roster and error words are the bank's own", async () => {
     const bank = new MockBank("acme"); bank.now = () => T;
     const c = await bank.call("corp.payroll.check", { userId: "sara", fromAccountId: "acme_ops", period: "2026-10", file: "employee,amount,reference\nemp_ali,180000,Oct\nemp_hina,500000,Oct\n" });
-    expect(Object.values(c.lines).map((l: any) => [l.payee, l.ok, l.message])).toEqual([["Ali Hamdan", true, undefined], ["Hina Rauf", false, "More than 1.5 times this employee's monthly salary"]]);
+    expect(Object.values(c.lines).map((l: any) => [l.payee, l.ok, l.message])).toEqual([["Ali Hamdan", true, undefined], ["Helena Rauch", false, "More than 1.5 times this employee's monthly salary"]]);
     expect(c).toMatchObject({ requiredApprovers: 2, period: "2026-10", total: 180_000 });
     expect((await bank.call("corp.company.get", { userId: "sara" })).employees.emp_ali).toEqual({ id: "emp_ali", name: "Ali Hamdan", bank: "HBL", maskedNumber: "••4410" });
     await expect(bank.call("corp.payroll.submit", { userId: "sara", fromAccountId: "acme_ops", period: "2026-10", file: "emp_ali,1000" })).rejects.toMatchObject({ code: "OTP_REQUIRED" });

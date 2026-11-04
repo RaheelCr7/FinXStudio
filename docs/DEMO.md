@@ -27,10 +27,10 @@ pnpm ios:sim --install
 cd apps/studio && npx tsx scripts/seed-journey.ts all   # then: pnpm ios:sim --brand bankworkx --install
 ```
 
-Sandbox logins: **Ayesha** (happy path, OTP `482100`), **Bilal** (core fails after OTP `111111`), **Zara** (KYC rejected).
+Sandbox logins: **Amira** (happy path, OTP `482100`), **Youssef** (core fails after OTP `111111`), **Zara** (KYC rejected).
 
 ## 15-minute script
-1. **Run a journey**: log in as Ayesha, open *Send to beneficiary*. Try an empty Continue (validation), 60,000 (daily-limit branch), then 25,000 through consent and OTP.
+1. **Run a journey**: log in as Amira, open *Send to beneficiary*. Try an empty Continue (validation), 60,000 (daily-limit branch), then 25,000 through consent and OTP.
 2. **Urdu**: tap اردو. The layout mirrors right-to-left.
 3. **Edit live**: in Studio open the journey, select a button, rename its label (English and Urdu). The phone preview and the flow canvas update; the chip says *Unpublished changes*.
 4. **Publish**: *Publish to UAT* (if it goes wrong: *Settings*, *Publish history*, *Restore* puts an earlier version back as the draft, and nothing changes for customers until you publish again). Reload the app home: *Live from Studio*, new version. Open the journey: new label, no rebuild.

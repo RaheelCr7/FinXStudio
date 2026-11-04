@@ -38,7 +38,7 @@ describe("simulate", () => {
     expect(r.bank.balances.acc_current).toBe(184250);
   });
 
-  it("shows a core failure after a correct OTP (Bilal) and that no money moved", async () => {
+  it("shows a core failure after a correct OTP (Youssef) and that no money moved", async () => {
     const steps: Step[] = [
       { set: { "bill.billerId": "lesco", "bill.fromAccountId": "acc_current", "bill.reference": "1234500001", "bill.consent": true } },
       { press: "Find my bill" }, { press: "Confirm and send OTP" }, { set: { "otp.code": "111111" } }, { press: "Pay now" }, { expectScreen: "failed" },

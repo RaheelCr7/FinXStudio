@@ -39,7 +39,7 @@ describe("Local transfer journey, end to end against the sandbox", () => {
     await press(r, "Continue");
     expect(r.current).toBe("review");
     const rows = r.view().blocks.find((b) => b.type === "reviewSummary")!.rows;
-    expect(rows.map((x: any) => x.value)).toEqual(["••7710", "Ahmed Khan", "PKR 25,000", "PKR 0"]);
+    expect(rows.map((x: any) => x.value)).toEqual(["••7710", "Ahmed Al Nuaimi", "PKR 25,000", "PKR 0"]);
 
     await press(r, "Confirm and send OTP");
     expect(r.current).toBe("review"); // consent missing

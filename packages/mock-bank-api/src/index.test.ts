@@ -2,7 +2,7 @@ import { describe, it, expect } from "vitest";
 import { defaultPersonaFor, MockBank, BankError, ADAPTER_CATALOG, describePersonas, personasFor, INSTRUMENTS, RANGES, portfolioSeries } from "./index";
 
 describe("mock bank sandbox", () => {
-  it("lists accounts and limits for Ayesha", async () => {
+  it("lists accounts and limits for Amira", async () => {
     const b = new MockBank("ayesha");
     const accs = await b.call("bank.accounts.list");
     expect(Object.keys(accs)).toEqual(["acc_current", "acc_savings"]);
@@ -25,7 +25,7 @@ describe("mock bank sandbox", () => {
     await b.call("bank.otp.send");
     await expect(b.call("bank.otp.verify", { code: "999999" })).rejects.toBeInstanceOf(BankError);
   });
-  it("Bilal's transfer fails at the core", async () => {
+  it("Youssef's transfer fails at the core", async () => {
     const b = new MockBank("bilal");
     await b.call("bank.otp.send");
     await b.call("bank.otp.verify", { code: "111111" });
@@ -35,7 +35,7 @@ describe("mock bank sandbox", () => {
   it("looks up a bill by reference and rejects a malformed one", async () => {
     const b = new MockBank("ayesha");
     const bill = await b.call("bank.bills.lookup", { billerId: "k_electric", reference: "0123456789" });
-    expect(bill).toMatchObject({ billerName: "K-Electric", payerName: "Ayesha Rahman", amount: 1000 + (6789 % 9000) });
+    expect(bill).toMatchObject({ billerName: "K-Electric", payerName: "Amira Saleh", amount: 1000 + (6789 % 9000) });
     await expect(b.call("bank.bills.lookup", { billerId: "k_electric", reference: "12" })).rejects.toMatchObject({ code: "BILL_NOT_FOUND" });
   });
   it("pays a bill only after OTP and uses the daily limit", async () => {
@@ -200,7 +200,7 @@ describe("corporate payments through the bank", () => {
     const c = await new MockBank("acme").call("corp.company.get", { userId: "omar" });
     expect(c).toMatchObject({ name: "Acme Trading Co.", currency: "PKR", dualApprovalAbove: 1_000_000, cutoff: "16:00", me: { id: "omar", roles: ["initiator"], remainingToday: 500_000 } });
     expect(Object.keys(c.accounts)).toEqual(["acme_ops", "acme_usd"]);
-    expect(c.beneficiaries.sup_textile.displayName).toBe("Crescent Textiles");
+    expect(c.beneficiaries.sup_textile.displayName).toBe("Atlas Textiles");
   });
   it("needs the one-time code to start and to approve, but not to reject", async () => {
     const b = new MockBank("acme");

@@ -73,7 +73,7 @@ Run these after each build that goes to testers. The last full pass was on 2 Nov
 
 1. The app opens on the sign-in screen with the bank's icon, and nothing sits under the Dynamic Island or the home indicator.
 2. Log in. Home shows *Live from Studio* with the published journeys and the Studio address.
-3. Send to beneficiary: pick an account and a beneficiary, type an amount, confirm, enter a wrong code (*Incorrect code*), then the right one (Ayesha's sandbox code is 482100). The receipt shows a reference, and home shows the new balance and daily limit used.
+3. Send to beneficiary: pick an account and a beneficiary, type an amount, confirm, enter a wrong code (*Incorrect code*), then the right one (Amira's sandbox code is 482100). The receipt shows a reference, and home shows the new balance and daily limit used.
 4. The on-screen back arrow steps back through a journey, and the cross closes it.
 5. اردو switches to Urdu, right to left, in the shell and in journeys (Nastaliq font).
 6. Studio server: an address that does not answer shows a clear message and keeps the old one. The right address, even without `http://`, says *Connected*, and survives closing the app.

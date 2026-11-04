@@ -603,13 +603,13 @@ export const payrollRun = {
           "press": "Check"
         },
         {
-          "press": "Row 6: Hina Rauf · will be paid"
+          "press": "Row 6: Helena Rauch · will be paid"
         },
         {
           "press": "Check"
         },
         {
-          "press": "Row 2: Sana Malik · More than 1.5 times this employee's monthly salary"
+          "press": "Row 2: Salma Bouzid · More than 1.5 times this employee's monthly salary"
         },
         {
           "press": "Check"
@@ -621,7 +621,7 @@ export const payrollRun = {
           "press": "Check"
         },
         {
-          "press": "Row 4: Bilal Ahmed · The amount is not valid for this account's currency"
+          "press": "Row 4: Bastien Laurent · The amount is not valid for this account's currency"
         },
         {
           "press": "Check"
@@ -674,7 +674,7 @@ export const payrollRun = {
           "press": "Check"
         },
         {
-          "press": "Row 2: Sana Malik · The amount is not valid for this account's currency"
+          "press": "Row 2: Salma Bouzid · The amount is not valid for this account's currency"
         },
         {
           "expectScreen": "start"
@@ -863,7 +863,7 @@ export const payrollRun = {
           "expectText": "PKR 360,000"
         },
         {
-          "press": "Row 1: Hina Rauf · More than 1.5 times this employee's monthly salary"
+          "press": "Row 1: Helena Rauch · More than 1.5 times this employee's monthly salary"
         },
         {
           "expectScreen": "start"

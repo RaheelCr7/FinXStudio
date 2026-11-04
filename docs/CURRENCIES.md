@@ -19,7 +19,7 @@ Step 1 of multi-currency (plan section 15). One place knows how each currency is
 - Limit: a currency a bank added itself is not known to the engine yet, so it is treated as 2 decimals inside a journey.
 
 ## In the sandbox bank (step 4)
-- **A customer with accounts in four currencies:** Hina Qureshi (`hina`, Meezan app, test code 482100): PKR current, USD savings, AED and KWD (3 decimals) accounts.
+- **A customer with accounts in four currencies:** Hana Al Mazrouei (`hina`, Meezan app, test code 482100): PKR current, USD savings, AED and KWD (3 decimals) accounts.
 - **A limit per currency:** `limits` still applies to the currency of the first account; other currencies have their own entry (`limitsByCurrency`). `bank.limits.get` takes an optional `currency`, and answers `LIMIT_NOT_SET` for a currency with no limit. Transfers, bill payments and top-ups check the balance and limit of the account's own currency, and use that currency's rounding. A transfer's answer includes the `currency`.
 - **Totals per currency:** `bank.accounts.totals` adds balances up per currency, never across currencies, as a list a journey can show.
 - Account pickers already show each balance in its own currency.
@@ -27,7 +27,7 @@ Step 1 of multi-currency (plan section 15). One place knows how each currency is
 ## FX (step 5)
 - **Sandbox rates:** a mid-market table (units per US dollar for USD, PKR, AED, KWD, EUR, GBP, JOD, SAR, INR, JPY). The customer's rate is the mid rate less a 0.5% spread, to six decimals; a fee of 0.2% of the amount sent is charged in the currency sent. A real bank's rate provider replaces the table behind the same adapters.
 - **`bank.fx.rate`** (a pair's mid and customer rate), **`bank.fx.quote`** (prices an amount between two of the customer's own accounts in different currencies, to each currency's own decimals; valid for 30 seconds) and **`bank.fx.convert`** (after the one-time code: debits amount plus fee, credits the converted amount, each quote works once; `QUOTE_EXPIRED`, `QUOTE_USED`, `INSUFFICIENT_FUNDS`, `SAME_CURRENCY`). Conversions between a customer's own accounts do not use the daily payment limits.
-- **Journey "Convert between my accounts"** (catalog, Accounts): choose the account to convert from and to, enter the amount in the currency of the account it leaves (read from that account, with its own decimals), see the rate, fee and what you get on the review screen with the rate's validity, consent, one-time code, receipt. If the rate runs out while the customer is typing the code, nothing is converted and "Try again" gets a new rate. Try it with the sandbox customer Hina Qureshi.
+- **Journey "Convert between my accounts"** (catalog, Accounts): choose the account to convert from and to, enter the amount in the currency of the account it leaves (read from that account, with its own decimals), see the rate, fee and what you get on the review screen with the rate's validity, consent, one-time code, receipt. If the rate runs out while the customer is typing the code, nothing is converted and "Try again" gets a new rate. Try it with the sandbox customer Hana Al Mazrouei.
 
 ## Not built yet
 1. Cross-currency payments to someone else (a beneficiary in another currency): the quote and convert adapters work between a customer's own accounts only.
