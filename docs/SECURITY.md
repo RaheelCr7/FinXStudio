@@ -43,7 +43,7 @@ Reports run in `.github/workflows/security.yml` and do not block merges yet: dep
 Current findings (3 Nov 2026): the production dependency audit flagged zod 3.23.8 (high, memory exhaustion on oversized collections; fixed by moving `journey-schema` to zod 4.6.7), and two moderate `glob`/`minimatch` advisories that come in through Expo's build tooling (not shipped in the app bundle); tracked until Expo updates.
 
 ## Controls roadmap (in order)
-1. **Done (production profile): Studio sign-in, sessions, CSRF defence, rate and size limits, security headers (CSP report-only), hash-chained audit log, four-eyes publish by default.** See "Studio in production" below. Still to add: a People-page form for passwords, TOTP second factor, SSO, a shared rate-limit store when Studio runs on more than one server.
+1. **Done (production profile): Studio sign-in, sessions, CSRF defence, rate and size limits, security headers (CSP report-only), hash-chained audit log, four-eyes publish by default.** See "Studio in production" below. Passwords are set on the People page (Manage access). Still to add: TOTP second factor, SSO, a shared rate-limit store when Studio runs on more than one server.
 2. Mobile: secure storage, certificate pinning, root/jailbreak detection, screenshot blocking, TLS only.
 3. **Done: signed journeys.** See "Signed journeys" below.
 4. `mock-bank-api` excluded from production bundles.
@@ -55,7 +55,7 @@ Set `FINX_PROFILE=production` and the following. Demo behaviour is untouched whe
 | Variable | Purpose |
 |---|---|
 | `FINX_SESSION_SECRET` | 32+ random characters; signs session cookies. Studio refuses to sign in without it. |
-| `FINX_BOOTSTRAP_ADMIN_PASSWORD` | Used once, when nobody has a password yet, as the first Admin's password (12+ characters). Change it at once with `PUT /api/people/<id>/password`, then remove the variable. |
+| `FINX_BOOTSTRAP_ADMIN_PASSWORD` | Used once, when nobody has a password yet, as the first Admin's password (12+ characters). Change it at once on the People page (open your own card, Manage access, Your password), then remove the variable. |
 | `FINX_STUDIO_ALLOWED_ORIGINS` | Comma-separated browser origins allowed to write (production does not trust localhost). |
 | `FINX_SERVICE_TOKEN` | 32+ characters; the FinX MCP server sends its `FINX_STUDIO_TOKEN` (same value) as `Authorization: Bearer`. |
 | `FINX_SERVICE_PERSON` | The person id agents act as. Pick someone without the publish permission; agents can never publish regardless. |
