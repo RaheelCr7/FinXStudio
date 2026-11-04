@@ -22,7 +22,7 @@ export async function runScenarios(journey: Journey, over: Overrides = {}): Prom
     const opts: SimOptions = {
       journey, persona: t.persona, lang: t.lang ?? journey.locale.default, steps: t.steps as unknown as Step[],
       provider: (over.provider ?? (t.provider as ProviderId | undefined)), now: t.now ? Date.parse(t.now) : undefined,
-      setup: t.setup as SimOptions["setup"], flaws: over.flaws,
+      setup: t.setup as SimOptions["setup"], flaws: over.flaws, conditions: t.conditions,
     };
     try {
       const r = await simulate(opts);
@@ -94,6 +94,7 @@ export function bankMutants(journey: Journey): Mutant[] {
   const calls = (name: string) => journey.integrations.some((i) => i.adapter === `corp.payments.${name}` || (name === "initiate" && /^corp\.(bulk|payroll)\.(check|submit)$/.test(i.adapter)));
   const bulk = journey.integrations.some((i) => /^corp\.(bulk|payroll)\./.test(i.adapter));
   const payroll = journey.integrations.some((i) => /^corp\.payroll\./.test(i.adapter));
+  const uses = (re: RegExp) => journey.integrations.some((i) => re.test(i.adapter));
   // only the rules this journey can reach: starting a payment, or approving and rejecting one
   const all: [keyof Flaws, string, boolean][] = [
     ["roles", "The bank ignores who may start and who may approve", calls("initiate") || calls("approve")],
@@ -106,6 +107,50 @@ export function bankMutants(journey: Journey): Mutant[] {
     ["lineChecks", "The bank accepts every row of a bulk file without checking it", bulk],
     ["employeeChecks", "The bank pays anyone, and any amount, on a payroll file", payroll],
     ["payrollPeriod", "The bank takes any pay period and lets a period be paid twice", payroll],
+    // a retail customer's own accounts: the rules of moving and converting money between them
+    ["sameAccount", "The bank lets money move from an account to itself", uses(/^bank\.(transfers\.own|schedules\.(check|create))$/)],
+    ["canDebit", "The bank lets an account that is frozen send money", uses(/^bank\.(transfers\.own|fx\.quote|payments\.(quote|create)|bills\.(quote|pay)|topup\.(check|create)|schedules\.(check|create))$/)],
+    ["funds", "The bank lets an account send more than it has", uses(/^bank\.(transfers\.own|fx\.(quote|convert)|payments\.(quote|create)|bills\.(quote|pay)|topup\.(check|create))$/)],
+    ["quoteExpiry", "The bank converts at a rate that has run out", uses(/^bank\.(fx\.convert|payments\.create)$/)],
+    ["quoteReplay", "The bank lets one rate be used twice", uses(/^bank\.(fx\.convert|payments\.create)$/)],
+    // sending money to someone else: the speeds and their limits, the daily limit, the new-payee allowance, screening, purpose and address
+    ["railLimit", "The bank sends a payment that is over the limit of its speed", uses(/^bank\.payments\.quote$/)],
+    ["dailyLimit", "The bank ignores the customer's daily limit", uses(/^bank\.(payments\.(quote|create)|bills\.(quote|pay)|topup\.(check|create)|schedules\.(check|create))$/)],
+    ["coolingOff", "The bank ignores the allowance of a payee added in the last 24 hours", uses(/^bank\.(payments\.(quote|create)|schedules\.(check|create))$/)],
+    ["sanctions", "The bank sends a payment to a payee that screening holds", uses(/^bank\.payments\.create$/)],
+    ["purposeRule", "The bank takes a payment abroad without a purpose", uses(/^bank\.payments\.quote$/)],
+    ["addressRule", "The bank takes a payment abroad without the payee's address when the rules ask for it", uses(/^bank\.payments\.quote$/)],
+    ["bankCode", "The bank accepts a transit number, IFSC or BSB in the wrong format", uses(/^bank\.payments\.quote$/) && uses(/^bank\.payees\.validate$/)],
+    // paying a bill: the smallest and the largest payment, what was already paid, an amount due that changed, and the currency of the bill
+    ["billMinimum", "The bank takes a bill payment below the minimum", uses(/^bank\.bills\.(quote|pay)$/)],
+    ["billMaximum", "The bank takes a bill payment above the amount due", uses(/^bank\.bills\.(quote|pay)$/)],
+    ["billMemory", "The bank forgets what was already paid on a bill", uses(/^bank\.bills\.(lookup|quote|pay)$/)],
+    ["billChanged", "The bank pays a bill whose amount due changed since the person saw it", uses(/^bank\.bills\.pay$/)],
+    ["billCurrency", "The bank pays a bill from an account in another currency when that is switched off", uses(/^bank\.bills\.(quote|pay)$/)],
+    // scheduled payments: how many, the first date, the end, and when a payment can still be changed
+    ["scheduleLimit", "The bank lets a customer have more than 20 scheduled payments", uses(/^bank\.schedules\.(check|create)$/)],
+    ["scheduleDates", "The bank takes a first date that is today, more than 12 months away or not a business day", uses(/^bank\.schedules\.(check|create|update)$/)],
+    ["scheduleEnd", "The bank takes an end date before the start, one off the list, or a number of payments out of range", uses(/^bank\.schedules\.(check|create|update)$/)],
+    ["scheduleCutoff", "The bank changes or cancels a payment after changes closed", uses(/^bank\.schedules\.(get|check|update|cancel)$/)],
+    ["scheduleRunning", "The bank changes or cancels a payment on the day it runs", uses(/^bank\.schedules\.(get|check|update|cancel)$/)],
+    // topping up a mobile number: the operator's own amounts, the numbers the operator cannot top up, and the day's allowance of one number
+    ["topupAmount", "The bank tops up an amount that is not one the operator offers", uses(/^bank\.topup\.(check|create)$/)],
+    ["topupNumber", "The bank tops up a number the operator cannot top up or cannot reach", uses(/^bank\.topup\.(check|create)$/)],
+    ["topupLimit", "The bank lets one number be topped up above 300.00 in a day", uses(/^bank\.topup\.(check|create)$/)],
+    // the payees a customer saves: what the bank checks about them
+    ["payeeLimit", "The bank lets a customer save more than 50 payees", uses(/^bank\.payees\.(validate|save)$/)],
+    ["payeeDuplicate", "The bank lets the same payee be saved twice", uses(/^bank\.payees\.(validate|save|update)$/)],
+    ["payeeInUse", "The bank deletes a payee that a scheduled payment uses", uses(/^bank\.payees\.delete$/)],
+    ["ibanChecksum", "The bank accepts an IBAN whose check digits are wrong", uses(/^bank\.payees\.validate$/)],
+    ["sepa", "The bank accepts an IBAN from outside the SEPA area as a European payee", uses(/^bank\.payees\.validate$/)],
+    ["countryMatch", "The bank accepts an IBAN from another country than the one chosen", uses(/^bank\.payees\.validate$/)],
+    ["routingChecksum", "The bank accepts a routing number whose checksum is wrong", uses(/^bank\.payees\.validate$/)],
+    ["sortCode", "The bank accepts a sort code that is not 6 digits", uses(/^bank\.payees\.validate$/)],
+    ["bic", "The bank accepts a SWIFT/BIC of the wrong length", uses(/^bank\.payees\.validate$/)],
+    ["nameCheck", "The name check says every name matches", uses(/^bank\.payees\.check$/)],
+    ["verifiedOnMatch", "The bank marks a payee Verified whether or not the name matched", uses(/^bank\.payees\.(save|update)$/)],
+    ["clockOnDetails", "Changing the bank details of a payee does not start its 24 hours again", uses(/^bank\.payees\.update$/)],
+    ["nameKeepsClock", "Changing only the name of a payee starts its 24 hours again", uses(/^bank\.payees\.update$/)],
   ];
   const rules = all.filter(([, , reachable]) => reachable).map(([k, what]) => [k, what] as [keyof Flaws, string]);
   return rules.map(([k, what]) => ({ id: `bank-${k}`, what, kind: "bank" as const, flaws: { [k]: false } as Flaws }));

@@ -1,6 +1,6 @@
 import type { Journey } from "@finx/journey-schema";
 import { JourneyRunner, localize, type View } from "@finx/renderer-core";
-import { MockBank, personas, type Flaws, type ProviderId } from "@finx/mock-bank-api";
+import { MockBank, personas, type Flaws, type ProviderId, type SandboxConditions } from "@finx/mock-bank-api";
 
 /** One scripted action or check. Actions change state; expectations only check it. */
 export type Step =
@@ -8,8 +8,12 @@ export type Step =
   | { press: string }
   | { expectScreen: string }
   | { expectText: string }
+  /** The text is not on the screen (for example an option the bank switched off). */
+  | { expectNoText: string }
   | { expectError: string }
   | { expectToast: string }
+  /** Moves the sandbox clock forward (seconds), for rules that depend on time, such as a rate that is only held for 30 seconds. */
+  | { advance: number }
   /** Reads the bank with a read adapter and checks one value: { adapter, input?, path, equals } (for example that no money has moved). An input value of the form {{path}} is read from the journey's data. */
   | { expectBank: { adapter: string; input?: Record<string, unknown>; path: string; equals: unknown } };
 
@@ -55,10 +59,11 @@ function describeBlock(b: Record<string, any>): string | null {
 function visibleStrings(view: View): string[] {
   const out: string[] = [view.title];
   for (const b of view.blocks as any[]) {
-    for (const k of ["label", "text", "title", "hint", "helper", "meta", "placeholder", "error"]) if (typeof b[k] === "string") out.push(b[k]);
+    for (const k of ["label", "text", "title", "hint", "helper", "meta", "placeholder", "error", "name"]) if (typeof b[k] === "string") out.push(b[k]);
     if (typeof b.value === "string") out.push(b.value);
     for (const r of b.rows ?? []) out.push(r.label, r.value);
-    for (const i of b.items ?? []) if (i?.name) out.push(i.name); else if (i?.displayName) out.push(i.displayName);
+    // a choice (its name and the line under it), a payee, or a row of a list (its label and the line under it)
+    for (const i of b.items ?? []) { if (i?.name) out.push(i.name); else if (i?.displayName) out.push(i.displayName); if (b.type === "select" && i?.sub) out.push(i.sub); if (b.type === "menu") { if (i?.label) out.push(i.label); if (i?.text) out.push(i.text); } }
   }
   return out.filter(Boolean);
 }
@@ -73,6 +78,8 @@ export type SimOptions = {
   setup?: { adapter: string; input?: Record<string, unknown>; saveAs?: string }[];
   /** Rules switched off in the sandbox, for mutation checks. */
   flaws?: Flaws;
+  /** Things that go wrong in the sandbox on purpose (a timeout, an unavailable adapter, a frozen account). */
+  conditions?: SandboxConditions;
 };
 
 export async function simulate(opts: SimOptions): Promise<SimResult> {
@@ -81,7 +88,7 @@ export async function simulate(opts: SimOptions): Promise<SimResult> {
   if (!journey.locale.supported.includes(lang)) throw new Error(`Language "${lang}" is not supported by this journey (supported: ${journey.locale.supported.join(", ")})`);
   if (steps.length > MAX_STEPS) throw new Error(`Too many steps (${steps.length}). The limit is ${MAX_STEPS}.`);
 
-  const bank = new MockBank(persona, { corpProvider: opts.provider, corpFlaws: opts.flaws });
+  const bank = new MockBank(persona, { corpProvider: opts.provider, corpFlaws: opts.flaws, conditions: opts.conditions });
   if (opts.now !== undefined) bank.now = () => opts.now!;
   const setupFailures: string[] = [];
   // what a setup call answered, by the name it was saved under: later inputs read it as {{setup.name.id}}, so a scenario never
@@ -129,11 +136,18 @@ export async function simulate(opts: SimOptions): Promise<SimResult> {
     if ("set" in step) {
       for (const [path, value] of Object.entries(step.set)) runner.set(path, resolve(value));
       view = snap(n, `set ${Object.keys(step.set).join(", ")}`);
+    } else if ("advance" in step) {
+      const ms = Number(step.advance) * 1000;
+      if (!(ms >= 0)) { failures.push(`Step ${n}: advance needs a number of seconds`); stopped = true; break; }
+      const t = bank.now() + ms; bank.now = () => t;
+      view = snap(n, `advance ${step.advance} seconds`);
     } else if ("press" in step) {
       // a button, or a row of a menu (a list row, a shortcut) with that label
-      const rows = (runner.view().blocks as any[]).filter((b) => b.type === "menu" || b.type === "shortcuts").flatMap((b) => (b.items ?? []).map((i: any) => ({ type: "button", label: i.label, actions: i.actions })));
-      const buttons = [...(runner.view().blocks as any[]).filter((b) => b.type === "button"), ...rows];
-      const raw = [...(runner.screen.blocks as any[]).filter((b) => b.type === "button"), ...rows];
+      const shown = runner.view().blocks as any[];
+      const rows = shown.filter((b) => b.type === "menu" || b.type === "shortcuts").flatMap((b) => (b.items ?? []).map((i: any) => ({ type: "button", label: i.label, actions: i.actions })));
+      const buttons = [...shown.filter((b) => b.type === "button"), ...rows];
+      // the same button as written in the journey (not translated), found by where it sits on the screen: a button that is hidden must not be mistaken for one that is shown
+      const raw = [...shown.filter((b) => b.type === "button").map((b) => (runner.screen.blocks as any[])[b.srcIndex]), ...rows];
       const want = String(step.press).trim().toLowerCase();
       const idx = buttons.findIndex((b, k) => String(b.label).trim().toLowerCase() === want || localize(raw[k]?.label, journey.locale.default, journey.locale.default).trim().toLowerCase() === want);
       if (idx < 0) {
@@ -159,6 +173,9 @@ export async function simulate(opts: SimOptions): Promise<SimResult> {
       } else if ("expectText" in step) {
         did = `expect text "${step.expectText}"`;
         if (!visibleStrings(view).some((s) => s.toLowerCase().includes(String(step.expectText).toLowerCase()))) fail(n, `${did}: not found on screen "${view.screenId}". Visible: ${visibleStrings(view).map((s) => clip(s, 40)).slice(0, 12).join(" | ")}`, view);
+      } else if ("expectNoText" in step) {
+        did = `expect no text "${step.expectNoText}"`;
+        if (visibleStrings(view).some((s) => s.toLowerCase().includes(String(step.expectNoText).toLowerCase()))) fail(n, `${did}: it is on screen "${view.screenId}"`, view);
       } else if ("expectError" in step) {
         did = `expect validation error "${step.expectError}"`;
         const q = String(step.expectError).toLowerCase();
@@ -176,7 +193,7 @@ export async function simulate(opts: SimOptions): Promise<SimResult> {
         did = `expect message "${step.expectToast}"`;
         if (!view.toast || !view.toast.toLowerCase().includes(String(step.expectToast).toLowerCase())) fail(n, `${did}: the message shown is ${view.toast ? `"${view.toast}"` : "none"}`, view);
       } else {
-        failures.push(`Step ${n} is not a known action. Use set, press, expectScreen, expectText, expectError, expectToast or expectBank.`);
+        failures.push(`Step ${n} is not a known action. Use set, press, advance, expectScreen, expectText, expectNoText, expectError, expectToast or expectBank.`);
         stopped = true;
         break;
       }

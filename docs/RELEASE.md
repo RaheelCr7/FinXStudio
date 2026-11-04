@@ -6,7 +6,7 @@ A release is a documented evidence trail, not a promise that nothing can go wron
 - [ ] `pnpm typecheck` and `pnpm test` green on the release commit; web build green
 - [ ] Demo flows work on web, iOS Simulator and Android (Send to beneficiary, Invest buy)
 - [ ] Production profile tests green (once the production switch exists)
-- [ ] `mock-bank-api` absent from production bundles
+- [ ] `mock-bank-api` absent from production bundles: `node scripts/audit-bundle.mjs <build folder> --strict` passes for web and phone builds, and the build does not set `*_ALLOW_SANDBOX`
 
 ## Security
 - [ ] Dependency audit, secret scan and CodeQL: no open high findings, or each one accepted in writing

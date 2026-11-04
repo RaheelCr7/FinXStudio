@@ -1,11 +1,19 @@
 import type { Journey } from "./schema";
 import { localTransfer } from "./fixtures/local-transfer";
 import { payBill } from "./fixtures/pay-bill";
+import { payBillBankworkx } from "./fixtures/pay-bill-bankworkx";
+import { mobileTopup } from "./fixtures/mobile-topup";
+import { schedulePayment } from "./fixtures/schedule-payment";
+import { cancelStandingOrder } from "./fixtures/cancel-standing-order";
 import { corporatePayment, corporateApproval } from "./fixtures/corporate-payments";
 import { bulkPayment } from "./fixtures/bulk-payment";
 import { payrollRun } from "./fixtures/payroll-run";
 import { withdrawPayment } from "./fixtures/withdraw-payment";
 import { convertCurrency } from "./fixtures/convert-currency";
+import { ownTransfer } from "./fixtures/own-transfer";
+import { manageBeneficiary } from "./fixtures/manage-beneficiary";
+import { personalTransfer } from "./fixtures/personal-transfer";
+import { internalTransfer } from "./fixtures/internal-transfer";
 import { addMoney, addCard, connectAccount, createBudget, invest, sellInvestment } from "./fixtures/bankworkx";
 import { cabJourneys } from "./fixtures/cab";
 
@@ -74,6 +82,46 @@ export const catalog: CatalogEntry[] = [
     id: addMoney.slug, category: "Accounts", madeFor: "bankworkx", journey: addMoney,
     summary: "Top up an account from a saved card, with quick amounts and a review step.",
     highlights: ["Quick amount chips", "Card picker", "Review and receipt"],
+  },
+  {
+    id: ownTransfer.slug, category: "Payments", madeFor: "bankworkx", journey: ownTransfer,
+    summary: "Move money between your own accounts: instant and free in the same currency; converted at the mid-market rate with a separate 0.20% fee and a rate held for 30 seconds in different currencies.",
+    highlights: ["Same-currency move with a note", "Mid-market rate, no margin", "Type what you send or what you get", "Rate that runs out and renews", "One-time code, locked after 3 wrong codes", "Timeout and unavailable screens"],
+  },
+  {
+    id: manageBeneficiary.slug, category: "Payments", madeFor: "bankworkx", journey: manageBeneficiary,
+    summary: "Save a person or company to pay, change their details, or remove them. The bank checks the details and the name; a new or changed payee is limited to 500.00 USD for 24 hours.",
+    highlights: ["Add a BankWorkx customer, a payee at a US, European, UK or Middle East bank, or abroad", "Name check with Use for a close match", "One-time code to add or change the name or account", "Nickname and label changes need no code", "Delete with or without the scheduled payments that use the payee", "Timeout and unavailable screens"],
+  },
+  {
+    id: personalTransfer.slug, category: "Payments", madeFor: "bankworkx", journey: personalTransfer,
+    summary: "Send money to a BankWorkx customer, a person at another bank or another country: choose how fast, see the fee, the rate and the arrival, confirm with a one-time code. A payee typed in the payment can be saved; a new payee is limited to 500.00 USD for 24 hours.",
+    highlights: ["Three ways to send, each switched on or off by the bank", "Find a BankWorkx customer by mobile, email or ID", "Standard, Same day, Instant (and Priority) with fee, arrival and limit", "Rate held 60 seconds, then a new price", "Later and repeating payments on business days", "Held for review, timeout and unavailable screens"],
+  },
+  {
+    id: payBillBankworkx.slug, category: "Payments", madeFor: "bankworkx", journey: payBillBankworkx,
+    summary: "Pay a bill from the bank's directory of billers: enter the reference, see the bill, pay the full amount, the minimum or another amount, confirm with a one-time code, and get a receipt.",
+    highlights: ["Directory with search, categories and saved billers", "Reference format per biller", "Full, minimum or other amount", "Late fee, fee and rate in another currency", "Save the biller or pay automatically", "Timeout and unavailable screens"],
+  },
+  {
+    id: mobileTopup.slug, category: "Payments", madeFor: "bankworkx", journey: mobileTopup,
+    summary: "Add credit to a mobile number: choose the operator, the number (a saved one or another), one of the operator's fixed amounts and the account to pay from, confirm with a one-time code, and get a receipt.",
+    highlights: ["Operators with fixed amounts", "Number rule of the home market", "Saved numbers, saved from the review", "Up to 300.00 a day to one number", "Timeout and unavailable screens"],
+  },
+  {
+    id: schedulePayment.slug, category: "Payments", madeFor: "bankworkx", journey: schedulePayment,
+    summary: "Pay a payee, one of your own accounts or a saved bill on a future date or on a repeat (once, weekly, every 2 weeks, monthly, every 3 months), with an end and a reminder; change a schedule later. Nothing is taken until each date.",
+    highlights: ["Payee, own account or saved bill", "Weekdays, month ends and closed days handled", "Ends never, on a date or after a number of payments", "Changes close the business day before", "20 schedules at most", "Timeout and unavailable screens"],
+  },
+  {
+    id: cancelStandingOrder.slug, category: "Payments", madeFor: "bankworkx", journey: cancelStandingOrder,
+    summary: "End a scheduled or recurring payment for good, or skip only the next one, from the list of what is scheduled. No code is asked, because it can only reduce what leaves the account. The cancel mode of Schedule a payment, as a journey of its own.",
+    highlights: ["All future payments or only the next one", "Refused while running or after changes close", "No code needed", "Timeout and unavailable screens"],
+  },
+  {
+    id: internalTransfer.slug, category: "Payments", madeFor: "bankworkx", journey: internalTransfer,
+    summary: "Send money to a BankWorkx customer: found by mobile number, email or BankWorkx ID, free and instant, up to 25,000.00. The same flow as Send money, opened at this type; kept so that links to the old name open the right place.",
+    highlights: ["Alias of Send money for one type", "Free and instant", "Switched off with the same option", "One-time code"],
   },
   {
     id: connectAccount.slug, category: "Accounts", madeFor: "bankworkx", journey: connectAccount,

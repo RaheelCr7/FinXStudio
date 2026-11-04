@@ -17,7 +17,7 @@ describe("signing in and out", () => {
   it("starts on the sign-in screen with the first customer of this bank, and tells listeners about changes", () => {
     const a = make("bankworkx");
     expect(a.getState()).toMatchObject({ screen: "login", personaId: "alex", tab: "dashboard", lang: "en" });
-    expect(a.personas().map((p) => p.id)).toEqual(["alex", "sam"]);
+    expect(a.personas().map((p) => p.id)).toEqual(["alex", "alexglobal", "alexpayees", "alexfull", "alexbills", "alextopup", "alexsched", "sam"]);
     let calls = 0; const off = a.subscribe(() => { calls++; });
     a.selectPersona("sam");
     expect(a.persona.name).toMatch(/Sam/);

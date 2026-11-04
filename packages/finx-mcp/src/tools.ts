@@ -47,6 +47,7 @@ const stepSchema = z.union([
   z.object({ press: z.string() }).strict().describe("Press the button with this label (English or the shown language) on the current screen"),
   z.object({ expectScreen: z.string() }).strict().describe("Check the current screen id"),
   z.object({ expectText: z.string() }).strict().describe("Check that this text is visible on the current screen (case-insensitive)"),
+  z.object({ expectNoText: z.string() }).strict().describe("Check that this text is NOT visible on the current screen (case-insensitive), for example an option the bank switched off"),
   z.object({ expectError: z.string() }).strict().describe("Check there is a validation error for this data path or containing this message"),
   z.object({ expectToast: z.string() }).strict().describe("Check the message shown at the top contains this text"),
 ]);
@@ -210,7 +211,7 @@ export function registerTools(server: McpServer, deps: ToolDeps) {
 
   server.registerTool("finx_run_scenarios", {
     title: "Run the tests that travel with a journey",
-    description: "Runs every scenario saved in the journey (journey.scenarios) through the real engine against the sandbox bank, and reports which pass, which fail and why, and for each acceptance criterion (journey.acceptance, AC-1 …) whether a passing scenario proves it, it is failing, or it is uncovered. Use it after writing or changing scenarios, and before saying a journey is done. A scenario is { id: T-1, name, covers: [AC-1], persona, now?, setup?, steps } with the same steps as finx_simulate_journey, plus expectBank { adapter, input?, path, equals } to read the bank (for example that no money moved).",
+    description: "Runs every scenario saved in the journey (journey.scenarios) through the real engine against the sandbox bank, and reports which pass, which fail and why, and for each acceptance criterion (journey.acceptance, AC-1 …) whether a passing scenario proves it, it is failing, or it is uncovered. Use it after writing or changing scenarios, and before saying a journey is done. A scenario is { id: T-1, name, covers: [AC-1], persona, now?, conditions?, setup?, steps } with the same steps as finx_simulate_journey, plus expectBank { adapter, input?, path, equals } to read the bank (for example that no money moved), expectNoText (the text is not on the screen) and advance: seconds to move the sandbox clock (a rate that is held for 30 seconds). conditions makes the sandbox misbehave on purpose: { timeout: [adapters], latencyMs, unavailable: [adapters], frozen: [account ids], transferFails, limitUsed (money already sent today, against the daily limit), closedDays: [YYYY-MM-DD dates the bank is closed, for scheduled payments] }; unavailable also takes rail:<id> to take one payment speed down.",
     inputSchema: z.object({ slug: slugSchema.optional(), journey: journeyJson.optional(), provider: z.enum(["reference", "bank-b"]).optional().describe("Run the corporate adapters against the second bank API instead") }),
     annotations: { readOnlyHint: true, openWorldHint: false },
   }, ({ slug, journey, provider }) => guarded(async () => {

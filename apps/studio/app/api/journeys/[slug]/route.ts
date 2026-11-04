@@ -18,7 +18,8 @@ export async function GET(req: Request, { params }: Ctx) {
     const env = new URL(req.url).searchParams.get("env") ?? "published";
     if (env === "draft") { if (isProduction()) await actorOf(req); return json(req, { ...rec, issues: lintAll(rec.draft) }); }
     if (!rec.published) return json(req, { error: "Journey is not published yet" }, 404);
-    return json(req, rec.published);
+    // signed when it was published (see docs/SECURITY.md); apps that hold the bank's public key check it
+    return json(req, rec.publishedSignature ? { ...rec.published, signature: rec.publishedSignature } : rec.published);
   } catch (e) { return fail(e, req); }
 }
 export async function PUT(req: Request, { params }: Ctx) {

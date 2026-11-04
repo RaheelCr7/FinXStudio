@@ -16,11 +16,88 @@ export type AdapterInfo = {
 export const ADAPTER_CATALOG: AdapterInfo[] = [
   {
     adapter: "bank.accounts.list", suggestedId: "accounts", description: "The signed-in customer's accounts.",
-    input: {}, returns: "Object map keyed by account id: { id, name, maskedNumber, iban, balance, currency, status, canDebit }. Save as ctx.accounts and use with accountPicker.",
+    input: { homeOnly: "optional, true: only accounts that can pay someone else" }, returns: "Object map keyed by account id: { id, name, maskedNumber, iban, balance, currency, status, canDebit }. Save as ctx.accounts and use with accountPicker.",
   },
   {
-    adapter: "bank.beneficiaries.list", suggestedId: "beneficiaries", description: "Saved payees.",
-    input: {}, returns: "Object map keyed by beneficiary id: { id, displayName, bank, maskedNumber, addedAt, ageHours }. Save as ctx.beneficiaries.",
+    adapter: "bank.beneficiaries.list", suggestedId: "beneficiaries", description: "Saved payees. One added in the last 24 hours is new and may only be sent 500.00 USD in any 24 hours.",
+    input: { sendType: "optional: internal | domestic | international, only payees of that kind" }, returns: "Object map keyed by beneficiary id: { id, displayName, bank, maskedNumber, addedAt, ageHours, sendType } and, for payees saved with bank.payees.save: kind (internal | domestic | international), region (bw | us | eu | uk | me | world), country, nickname, label, verified, nameCheck, coolingOffUntil (ISO or null), coolingOffHoursLeft, allowanceLeft (USD, null when not new), scheduledCount, scheduledText. Save as ctx.beneficiaries.",
+  },
+  {
+    adapter: "bank.payees.validate", suggestedId: "validate", description: "Checks the details of a payee being added (or changed, with payeeId): the account for its region, no second copy, at most 50 payees. Fails with the first problem.",
+    input: { payeeId: "only to change a payee", region: "bw (BankWorkx customer) | us | eu | uk | me | world (abroad)", country: "me: AE, SA, JO; world: DE, CA, IN, JP, AU, CH, SG, MX", name: "name on the account", nickname: "up to 24 characters", label: "Family | Friend | Landlord | Business | Other", customerNo: "bw: 10 digits", routing: "us: 9 digits, ABA checksum", account: "us, uk, world", accountType: "us: checking | savings", iban: "eu, me", sort: "uk: 6 digits", swift: "world: 8 or 11 characters" },
+    returns: "{ ok, bankName, maskedNumber, sensitive, restartsClock }; for bw also { registeredName, found }. sensitive: the name or bank details of a saved payee changed.",
+    errors: ["PAYEE_NAME_REQUIRED", "COUNTRY_REQUIRED", "INVALID_ACCOUNT", "CUSTOMER_NOT_FOUND", "INVALID_ROUTING", "INVALID_SORT_CODE", "INVALID_IBAN", "NOT_SEPA", "COUNTRY_MISMATCH", "INVALID_BIC", "NICKNAME_TOO_LONG", "BENEFICIARY_LIMIT", "BENEFICIARY_EXISTS", "BENEFICIARY_NOT_FOUND"],
+  },
+  {
+    adapter: "bank.payees.check", suggestedId: "check", description: "The name check (Verification or Confirmation of Payee). A BankWorkx customer always matches; abroad, an unknown account, or skip gives na.",
+    input: { "...": "the fields of bank.payees.validate", skip: "true when the bank switched the check off" },
+    returns: "{ result: match | close | none | na, registeredName?, label }", errors: ["TIMEOUT", "SERVICE_UNAVAILABLE"],
+  },
+  {
+    adapter: "bank.payees.save", suggestedId: "save", description: "Saves a new payee after the one-time code. Unless the name matched, acknowledged must be true. Verified only after a match. New for 24 hours.",
+    input: { "...": "the fields of bank.payees.validate", skip: "as for check", acknowledged: "the person ticked that they understand" },
+    returns: "{ payeeId, addedAt, coolingOffUntil, displayName, bank, maskedNumber, verified, nameCheck, allowanceUsd }",
+    requiresOtp: true, errors: ["OTP_REQUIRED", "PAYEE_NOT_CHECKED", "BENEFICIARY_EXISTS", "BENEFICIARY_LIMIT"],
+  },
+  {
+    adapter: "bank.payees.update", suggestedId: "update", description: "Changes a payee. Nickname or label: nothing more. Name or bank details: the one-time code and the check again; bank details also make it new for 24 hours (the name alone does not). Region cannot change.",
+    input: { payeeId: "payee to change", "...": "the fields of bank.payees.validate", skip: "as for check", acknowledged: "as for save" },
+    returns: "{ payeeId, addedAt, coolingOffUntil, displayName, bank, maskedNumber, verified, nameCheck, sensitive, restarted }",
+    errors: ["OTP_REQUIRED", "PAYEE_NOT_CHECKED", "BENEFICIARY_NOT_FOUND", "BENEFICIARY_EXISTS"],
+  },
+  {
+    adapter: "bank.payees.delete", suggestedId: "remove", description: "Removes a payee, no code needed. One used by a scheduled payment needs cancelSchedules true, which cancels them.",
+    input: { payeeId: "payee to remove", cancelSchedules: "true to cancel the scheduled payments that use it" },
+    returns: "{ removed, schedulesCancelled, displayName, bank, maskedNumber }", errors: ["BENEFICIARY_NOT_FOUND", "BENEFICIARY_IN_USE"],
+  },
+  {
+    adapter: "bank.payees.lookup", suggestedId: "lookup", description: "Finds a BankWorkx customer by mobile number, email or BankWorkx ID. No code needed.",
+    input: { by: "mobile | email | id", value: "what was typed" },
+    returns: "{ name, customerNumber, maskedAccount, currency, key }; key goes to bank.payments.quote.", errors: ["CUSTOMER_NOT_FOUND", "BENEFICIARY_EXISTS"],
+  },
+  {
+    adapter: "bank.payments.quote", suggestedId: "quote", description: "Prices and checks a payment to someone else (BankWorkx customer, home-market bank, or abroad): speeds with arrival, limit and fee, the rate (held 60 s), the total, every bank rule. Home-currency accounts only. Nothing moves.",
+    input: { fromAccountId: "home-currency account", payeeId: "a saved payee; or sendType (internal | domestic | international), currency, country, payeeName, payeeKey (from validate or lookup)", receiveAmount: "what the payee gets, in their currency", speed: "optional: standard | sameDay | instant | priority (default: first that fits)", standard: "false if the bank does not offer it (also sameDay, instant); priority only when true", chargeChoice: "true if the customer may pick who pays charges", chargeBearer: "shared | ours | theirs", coolingOff: "false if the bank switched the new-payee limit off", purpose: "abroad: Family support | Goods or services | Salary | Rent | Education | Savings or investment | Other", street: "abroad, when ADDRESS_REQUIRED", city: "as street", relationship: "as street: Myself | Family member | Friend | My employer | Supplier or business | Landlord | School or university | Other" },
+    returns: "{ quoteId, type, speed, speedName, arrives, speeds (map: { id, name, sub, usable }), receive { currency, amount }, rate, converted, pay, fee, feeText, total, currency, expiresAt, sendDates (map: { id, name }) }. Save as ctx.quote.",
+    errors: ["ACCOUNT_CANNOT_DEBIT", "PAYEE_NOT_CHECKED", "INVALID_AMOUNT", "RAIL_NOT_AVAILABLE", "RAIL_LIMIT", "INSUFFICIENT_FUNDS", "DAILY_LIMIT_EXCEEDED", "BENEFICIARY_COOLING_OFF", "PURPOSE_REQUIRED", "ADDRESS_REQUIRED"],
+  },
+  {
+    adapter: "bank.payments.create", suggestedId: "pay", description: "Pays a quote after the one-time code, checking the rules again. A payee named \"Test Sanctions\" is held (nothing moves). when: later only sets it up. save: true also saves a payee typed in the payment (new for 24 hours).",
+    input: { quoteId: "from bank.payments.quote", when: "now | later", sendOn: "later: a date of sendDates", repeat: "later: none | weekly | monthly", save: "true to save a typed payee (with the fields of bank.payees.validate)", reference: "optional" },
+    returns: "{ reference, railReference, status (settled | processing | scheduled | held), speed, speedName, arrives, receive, rate, pay, fee, total, currency, payeeId, payeeName, newBalance }",
+    moneyMoving: true, requiresOtp: true,
+    errors: ["OTP_REQUIRED", "CORE_UNAVAILABLE", "QUOTE_EXPIRED", "INSUFFICIENT_FUNDS", "DAILY_LIMIT_EXCEEDED", "BENEFICIARY_COOLING_OFF", "INVALID_DATE", "BENEFICIARY_EXISTS"],
+  },
+  {
+    adapter: "bank.schedules.list", suggestedId: "schedules", description: "Payments set up to go later or repeat. BankWorkx: with status (live, active, paused, history) the schedules of schedule-payment, soonest first.",
+    input: { status: "optional" }, returns: "Map by id: { id, beneficiaryId, name, text }; with status also sub, nextText, amountText, remainingRuns, running.",
+  },
+  {
+    adapter: "bank.schedules.get", suggestedId: "scheduleGet", description: "BankWorkx: one schedule. With for: change or cancel it fails if that cannot be done now.",
+    input: { scheduleId: "id", for: "optional: change | cancel" }, returns: "The list entry plus canSkip, afterText, endType, endOn, endLeft.",
+    errors: ["SCHEDULE_NOT_FOUND", "SCHEDULE_NOT_ACTIVE", "SCHEDULE_RUNNING", "SCHEDULE_CUTOFF_PASSED"],
+  },
+  {
+    adapter: "bank.schedules.check", suggestedId: "scheduleCheck", description: "BankWorkx: checks a new schedule, or a change (scheduleId), before the code. Changes nothing.",
+    input: { kind: "payee | own | bill", target: "payee, account or saved biller id", from: "account id", amount: "number", amountMode: "bill: fixed | full | minimum", frequency: "once | weekly | biweekly | monthly | quarterly", first: "YYYY-MM-DD", endType: "never | date | count", endOn: "date", endCount: "number" },
+    returns: "{ targetName, amountText, frequencyName, startText, endsText, nextDates, dates, maxCount }",
+    errors: ["BENEFICIARY_NOT_FOUND", "SAME_ACCOUNT", "INVALID_AMOUNT", "DAILY_LIMIT_EXCEEDED", "DATE_TOO_SOON", "DATE_TOO_FAR", "DATE_NOT_WEEKDAY", "END_BEFORE_START", "INVALID_COUNT", "BENEFICIARY_COOLING_OFF", "SCHEDULE_LIMIT"],
+  },
+  {
+    adapter: "bank.schedules.create", suggestedId: "scheduleCreate", description: "BankWorkx: makes the schedule; nothing is taken until each date. Input of check.",
+    input: {}, returns: "{ scheduleId, ...check }", moneyMoving: true, requiresOtp: true, errors: ["OTP_REQUIRED", "CORE_UNAVAILABLE"],
+  },
+  {
+    adapter: "bank.schedules.update", suggestedId: "scheduleUpdate", description: "BankWorkx: changes amount, next date or end, never the payee. Input of check and scheduleId.",
+    input: {}, returns: "{ scheduleId, ...check }", moneyMoving: true, requiresOtp: true, errors: ["OTP_REQUIRED", "CORE_UNAVAILABLE", "SCHEDULE_NOT_ACTIVE", "SCHEDULE_RUNNING", "SCHEDULE_CUTOFF_PASSED"],
+  },
+  {
+    adapter: "bank.schedules.cancel", suggestedId: "scheduleCancel", description: "BankWorkx: ends a schedule, or skips only the next payment. No code.",
+    input: { scheduleId: "id", scope: "all | next" }, returns: "{ status: cancelled | skipped, name, amountText, next }", errors: ["SCHEDULE_NOT_FOUND", "SCHEDULE_NOT_ACTIVE", "SCHEDULE_RUNNING", "SCHEDULE_CUTOFF_PASSED"],
+  },
+  {
+    adapter: "bank.schedules.runDue", suggestedId: "scheduleRun", description: "Scenarios only: moves the clock to the date and makes what is due.",
+    input: { date: "YYYY-MM-DD" }, returns: "Map of { status: paid | skipped | retry, reason }",
   },
   {
     adapter: "bank.limits.get", suggestedId: "limits", description: "Daily transfer limit and how much is used today.",
@@ -31,13 +108,19 @@ export const ADAPTER_CATALOG: AdapterInfo[] = [
     input: {}, returns: "Object keyed by currency code: { id, currency, total, count }. Save as ctx.totals and use it as a list source (a balance per currency).",
   },
   {
+    adapter: "bank.transfers.own", suggestedId: "transferOwn", description: "Moves money between two of the customer's own accounts in the same currency: instant, no fee, and not counted against the daily limit. Needs the one-time code first. For accounts in different currencies use bank.fx.quote and bank.fx.convert.",
+    input: { fromAccountId: "account to debit", toAccountId: "account to credit", amount: "in the accounts' currency", note: "optional text" },
+    returns: "{ reference, from: { currency, newBalance }, to: { currency, newBalance } }", moneyMoving: true, requiresOtp: true,
+    errors: ["OTP_REQUIRED", "CORE_UNAVAILABLE", "ACCOUNT_NOT_FOUND", "SAME_ACCOUNT", "ACCOUNT_CANNOT_DEBIT", "CURRENCY_MISMATCH", "INVALID_AMOUNT", "INSUFFICIENT_FUNDS"],
+  },
+  {
     adapter: "bank.fx.rate", suggestedId: "fxRate", description: "The exchange rate between two currencies: the mid-market rate and the rate the customer gets after the bank's spread.",
     input: { from: "currency code, e.g. USD", to: "currency code, e.g. PKR" }, returns: "{ from, to, midRate, rate, spreadPercent }. Fails with CURRENCY_NOT_SUPPORTED for a pair the bank does not convert.",
   },
   {
     adapter: "bank.fx.quote", suggestedId: "fxQuote", description: "Prices converting an amount between two of the customer's own accounts in different currencies. The quote is valid for 30 seconds.",
-    input: { fromAccountId: "account to debit", toAccountId: "account to credit", amount: "amount in the debit account's currency" },
-    returns: "{ quoteId, from: { currency, amount }, to: { currency, amount }, midRate, rate, fee, feeCurrency, total, expiresAt, ttlSeconds }. Save as ctx.quote. Errors: SAME_CURRENCY, INVALID_AMOUNT, INSUFFICIENT_FUNDS, CURRENCY_NOT_SUPPORTED, ACCOUNT_NOT_FOUND.",
+    input: { fromAccountId: "account to debit", toAccountId: "account to credit", amount: "amount in the debit account's currency (or in the credit account's, with direction 'get')", direction: "optional: 'send' (default) or 'get', when the amount is what the person receives; the amount sent is then rounded up to the next cent", feeWaived: "optional: true when the bank does not charge the conversion fee" },
+    returns: "{ quoteId, from: { currency, amount }, to: { currency, amount }, midRate, rate, fee, feeCurrency, total, expiresAt, ttlSeconds }. Save as ctx.quote. A BankWorkx customer gets the mid-market rate with no margin; a renewed quote of the same pair can move up to 0.04%. Errors: SAME_CURRENCY, INVALID_AMOUNT, INSUFFICIENT_FUNDS, CURRENCY_NOT_SUPPORTED, ACCOUNT_NOT_FOUND, ACCOUNT_CANNOT_DEBIT.",
   },
   {
     adapter: "bank.fx.convert", suggestedId: "fxConvert", description: "Carries out a quote after the one-time code: debits the amount plus the fee and credits the converted amount.",
@@ -107,35 +190,62 @@ export const ADAPTER_CATALOG: AdapterInfo[] = [
     errors: ["OTP_INVALID"],
   },
   {
-    adapter: "bank.transfers.create", suggestedId: "transfer", description: "Sends money to a saved beneficiary.",
+    adapter: "bank.transfers.create", suggestedId: "transfer", description: "Sends money to a saved beneficiary. A payee added in the last 24 hours may only be sent 500.00 USD (or the same value in the account's currency) in total in any 24 hours.",
     input: { fromAccountId: "account id", beneficiaryId: "beneficiary id", amount: "number (PKR)", purpose: "text" },
     returns: "{ reference, newBalance }", moneyMoving: true, requiresOtp: true,
-    errors: ["OTP_REQUIRED", "CORE_UNAVAILABLE", "ACCOUNT_NOT_FOUND", "INSUFFICIENT_FUNDS", "LIMIT_EXCEEDED"],
+    errors: ["OTP_REQUIRED", "CORE_UNAVAILABLE", "ACCOUNT_NOT_FOUND", "INSUFFICIENT_FUNDS", "LIMIT_EXCEEDED", "BENEFICIARY_COOLING_OFF"],
   },
   {
-    adapter: "bank.billers.list", suggestedId: "billers", description: "Billers the customer can pay (utilities, internet).",
-    input: {}, returns: "Object map keyed by biller id: { id, name, category }. Save as ctx.billers and use with a select block (source).",
+    adapter: "bank.billers.list", suggestedId: "billers", description: "Billers the customer can pay. BankWorkx: the bank's directory.",
+    input: { category: "BankWorkx", q: "BankWorkx" }, returns: "Object map keyed by biller id: { id, name, category } (BankWorkx adds label, format, accepts, fee). Save as ctx.billers; use as a block source.",
+  },
+  {
+    adapter: "bank.bills.saved", suggestedId: "savedBillers", description: "BankWorkx: saved billers; billerId and reference save one.",
+    input: { q: "optional", category: "optional", billerId: "save", reference: "save" }, returns: "Map by id: { id, nickname, billerId, billerName, category, label, format, accepts, fee, reference, last4 }",
+  },
+  {
+    adapter: "bank.bills.quote", suggestedId: "billQuote", description: "BankWorkx: prices and checks a bill payment. Pays nothing.",
+    input: { billerId: "biller id", reference: "as typed", choice: "full | min | other", amount: "for other", fromAccountId: "account id", fetched: "false: no lookup", allowCrossCurrency: "false: same currency only" },
+    returns: "{ amount, fee, rate, youPay, due, changed, lateFee, autopayOk, saved }",
+    errors: ["BILL_ALREADY_PAID", "AMOUNT_BELOW_MINIMUM", "AMOUNT_ABOVE_DUE", "INSUFFICIENT_FUNDS", "DAILY_LIMIT_EXCEEDED", "BILL_CURRENCY_MISMATCH"],
   },
   {
     adapter: "bank.bills.lookup", suggestedId: "billLookup", description: "Finds a bill by biller and consumer number.",
     input: { billerId: "biller id", reference: "consumer number, 10 to 14 digits" },
-    returns: "{ billerName, reference, payerName, amount, dueDate }", errors: ["BILL_NOT_FOUND", "BILLER_NOT_FOUND"],
+    returns: "{ billerName, reference, payerName, amount, dueDate }; BankWorkx: { billerName, label, due, min, max, dateText, late, lateFee, choices }", errors: ["BILL_NOT_FOUND", "BILLER_NOT_FOUND", "BILL_ALREADY_PAID", "NO_AMOUNT_DUE", "BILLER_UNAVAILABLE"],
   },
   {
     adapter: "bank.bills.pay", suggestedId: "billPay", description: "Pays a bill from an account.",
-    input: { fromAccountId: "account id", amount: "number (PKR)", billerId: "optional", reference: "optional" },
-    returns: "{ reference, newBalance }", moneyMoving: true, requiresOtp: true,
-    errors: ["OTP_REQUIRED", "CORE_UNAVAILABLE", "ACCOUNT_NOT_FOUND", "INSUFFICIENT_FUNDS", "LIMIT_EXCEEDED"],
+    input: { fromAccountId: "account id", amount: "number (PKR)", billerId: "optional", reference: "optional", due: "BankWorkx: amount due seen", save: "BankWorkx", autopay: "BankWorkx" },
+    returns: "{ reference, newBalance }; BankWorkx adds paid, left, youPay, nextAutopay", moneyMoving: true, requiresOtp: true,
+    errors: ["OTP_REQUIRED", "CORE_UNAVAILABLE", "ACCOUNT_NOT_FOUND", "INSUFFICIENT_FUNDS", "LIMIT_EXCEEDED", "BILL_CHANGED"],
   },
   {
-    adapter: "bank.carriers.list", suggestedId: "carriers", description: "Mobile carriers (Jazz, Zong, Telenor, Ufone).",
-    input: {}, returns: "Object map keyed by carrier id: { id, name }. Save as ctx.carriers and use with a select block (source).",
+    adapter: "bank.carriers.list", suggestedId: "carriers", description: "Mobile carriers (Jazz, Zong, Telenor, Ufone). BankWorkx: operators.",
+    input: {}, returns: "Object map keyed by carrier id: { id, name }. Save as ctx.carriers and use with a select block (source). BankWorkx adds amounts.",
   },
   {
-    adapter: "bank.topup.create", suggestedId: "topup", description: "Mobile top-up from an account. The amount must be between 50 and 5,000 PKR.",
-    input: { fromAccountId: "account id", amount: "number, 50 to 5000", carrier: "optional carrier id", mobile: "optional mobile number" },
-    returns: "{ reference, newBalance }", moneyMoving: true, requiresOtp: true,
-    errors: ["OTP_REQUIRED", "CORE_UNAVAILABLE", "INVALID_AMOUNT", "ACCOUNT_NOT_FOUND", "INSUFFICIENT_FUNDS", "LIMIT_EXCEEDED"],
+    adapter: "bank.topup.amounts", suggestedId: "amounts", description: "BankWorkx: an operator's fixed amounts.",
+    input: { operatorId: "operator id" }, returns: "Map keyed by amount: { id, amount, name }", errors: ["OPERATOR_NOT_FOUND"],
+  },
+  {
+    adapter: "bank.topup.numbers", suggestedId: "savedNumbers", description: "BankWorkx: saved numbers of an operator that fit the market.",
+    input: { operatorId: "optional", market: "A to D, default A" }, returns: "Map keyed by id: { id, name, number, last4, sub }", errors: ["OPERATOR_NOT_FOUND"],
+  },
+  {
+    adapter: "bank.topup.check", suggestedId: "checkNumber", description: "BankWorkx: checks a top-up before the code. Changes nothing.",
+    input: { operatorId: "id", number: "text", market: "A to D", amount: "number", fromAccountId: "account id" }, returns: "{ ok, last4, saved }",
+    errors: ["INVALID_AMOUNT", "NUMBER_INVALID", "NUMBER_NOT_FOUND", "OPERATOR_UNAVAILABLE", "TOPUP_LIMIT", "INSUFFICIENT_FUNDS", "LIMIT_EXCEEDED"],
+  },
+  {
+    adapter: "bank.topup.create", suggestedId: "topup", description: "Mobile top-up from an account. Meezan: 50 to 5,000 PKR. BankWorkx: an operator's amount, up to $300.00 a day to a number.",
+    input: { fromAccountId: "account id", amount: "number", carrier: "optional carrier id", mobile: "optional mobile number", operatorId: "BankWorkx", number: "BankWorkx", market: "BankWorkx", save: "BankWorkx", name: "BankWorkx" },
+    returns: "{ reference, newBalance }; BankWorkx adds last4, date, saved", moneyMoving: true, requiresOtp: true,
+    errors: ["OTP_REQUIRED", "CORE_UNAVAILABLE", "INVALID_AMOUNT", "ACCOUNT_NOT_FOUND", "INSUFFICIENT_FUNDS", "LIMIT_EXCEEDED", "TOPUP_LIMIT"],
+  },
+  {
+    adapter: "bank.activity.list", suggestedId: "activity", description: "BankWorkx: recent activity.",
+    input: {}, returns: "Map keyed by id: { id, title, category, amount }",
   },
   {
     adapter: "bank.banks.list", suggestedId: "banks", description: "Banks a customer can connect (BankWorkx).",
@@ -248,14 +358,25 @@ export const ADAPTER_CATALOG: AdapterInfo[] = [
 
 /** Sandbox customers for testing. The OTP codes are sandbox-only test values. */
 export function describePersonas() {
-  return Object.values(personas).map((p) => ({
+  const seen: { id: string; accounts: string[] }[] = [];
+  return Object.values(personas).map((p) => {
+    const accounts = p.accounts.map((a) => `${a.id}: ${a.name} ${a.maskedNumber}, ${a.currency} ${a.balance.toLocaleString("en-US")}`);
+    // customers that start with the same accounts say so, to keep the catalog short
+    const twin = accounts.length > 2 ? seen.find((x) => x.accounts.join("|") === accounts.join("|")) : undefined;
+    seen.push({ id: p.id, accounts });
+    return { ...describe(p), accounts: twin ? [`Same accounts as ${twin.id}`] : accounts };
+  });
+}
+function describe(p: (typeof personas)[string]) {
+  return {
     id: p.id,
     brand: p.brand,
     name: p.name,
     otpCode: p.behaviour.otpCode,
-    accounts: p.accounts.map((a) => `${a.id}: ${a.name} ${a.maskedNumber}, ${a.currency} ${a.balance.toLocaleString("en-US")}`),
-    beneficiaries: p.beneficiaries.map((b) => `${b.id}: ${b.displayName}`),
+    // a customer with many payees is described, not listed
+    beneficiaries: p.beneficiaries.length > 6 ? [`${p.beneficiaries.length} saved payees (${p.beneficiaries[0]!.id} to ${p.beneficiaries.at(-1)!.id})`] : p.beneficiaries.map((b) => `${b.id}: ${b.displayName}`),
+    ...((p.schedules?.length ?? 0) > 2 ? { scheduled: `${p.schedules!.length} scheduled payments (${p.schedules![0]!.id} to ${p.schedules!.at(-1)!.id})` } : {}),
     limits: p.limits,
     behaviour: p.behaviour.transferFails ? "Money-moving calls fail with CORE_UNAVAILABLE after a correct OTP." : p.behaviour.kyc === "rejected" ? "KYC rejected: no accounts, so money-moving journeys cannot start." : "Everything works.",
-  }));
+  };
 }
