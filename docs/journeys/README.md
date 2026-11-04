@@ -8,8 +8,8 @@ Brand rule: the product is written **BankWorkx®**. All people, companies, numbe
 
 | File | Module | Release | Workspace | Depth |
 |---|---|---|---|---|
-| [01-retail.md](01-retail.md) | 1. Retail (pre-login, sign-in, security, Personal "Aurora"): 52 journeys | 1 | Public + Personal | Full |
-| [02-sme.md](02-sme.md) | 2. SME (Business "Graphite") and the combined Alex Morgan demo: 17 journeys | 1 | Business | Full |
+| [01-retail.md](01-retail.md) | 1. Retail (pre-login, sign-in, security, Personal "Aurora"): 57 journeys | 1 | Public + Personal | Full |
+| [02-sme.md](02-sme.md) | 2. SME (Business "Graphite") and the combined Alex Morgan demo: 22 journeys | 1 | Business | Full |
 | [03-wealth.md](03-wealth.md) | 3. Wealth: 10 journeys | 2 | Personal (Wealth section) | Structure + planned parts |
 | [04-corporate.md](04-corporate.md) | 4. Corporate: 11 journeys | 2 | Business | Structure + planned parts |
 | [05-trade-finance.md](05-trade-finance.md) | 5. Trade Finance: 12 journeys | 3 | Business | Structure + planned parts |
@@ -452,7 +452,7 @@ In 5.3 the passed value of *Admin › limits › Change* is `{userId}` only (acc
 Modules 3–8 launch points are in each module file (section "Entry points" of each journey and its link-map table).
 
 ## 6. Release 1 count check
-Retail 52 + SME 17 = 69 journeys, checked by counting the `### ★` headings in the files. Releases 2–4: Wealth 10, Corporate 11, Trade Finance 12, Cash & Liquidity 11, Supply Chain Finance 11, Factoring 12 (67).
+Retail 57 + SME 22 = 79 journeys, checked by counting the `### ★` headings in the files. Releases 2–4: Wealth 10, Corporate 11, Trade Finance 12, Cash & Liquidity 11, Supply Chain Finance 11, Factoring 12 (67).
 
 ## 7. How the proof works (existing)
 `acceptance` (AC-n) and `scenarios` (T-n, with `covers`, optional `setup`, `now`, `provider`, steps and `expectBank`) travel with the journey. `finx_run_scenarios` reports each criterion proved, failing or uncovered. `finx_mutation_check` breaks the journey and the bank rules one at a time; a mutant is killed when a scenario fails; survivors are listed in `packages/finx-mcp/src/scenarios.test.ts` with the reason. See `docs/CORPORATE.md`.

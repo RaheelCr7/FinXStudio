@@ -4,17 +4,17 @@
 
 **What exists today:** BankWorkx® is a retail-only shell (`docs/BANKWORKX.md`): Dashboard, Accounts, Budgets, Wallet and Invest, six journeys in `packages/journey-schema/src/fixtures/bankworkx.ts` without consent, OTP or proof, the CAB access journeys (`fixtures/cab.ts`, `docs/CAB.md`) as the starting pattern for pre-login and sign-in, and Meezan journeys for local transfer, currency conversion and bill pay. **What is planned:** everything marked *(planned)*: sandbox domains, adapters, blocks, contexts, conditions.
 
-## Journey index (52)
+## Journey index (57)
 
 | Group | Journeys |
 |---|---|
 | Explore and onboarding (Public) | `loan-calculator`, `deposit-calculator`, `find-branch-atm`, `contact-support`, `open-account`, `track-application`, `register-digital-banking` |
-| Sign-in and security | `sign-in`, `setup-quick-login`, `forgot-username`, `reset-password`, `unlock-account`, `change-password`, `trusted-devices`, `change-quick-pin` |
-| Accounts | `accounts`, `account-details`, `statement` (was `account-statement`), `account-nickname` (alias of `account-details`), `open-another-account`, `create-budget` |
+| Sign-in and security | `sign-in`, `setup-quick-login`, `forgot-username`, `reset-password`, `unlock-account` (alias of `reset-password`, mode unlock), `forgot-password` (alias of `reset-password`, mode reset), `change-password`, `trusted-devices` (view in More), `change-quick-pin` |
+| Accounts | `accounts`, `account-details`, `statement` (was `account-statement`), `account-nickname` (alias of `account-details`), `open-another-account`, `create-budget`, `budgets` |
 | Payments | `transfer-types`, `own-transfer`, `internal-transfer`, `personal-transfer`, `single-transfer`, `international-transfer`, `pay-bill`, `mobile-topup`, `manage-beneficiary`, `schedule-payment`, `cancel-standing-order` (alias of `schedule-payment` in cancel mode) |
 | Cards | `cards`, `activate-card`, `freeze-card` (alias of `card-controls`), `card-controls`, `virtual-card`, `replace-card`, `card-pin`, `dispute-transaction`, `add-card` |
-| Save & Borrow | `term-deposit`, `savings-goal`, `apply-loan`, `repay-loan`, `invest`, `sell-investment`, `add-money` |
-| More | `update-profile`, `new-message`, `service-request`, `connect-account` |
+| Save & Borrow | `save-borrow` (the Save tab, a view), `term-deposit`, `savings-goal`, `apply-loan`, `repay-loan`, `invest`, `sell-investment`, `add-money` |
+| More | `update-profile`, `new-message`, `messages` (view), `service-request`, `my-requests` (view), `connect-account` |
 
 **Slug mapping to existing Meezan fixtures:** `fund-transfer-local` → `personal-transfer`, `convert-currency` → `own-transfer`, `pay-a-bill` → `pay-bill` (old slugs stay as aliases for Meezan). Existing BankWorkx® journeys keep their slugs and are upgraded: `add-money`, `add-card`, `connect-account`, `create-budget`, `invest`, `sell-investment`.
 
@@ -301,604 +301,558 @@ Drill-downs: each row opens the document; the document links to the others at th
 
 ### ★ Loan calculator — `loan-calculator`
 
+**Catalog:** slug `loan-calculator`, workspace `public`, category Public: before sign-in (prototype tag "Before you sign in"), core no, can a bank switch it off: yes (basic entry, kept in the Lean preset). Options (key, label, default): `showHome` "Include home loans" (on); `showApply` "Show a Start application button" (on). Research: `research/loan-calculator.md`. Built in `design/bankworkx-r1/src/journeys/50-calculators.js`, with the helper object `CALC` shared with `deposit-calculator`.
+
+The lean rework removed per-region rate tables, fees, insurance and the repayment schedule. What remains: choose a loan type, move the amount and the term, read the monthly payment, the total interest and the total to repay. Nothing is stored and no one signs in.
+
+**Home market configuration.** The only market-dependent thing is the currency symbol on every amount. The rates and ranges below are the same in every market (a bank loads its own table).
+
+| Market | Symbol before the amount |
+|---|---|
+| Market A (routing number and account) | `$` |
+| Market B (sort code and account) | `£` |
+| Market C (IBAN) | `€` |
+| Market D (IBAN, mobile alias) | `AED ` |
+
 #### 1. Summary
 
-| | |
+| Field | Value |
 |---|---|
 | Slug | `loan-calculator` |
-| Purpose | Show a monthly payment, the interest and the total to repay for a loan, before the person signs in or opens an account. |
-| Release | 1 |
-| Workspace | Public (`workspace: "public"`, planned field) |
-| Status | New (planned). Nothing like it exists in `fixtures/`. |
-| Channels | Web, mobile |
-| Starting pattern | The Meezan/BankWorkx amount screens (`amountInput` with `quickAmounts` and `validation`). The sums are done by a planned adapter, not in the journey, because the expression language has only `min`, `max`, `abs`, `round`, `floor`, `ceil`, `len`, `isEmpty` (`packages/renderer-core/src/expr.ts`): no power function, so the repayment formula cannot be written there. |
-| Who may use it | Anyone. No sign-in, no permission, no one-time code. |
-| Money moving | No. It saves nothing and makes no offer. |
+| Purpose | Move the amount and the term to see the monthly payment, the total interest and the total to repay for a personal, car or home loan. |
+| Release / workspace | 1 / Public (before sign-in) |
+| Status | Built in the prototype as a one-screen form journey (`submit: "Show summary"`, no adapter call). It only estimates; nothing is applied for. |
+| Channels | Web and mobile |
+| Starting pattern | None in the fixtures; a form with a live summary box |
+| Who may use it | Anyone, signed in or not. No permission. |
 
-New adapters: `bank.calc.loan` (planned, sandbox domain `calc`). Products come from `bank.products.get` / `bank.products.list` (planned, see Shell: Product detail). New blocks used: `dataTable` (planned, batch A) for the schedule and `chart` (planned, batch A) for the principal-and-interest ring. Everything else is in `schema.ts` today.
+**Loan table (prototype, generic).** Rate is the yearly rate, fixed per loan type. Amount and term are sliders (`range`).
+
+| Loan | Rate | Amount: min, max, step, start | Term in months: min, max, step, start |
+|---|---|---|---|
+| Personal loan | 9.9% | 1,000 to 50,000, step 500, start 10,000 | 6 to 84, step 6, start 36 |
+| Car loan | 7.4% | 2,000 to 80,000, step 500, start 15,000 | 12 to 84, step 6, start 48 |
+| Home loan (option `showHome`) | 5.1% | 50,000 to 750,000, step 5,000, start 200,000 | 60 to 360, step 12, start 240 |
+
+Monthly payment = `P × r / (1 − (1 + r)^−n)` with `r` = rate ÷ 12 ÷ 100, `P` the amount, `n` the months. Total to repay = payment × n; total interest = total to repay − amount. Amounts show with 2 decimals in the summary and receipt, and without decimals on the slider labels. A term shows as "{n} months" below 24 months or when it is not a whole number of years, "1 year" for 12 months, and "{n} years" from 24 months in whole years.
 
 #### 2. Entry points
 
-| Place | Label | Passes | Permission |
-|---|---|---|---|
-| Products › loan detail | Estimate repayments | `{productId}` (`loan_personal`, `loan_auto` or `loan_home`) | none |
-| Landing › Explore › Calculators | Loan calculator (README change needed) | – | none |
-| Products › loans list | Calculator (README change needed) | – | none |
-| Deep link | `/public/j/loan-calculator?productId=loan_auto` | `{productId}` | none |
+| Place › label | Passes in | Permission |
+|---|---|---|
+| Landing › Calculators | none | none |
+| Products › loan › Estimate repayments | `{productId}` (`loan_personal`, `loan_auto`, `loan_home`) | none |
+| Deep link `/public/j/loan-calculator?product=auto` | `{product}` (`personal`, `auto`, `home`) | none |
 
-With `{productId}` the first screen opens with that loan type chosen and its limits shown. Without it, the person chooses.
+A product that is not offered (home loans with `showHome` off) falls back to Personal loan. The amount and the term start at the loan's start values.
 
 #### 3. Screens
 
-**Screen `inputs` — "Loan calculator"** (entry screen). Blocks: `text` (title), `select` (loan type), `amountInput`, `select` (term), `reviewSummary` (the rate), `button`.
+One screen, then a result.
 
-| Label | Block | Required | Validation rule | Error message |
+**Screen `calc`** ("Loan calculator"). Button **Show summary**.
+
+| Field | Block | Required | Validation | Message |
 |---|---|---|---|---|
-| Loan type (`calc.productId`) | `select`, variant `dropdown`, `source` = loan products | Yes | Must be one of `loan_personal`, `loan_auto`, `loan_home` | "Choose a loan type." |
-| How much do you want to borrow? (`calc.amount`) | `amountInput`, currency USD, `quickAmounts` from the product (personal: 5,000, 10,000, 25,000) | Yes | Whole dollars (decimals not allowed). Between the product's minimum and maximum, both included. | "Enter a whole number of dollars between {min} and {max}." (whole-number part uses the runner's `amountWhole` rule) |
-| How long do you want to repay over? (`calc.termMonths`) | `select`, variant `chips`, choices from the product's terms, shown as "12 months" | Yes | One of the product's terms | "Choose how long you want to repay over." |
+| (no label) | `chips`: Personal loan, Car loan, Home loan (home only with `showHome`). Default Personal loan. Changing it resets the amount and the term to that loan's start values | No | One of the loans | none |
+| How much do you need? | `range`, the amount row of the table, label shows the symbol and the amount | Yes | Inside min and max in steps | none (the slider cannot leave its range) |
+| Over how long? | `range`, the term row of the table, label shows the term text | Yes | Inside min and max in steps | none |
 
-Copy:
+Only the sliders of the chosen loan are shown. The summary box under the fields redraws on every move:
 
-| Where | Text |
-|---|---|
-| Title | "Estimate your repayments" |
-| Body | "Choose a loan type, an amount and a term. We'll show what you'd pay each month." |
-| Helper under amount | "{productName}: from {min} to {max}." (for example "Personal loan: from $1,000 to $35,000.") |
-| Rate row (`reviewSummary`, read only) | Label "Interest rate", value "{apr}% a year, fixed" |
-| Info alert | "This is an estimate, not an offer. Your rate can be different once we check your application." |
+- Small text "Monthly payment", then the payment in large type.
+- Rows "Interest rate" (for example "9.9% a year"), "Total interest", "Total to repay".
+- Small text "This is an estimate. Your rate may differ."
+- Button **Start application** (secondary), only with `showApply` on. It opens `apply-loan` with `{amount, term}` (months).
 
-Buttons:
+**Result** ("Your estimate", green, text "Based on today’s rates. Nothing has been applied for."). A reference starting EST-. Rows: "Loan", "Amount", "Term", "Interest rate", "Monthly payment", "Total interest", "Total to repay". Button **Start application** when `showApply` is on and `apply-loan` is on at the bank. Then **Done**.
 
-| Button | Does | Leads to |
-|---|---|---|
-| Calculate | `validate`, then `callApi` `calculate` | `result` on success; stays here on error (message under the button) |
-| Back | `exit` | Where the person came from (Products or Landing) |
-
-States: Loading: the three fields show skeletons while the products load; the button is disabled with a spinner while `calculate` runs. Empty: if no loan products come back: "There are no loan types to show right now." Button "Back". Error: see section 4. Changing the loan type clears the amount and the term (their limits differ) and redraws the limits.
-
-**Screen `result` — "Your estimate"**. Blocks: `result` (tone success, no reference, because nothing was created), `reviewSummary`, `chart` (planned, ring), `alert`, `accordion`, `button`.
-
-| Row (reviewSummary) | Value (example: personal, $10,000, 36 months) |
-|---|---|
-| Loan type | Personal loan |
-| Amount | $10,000.00 |
-| Term | 36 months |
-| Interest rate | 8.90% a year, fixed |
-| Monthly payment | $317.53 |
-| Last payment | $317.61 |
-| Total interest | $1,431.16 |
-| Total to repay | $11,431.16 |
-
-Title "About $317.53 a month". Text "Over 36 months you'd repay $11,431.16, of which $1,431.16 is interest." The ring shows principal against interest (87.5% / 12.5%) with a text alternative. The accordion "How we work this out" says: "We use the usual repayment formula. Each month's interest is the balance times the yearly rate divided by 12. Each payment first covers that interest; the rest reduces what you owe. The last payment is adjusted by a few cents so the balance ends at exactly zero. No fees are included."
-
-| Button | Does | Leads to |
-|---|---|---|
-| Change numbers | `navigate` | `inputs` (values kept) |
-| See repayment schedule | `navigate` | `schedule` |
-| Sign in to apply | `navigate` with `toJourney: "sign-in"` (planned engine feature) | `sign-in` then, once signed in, the Personal Save & Borrow › loans area (`apply-loan` with `{productId}`) |
-| New to BankWorkx®? Open an account | `navigate` with `toJourney: "open-account"` | `open-account` |
-
-**Screen `schedule` — "Repayment schedule"**. Block: `dataTable` (planned) with paging of 12 rows, plus a Back button.
-
-| Column | Meaning | Format |
-|---|---|---|
-| Payment | Number 1 to n | 1 |
-| Payment amount | What is paid that month | $317.53 |
-| Principal | Part that reduces the loan | $243.36 |
-| Interest | Part that is interest | $74.17 |
-| Balance | What is still owed after this payment | $9,756.64 |
-
-Order: payment 1 first. No filter or search. Empty: not possible (at least 12 rows). Phones show one card per payment. Footer line: "Dates depend on when your loan starts." Back goes to `result`.
+**States**
+- Loading: none (the table is local in the prototype). In the product the rates load first with a skeleton for the summary box (planned).
+- Empty: not applicable.
+- Error: the rates cannot load: "We couldn’t load the rates. Try again in a few minutes." and **Try again** (planned; the prototype calculators make no adapter call, so its Service down switch changes nothing here).
+- Timeout: after 10 seconds, "This is taking longer than expected. Nothing was changed." with **Try again** (planned).
 
 #### 4. Sandbox errors
 
-Business outcomes are not errors here: the adapter always answers a valid request. Misuse throws, like the existing adapters (`BankError`).
-
-| Code | Message the person sees | Shows on | Button |
+| Code | Message | Shows on | Button |
 |---|---|---|---|
-| `PRODUCT_NOT_FOUND` | "We can't find that loan type. Choose another." | `inputs`, under the loan type | Choose loan type (focuses the field) |
-| `INVALID_AMOUNT` | "Enter a whole number of dollars between {min} and {max}." | `inputs`, under the amount | Change amount |
-| `INVALID_TERM` | "Choose a term of {terms}, for example \"12, 24, 36, 48 or 60 months\"." | `inputs`, under the term | Change term |
-| `TIMEOUT` | Non-money wording of S-`TIMEOUT` (README 1.6): "This is taking longer than expected. Nothing was changed." | `inputs`, alert above the button | Try again (calls again) |
-| `SERVICE_UNAVAILABLE` | S-`SERVICE_UNAVAILABLE`: "This service is not available right now. Nothing was changed. Please try again in a few minutes." | `inputs`, alert above the button | Try again |
-
-Codes from the standard table that cannot occur: `OTP_*`, `ACCOUNT_NOT_FOUND`, `INSUFFICIENT_FUNDS`, `LIMIT_EXCEEDED`, `CORE_UNAVAILABLE`, `NOT_SUPPORTED`, `PERMISSION_DENIED`, `WRONG_CONTEXT`, `STEP_UP_REQUIRED`, `SESSION_EXPIRED` (no session, no money).
+| `SERVICE_UNAVAILABLE` | "We couldn’t load the rates. Try again in a few minutes." | `calc` | Try again |
+| `TIMEOUT` (planned) | "This is taking longer than expected. Nothing was changed." | `calc` | Try again |
+| `JOURNEY_DISABLED` | "This isn’t available at your bank." | whole journey | none |
 
 #### 5. Adapters
 
-| Integration id | Adapter | Request | Response | Error codes | Status | moneyMoving | requiresOtp |
-|---|---|---|---|---|---|---|---|
-| `loanProducts` | `bank.products.list` | `{ type: "loan" }` | Products by id (`id`, `name`, `apr`, `minAmount`, `maxAmount`, `terms[]`) | `TIMEOUT`, `SERVICE_UNAVAILABLE` | (planned) | No | No |
-| `loanProduct` | `bank.products.get` | `{ productId }` | One product | `PRODUCT_NOT_FOUND`, `TIMEOUT`, `SERVICE_UNAVAILABLE` | (planned) | No | No |
-| `calculate` | `bank.calc.loan` | `{ productId, amount, termMonths }` | `{ productId, amount, termMonths, apr, monthlyPayment, lastPayment, totalInterest, totalPayable, schedule: [{ n, payment, principal, interest, balance }] }` | `PRODUCT_NOT_FOUND`, `INVALID_AMOUNT`, `INVALID_TERM`, `TIMEOUT`, `SERVICE_UNAVAILABLE` | (planned) | No | No |
+| Integration id | Adapter | Request | Response | Errors | Status |
+|---|---|---|---|---|---|
+| `loanRates` | `bank.rates.loans` | `{}` | list of `{type, apr, amountMin, amountMax, amountStep, termMin, termMax, termStep}` | `SERVICE_UNAVAILABLE`, `TIMEOUT` | (planned). The prototype holds the table `LC_PROD` |
 
-Rules inside `bank.calc.loan` (so the sandbox is the one place that holds them; a real bank's calculator replaces it behind the same name):
-
-1. `r = apr / 1200` (monthly rate). `payment = round2(amount * r / (1 - (1 + r) ^ -n))`, rounding half up to cents.
-2. For payment k from 1 to n: `interest_k = round2(balance * r)`; `principal_k = payment - interest_k`; `balance = balance - principal_k`.
-3. Payment n is `balance + interest_n` so the balance ends at 0.00. `lastPayment` is that amount.
-4. `totalInterest` is the sum of `interest_k`. `totalPayable = payment * (n - 1) + lastPayment`.
-5. Limits per product: `loan_personal` $1,000 to $35,000, terms 12, 24, 36, 48, 60, 8.90%; `loan_auto` $5,000 to $60,000, terms 12, 24, 36, 48, 60, 72, 84, 6.90%; `loan_home` $50,000 to $500,000, terms 60, 120, 180, 240, 300, 360, 5.40%. No fees.
+The calculation runs on the device from the table; no customer data leaves it.
 
 #### 6. Permissions, step-up and limits
 
-No permission, step-up `none`. Limits: the amount and term limits above (the only limits). The sandbox may rate-limit a real deployment; in the sandbox there is no rate limit. Nothing is stored: the numbers live in the journey data only for this visit.
+None. No step-up. The only limits are the slider ranges above.
 
 #### 7. Result and links out
 
-Result screen: `result`. Receipt: none (no record is made). Notifications: none. Links out are the four buttons on `result` above.
+Result as above. No notification. Links out: `apply-loan` (with the amount and the term), `contact-support` (from the landing page, not from this journey).
 
 #### 8. Acceptance criteria
 
-- AC-1: For each loan type, the monthly payment, last payment, total interest and total to repay follow the rules in section 5.
-- AC-2: An amount below the product's minimum or above its maximum is refused with the amount message, before any result is shown.
-- AC-3: An amount with cents is refused with the whole-dollar message.
-- AC-4: A term that is not one of the product's terms is refused.
-- AC-5: When the journey is opened with a `{productId}` the loan type is already chosen and its limits are shown.
-- AC-6: The schedule has one row per payment, the first row matches the first-month interest, the balance ends at $0.00, and the principal column adds up to the amount.
-- AC-7: A timeout and an unavailable service each show their message and let the person try again; nothing is stored.
-- AC-8: The result says it is an estimate and offers sign-in and open-account buttons.
+- AC-1: Each loan shows only its own sliders with the ranges and start values of the table, and changing the loan resets the sliders.
+- AC-2: The monthly payment, the total interest and the total to repay follow the formula above and update on every move.
+- AC-3: The term text follows the rule (months below 24, "1 year", whole years from 24).
+- AC-4: Home loans appear only with `showHome` on; a launch with `product: "home"` while it is off shows Personal loan.
+- AC-5: **Start application** appears in the summary and on the result only with `showApply` on, and carries the amount and the term to `apply-loan`.
+- AC-6: Every amount uses the symbol of the bank's home market.
+- AC-7: The screen says it is an estimate and the result says nothing has been applied for.
+- AC-8: When the rates cannot load the person sees the plain message and can try again (planned in the prototype).
 
 #### 9. Scenarios
 
-All use persona `sam` (any persona works, no session). No setup unless stated.
+Synthetic anonymous visitor.
 
-| Id | Covers | Setup / conditions | Steps | Expected |
+| # | Covers | Persona / setup | Conditions | Steps and expected result |
 |---|---|---|---|---|
-| T-1 | AC-1, AC-8 | – | Personal loan, $10,000, 36 months, Calculate | Payment 317.53, last payment 317.61, interest 1,431.16, total 11,431.16; alert and both buttons visible |
-| T-2 | AC-1 | – | Auto loan, $25,000, 60 months | 493.85, 493.95, 4,631.10, 29,631.10 |
-| T-3 | AC-1 | – | Home loan, $200,000, 240 months | 1,364.50, 1,365.80, 127,481.30, 327,481.30 |
-| T-4 | AC-2 | – | Personal loan, $999 then $35,001 | Both: amount message "Enter a whole number of dollars between $1,000 and $35,000."; `bank.calc.loan` not called |
-| T-5 | AC-3 | – | Personal loan, $10,000.50 | Whole-dollar message; no call |
-| T-6 | AC-4 | Scenario sends `termMonths: 18` straight to the adapter (the chips cannot) | Calculate | `INVALID_TERM` message on `inputs` |
-| T-7 | AC-5 | Start with `{productId: "loan_auto"}` | Open the journey | Loan type shows "Auto loan"; helper "Auto loan: from $5,000 to $60,000." |
-| T-8 | AC-6 | After T-1 | Open the schedule | 36 rows over 3 pages; row 1: 317.53 / 243.36 / 74.17 / 9,756.64; row 36 balance 0.00; principal column sums to 10,000.00 |
-| T-9 | AC-7 | `conditions.timeout: ["bank.calc.loan"]`, `latencyMs: 10000` | Calculate | Timeout message; Try again works after the condition is cleared |
-| T-10 | AC-7 | `conditions.unavailable: ["bank.calc.loan"]` | Calculate | Unavailable message at once; no result |
+| T-1 | AC-1, AC-2 | Visitor, Market A | none | Open with no parameters: Personal loan, 10,000, "36 months". Summary: payment 322.20, "9.9% a year", total interest 1,599.29, total to repay 11,599.29. |
+| T-2 | AC-1 | Visitor | none | Choose Car loan: sliders reset to 15,000 and "4 years" (48 months); payment 361.98. Choose Home loan: 200,000 and "20 years"; payment 1,330.98. |
+| T-3 | AC-3 | Visitor | none | Term 6 shows "6 months"; 12 shows "1 year"; 30 (personal) shows "30 months"; 36 shows "3 years". |
+| T-4 | AC-4 | Visitor, `showHome` off | none | The chips offer Personal and Car only; `product: "home"` opens Personal loan. |
+| T-5 | AC-5 | Visitor, amount 15,000, term 48 | none | **Start application** opens `apply-loan` with amount 15,000 and term 48. With `showApply` off the button is absent in the summary and on the result. |
+| T-6 | AC-6 | Visitor, Market B, C, D | none | Symbols `£`, `€`, `AED `. |
+| T-7 | AC-7 | Visitor | none | Footnote and the result text are shown. |
+| T-8 | AC-8 | Visitor | `unavailable: ["bank.rates.loans"]` | "We couldn’t load the rates. Try again in a few minutes." (planned). |
+| T-9 | AC-8 | Visitor | `timeout: ["bank.rates.loans"]`, `latencyMs: 10000` | After 10 seconds: "This is taking longer than expected. Nothing was changed." (planned). |
 
 #### 10. Expected mutation-check survivors
 
-| Survivor | Why it stays alive |
-|---|---|
-| Removing the `PRODUCT_NOT_FOUND` check in the adapter | The dropdown only offers real products, so no scenario can reach it without sending a bad id. T-6 style direct input could kill it; add it only if the team wants (not planned). |
-| Rounding the schedule's `interest_k` half-down instead of half-up | Only differs when the unrounded interest ends in exactly half a cent; none of the example loans do. |
+The slider bounds and steps survive if the sandbox rate table is not asserted per loan; expected, because the control cannot go outside them. Rounding of the displayed cents survives a half-cent change; expected. Everything else: none expected.
 
 ---
 
 ### ★ Deposit calculator — `deposit-calculator`
 
+**Catalog:** slug `deposit-calculator`, workspace `public`, category Public: before sign-in (prototype tag "Before you sign in"), core no, can a bank switch it off: yes (basic entry, kept in the Lean preset). Options (key, label, default): `allowMonthly` "Offer interest paid every month" (on); `showApply` "Show a Start application button" (on). Research: `research/deposit-calculator.md`. Built in `design/bankworkx-r1/src/journeys/50-calculators.js` (object `DC`, with `CALC` shared with `loan-calculator`).
+
+The lean rework removed tax, compounding, early-withdrawal penalties and the rate-by-amount bands. Interest is simple: amount × yearly rate × years. What remains: amount, term, and when interest is paid.
+
+**Home market configuration.** Only the currency symbol depends on the market (same table as `loan-calculator`).
+
+| Market | Symbol before the amount |
+|---|---|
+| Market A (routing number and account) | `$` |
+| Market B (sort code and account) | `£` |
+| Market C (IBAN) | `€` |
+| Market D (IBAN, mobile alias) | `AED ` |
+
 #### 1. Summary
 
-| | |
+| Field | Value |
 |---|---|
 | Slug | `deposit-calculator` |
-| Purpose | Show how much interest a term deposit earns, how it is paid and when it matures, before sign-in. |
-| Release | 1 |
-| Workspace | Public |
-| Status | New (planned) |
-| Channels | Web, mobile |
-| Starting pattern | The `loan-calculator` above (same shape: inputs, result). The `term-deposit` Personal journey later reuses the same rule through the same adapter. |
-| Who may use it | Anyone. No sign-in, no permission, no one-time code. |
-| Money moving | No. |
+| Purpose | Choose an amount and a term to see the interest and what you get back, paid at the end or every month. |
+| Release / workspace | 1 / Public (before sign-in) |
+| Status | Built in the prototype as a one-screen form journey (`submit: "Show summary"`, no adapter call). It only estimates; nothing is opened. |
+| Channels | Web and mobile |
+| Starting pattern | None in the fixtures; a form with a live summary box |
+| Who may use it | Anyone. No permission. |
 
-New adapters: `bank.calc.deposit` (planned). Products from `bank.products.list` / `get` (planned). Blocks: all in `schema.ts` today, plus `chart` (planned) for the optional growth line.
+**Rate table (prototype, generic; a bank loads its own).**
+
+| Term (months) | 3 | 6 | 12 | 24 | 60 |
+|---|---|---|---|---|---|
+| Term text | 3 months | 6 months | 1 year | 2 years | 5 years |
+| Rate a year | 3.00% | 3.40% | 3.90% | 3.60% | 3.30% |
+
+Interest = amount × rate ÷ 100 × months ÷ 12. "You get back" = amount + interest. "Interest every month" = interest ÷ months. The amount slider runs 500 to 100,000 in steps of 500, start 10,000.
 
 #### 2. Entry points
 
-| Place | Label | Passes | Permission |
-|---|---|---|---|
-| Products › deposit detail | Estimate returns | `{productId}` (`dep_6m`, `dep_12m`, `dep_24m`) | none |
-| Landing › Explore › Calculators | Deposit calculator (README change needed) | – | none |
-| Products › deposits list | Calculator (README change needed) | – | none |
-| Deep link | `/public/j/deposit-calculator?productId=dep_12m` | `{productId}` | none |
+| Place › label | Passes in | Permission |
+|---|---|---|
+| Landing › Calculators | none | none |
+| Products › deposit › Estimate returns | `{productId}` (`dep_3m`, `dep_6m`, `dep_12m`, `dep_24m`, `dep_60m`) | none |
+| Deep link `/public/j/deposit-calculator?term=24` | `{term}` in months (3, 6, 12, 24, 60) | none |
+
+Any other term opens 12 months (1 year). Interest starts as "At the end".
 
 #### 3. Screens
 
-**Screen `inputs` — "Deposit calculator"** (entry). Blocks: `text`, `select`, `amountInput`, `select`, `reviewSummary`, `button`.
+One screen, then a result.
 
-| Label | Block | Required | Validation rule | Error message |
+**Screen `calc`** ("Deposit calculator"). Button **Show summary**.
+
+| Field | Block | Required | Validation | Message |
 |---|---|---|---|---|
-| Deposit (`calc.productId`) | `select`, variant `rows`, choices: "6 months, 3.60%", "12 months, 4.10%", "24 months, 4.40%" | Yes | One of `dep_6m`, `dep_12m`, `dep_24m` | "Choose a deposit." |
-| How much do you want to deposit? (`calc.amount`) | `amountInput`, USD, `quickAmounts` 1,000, 5,000, 10,000 | Yes | Between $500.00 and $250,000.00, up to 2 decimals | "Enter an amount between $500.00 and $250,000.00." |
-| How do you want your interest? (`calc.payout`) | `select`, variant `chips`: "At the end" (`maturity`), "Every month" (`monthly`) | Yes (default "At the end") | One of the two | "Choose how you want your interest." |
+| How much do you want to deposit? | `range`, 500 to 100,000, step 500, start 10,000 | Yes | Inside the range in steps | none |
+| For how long? | `chips`: 3 months, 6 months, 1 year, 2 years, 5 years. Default 1 year | Yes | One of the five | none |
+| Interest | `chips`: "At the end", "Every month". Shown only with `allowMonthly`. Default "At the end" | No | One of two | none |
 
-Copy: Title "Estimate your returns". Body "Choose a deposit, an amount and how you want your interest." Helper under amount: "Deposits of $50,000 or more earn 0.10% a year extra." Read-only rows: "Term" (from the product, "12 months"), "Interest rate" ("4.10% a year" or, once the amount is $50,000 or more, "4.20% a year, includes 0.10% bonus", redrawn as the amount changes). Info alert: "This is an estimate before tax. The rate is fixed for the whole term."
+Summary box, redrawn on every change:
 
-| Button | Does | Leads to |
-|---|---|---|
-| Calculate | `validate`, then `callApi` `calculate` | `result` |
-| Back | `exit` | Where the person came from |
+- At the end: small text "You get back", the maturity amount in large type.
+- Every month: small text "Interest every month", the monthly interest in large type, and a row "Your deposit returned at the end" with the amount.
+- Rows "Interest rate" (two decimals, for example "3.90% a year") and "Total interest".
+- Small text "This is an estimate. Rates can change before you open the deposit."
+- Button **Start application** (secondary) with `showApply` on. It opens `term-deposit` with `{amount, term}` (months).
 
-States as in `loan-calculator` (skeleton while products load, spinner on the button, empty text "There are no deposits to show right now." with Back).
+**Result** ("Your estimate", green, text "Based on today’s rates. Nothing has been opened."). Reference starting EST-. Rows: "Amount", "Term", "Interest rate", "Interest paid" ("At the end" or "Every month"), "Total interest", and "You get back" (or "Each month" when interest is monthly). Button **Start application** when `showApply` is on and `term-deposit` is on at the bank. Then **Done**.
 
-**Screen `result` — "Your estimate"**. Blocks: `result`, `reviewSummary`, `alert`, `accordion`, `button`.
-
-| Row | Example 1: `dep_12m`, $10,000, at the end | Example 2: `dep_6m`, $10,000, every month |
-|---|---|---|
-| Deposit | 12-month deposit | 6-month deposit |
-| Amount | $10,000.00 | $10,000.00 |
-| Interest rate | 4.10% a year | 3.60% a year |
-| Interest | $410.00 at the end | $30.00 a month, $180.00 in total |
-| You get back (maturity) | $10,410.00 | $10,000.00 (the interest was paid monthly) |
-| Matures on | 3 Nov 2027 | 3 May 2027 |
-
-Title: "You'd earn about $410.00". Text: "If you opened this deposit today, it would mature on 3 Nov 2027." Accordion "How we work this out": "Interest is simple interest: amount times yearly rate, for the number of months out of 12. Paid at the end, you get the interest with your money. Paid every month, each month's interest is rounded to the cent. The maturity date is the same day of the month, {term} months from today; if that day doesn't exist (for example 31 Aug plus 6 months), it is the last day of that month. Deposits of $50,000 or more earn 0.10% a year extra. Taking money out early costs 1% of the amount."
-
-| Button | Does | Leads to |
-|---|---|---|
-| Change numbers | `navigate` | `inputs` (values kept) |
-| Sign in to open a deposit | `navigate` with `toJourney: "sign-in"` (planned) | `sign-in`, then Personal Save & Borrow › deposits (`term-deposit`, `{mode: "open"}`) |
-| New to BankWorkx®? Open an account | `navigate` with `toJourney: "open-account"` | `open-account` |
+**States**
+- Loading: none in the prototype (local table). Product: skeleton for the summary box (planned).
+- Empty: not applicable.
+- Error: the rates cannot load: "We couldn’t load the rates. Try again in a few minutes." and **Try again** (planned; the prototype makes no adapter call here, so its Service down switch changes nothing).
+- Timeout: after 10 seconds, "This is taking longer than expected. Nothing was changed." with **Try again** (planned).
 
 #### 4. Sandbox errors
 
-| Code | Message the person sees | Shows on | Button |
+| Code | Message | Shows on | Button |
 |---|---|---|---|
-| `PRODUCT_NOT_FOUND` | "We can't find that deposit. Choose another." | `inputs` | Choose deposit |
-| `INVALID_AMOUNT` | "Enter an amount between $500.00 and $250,000.00." (limits from the product; at most 2 decimals) | `inputs`, under the amount | Change amount |
-| `INVALID_PAYOUT` | "Choose how you want your interest." | `inputs` | Choose |
-| `TIMEOUT` | "This is taking longer than expected. Nothing was changed." | `inputs`, alert | Try again |
-| `SERVICE_UNAVAILABLE` | S-`SERVICE_UNAVAILABLE` (README 1.6) | `inputs`, alert | Try again |
+| `SERVICE_UNAVAILABLE` | "We couldn’t load the rates. Try again in a few minutes." | `calc` | Try again |
+| `TIMEOUT` (planned) | "This is taking longer than expected. Nothing was changed." | `calc` | Try again |
+| `JOURNEY_DISABLED` | "This isn’t available at your bank." | whole journey | none |
 
 #### 5. Adapters
 
-| Integration id | Adapter | Request | Response | Error codes | Status | moneyMoving | requiresOtp |
-|---|---|---|---|---|---|---|---|
-| `depositProducts` | `bank.products.list` | `{ type: "deposit" }` | Products by id (`id`, `name`, `termMonths`, `rate`, `bonusRate`, `bonusFrom`, `minAmount`, `maxAmount`) | `TIMEOUT`, `SERVICE_UNAVAILABLE` | (planned) | No | No |
-| `calculate` | `bank.calc.deposit` | `{ productId, amount, payout: "maturity" \| "monthly" }` | `{ productId, amount, termMonths, rate, bonusApplied, interestTotal, monthlyInterest?, maturityAmount, openedOn, maturesOn }` | `PRODUCT_NOT_FOUND`, `INVALID_AMOUNT`, `INVALID_PAYOUT`, `TIMEOUT`, `SERVICE_UNAVAILABLE` | (planned) | No | No |
-
-Rules inside `bank.calc.deposit`:
-
-1. Rate: `dep_6m` 3.60%, `dep_12m` 4.10%, `dep_24m` 4.40%. If `amount >= 50,000.00` the rate is the product rate plus 0.10 (bonus). 49,999.99 gets no bonus.
-2. Amount between $500.00 and $250,000.00, at most 2 decimals.
-3. Paid at the end: `interestTotal = round2(amount * rate / 100 * termMonths / 12)` (half up); `maturityAmount = amount + interestTotal`.
-4. Paid every month: `monthlyInterest = round2(amount * rate / 100 / 12)`; `interestTotal = monthlyInterest * termMonths`; `maturityAmount = amount`. (So the two choices can differ by a few cents.)
-5. `openedOn` is the sandbox clock's date. `maturesOn` adds `termMonths` months to it, using the same day of the month, or the month's last day if that day does not exist.
+| Integration id | Adapter | Request | Response | Errors | Status |
+|---|---|---|---|---|---|
+| `depositRates` | `bank.rates.deposits` | `{}` | list of `{termMonths, rate}` | `SERVICE_UNAVAILABLE`, `TIMEOUT` | (planned). The prototype holds the table `DC_RATES` |
 
 #### 6. Permissions, step-up and limits
 
-No permission, step-up `none`. Limits are the amount limits in rule 2 only. Nothing is stored.
+None. No step-up. Limits: amount 500 to 100,000 on the slider.
 
 #### 7. Result and links out
 
-Result screen `result`. Receipt none. Notifications none. Links out: the three buttons above.
+Result as above. No notification. Links out: `term-deposit` (with the amount and the term).
 
 #### 8. Acceptance criteria
 
-- AC-1: Interest paid at the end equals amount times rate times months over 12, rounded to the cent, and maturity equals amount plus interest.
-- AC-2: Interest paid every month is rounded each month and the total is that figure times the months.
-- AC-3: Amounts of $50,000 or more get the 0.10% bonus; $49,999.99 does not; the screen shows the bonus rate before calculating.
-- AC-4: The maturity date is the same day of the month after the term, or the last day of the month when that day does not exist.
-- AC-5: An amount below $500.00 or above $250,000.00, or with more than 2 decimals, is refused with the amount message.
-- AC-6: Opened with a `{productId}`, that deposit is chosen and its term and rate shown.
-- AC-7: A timeout and an unavailable service each show their message and allow a retry; nothing is stored.
+- AC-1: Interest, total return and monthly interest follow the formulas above and update on every change.
+- AC-2: The five terms show the rates of the table with two decimals.
+- AC-3: "Every month" appears only with `allowMonthly`; with it chosen the big figure is the monthly interest and a row shows the deposit returned at the end.
+- AC-4: An unknown launch term opens 1 year.
+- AC-5: **Start application** appears only with `showApply` on and carries the amount and the term to `term-deposit`.
+- AC-6: Every amount uses the symbol of the home market.
+- AC-7: The screen says rates can change and the result says nothing has been opened.
+- AC-8: When the rates cannot load the person sees the plain message and can try again (planned in the prototype).
 
 #### 9. Scenarios
 
-Persona `sam`, no session. Sandbox clock set with `now` where stated.
+Synthetic anonymous visitor, Market A unless stated.
 
-| Id | Covers | Setup / conditions | Steps | Expected |
+| # | Covers | Persona / setup | Conditions | Steps and expected result |
 |---|---|---|---|---|
-| T-1 | AC-1 | `now: 2026-11-03` | `dep_12m`, $10,000, at the end | Interest 410.00, maturity amount 10,410.00, matures 3 Nov 2027 |
-| T-2 | AC-2 | `now: 2026-11-03` | `dep_6m`, $10,000, every month | 30.00 a month, 180.00 total, matures 3 May 2027 |
-| T-3 | AC-1, AC-2 | – | `dep_6m`, $1,234.00, at the end then every month | End: 22.21. Monthly: 3.70 a month, total 22.20 |
-| T-4 | AC-3 | – | `dep_24m`, $50,000, at the end | Rate row "4.50% a year, includes 0.10% bonus"; interest 4,500.00; maturity 54,500.00 |
-| T-5 | AC-3 | – | `dep_12m`, $49,999.99 then $50,000 | First: 4.10%, interest 2,050.00. Second: 4.20%, interest 2,100.00 |
-| T-6 | AC-4 | `now: 2026-08-31` | `dep_6m`, $1,000, at the end | Matures 28 Feb 2027 |
-| T-7 | AC-5 | – | $499.99; $250,000.01; $1,000.001 | Each: "Enter an amount between $500.00 and $250,000.00."; no call |
-| T-8 | AC-6 | Start with `{productId: "dep_24m"}` | Open | "24-month deposit" chosen; Term "24 months"; Rate "4.40% a year" |
-| T-9 | AC-7 | `conditions.timeout: ["bank.calc.deposit"]` | Calculate | Timeout message and Try again |
-| T-10 | AC-7 | `conditions.unavailable: ["bank.calc.deposit"]` | Calculate | Unavailable message |
+| T-1 | AC-1, AC-2 | Visitor | none | Defaults 10,000, 1 year, at the end: "You get back" 10,390.00, rate "3.90% a year", total interest 390.00. |
+| T-2 | AC-1, AC-3 | Visitor | none | Interest "Every month": "Interest every month" 32.50, row "Your deposit returned at the end" 10,000.00. |
+| T-3 | AC-2 | Visitor | none | 3 months at 10,000: rate "3.00% a year", interest 75.00. 5 years at 500: rate "3.30% a year", interest 82.50. |
+| T-4 | AC-3 | Visitor, `allowMonthly` off | none | The "Interest" chips are absent; the result shows "At the end". |
+| T-5 | AC-4 | Visitor | none | `term=7` opens 1 year; `productId=dep_24m` opens 2 years. |
+| T-6 | AC-5 | Visitor, 10,000, 2 years | none | **Start application** opens `term-deposit` with amount 10,000 and term 24; absent with `showApply` off. |
+| T-7 | AC-6 | Visitor, Markets B, C, D | none | Symbols `£`, `€`, `AED `. |
+| T-8 | AC-8 | Visitor | `unavailable: ["bank.rates.deposits"]` | "We couldn’t load the rates. Try again in a few minutes." (planned). |
+| T-9 | AC-8 | Visitor | `timeout: ["bank.rates.deposits"]`, `latencyMs: 10000` | After 10 seconds: "This is taking longer than expected. Nothing was changed." (planned). |
 
 #### 10. Expected mutation-check survivors
 
-| Survivor | Why it stays alive |
-|---|---|
-| Moving the $250,000.00 maximum by less than one cent | Amounts have at most 2 decimals, so no scenario can tell the difference. |
-| `PRODUCT_NOT_FOUND` and `INVALID_PAYOUT` checks removed | The product list and the chips only offer valid values, so the UI cannot reach them. |
+Display rounding to cents survives a half-cent change; expected. The slider bounds survive because the control cannot leave them; expected. Everything else: none expected.
 
 ---
 
 ### ★ Find a branch or ATM — `find-branch-atm`
 
+**Catalog:** slug `find-branch-atm`, workspace `public`, category Public: before sign-in (prototype tag "Before you sign in"), core no, can a bank switch it off: yes (basic entry, kept in the Lean preset). Options (key, label, default): `showAtms` "Include cash machines" (on); `openNow` "Offer an “Open now” filter" (on). Research: `research/find-branch-atm.md`. Built in `design/bankworkx-r1/src/journeys/51-find-help.js` (objects `FB`, `HELP`).
+
+The lean rework removed real map tiles, live location, ratings and appointment booking. What remains: search places by area or street, filter by kind and by open now, see a simple map, open one place for its hours and services, and hand over to the phone's maps app for directions. Places in the prototype are synthetic and generic.
+
+**Home market configuration.** Only the distance unit depends on the market.
+
+| Market | Distance unit |
+|---|---|
+| Market A (routing number and account) | miles (`mi`) |
+| Market B (sort code and account) | miles (`mi`) |
+| Market C (IBAN) | kilometres (`km`) |
+| Market D (IBAN, mobile alias) | kilometres (`km`) |
+
+The place data holds kilometres. Miles = km × 0.621. Distances show with one decimal and the unit, for example "0.8 km" or "0.5 mi".
+
 #### 1. Summary
 
-| | |
+| Field | Value |
 |---|---|
 | Slug | `find-branch-atm` |
-| Purpose | Find a branch or ATM near a place, see if it is open, and call or get directions. |
-| Release | 1 |
-| Workspace | Public (also reachable after sign-in from Help, same journey) |
-| Status | New (planned) for BankWorkx®. The pattern exists: CAB `locate-us` (`packages/journey-schema/src/fixtures/cab.ts`, draft, 5 screens) with adapters `cab.locations.search` and `cab.locations.details` (`packages/mock-bank-api/src/cab.ts`). |
-| Channels | Web, mobile |
-| Starting pattern | CAB `locate-us`: `search` → `filter` → `results` (a `map` block over a `menu` of found places) → `none` / `details`. The BankWorkx® version keeps the same screens and block use, changes miles-only distances and the sample places, and renames the adapters to `bank.locations.search` and `bank.locations.details` (planned, same request and response shape as the `cab.*` pair). |
-| Who may use it | Anyone. No sign-in, no permission, no one-time code. |
-| Money moving | No. |
+| Purpose | Search the bank's branches and cash machines near you, see whether each is open now, read opening hours and services, and open directions. |
+| Release / workspace | 1 / Public (before sign-in) |
+| Status | Built in the prototype as a two-screen journey (`submit: "Get directions"`, no adapter call). The list is a local table of 8 places; the "map" is a drawn placeholder with dots. |
+| Channels | Web and mobile |
+| Starting pattern | None in the fixtures; `cab.locations.search` and `cab.locations.details` in `packages/mock-bank-api/src/cab.ts` are the existing adapters to build on |
+| Who may use it | Anyone. No permission. |
 
-The map is the existing schematic `map` block (pins on a grid by latitude and longitude, no streets or tiles, `docs/CAB.md`). A bank with a map provider replaces the drawing component; the journey does not change.
+**Places (prototype data).** Open status is worked out from the hours and the clock; the prototype clock is fixed at Tuesday 18:45 so the chips are stable. In the product the clock is the bank's time zone (planned).
+
+| Place | Kind | Address | Area | Distance (km) | Hours set | Services |
+|---|---|---|---|---|---|---|
+| Central Branch | Branch | 1 Example Square | City centre | 0.8 | Branch | Cash deposits, Advice desk, Step-free access |
+| Central Plaza cash machine | Cash machine | Central Plaza, ground floor | City centre | 0.4 | 24 hours | Cash withdrawal, Cash deposit |
+| Station cash machine | Cash machine | Main Station concourse | Station | 1.2 | 24 hours | Cash withdrawal |
+| Market Street Branch | Branch | 48 Market Street | Market | 2.1 | Late | Cash deposits, Safe deposit boxes, Step-free access |
+| Mall cash machine | Cash machine | Riverside Mall, level 1 | Riverside | 3.4 | Mall | Cash withdrawal, Cash deposit, Step-free access |
+| Riverside Branch | Branch | 9 Example Road | Riverside | 3.6 | Branch | Cash deposits, Advice desk |
+| Harbour cash machine | Cash machine | Harbour Walk | Harbour | 5.8 | 24 hours | Cash withdrawal |
+| Airport Branch | Branch | Terminal 1, arrivals | Airport | 12.4 | Late | Cash deposits, Currency exchange, Step-free access |
+
+| Hours set | Sunday | Monday to Friday | Saturday |
+|---|---|---|---|
+| Branch | Closed | 09:00 to 17:00 | 09:00 to 13:00 |
+| Late | 10:00 to 16:00 | 08:00 to 20:00 | 08:00 to 20:00 |
+| Mall | 10:00 to 21:00 | 09:00 to 22:00 | 09:00 to 22:00 |
+| 24 hours | Open 24 hours | Open 24 hours | Open 24 hours |
+
+**Open chip and status text.** Open now: chip "Open" and "Closes {hh:mm}". Closed but opening later today: chip "Closed" and "Opens {hh:mm}". Closed for the day: chip "Closed" and "Opens tomorrow {hh:mm}" or "Opens {Mon, Tue…} {hh:mm}" for the next open day; "Closed" when it never opens.
 
 #### 2. Entry points
 
-| Place | Label | Passes | Permission |
-|---|---|---|---|
-| Landing | Find a branch or ATM | `{kind}` (optional: `branch`, `atm`, `all`; default `branch`) | none |
-| Landing › Explore | Find a branch or ATM | `{kind}` empty | none |
-| Deep link | `/public/j/find-branch-atm?kind=atm` | `{kind}` | none |
+| Place › label | Passes in | Permission |
+|---|---|---|
+| Landing › Find a branch or ATM | none | none |
+| `replace-card` › Collect from a branch | `{kind: "branch"}` | none |
+| Deep link `/public/j/find-branch-atm?kind=atm` | `{kind}` (`atm`, `branch`) | none |
 
-README change needed: add "More › help › Find a branch or ATM" if the Personal app should show it after sign-in (not in the link map today; optional).
+`kind: "atm"` is used only when `showAtms` is on; `branch` filters to branches; anything else shows All.
 
 #### 3. Screens
 
-**Screen `search` — "Find a branch or ATM"** (entry). `onEnter` sets `loc.kind` to the passed `{kind}` or `branch`, `loc.range` to `10`, `loc.searched` to `false`. Blocks: `textInput`, `select`, `button`, `button`.
+Steps in order: `search`, `details`, then the result.
 
-| Label | Block | Required | Validation rule | Error message |
+**Screen `search`** ("Find a branch or ATM"). Button **Show details**.
+
+| Field | Block | Required | Validation | Message |
 |---|---|---|---|---|
-| Search (`loc.query`) | `textInput`, placeholder "Search by zip code, city, street" | No | At most 60 characters; letters, digits, spaces, `-`, `,`, `.` | "Use letters, numbers and spaces only, up to 60 characters." |
-| Show (`loc.kind`) | `select`, variant `chips`: Branches (`branch`), ATMs (`atm`), All (`all`) | Yes (default Branches) | One of the three | "Choose what to show." |
+| (no label) | `text`, placeholder "Search by area or street", max 60 | No | Matches part of the name, address or area, ignoring capitals | none |
+| (no label) | `chips`: All, Branches, Cash machines (the last only with `showAtms`). Default All, or from the launch value | No | One of the kinds | none |
+| Open now | `check`, shown only with option `openNow` | No | Keeps places that are open now | none |
 
-Copy: Title "Find a branch or ATM". Helper under search: "Leave it empty to see everything within 10 miles of the sandbox centre (downtown San Francisco)." Real apps replace the centre with the person's location (see open questions).
+Below the fields: a drawn map (a grid with up to 8 dots, branches in the accent colour, cash machines green, the chosen place larger, labelled "Map"), then the list sorted by distance, nearest first. Each row: an icon (building for a branch, wallet for a cash machine), the name, "{distance} · {address}", the chip and the status text. Tapping a row chooses that place and goes straight to the details. **Show details** chooses the nearest place when none was tapped.
 
-| Button | Does | Leads to |
-|---|---|---|
-| Search | `validate`, `callApi` `locations` with kind, range and query, sets `loc.searched` | `results` if one or more found, `none` if zero (rules on `loc.found`, like CAB) |
-| Filters | goes to `filter` | `filter` |
-| Back | `exit` | Where the person came from |
+- Empty (no match): icon, "No places found", "Try another search or show everything." The button is blocked with "No places match. Try another search."
 
-States: Loading: Search button disabled with a spinner while the call runs. Empty: n/a. Error: below.
+**Screen `details`** ("Details"). Button **Get directions**.
 
-**Screen `filter` — "Filters"**. Blocks: `select` (range), `select` (kind), `button` Apply.
+- Card: name, address, chip Open or Closed, the status text, "· {distance} away".
+- Card "Opening hours": seven rows Sunday to Saturday, each "Open 24 hours", "{hh:mm} to {hh:mm}" or "Closed".
+- Card "Services": one chip per service.
 
-| Label | Block | Required | Rule | Error |
-|---|---|---|---|---|
-| Show (`loc.kind`) | `select`, `chips` | Yes | As above | "Choose what to show." |
-| Search range (`loc.range`) | `select`, variant `dropdown`, choices "5 miles", "10 miles", "25 miles", "50 miles", "100 miles" | Yes | One of 5, 10, 25, 50, 100 | "Choose a search range." |
+**Result** ("Opening directions", green). Text "Your maps app will open with the route to {place}." Reference MAP- plus the place id in capitals (for example MAP-B1). Rows "Place", "Address", "Distance". Button **Search again** (starts the journey fresh), then **Done**.
 
-Apply runs the same search and leads to `results` or `none`. A "Reset" ghost button puts back Branches and 10 miles.
-
-**Screen `results` — title follows the filter ("Branches", "ATMs" or "All")**. Blocks: `map` (`source: loc.found`, `label` "Places on the map", `onSelect` opens details), `menu` built from `loc.found` (label = name, text = address, icon `mapPin`), `button` Filters.
-
-| Item | Content |
-|---|---|
-| Counter | "{n} places within {range} miles" (n = `len(loc.found)`) |
-| Order | Nearest first (the adapter returns them in distance order) |
-| Row tap or map pin tap | `callApi` `locationDetail` with `{id}`, then `details` |
-| Row second line | "{address} · {miles} mi" |
-
-States: Loading: the map shows a grey box and three row skeletons while the search runs. Error: toast "We couldn't search right now. Try again." and the person stays on `search` (the `showToast` of the CAB journey). With 50 or more results the list shows the nearest 50 and a line "Showing the nearest 50. Narrow your search to see others."
-
-**Screen `none` — "No places found"**. Block `result` (tone error). Title "No places found". Text "Try a wider range or a different search." Button "Search again" → `search`.
-
-**Screen `details` — "Find a branch or ATM"** (terminal). Blocks: `text` (name, title), `reviewSummary`, `button`, `button`, `dialog`.
-
-| Row | Example: Market Street Branch |
-|---|---|
-| Status | Open (computed from hours and the bank's clock; "Closed" or "Open 24 hours") |
-| Type | Branch |
-| Distance | 0.8 miles |
-| Address | 100 Market Street, San Francisco, CA 94105 |
-| Hours | Mon to Fri 9:00 to 17:00, Sat 9:00 to 13:00, Sun closed (UTC in the sandbox) |
-| Services | Make an appointment, Safe deposit, Foreign currency |
-
-| Button | Does | Leads to |
-|---|---|---|
-| Call this branch | Sets `ui.call` true | Opens the dialog below |
-| Get directions | `share` action with the address as text | The platform share sheet (mobile) or copies the address (web) |
-| Back to results | `navigate` | `results` |
-
-Dialog `dialer` (block `dialog`, `visibleWhen: ui.call`): icon `phone`, title "Call this branch", text "+1 415 555 0100". Buttons "Cancel" (secondary, closes) and "Call" (shows toast "Calling +1 415 555 0100…" in the sandbox; on a phone opens the dialer). Dismiss closes it.
-
-Sample places in the sandbox (`bank.locations.search` seed). Hours are weekday opening times in UTC. The centre is 37.7879, -122.4012.
-
-| Id | Kind | Name | Address | Miles | Hours | Services |
-|---|---|---|---|---|---|---|
-| `loc_market` | branch | Market Street Branch | 100 Market Street, San Francisco, CA 94105 | 0.8 | Mon to Fri 9:00 to 17:00, Sat 9:00 to 13:00 | Make an appointment, Safe deposit, Foreign currency |
-| `loc_market_atm` | atm | Market Street ATM | 100 Market Street, San Francisco, CA 94105 | 0.8 | 24 hours | Deposit-taking ATM |
-| `loc_mission` | branch | Mission Branch | 2400 Mission Street, San Francisco, CA 94110 | 2.6 | Mon to Fri 9:00 to 17:00 | Make an appointment |
-| `loc_oakland` | branch | Oakland Lakeside Branch | 1200 Lakeshore Avenue, Oakland, CA 94610 | 11.4 | Mon to Fri 9:00 to 17:00, Sat 9:00 to 13:00 | Make an appointment, Safe deposit |
-| `loc_airport_atm` | atm | Airport Terminal 2 ATM | Terminal 2, San Francisco Airport, CA 94128 | 14.9 | 24 hours | Deposit-taking ATM |
-| `loc_sanjose` | branch | San Jose Downtown Branch | 88 Santa Clara Street, San Jose, CA 95113 | 48.0 | Mon to Fri 9:00 to 17:00 | Make an appointment |
-
-Search rules (the same as `cab.locations.search`): `kind` is `branch`, `atm` or `all` (anything else counts as `all`); `rangeMiles` is a number above 0 (otherwise 10); a place matches when its miles are within the range, and the query (trimmed, lower case) is found in its name plus address. Details answer `LOCATION_NOT_FOUND` for an unknown id.
+**States**
+- Loading: none in the prototype. Product: list skeleton and a grey map (planned).
+- Empty: as above.
+- Error: places cannot load: "We couldn’t load places right now. Try again in a few minutes." with **Try again** (planned; the prototype makes no adapter call, so its Service down switch changes nothing here).
+- Location refused (planned "Use my location" button): "We couldn’t get your location. Search by area instead."
+- Timeout: after 10 seconds, "This is taking longer than expected. Nothing was changed." with **Try again** (planned).
 
 #### 4. Sandbox errors
 
-| Code | Message the person sees | Shows on | Button |
+| Code | Message | Shows on | Button |
 |---|---|---|---|
-| `LOCATION_NOT_FOUND` | "We can't find that place. It may have moved." | Toast, stays on `results` | Back to results |
-| `TIMEOUT` | "This is taking longer than expected. Nothing was changed." | Toast on `search`, `filter` or `results`; on `details` an inline alert | Try again |
-| `SERVICE_UNAVAILABLE` | S-`SERVICE_UNAVAILABLE` (README 1.6) | Same places | Try again |
-| (empty list, not an error) | "Try a wider range or a different search." | `none` | Search again |
+| `LOCATION_DENIED` (planned) | "We couldn’t get your location. Search by area instead." | `search` | OK |
+| `SERVICE_UNAVAILABLE` | "We couldn’t load places right now. Try again in a few minutes." | `search`, `details` | Try again |
+| `TIMEOUT` (planned) | "This is taking longer than expected. Nothing was changed." | `search` | Try again |
+| `JOURNEY_DISABLED` | "This isn’t available at your bank." | whole journey | none |
 
 #### 5. Adapters
 
-| Integration id | Adapter | Request | Response | Error codes | Status | moneyMoving | requiresOtp |
-|---|---|---|---|---|---|---|---|
-| `locations` | `bank.locations.search` | `{ kind, rangeMiles, query }` | Record by id: `{ id, name, lat, lng, address, sub }` (nearest first) | `TIMEOUT`, `SERVICE_UNAVAILABLE` | (planned; pattern: existing `cab.locations.search`) | No | No |
-| `locationDetail` | `bank.locations.details` | `{ id }` | `{ id, kind, name, address, lat, lng, miles, open, hours, phone, services, status, type, distanceMiles, country }` | `LOCATION_NOT_FOUND`, `TIMEOUT`, `SERVICE_UNAVAILABLE` | (planned; pattern: `cab.locations.details`) | No | No |
+| Integration id | Adapter | Request | Response | Errors | Status |
+|---|---|---|---|---|---|
+| `searchPlaces` | `cab.locations.search` | `{query, kind, near?}` | list of places with hours | `SERVICE_UNAVAILABLE`, `TIMEOUT` | Existing for the CAB access journeys (`packages/mock-bank-api/src/cab.ts`); a `bank.locations.search` twin for BankWorkx® is (planned) |
+| `placeDetails` | `cab.locations.details` | `{placeId}` | place with hours and services | `NOT_FOUND`, `SERVICE_UNAVAILABLE` | Existing in `cab.ts`; the BankWorkx® twin is (planned) |
+
+The prototype reads the local table `FB_PLACES`. The "open directions" step is a link to the phone's maps app and calls nothing.
 
 #### 6. Permissions, step-up and limits
 
-None, step-up `none`. Limits: at most 50 results; range at most 100 miles. If the platform asks for location permission (planned "Use my location"), the answer is never stored.
+None. No step-up. The search text is limited to 60 characters.
 
 #### 7. Result and links out
 
-Result: the `details` screen. No receipt, no notification. Links out: Call this branch (dialer), Get directions (share), Back to results, and the screen's Back (exit to Landing). Where a place offers "Make an appointment" the row is text only in Release 1.
+Result as above. No notification. Links out: the device's maps app. Reached from `replace-card` (collect from a branch).
 
 #### 8. Acceptance criteria
 
-- AC-1: A search returns only places of the chosen kind within the chosen range, nearest first.
-- AC-2: A text search matches name or address, ignoring case.
-- AC-3: A search with no match shows "No places found" and a way to search again.
-- AC-4: Opened with `{kind: "atm"}` the ATM chip is chosen.
-- AC-5: Choosing a result (row or pin) shows its status, distance, address, hours and services.
-- AC-6: Status is Open or Closed from the opening hours and the bank's clock; ATMs show "Open 24 hours".
-- AC-7: "Call this branch" opens a dialer pop-up with the number, and Cancel closes it without calling.
-- AC-8: A timeout and an unavailable service show their messages and allow a retry.
+- AC-1: The list is sorted nearest first and shows the distance in miles for Markets A and B and kilometres for Markets C and D.
+- AC-2: The search matches the name, address or area, ignoring capitals; the kind chips and the Open now filter narrow the list.
+- AC-3: Each place shows Open or Closed and the status text worked out from its hours and the clock.
+- AC-4: With no match the empty state shows and the button is blocked.
+- AC-5: Tapping a row, or **Show details**, opens the details with seven hours rows and the services.
+- AC-6: Cash machines and the Cash machines chip appear only with `showAtms`; the Open now filter only with `openNow`.
+- AC-7: The result names the place, the address and the distance and offers **Search again**.
+- AC-8: Launching with `kind=branch` shows branches only.
+- AC-9: When places cannot load the person sees the plain message and can try again (planned in the prototype).
 
 #### 9. Scenarios
 
-Persona `sam` (no session). Sandbox clock `now: 2026-11-03T12:00:00Z` (a Tuesday) unless stated.
+Synthetic anonymous visitor, Market A, clock Tuesday 18:45.
 
-| Id | Covers | Setup / conditions | Steps | Expected |
+| # | Covers | Persona / setup | Conditions | Steps and expected result |
 |---|---|---|---|---|
-| T-1 | AC-1 | – | Branches, 10 miles, Search | 2 results: Market Street Branch, Mission Branch, in that order; title "Branches" |
-| T-2 | AC-1 | – | Filters: All, 25 miles | 5 results: Market Street Branch, Market Street ATM, Mission Branch, Oakland Lakeside Branch, Airport Terminal 2 ATM, nearest first (Market branch and ATM are tied at 0.8; branch first) |
-| T-3 | AC-2 | – | Branches, query "MISSION" | 1 result: Mission Branch |
-| T-4 | AC-3 | – | Query "zzzz" | `none` screen: "No places found"; "Search again" returns to `search` |
-| T-5 | AC-4 | Start with `{kind: "atm"}` | Search | ATM chip chosen; 1 result (Market Street ATM) |
-| T-6 | AC-5 | – | Open Market Street Branch | Type Branch, Distance 0.8 miles, address and hours as in the table, Services listed |
-| T-7 | AC-6 | – | Open Market Street Branch at Tuesday 12:00 UTC; then `now: 2026-11-08T12:00:00Z` (Sunday) | Open; then Closed. Market Street ATM shows "Open 24 hours" in both |
-| T-8 | AC-7 | – | Details, Call this branch, Cancel | Pop-up shows "+1 415 555 0100"; after Cancel it is gone and no toast appears |
-| T-9 | AC-8 | `conditions.timeout: ["bank.locations.search"]` | Search | Toast with the timeout message; person stays on `search` |
-| T-10 | AC-8 | `conditions.unavailable: ["bank.locations.details"]` | Open a result | Unavailable message; Try again works once cleared |
+| T-1 | AC-1, AC-3 | Visitor | none | The first row is Central Plaza cash machine, "0.2 mi · Central Plaza, ground floor", chip Open, "Closes 24:00". Central Branch shows "0.5 mi", chip Closed, "Opens tomorrow 09:00". |
+| T-2 | AC-1 | Visitor, Market C | none | Distances read "0.4 km", "0.8 km" and so on. |
+| T-3 | AC-2 | Visitor | none | Typing "riverside" leaves the mall cash machine and Riverside Branch. Chip Branches leaves four branches. Open now removes Central Branch and Riverside Branch. |
+| T-4 | AC-4 | Visitor | none | Typing "zzz" shows "No places found" and the blocked button message. |
+| T-5 | AC-5, AC-7 | Visitor | none | Tap Market Street Branch: hours Sunday "10:00 to 16:00", Monday "08:00 to 20:00"; services as listed. **Get directions**: result "Opening directions", reference MAP-B2, rows Place, Address, Distance. |
+| T-6 | AC-6 | Visitor, `showAtms` off | none | No Cash machines chip, no cash machine rows; `kind=atm` shows All. |
+| T-7 | AC-8 | Visitor | none | `kind=branch` opens with Branches chosen. |
+| T-8 | AC-9 | Visitor | `unavailable: ["bank.locations.search"]` | "We couldn’t load places right now. Try again in a few minutes." (planned). |
+| T-9 | AC-9 | Visitor | `timeout: ["bank.locations.search"]`, `latencyMs: 10000` | After 10 seconds: "This is taking longer than expected. Nothing was changed." (planned). |
 
 #### 10. Expected mutation-check survivors
 
-| Survivor | Why it stays alive |
-|---|---|
-| `LOCATION_NOT_FOUND` check removed in details | Only ids from the search can be tapped; no scenario sends an unknown id. |
-| Changing the 50-result cap | The seed has six places; the cap cannot be reached. |
+The map dot positions are decoration and are not asserted; expected. The mile conversion survives a rounding change in the second decimal; expected. The sort order survives when two places are the same distance; expected. Everything else: none expected.
 
 ---
 
 ### ★ Contact us — `contact-support`
 
+**Catalog:** slug `contact-support`, workspace `public`, category Public: before sign-in (prototype tag "Before you sign in"), core no, can a bank switch it off: yes (basic entry, kept in the Lean preset). Options (key, label, default): `allowChat` "Offer chat" (on); `allowCall` "Offer a call" (on); `secureMessages` "Offer secure messages to signed-in customers" (on). Research: `research/contact-support.md`. Built in `design/bankworkx-r1/src/journeys/51-find-help.js` (object `CS`, with `HELP` shared with `find-branch-atm`).
+
+The lean rework removed topic routing by market, callback booking, social channels and the help-centre search. What remains: three ways to reach the bank (Chat, Call, Message), each with its own opening hours and a short path.
+
 #### 1. Summary
 
-| | |
+| Field | Value |
 |---|---|
 | Slug | `contact-support` |
-| Purpose | Reach the bank before signing in: answers to common questions, phone numbers with opening hours, and a call-back request. |
-| Release | 1 |
-| Workspace | Public |
-| Status | New (planned). Pattern exists: CAB `support` (`fixtures/cab.ts`, draft) with FAQs as one accordion screen of six topics, Terms and Privacy text screens, a Call-us dialer `dialog`, and opening hours as `reviewSummary` rows. |
-| Channels | Web, mobile |
-| Starting pattern | CAB `support`. BankWorkx® adds a call-back form (`callback`) because a person with a problem before sign-in has no secure messages. |
-| Who may use it | Anyone. No sign-in, no permission, no one-time code. |
-| Money moving | No. |
+| Purpose | Reach the bank by chat, by phone or by a written message, and see whether each channel is open. |
+| Release / workspace | 1 / Public (before sign-in) |
+| Status | Built in the prototype as a form journey with three branches (`submit: "Send"`). Chat and message call an adapter in the prototype (a simulated wait); Call opens the phone's dialer. No money moves. |
+| Channels | Web and mobile |
+| Starting pattern | None in the fixtures |
+| Who may use it | Anyone. No permission. A signed-in person can also use `new-message` (secure messages). |
 
-New adapter: `bank.support.callback` (planned). The FAQ text is built into the journey (as in CAB; the content team replaces the sample answers).
+**Ways to reach the bank.**
+
+| Way | Sub-line | Hours | Chip | Offered when |
+|---|---|---|---|---|
+| Chat | "Ask an adviser online" | Monday to Saturday 08:00 to 20:00, Sunday 10:00 to 16:00 | "Open now" with "Closes {hh:mm}", or "Closed" with "Opens {…}" | option `allowChat` |
+| Call | "Talk to us" | Monday to Friday 08:00 to 18:00; Saturday and Sunday closed | same as Chat | option `allowCall` |
+| Message | "We reply within 1 working day" | any time | "Open now" with "Any time" | always |
+
+Topics (Chat and Message): Accounts, Cards, Payments, Loans and savings, Online and app banking, Something else. The prototype clock is fixed at Tuesday 18:45 for the chips; the product uses the bank's time zone (planned).
 
 #### 2. Entry points
 
-| Place | Label | Passes | Permission |
-|---|---|---|---|
-| Landing | Contact us | – | none |
-| Landing › Explore | Contact us | – | none |
-| Sign-in screen | Help (README change needed; not in the link map) | – | none |
-| Deep link | `/public/j/contact-support` | – | none |
+| Place › label | Passes in | Permission |
+|---|---|---|
+| Landing › Contact us | none | none |
+| `sign-in` › Help | none | none |
+| `reset-password` and `unlock-account` › Too many tries › **Contact us** | none | none |
+| Account locked › Contact support | none | none |
+| `register-digital-banking`, `forgot-username`, `track-application` › Too many tries › **Contact us** | none | none |
+| Deep link `/public/j/contact-support?way=chat` | `{way}` (`chat`, `call`, `message`) | none |
+
+With `way` passed, the choice is preselected on the first screen.
 
 #### 3. Screens
 
-**Screen `home` — "Contact us"** (entry). `onEnter` sets `ui.call` to `false`. Blocks: `menu`, `reviewSummary`, `button`, `button`, `dialog`.
+Steps in order: `way`, then one of `chat`, `call` or `message`, then the result.
 
-| Row (menu) | Text | Leads to |
-|---|---|---|
-| FAQs | Answers to common questions | `faqs` |
-| Ask us to call you | We'll call you in a time you choose | `callback` |
-| Terms and conditions | Version 2026-10 | Ends the journey and opens Shell: Legal pages, `terms` |
-| Privacy notice | How we use your information | Ends the journey and opens Shell: Legal pages, `privacy` |
+**Screen `way`** ("Contact us"). Text "How would you like to reach us?" One `cards` field.
 
-Opening hours (`reviewSummary`, times in UTC in the sandbox): "Monday to Friday" "8:00 to 20:00"; "Saturday" "9:00 to 17:00"; "Sunday" "Closed". A line: "Lost or stolen card? Call any time: +1 800 555 0111."
-
-| Button | Does | Leads to |
-|---|---|---|
-| Call us | Sets `ui.call` true | Opens dialer |
-| Back | `exit` | Where the person came from |
-
-Dialer `dialog`: icon `phone`, title "Call us", text "+1 800 555 0100"; buttons "Cancel" (closes) and "Call" (toast "Calling the bank…" in the sandbox; opens the phone's dialer on a phone, then closes). A second dialer row for the card line is offered inside the same dialog as a text line: "Lost or stolen card: +1 800 555 0111".
-
-**Screen `faqs` — "FAQs"**. Blocks: `accordion` with six topics, a `text` caption "Sample answers: the bank's content team replaces these with approved text." and Back.
-
-| Topic | Question | Answer |
-|---|---|---|
-| Opening an account | Who can open an account? | You must be 18 or older, live in the United States and have a photo ID. Use Open an account on the start screen. It takes about 10 minutes. |
-| Opening an account | Can I stop and come back? | Yes. Choose Save and continue later. We keep your application for 30 days. |
-| Signing in | I have an account but no online login. What do I do? | Choose Register for digital banking. You'll need your card or account number and your phone. |
-| Cards | I lost my card. What do I do? | Call +1 800 555 0111 at any time. We'll block the card straight away. |
-| Payments | When is my payment sent? | Payments made before the daily cut-off are sent the same working day. |
-| Fees and rates | Where can I see today's exchange rates? | On the start screen, choose Explore, then Exchange rates. |
-| Security | Will the bank ever ask for my password? | Never. We will never ask for your password or full one-time code by phone, text or email. |
-
-The accordion's six groups are Opening an account, Signing in, Cards, Payments, Fees and rates, Security (the table lists seven questions across them). Opening one group closes the others.
-
-**Screen `callback` — "Ask us to call you"**. Blocks: `text`, `textInput` x2, `select` x2, `alert`, `button`.
-
-| Label | Block | Required | Validation rule | Error message |
+| Field | Block | Required | Validation | Message |
 |---|---|---|---|---|
-| Your name (`cb.name`) | `textInput` | Yes | 2 to 60 characters; letters, spaces, `-`, `'`, `.` | "Enter your name (2 to 60 letters)." |
-| Phone number (`cb.phone`) | `textInput`, keyboard `phone`, placeholder "+1 415 555 0100" | Yes | 10 to 15 digits, may start with `+`, spaces and dashes allowed (pattern `^\+?[0-9 -]{10,18}$` and 10 to 15 digits after removing symbols) | "Enter a phone number with 10 to 15 digits." |
-| What is it about? (`cb.topic`) | `select`, variant `dropdown`: Opening an account (`open`), Signing in or registering (`signin`), A card (`card`), A payment (`payment`), Something else (`other`) | Yes | One of the five | "Choose a topic." |
-| Best time (`cb.window`) | `select`, `chips`: Morning 9:00 to 12:00 (`am`), Afternoon 12:00 to 17:00 (`pm`), Evening 17:00 to 20:00 (`eve`) | Yes | One of the three | "Choose a time." |
+| (no label) | `cards`: Chat, Call, Message (only the ways that are on), each with its sub-line and its open chip | Yes | One of the cards | "This is required." |
 
-Copy: Title "We'll call you". Body "Tell us when to call. We'll call the number you give, within the time you choose." Alert (info): "We will never ask for your password or a full one-time code on the phone." Button "Request a call" (validate, then `callApi` `callback`) → `callbackDone`. Ghost button "Back" → `home`.
+The chip is information only: a closed channel can still be chosen in the prototype (open point: a closed Chat should say when it opens and offer Message instead; planned).
 
-**Screen `callbackDone` — "Request received"** (terminal). `result` tone success. Title "We'll call you". Text "We'll call {maskedPhone} {when} between {from} and {to}. If you miss us we'll try once more." Meta: "Reference {reference}". {when} is "today" if the window is still ahead and the bank is open, else "on {next working day}". Buttons: "Done" (`exit`).
+**Screen `chat`** ("Chat"). Button **Start chat**, busy "Finding an adviser…" (about 0.8 seconds).
+
+| Field | Block | Required | Validation | Message |
+|---|---|---|---|---|
+| What is it about? | `select` of the six topics | Yes | One of the list | "This is required." |
+| Your question | `textarea`, placeholder "Tell us a little", max 300 | Yes | At least 5 characters | "Write a few words so we can help." |
+
+**Screen `call`** ("Call us"). Card "Opening hours" with seven rows Sunday to Saturday (for example "08:00 to 18:00" or "Closed"). Button **Call us**. No fields.
+
+**Screen `message`** ("Send us a message"). Button **Send**, busy "Sending…" (about 0.7 seconds). With `secureMessages` on, a secondary button **Send us a message** opens `new-message`; it appears only when that journey is on and the person is signed in.
+
+| Field | Block | Required | Validation | Message |
+|---|---|---|---|---|
+| What is it about? | `select` of the six topics | Yes | One of the list | "This is required." |
+| Your email | `email`, placeholder "name@example.com", max 80 | Yes | `name@host.tld` shape | "Enter a valid email address." |
+| Your message | `textarea`, placeholder "How can we help?", max 1000, counter "{n} of 1000" | Yes | At least 10 characters | "Write at least 10 characters." |
+
+**Results**
+
+| Way | Title | Text | Chip | Rows |
+|---|---|---|---|---|
+| Chat | "You’re in the queue" | "An adviser will join in about 2 minutes." | Waiting (amber) | Topic |
+| Call | "Calling the bank" | "Your phone will open the dialer." | none (reference CALL-…) | Opening hours: "Mon to Fri, 08:00 to 18:00" |
+| Message | "Message sent" | "We’ll reply to {email} within 1 working day." | Received (green) | Topic, Reply to |
+
+Each result has a reference and the button **Done**.
+
+**States**
+- Loading: busy text on the button for Chat and Message as above.
+- Empty: not applicable. If Chat and Call are both off, only Message is offered.
+- Error: "We couldn’t send that. Nothing was sent. Try again in a few minutes." with **Try again**. The Service down switch shows the standard connection sheet ("We couldn’t reach the bank", "Nothing was sent and you haven’t been charged. Try again in a moment.", **Try again**).
+- Timeout: "This is taking longer than expected. Nothing was sent." with **Try again**.
 
 #### 4. Sandbox errors
 
-| Code | Message the person sees | Shows on | Button |
+| Code | Message | Shows on | Button |
 |---|---|---|---|
-| `PHONE_INVALID` | "Enter a phone number with 10 to 15 digits." | `callback`, under the phone | Change number |
-| `TOPIC_INVALID` | "Choose a topic." | `callback` | Choose topic |
-| `WINDOW_INVALID` | "Choose a time." | `callback` | Choose time |
-| `CALLBACK_EXISTS` | "We already have a request for this number. We'll call by {expectedBy}." | `callback`, alert above the button | Done (exit) / Change number |
-| `RATE_LIMITED` | "You've asked for a call back too many times today. Please call us on +1 800 555 0100." | `callback`, alert | Call us (opens dialer) |
-| `TIMEOUT` | "This is taking longer than expected. Nothing was changed." | `callback`, alert | Try again |
-| `SERVICE_UNAVAILABLE` | S-`SERVICE_UNAVAILABLE` (README 1.6) | `callback`, alert | Try again |
+| `SERVICE_UNAVAILABLE` | "We couldn’t send that. Nothing was sent. Try again in a few minutes." | `chat`, `message` | Try again |
+| `TIMEOUT` | "This is taking longer than expected. Nothing was sent." | `chat`, `message` | Try again |
+| `RATE_LIMITED` (planned) | "You’ve sent a lot of messages. Try again later." | `message` | Back |
+| `JOURNEY_DISABLED` | "This isn’t available at your bank." | whole journey | none |
 
 #### 5. Adapters
 
-| Integration id | Adapter | Request | Response | Error codes | Status | moneyMoving | requiresOtp |
-|---|---|---|---|---|---|---|---|
-| `callback` | `bank.support.callback` | `{ name, phone, topic, window }` | `{ reference: "CB-20261103-0001", maskedPhone: "••••••0100", window, expectedBy }` | `PHONE_INVALID`, `TOPIC_INVALID`, `WINDOW_INVALID`, `CALLBACK_EXISTS`, `RATE_LIMITED`, `TIMEOUT`, `SERVICE_UNAVAILABLE` | (planned) | No | No |
+| Integration id | Adapter | Request | Response | Errors | Status |
+|---|---|---|---|---|---|
+| `hours` | `bank.support.hours` | `{}` | opening hours per way | `SERVICE_UNAVAILABLE` | (planned). The prototype holds the tables `HELP_H` and `CS_WAYS` |
+| `openChat` | `bank.support.openChat` | `{topic, text}` | `{queueId, waitMinutes}` | `SERVICE_UNAVAILABLE`, `TIMEOUT` | (planned) |
+| `sendMessage` | `bank.support.sendMessage` | `{topic, email, text}` | `{reference}` | `SERVICE_UNAVAILABLE`, `TIMEOUT`, `RATE_LIMITED` | (planned) |
 
-Sandbox rules: one open request per phone number (a second gets `CALLBACK_EXISTS`); at most 3 requests per phone number per sandbox day (a fourth gets `RATE_LIMITED`); the phone is stored masked in logs. Business outcomes come back as data (`{ ok: false, code }`) like the `cab.*` adapters, so the journey can route on them. A bot check (the "picture code" of the CAB access journeys) is not in Release 1; see open questions.
+Call has no adapter: it opens a `tel:` link.
 
 #### 6. Permissions, step-up and limits
 
-None, step-up `none`. Limits: 3 call-back requests per phone number per day.
+None. No step-up. Limits: chat question 300 characters; message 1000 characters; abuse limit on messages per device (planned).
 
 #### 7. Result and links out
 
-Result: `callbackDone` (reference `CB-<date>-<n>`). Receipt: none. Notification: a text message to the number: "BankWorkx®: we've got your call-back request (CB-20261103-0001)." (planned, sandbox only records it). Links out: Done; Terms and Privacy open Shell: Legal pages.
+Results as above. Notifications: a message reply goes to the email address given. Links out: `new-message` (signed in), the phone dialer. Reached from `sign-in`, `reset-password`, `unlock-account`, `register-digital-banking`, `forgot-username` and `track-application`.
 
 #### 8. Acceptance criteria
 
-- AC-1: The home screen shows the opening hours and the four rows.
-- AC-2: FAQs show six groups; opening one closes the others.
-- AC-3: "Call us" opens a pop-up with the number; Cancel closes it without a call.
-- AC-4: A valid call-back request gives a reference and a message naming the chosen time.
-- AC-5: A phone number with fewer than 10 or more than 15 digits is refused with the phone message.
-- AC-6: A second request for the same number is refused and says when the bank will call.
-- AC-7: A fourth request for the same number in one day is refused and offers the phone number.
-- AC-8: A timeout and an unavailable service show their messages and allow a retry; no request is recorded.
-- AC-9: Terms and Privacy open the Legal pages.
+- AC-1: Chat appears only with `allowChat`, Call only with `allowCall`, Message always; each shows an open or closed chip from its hours.
+- AC-2: Chat needs a topic and at least 5 characters, and ends in the queue result.
+- AC-3: Call shows the seven opening-hours rows, then the dialer result with the weekday hours.
+- AC-4: Message needs a topic, a valid email and at least 10 characters, and the result repeats the email.
+- AC-5: The secure-message button appears only with `secureMessages` on and `new-message` available to the person.
+- AC-6: A launch value `way` preselects that way.
+- AC-7: When the bank is unavailable or times out nothing is sent and the person can try again.
 
 #### 9. Scenarios
 
-Persona `sam`, no session, `now: 2026-11-03T10:00:00Z`.
+Synthetic anonymous visitor, clock Tuesday 18:45.
 
-| Id | Covers | Setup / conditions | Steps | Expected |
+| # | Covers | Persona / setup | Conditions | Steps and expected result |
 |---|---|---|---|---|
-| T-1 | AC-1 | – | Open the journey | Four rows; hours "8:00 to 20:00", "9:00 to 17:00", "Closed"; card line text |
-| T-2 | AC-2 | – | FAQs, open "Security", then "Cards" | Six groups; only "Cards" is open at the end |
-| T-3 | AC-3 | – | Call us, Cancel | Pop-up shows "+1 800 555 0100"; no toast after Cancel |
-| T-4 | AC-4 | – | Name "Sam Rivera", phone "+1 415 555 0199", topic Opening an account, Afternoon, Request a call | Reference `CB-20261103-0001`; text "We'll call ••••••0199 today between 12:00 and 17:00." |
-| T-5 | AC-5 | – | Phone "12345", then "1234567890123456" | Phone message both times; adapter not called |
-| T-6 | AC-6 | After T-4 | Same number again | `CALLBACK_EXISTS` message with the expected time |
-| T-7 | AC-7 | Sandbox holds 3 requests made today for `+1 415 555 0199`, none open | Fourth request | `RATE_LIMITED` message and the Call us button |
-| T-8 | AC-8 | `conditions.timeout: ["bank.support.callback"]` | Request a call | Timeout message; clearing the condition and pressing Try again gives the reference; only one request exists |
-| T-9 | AC-8 | `conditions.unavailable: ["bank.support.callback"]` | Request a call | Unavailable message; no reference |
-| T-10 | AC-9 | – | Terms and conditions row | Journey ends; Legal pages open on `terms` |
+| T-1 | AC-1 | Visitor | none | Chat: "Open now", "Closes 20:00". Call: the line closed at 18:00, so chip "Closed" and "Opens tomorrow 08:00". Message: "Open now", "Any time". |
+| T-2 | AC-1 | Visitor, `allowChat` and `allowCall` off | none | Only Message is offered. |
+| T-3 | AC-2 | Visitor | none | Chat, topic Cards, question "Hi": "Write a few words so we can help." Question "I need help with my card.": result "You’re in the queue", row Topic "Cards". |
+| T-4 | AC-3 | Visitor | none | Call: Saturday and Sunday "Closed", Monday "08:00 to 18:00". Result "Calling the bank", row "Mon to Fri, 08:00 to 18:00". |
+| T-5 | AC-4 | Visitor | none | Email "alex" gives "Enter a valid email address."; message "Hello" gives "Write at least 10 characters."; valid input gives "Message sent" and "We’ll reply to alex.morgan@example.com within 1 working day." |
+| T-6 | AC-5 | Alex (signed in), `secureMessages` on | none | The button **Send us a message** opens `new-message`; with the option off or signed out it is absent. |
+| T-7 | AC-6 | Visitor | none | `way=message` opens with Message chosen. |
+| T-8 | AC-7 | Visitor | `unavailable: ["bank.support.sendMessage"]` (prototype: Service down on) | Connection sheet; nothing sent. |
+| T-9 | AC-7 | Visitor | `timeout: ["bank.support.sendMessage"]`, `latencyMs: 10000` | After 10 seconds: "This is taking longer than expected. Nothing was sent." |
 
 #### 10. Expected mutation-check survivors
 
-| Survivor | Why it stays alive |
-|---|---|
-| FAQ answer text changed | The scenarios check the group titles and the one-open rule, not the sample answers (they are placeholders for the content team). |
-| `TOPIC_INVALID` / `WINDOW_INVALID` removed in the adapter | The dropdown and chips only offer valid values. |
+The wait text "about 2 minutes" is fixed copy and is not asserted against a queue; expected. The abuse limit (`RATE_LIMITED`) cannot be produced by the sandbox yet; expected. Everything else: none expected.
 
 ---
 
@@ -1128,349 +1082,280 @@ The market-specific checks (ID format, proof of address, birth-year match) survi
 
 ### ★ Track my application — `track-application`
 
+**Catalog:** slug `track-application`, workspace `public`, category Public: before sign-in (prototype tag "Before you sign in"), core no, can a bank switch it off: yes (basic entry, kept in the Lean preset). Options (key, label, default): `askCode` "Ask for a one-time code before showing the status" (on). Research: `research/track-application.md`. Built in `design/bankworkx-r1/src/journeys/53-track.js`.
+
+The lean rework reduced the tracker to three stages and removed document upload, appointment booking and the full timeline. What remains: find an application with its number and the mobile number, confirm with a code, see where it is, and when it is ready go on to register for digital banking.
+
 #### 1. Summary
 
-| | |
+| Field | Value |
 |---|---|
 | Slug | `track-application` |
-| Purpose | A new customer looks up an application they made with `open-account`, sees where it is in a timeline, answers a request for more information, and when the account is open, goes on to activate digital banking. |
-| Release | 1 |
-| Workspace | Public |
-| Status | New (planned) |
-| Channels | Web, mobile |
-| Starting pattern | CAB `enroll` for "identify the person with details, then show a result" (`fixtures/cab.ts`, adapters `cab.enroll.retail`); the `otp` screens of `local-transfer` for the code step. The timeline needs the `timeline` and `statusChip` blocks (planned, batch A). |
-| Who may use it | The applicant, proved by application number, date of birth and a one-time code. No sign-in. |
-| Money moving | No. Security journey: it shows personal application data, so a code is required. |
+| Purpose | Show where an account application is: received, checking your ID, or ready. |
+| Release / workspace | 1 / Public (before sign-in) |
+| Status | Built in the prototype as a two-screen form journey (`submit: "Show status"`). It also finds the application a person just made in `open-account`. No money moves. |
+| Channels | Web and mobile |
+| Starting pattern | None in the fixtures |
+| Who may use it | Anyone with the application number and the mobile number. No permission. |
 
-New adapters (planned): `bank.onboarding.lookup`, `bank.onboarding.status` (and the shared `bank.onboarding.get` from `open-account`). Reuses `bank.otp.verify`.
+**Stages.** The status is one of three: Received, Checking your ID, Ready.
+
+**Sandbox applications (not shown on screen).** APP-100234, mobile ending 0123, Jordan, Everyday Account, stage "Checking your ID", sent Tue 3 Nov 2026. APP-100235, mobile ending 0124, Sam, Everyday Account, stage "Ready", account number ending 2208. Any application made in `open-account` in the same session is found too. The match needs the application number (ignoring capitals and spaces at the ends) and the last 6 digits of the mobile number. One-time code: any 6 digits is accepted, `000000` is wrong, `999999` is expired. Three wrong tries (details or codes together) lock the journey; the prototype shortens the 30 minutes to 2 minutes.
 
 #### 2. Entry points
 
-| Place | Label | Passes | Permission |
-|---|---|---|---|
-| Landing | Track my application | `{applicationId}` optional | none |
-| Notification (any channel) | Application update | `{applicationId}` | none (the code is still asked) |
-| `open-account` result (`submitted`, `saved`) | Track my application | `{applicationId}` | none |
-| Deep link | `/public/j/track-application?applicationId=APP-20261103-0042` | `{applicationId}` | none |
+| Place › label | Passes in | Permission |
+|---|---|---|
+| Landing › Track my application | none | none |
+| Notification › Application update | `{applicationId}` (prefills the number) | none |
+| `open-account` › Done › Track my application | `{applicationId}` | none |
+| Deep link `/public/j/track-application?applicationId=APP-100234` | `{applicationId}` | none |
 
 #### 3. Screens
 
-**Screen `find` — "Track my application"** (entry). Blocks: `text`, `textInput`, `datePicker` (planned; `dateInput` until then), `alert`, `button`.
+Steps in order: `find`, `code` (with `askCode`), then the result.
 
-| Label (bind) | Block | Required | Rule | Error |
+**Screen `find`** ("Track my application"). Text "Enter the number we sent you." Button **Continue**, busy "Looking for your application…" (about 0.8 seconds).
+
+| Field | Block | Required | Validation | Message |
 |---|---|---|---|---|
-| Application number (`ta.applicationId`) | `textInput`, prefilled from `{applicationId}`, pattern `^APP-[0-9]{8}-[0-9]{4}$` | Yes | Looks like `APP-20261103-0042` | "Enter your application number, like APP-20261103-0042." |
-| Date of birth (`ta.dob`) | `datePicker` (typed `DD / MM / YYYY` until it exists) | Yes | A real date in the past, person at least 16 years old | "Enter your date of birth as DD / MM / YYYY." |
+| Application number | `text`, placeholder "APP-123456", max 20 | Yes | `APP-` and 6 digits, any capitals | "Enter the number as shown, like APP-123456." |
+| Mobile number | `tel`, placeholder "Mobile number", max 20 | Yes | 7 to 18 digits, spaces, brackets, dashes, optional leading + | "Enter a valid mobile number." |
 
-Copy: Title "Track my application". Body "Enter the number we sent you and your date of birth. We'll text you a code." Alert (info): "We keep applications for 30 days after you last worked on them." Button "Send me a code": `validate`, `callApi` `lookup` → `code`. Ghost "I don't have my number" → shows text "Check your email and texts from BankWorkx®, or call us" with a Contact us button (`toJourney: contact-support`).
+Not found: "We couldn’t find an application with those details. Check them and try again." The third wrong try locks the screen: the fields are replaced by a card "Too many tries", "For your security, try again in 30 minutes, or contact us.", button **Contact us** (`contact-support`); the step is blocked with "Too many tries. Try again in 30 minutes."
 
-**Screen `code` — "Enter your code"**. Blocks: `otp` (6 digits, `maxAttempts: 3`), `button`.
+**Screen `code`** ("Enter your code"). Shown only with `askCode`. Card "Code sent", "We sent a 6-digit code to ••• {last 4 digits}." Button **Continue**, busy "Checking your code…" (about 0.7 seconds).
 
-Copy: Title "Enter your code". Body "We sent a 6-digit code to {maskedPhone}." Helper "You can ask for a new code in 30 seconds." Button "Show my application": `callApi` `otpVerify` (id exactly `otpVerify`) then `callApi` `status` → `status`. Ghost "Send a new code". Third wrong code: S-`OTP_INVALID` third form, button "Start again" → `find`.
+| Field | Block | Required | Validation | Message |
+|---|---|---|---|---|
+| 6-digit code | `text`, placeholder "000000", max 6 | Yes | Exactly 6 digits | "Enter the 6 digits from the message." |
 
-**Screen `status` — "Your application"**. Blocks: `statusChip` (planned), `reviewSummary`, `timeline` (planned), `alert`, `button`s. The screen refreshes when the person pulls down (mobile) or presses "Refresh" (web). It does not refresh by itself.
+A wrong code (`000000`) clears the field and counts towards the lock: "That code isn’t right. Check the latest message and try again." An expired code (`999999`): "That code has expired. Ask for a new one." The prototype has no Resend button on this step (open point: add one, as in `register-digital-banking`; planned).
 
-Header rows (`reviewSummary`): "Application" `{applicationId}`; "Account" `{productName}`; "Submitted" `{submittedAt}` (for example `3 Nov 2026 10:12 UTC`); "Status" chip.
+**Result.** Chip and title by stage, reference = the application number. Rows, in order: "Account" (the product, when known), then one row per stage: **Done** for stages before the current one, **In progress** for the current one (or **Done** when the current one is Ready), **Next** for later ones; "Account number" (for example ••2208) when Ready.
 
-Timeline steps (planned `timeline`; `state` is `done`, `current`, `upcoming` or `attention`):
+| Stage | Title | Text | Chip | Button |
+|---|---|---|---|---|
+| Received | "We’ve received your application" | "We’ll text you when something changes." | Received (amber) | **Contact us** |
+| Checking your ID | "We’re checking your ID" | "We’ll text you when something changes." | Checking your ID (amber) | **Contact us** |
+| Ready | "Your account is ready" | "One last step: set up your online login." | Ready (green) | **Register for digital banking** (opens `register-digital-banking` with `{applicationId}`) |
 
-| # | Step | Meaning |
-|---|---|---|
-| 1 | Submitted | We have your application |
-| 2 | ID and documents | We check your ID and your documents |
-| 3 | Final checks | Tax and safety checks |
-| 4 | Decision | We say yes or no |
-| 5 | Account ready | Your account is open |
-| 6 | Digital banking | You activate your login |
-
-What each status shows:
-
-| Status | Chip | Current step | Title | Text | Buttons |
-|---|---|---|---|---|---|
-| `draft` | Not sent | none | "You haven't sent this yet" | "Your application is saved until {expiresOn}." | Continue application (`toJourney: open-account`, `{applicationId}`) |
-| `submitted` | Received | 1 done, 2 current | "We've got your application" | "We'll start checking it soon. This usually takes 1 to 2 working days." | Refresh, Contact us |
-| `in_review` | Checking | 2 or 3 current | "We're checking your details" | "Nothing for you to do right now." | Refresh, Contact us |
-| `more_info` | We need something | 2 attention | "We need one more thing" | The bank's request, for example "Your proof of address is older than 3 months. Please upload a newer one." | Upload documents (`toJourney: open-account`, `{applicationId}`, opens on `documents`) |
-| `approved` | Approved | 4 done, 5 current | "Good news, you're approved" | "We're opening your account." | Refresh |
-| `account_opened` | Ready | 5 done, 6 current | "Your account is open" | "Account {maskedAccount}. One last step: set up your online login." | **Activate digital banking** (`toJourney: register-digital-banking`, `{applicationId}`) |
-| `activated` | Active | all done | "You're all set" | "Sign in with the username you chose." | Sign in (`toJourney: sign-in`) |
-| `rejected` | Not approved | 4 attention | "We couldn't open your account" | "We can't open an account for you right now. We're sorry. Nothing was charged." | Contact us |
-| `expired` | Expired | none | "This application has expired" | "Applications are kept for 30 days." | Start a new application (`toJourney: open-account`) |
-
-Empty: not possible (a found application always has a status). Loading: header and timeline skeletons. Error and locked states below.
-
-**Screen `locked` — "Too many tries"** (terminal). `result` (error). Title "Too many tries". Text "For your security, try again in 30 minutes, or call us." Buttons "Contact us" (`toJourney: contact-support`), "Done".
+**States**
+- Loading: busy text on the button as above.
+- Empty: not applicable.
+- Error: "We couldn’t reach the bank. Try again in a few minutes." The Service down switch shows the standard connection sheet ("We couldn’t reach the bank", "Nothing was sent and you haven’t been charged. Try again in a moment.", **Try again**).
+- Timeout: "This is taking longer than expected. Try again."
+- Locked: as above.
 
 #### 4. Sandbox errors
 
-| Code | Message the person sees | Shows on | Button |
+| Code | Message | Shows on | Button |
 |---|---|---|---|
-| `APPLICATION_NOT_FOUND` | "We couldn't find an application with those details. Check the number and your date of birth. {n} tries left." (same message whether the number or the date is wrong) | `find`, alert | Change details |
-| `LOOKUP_LOCKED` | "Too many tries. For your security, try again in 30 minutes, or call us." | `locked` | Contact us |
-| `OTP_INVALID` | "That code isn't right. {n} tries left." After the third: "Too many wrong codes. Start again." | `code` | Try again / Start again |
-| `OTP_REQUIRED` | "Confirm with your one-time code first." | `code` (when `status` is asked for without a verified code) | Back to code |
-| `APPLICATION_EXPIRED` | "This application has expired. Start a new one." | `status` (chip Expired) | Start a new application |
-| `TIMEOUT` | "This is taking longer than expected. Nothing was changed." | The step that was running, as an alert | Try again |
-| `SERVICE_UNAVAILABLE` | S-`SERVICE_UNAVAILABLE` (README 1.6) | The step that was running | Try again |
+| `NOT_FOUND` | "We couldn’t find an application with those details. Check them and try again." | `find` | Try again |
+| `TRACK_LOCKED` | "Too many tries. For your security, try again in 30 minutes, or contact us." | `find`, `code` | Contact us |
+| `OTP_INVALID` | "That code isn’t right. Check the latest message and try again." | `code` | Try again |
+| `OTP_EXPIRED` | "That code has expired. Ask for a new one." | `code` | Back |
+| `SERVICE_UNAVAILABLE` | "We couldn’t reach the bank. Try again in a few minutes." | `find`, `code` | Try again |
+| `TIMEOUT` | "This is taking longer than expected. Try again." | `find`, `code` | Try again |
+| `JOURNEY_DISABLED` | "This isn’t available at your bank." | whole journey | none |
 
 #### 5. Adapters
 
-| Integration id | Adapter | Request | Response | Error codes | Status | moneyMoving | requiresOtp |
-|---|---|---|---|---|---|---|---|
-| `lookup` | `bank.onboarding.lookup` | `{ applicationId, dob }` | `{ ok: true, maskedPhone }` and sends a code (as `bank.otp.send`), or `{ ok: false, code, attemptsLeft? }` | `APPLICATION_NOT_FOUND`, `LOOKUP_LOCKED` | (planned) | No | No (it starts the code) |
-| `otpVerify` | `bank.otp.verify` | `{ code }` | `{ verified: true }` | `OTP_INVALID` | Existing | No | No |
-| `status` | `bank.onboarding.status` | `{ applicationId }` | `{ applicationId, status, productId, productName, submittedAt, expiresOn?, steps: [{ id, label, state, at? }], message?, maskedAccount? }` | `OTP_REQUIRED`, `APPLICATION_NOT_FOUND`, `APPLICATION_EXPIRED` | (planned) | No | Yes (read) |
-
-Sandbox rules: 3 failed lookups for one application number lock it for 30 minutes (the same limits as the CAB access journeys: 3 mistakes, 30 minutes); a verified code stays valid for the visit and does not expire during the journey; the application's status is stored and changes only when a scenario or the sandbox panel sets it (button "Move to next step"). Seeded applications (all with date of birth 14 Mar 1992 and Sam's mobile):
-
-| Number | Status | Notes |
-|---|---|---|
-| `APP-20261103-0042` | `submitted` | Everyday Account, submitted 3 Nov 2026 10:12 UTC (the application made in the `open-account` scenario) |
-| `APP-20261028-0017` | `in_review` | Aurora Savings |
-| `APP-20261020-0007` | `more_info` | Message: "Your proof of address is older than 3 months. Please upload a newer one." |
-| `APP-20261015-0003` | `account_opened` | Everyday Account, `maskedAccount` `••9021` |
-| `APP-20260915-0002` | `activated` | Everyday Account |
-| `APP-20261001-0001` | `rejected` | |
-| `APP-20261030-0021` | `draft` | Expires 29 Nov 2026 |
-| `APP-20260901-0005` | `expired` | |
+| Integration id | Adapter | Request | Response | Errors | Status |
+|---|---|---|---|---|---|
+| `findApplication` | `bank.applications.find` | `{reference, mobile}` | `{reference, product, stage, accountLast4?}` | `NOT_FOUND`, `TRACK_LOCKED`, `SERVICE_UNAVAILABLE`, `TIMEOUT` | (planned). The prototype reads `TR_APPS` and `OA.app` |
+| `sendOtp` / `verifyOtp` | `bank.otp.send` / `bank.otp.verify` | `{channel}` / `{code}` | `{sent}` / `{verified}` | `OTP_INVALID`, `OTP_EXPIRED` | Existing (`packages/mock-bank-api/src/index.ts`) |
 
 #### 6. Permissions, step-up and limits
 
-No permission, no session. Step-up `otp` before any application data is shown. Limits: 3 code tries, 3 lookups then a 30-minute lock. Only the application number, status, product, dates and the bank's request are returned; the tax number, ID images and files never are.
+None. The one-time code is the step-up and is on by default (`askCode`). Limits: 3 wrong tries lock the journey for 30 minutes (2 minutes in the prototype).
 
 #### 7. Result and links out
 
-Result: `status`. No receipt (the receipt is made at submission by `open-account`). Notifications: the bank sends "Application update" messages (email, text and push if the app is installed) when the status changes: "We're checking your application" (to `in_review`), "We need one more thing" (to `more_info`), "Your account is open" (to `account_opened`), "We couldn't open your account" (to `rejected`); each links to this journey with `{applicationId}`. Links out: Continue application and Upload documents (`open-account`), Activate digital banking (`register-digital-banking`, `{applicationId}`), Sign in (`sign-in`), Contact us (`contact-support`). README changes needed: add "Application tracker › Continue application / Upload documents" (`open-account`, `{applicationId}`) and "Application tracker › Activate digital banking" (`register-digital-banking`, `{applicationId}`).
+Result as above. Notification raised (planned): a text when the stage changes ("Your BankWorkx® application {reference} has moved to: {stage}"). Links out: `register-digital-banking`, `contact-support`, `open-account`.
 
 #### 8. Acceptance criteria
 
-- AC-1: An application is shown only after the application number, date of birth and a one-time code are all right.
-- AC-2: A wrong number or date gives one message that does not say which is wrong; three failures lock the lookup for 30 minutes.
-- AC-3: A wrong code is counted; the third ends the step.
-- AC-4: Each status shows its chip, its current timeline step, its title, text and buttons as in the table.
-- AC-5: In `more_info` the bank's request is shown and "Upload documents" opens `open-account` on the documents step.
-- AC-6: In `account_opened` the masked account is shown and "Activate digital banking" opens `register-digital-banking` with the application number.
-- AC-7: A `rejected` application shows no reason beyond the standard text.
-- AC-8: Asking for the status without a verified code is refused.
-- AC-9: A timeout and an unavailable service each show their message and allow a retry.
-- AC-10: Opened from a notification with `{applicationId}`, the number is prefilled but the code is still required.
+- AC-1: The application number must be `APP-` and 6 digits and the mobile number must be valid before the button works.
+- AC-2: A match needs both the number and the last 6 digits of the mobile; otherwise the person sees "We couldn’t find an application with those details. Check them and try again." and no hint which part was wrong.
+- AC-3: With `askCode` on a code is required before the status shows; with it off the status shows after the details.
+- AC-4: Three wrong tries (details and codes together) lock the journey with the "Too many tries" card and a link to `contact-support`.
+- AC-5: The status rows follow the stage rule (Done, In progress, Next; all Done when Ready) and the chip and title follow the table.
+- AC-6: A Ready application shows the account number and the button **Register for digital banking** with the application number.
+- AC-7: An application made in `open-account` can be tracked straight away.
+- AC-8: When the bank is unavailable or times out nothing is shown and the person can try again.
 
 #### 9. Scenarios
 
-Persona `sam` (code `123456`). Date of birth `14/03/1992` unless stated.
+Synthetic anonymous visitor.
 
-| Id | Covers | Setup / conditions | Steps | Expected |
+| # | Covers | Persona / setup | Conditions | Steps and expected result |
 |---|---|---|---|---|
-| T-1 | AC-1, AC-4 | – | `APP-20261103-0042`, correct date, code `123456` | Chip Received; step 1 done, step 2 current; title "We've got your application" |
-| T-2 | AC-2 | – | Right number, wrong date `15/03/1992` three times | Messages with 2, 1 tries left; third: `locked` screen; a fourth try with the right date is still refused |
-| T-3 | AC-2 | – | Unknown number `APP-20261103-9999` | Same message text as T-2 |
-| T-4 | AC-3 | – | Wrong code three times | S-`OTP_INVALID` messages; third: "Too many wrong codes. Start again." |
-| T-5 | AC-4 | Status set to each of `in_review`, `approved`, `rejected`, `expired`, `draft`, `activated` in turn | Open | Chip, title, text, buttons as in the table |
-| T-6 | AC-5 | `APP-20261020-0007` | Open, press Upload documents | Request text shown; `open-account` opens on `documents` with `{applicationId}` |
-| T-7 | AC-6 | `APP-20261015-0003` | Open, press Activate digital banking | Shows `••9021`; `register-digital-banking` opens with `applicationId` passed and skips the card or account step |
-| T-8 | AC-7 | `APP-20261001-0001` | Open | Standard text only; no reason, no score |
-| T-9 | AC-8 | – | Scenario calls `bank.onboarding.status` before the code | `OTP_REQUIRED` |
-| T-10 | AC-9 | `conditions.timeout: ["bank.onboarding.status"]`, `latencyMs: 10000` | Enter correct code | Timeout message; Try again after clearing shows the status |
-| T-11 | AC-9 | `conditions.unavailable: ["bank.onboarding.lookup"]` | Send me a code | Unavailable message; no code sent |
-| T-12 | AC-10 | Start with `{applicationId: "APP-20261103-0042"}` | Open | Number prefilled; date empty; code still required before status shows |
+| T-1 | AC-1 | Visitor | none | "APP-12" gives "Enter the number as shown, like APP-123456."; mobile "12" gives "Enter a valid mobile number." |
+| T-2 | AC-2, AC-3, AC-5 | Visitor | none | APP-100234 with 5550100123, any code except 000000 and 999999: title "We’re checking your ID"; rows Account "Everyday Account", Received "Done", Checking your ID "In progress", Ready "Next". |
+| T-3 | AC-2 | Visitor | none | APP-100234 with a different mobile: "We couldn’t find an application with those details. Check them and try again." |
+| T-4 | AC-4 | Visitor | none | Two wrong detail tries, then a wrong code: the third shows the "Too many tries" card; the fields are gone. |
+| T-5 | AC-3 | Visitor | none | Code 999999: "That code has expired. Ask for a new one." Code 000000: "That code isn’t right. Check the latest message and try again." |
+| T-6 | AC-3 | Visitor, `askCode` off | none | No code screen; the status shows after the details. |
+| T-7 | AC-5, AC-6 | Visitor | none | APP-100235 with 5550100124: title "Your account is ready", all stages "Done", "Account number" "••2208", button **Register for digital banking**. |
+| T-8 | AC-7 | Visitor | none | Finish `open-account`, then track with its number and mobile: found. |
+| T-9 | AC-8 | Visitor | `unavailable: ["bank.applications.find"]` (prototype: Service down on) | Connection sheet; nothing shown. |
+| T-10 | AC-8 | Visitor | `timeout: ["bank.applications.find"]`, `latencyMs: 10000` | After 10 seconds: "This is taking longer than expected. Try again." |
 
 #### 10. Expected mutation-check survivors
 
-| Survivor | Why it stays alive |
-|---|---|
-| The 30-minute lock length | The sandbox clock is not advanced past 30 minutes in a scenario. |
-| Wording of the rejected text | Scenarios assert that no reason is shown, not the exact apology. |
-| `APPLICATION_EXPIRED` on `status` for a draft past 30 days | T-5 sets the status directly; the date rule is covered in `open-account` T-15. |
+The 30-minute lock length survives because the sandbox lock is 2 minutes and not asserted; expected. The text notification is not asserted; expected. Everything else: none expected.
 
 ---
 
 ### ★ Register for digital banking — `register-digital-banking`
 
+**Catalog:** slug `register-digital-banking`, workspace `public`, category Public: before sign-in (prototype tag "Before you sign in"), core no, can a bank switch it off: yes (basic entry, kept in the Lean preset). Options (key, label, default): `allowCard` "Let people identify with a card number" (on); `trustDevice` "Offer to trust this device" (on). Research: `research/register-digital-banking.md`. Built in `design/bankworkx-r1/src/journeys/52-register-recover.js`, with the helper object `RC` shared with `reset-password` and `forgot-username`.
+
+The lean rework removed the per-market identity documents, the activation letter and the security questions. What remains: an existing customer proves who they are with a customer ID (or a card) and a date of birth, confirms a code sent to the mobile number the bank holds, chooses a username and password, and may trust the device.
+
 #### 1. Summary
 
-| | |
+| Field | Value |
 |---|---|
 | Slug | `register-digital-banking` |
-| Purpose | An existing customer who has an account or card but no online login proves who they are, confirms a code sent to their phone, chooses a username and password, and optionally remembers the device. A new customer who just got their account arrives from `track-application` already identified. |
-| Release | 1 |
-| Workspace | Public |
-| Status | New (planned) |
-| Channels | Web, mobile |
-| Starting pattern | CAB `enroll` (picture code, identify, outcomes `NOT_FOUND`, `ALREADY_ENROLLED`) and CAB `activate-profile` (create the password under the bank's rules), `packages/journey-schema/src/fixtures/cab.ts`; sandbox `cab.captcha.generate`, `cab.enroll.retail`, `cab.password.policy` and `cab.activate.setPassword` (`packages/mock-bank-api/src/cab.ts`). The BankWorkx® versions are `bank.captcha.generate`, `bank.registration.identify`, `bank.password.policy` and `bank.registration.complete` (planned). |
-| Who may use it | A customer of the bank with no digital banking login. Persona `jordan` (planned, below). Alex Morgan is already registered, so the already-registered path uses `alex`. |
-| Money moving | No. Security journey: it creates credentials. |
+| Purpose | Let an existing customer who has never used digital banking prove who they are, confirm a one-time code, and choose a username and password. |
+| Release / workspace | 1 / Public (before sign-in) |
+| Status | Built in the prototype as a four-screen form journey (`submit: "Finish"`). Starting pattern in code: the CAB enrolment and activation adapters (`cab.enroll.retail`, `cab.activate.validate`, `cab.activate.setPassword` in `packages/mock-bank-api/src/cab.ts`). No money moves. |
+| Channels | Web and mobile |
+| Starting pattern | `fixtures/cab.ts` (enrol, activate, set password) |
+| Who may use it | An existing customer aged 18 or over who is not yet registered. No permission. |
 
-New persona (planned, sandbox seed): **Jordan Lee** (`jordan`), existing customer, not registered. Phone `+1 415 555 0177`, one-time code `482100`, date of birth 22 Jul 1988. Everyday Account ••2208, account number `7700002208`, balance USD 1,846.20. Debit card `5555 5555 5555 4444`, expiry `08/29`, active. Old card `4242 4242 4242 4242`, expiry `03/27`, blocked (reported lost). Alex Morgan's identifiers for the already-registered path: account number `7700004410`, date of birth 9 Jan 1986.
-
-New adapters: `bank.captcha.generate`, `bank.captcha.verify`, `bank.registration.identify`, `bank.password.policy`, `bank.registration.complete`, `bank.device.bind` (all planned). Reuses `bank.otp.send`, `bank.otp.verify`.
+**Sandbox customers (not shown on screen).** Customer ID 20481993 or card 5555 5555 5555 4444: not registered, born 1 Jan 1990, mobile ending 0177 (Jordan Lee). Customer ID 20440010 or card 4242 4242 4242 4242: already registered (Alex Morgan). One-time code: any 6 digits is accepted, `000000` is wrong, `999999` is expired. Three wrong identity checks or codes lock the journey; the prototype shortens the 30 minutes to 2 minutes. Usernames that are always taken: admin, administrator, bankworkx, jordan.lee, alex.morgan, sam.rivera, customer, support, and any username already registered.
 
 #### 2. Entry points
 
-| Place | Label | Passes | Permission |
-|---|---|---|---|
-| Landing | Register for digital banking | – | none |
-| Sign-in screen | Register | – | none |
-| `track-application` (status `account_opened`) | Activate digital banking | `{applicationId}` | none |
-| `open-account` | "Already a customer? Register for digital banking" link | – | none |
-| Deep link | `/public/j/register-digital-banking` | – | none |
+| Place › label | Passes in | Permission |
+|---|---|---|
+| Landing › Register | none | none |
+| `sign-in` › Register | none | none |
+| `track-application` result (Ready) › **Register for digital banking** | `{applicationId}` | none |
+| Deep link `/public/j/register-digital-banking` | none | none |
 
-Leads to: `sign-in` (README 5.1: register ends in sign-in).
+With `applicationId` the identity screen is skipped (the application already proved who the person is) and the flow starts at the code.
 
 #### 3. Screens
 
-Happy path: `intro` → `identifyCard` or `identifyAccount` → `verify` → `credentials` → `device` → `done`. With `{applicationId}` the path is `intro` (skipped) → `verify` → `credentials` → `device` → `done`.
+Steps in order: `find` (skipped with an application number), `code`, `creds`, `device` (with `trustDevice`), then the result.
 
-**Screen `intro` — "Register for digital banking"** (entry). Blocks: `text`, `select` (tiles), `alert`, `button`.
+**Screen `find`** ("Register for digital banking"). Text "Tell us who you are." Button **Continue**, busy "Checking your details…" (about 0.8 seconds).
 
-| Label (bind) | Block | Required | Rule | Error |
+| Field | Block | Required | Validation | Message |
 |---|---|---|---|---|
-| How do you want to prove it's you? (`rg.method`) | `select`, `tiles`: "My card" (`card`), "My account number" (`account`) | Yes | One of two | "Choose how you'd like to start." |
+| (no label) | `chips`: Customer ID, Card number. Shown only with `allowCard`. Default Customer ID | No | One of two | none |
+| Customer ID | `text`, placeholder "8 digits", max 8 (when Customer ID is chosen) | Yes | 8 digits | "Enter your 8-digit customer ID." |
+| Card number | `text`, placeholder "16 digits", max 23 (when Card number is chosen) | Yes | 13 or more digits that pass the check-digit test | "Check the card number." |
+| Date of birth | `select` Day, 1 to 31 (half width) | Yes | A day | "This is required." |
+| Month | `select`, January to December (half width) | Yes | A month | "This is required." |
+| Year | `text`, placeholder "1990", max 4 | Yes | 4 digits starting 19 or 20; a real date; in the past; the person is 18 or over | "Enter a 4-digit year." and "That date doesn’t exist." and "Enter a date in the past." and "You need to be 18 or over to register online." |
 
-Copy: Title "Register for digital banking". Body "Use your card or account number, then confirm with your phone. It takes about 3 minutes." Alert (info): "You need to be a BankWorkx® customer. If you're new, open an account first." Links: "Open an account" (`toJourney: open-account`), "I already have a login" (`toJourney: sign-in`). Button "Continue": `validate` → `identifyCard` or `identifyAccount`. When `{applicationId}` is passed this screen is skipped: `onEnter` calls `identify` with `method: "application"` and goes to `verify`.
+Results: no customer matches the ID (or card) and the date of birth: "We couldn’t match those details. Check them and try again." The customer is already registered: "You’re already registered. Sign in, or reset your password if you’ve forgotten it." The third no-match locks the screen: the fields are replaced by a card "Too many tries", "For your security, try again in 30 minutes, or contact us.", button **Contact us** (`contact-support`); the step is blocked with "Too many tries. Try again in 30 minutes." The message never says which part did not match.
 
-**Screen `identifyCard` — "Your card"**. Blocks: `textInput` x3, `dateInput`/`datePicker`, `text`, `textInput` (picture code), `button`, `button`.
+**Screen `code`** ("Enter your code"). Card "Code sent", "We sent a 6-digit code to ••• {last 4 digits of the mobile}." with the button **Resend code**. Button **Continue**, busy "Checking your code…" (about 0.7 seconds).
 
-| Label (bind) | Block | Required | Rule | Error |
+| Field | Block | Required | Validation | Message |
 |---|---|---|---|---|
-| Card number (`rg.card`) | `textInput`, keyboard `number`, pattern `^[0-9]{4} ?[0-9]{4} ?[0-9]{4} ?[0-9]{4}$` | Yes | 16 digits, spaces allowed, passes the Luhn check (`4242 4242 4242 4242` and `5555 5555 5555 4444` pass) | Pattern: "Enter the 16 digits on the front of your card." Luhn: "That card number isn't right. Check the 16 digits." |
-| Expiry (`rg.expiry`) | `textInput`, pattern `^(0[1-9]\|1[0-2]) ?/ ?[0-9]{2}$` | Yes | MM / YY | "Enter the expiry as MM / YY." |
-| Date of birth (`rg.dob`) | `datePicker` (typed `DD / MM / YYYY` today, `dateInput` in the working tree) | Yes | A real date in the past | "Enter your date of birth as DD / MM / YYYY." |
-| Picture code (`rg.captcha`) | `textInput`, placeholder "Enter the above text here", the code shown in a `text` block above (sandbox shows it as text, as CAB does) | Yes | Equals the code shown (case-insensitive) | "That code doesn't match. Check it or ask for a new one." |
+| 6-digit code | `text`, placeholder "000000", max 6 | Yes | Exactly 6 digits | "Enter the 6 digits from the message." |
 
-Copy: Title "Your card". Body "Enter the details exactly as they appear on your debit card. We never ask for your PIN or the 3 digits on the back." Buttons: "New code" (ghost; runs `captcha` again), "Continue" (`validate`, `callApi` `identify`, which also sends the code) → `verify`; ghost "Use my account number instead" → `identifyAccount`. On `onEnter` the screen calls `captcha`.
+**Resend code** says "New code sent. The old code no longer works." After 3 resends it says "You have asked for the maximum number of codes. Try again later." A wrong code clears the field and counts towards the same lock as the identity check: "That code isn’t right. Check the latest message and try again." An expired code: "That code has expired. Ask for a new one."
 
-**Screen `identifyAccount` — "Your account number"**. Same as above with the first two fields replaced:
+**Screen `creds`** ("Choose your sign-in details"). Button **Continue**, busy "Setting up…" (about 0.8 seconds, on the last screen when the device screen is off).
 
-| Label (bind) | Block | Required | Rule | Error |
+| Field | Block | Required | Validation | Message |
 |---|---|---|---|---|
-| Account number (`rg.account`) | `textInput`, keyboard `number`, pattern `^[0-9]{10}$` | Yes | 10 digits | "Enter your 10-digit account number." |
-| Date of birth (`rg.dob`) | as above | Yes | as above | as above |
-| Picture code (`rg.captcha`) | as above | Yes | as above | as above |
+| Username | `text`, placeholder "6 to 30 characters", max 30 | Yes | 6 to 30 letters, numbers, dots, dashes or underscores; not taken (ignoring capitals) | "Use 6 to 30 letters, numbers, dots, dashes or underscores." and "That username is taken. Try another." |
+| Password | `password`, placeholder "At least 12 characters", max 64, with a Show or Hide button | Yes | At least 12 and at most 64 characters; not containing the username (3 or more characters); not a common password; not in a known data breach; not one used before at the bank | "Use at least 12 characters. Three or four unrelated words work well." / "Use 64 characters or fewer." / "Don’t use your username in your password." / "That password is too common. Try a longer phrase of unrelated words." / "This password has appeared in a data breach, so we can’t accept it." / "Choose a password you haven’t used here before." |
+| Confirm password | `password`, max 64 | Yes | Same as Password | "The two passwords don’t match." |
+| (checkbox) | `check`: "I agree to the online banking terms." | Yes | Ticked | "Please agree to continue." |
 
-Copy: Title "Your account number". Body "You can find it on a statement or in your welcome letter." Ghost "Use my card instead" → `identifyCard`.
+Under the fields a live checklist shows four rules, each with ✓ when met and ○ when not: "At least 12 characters", "Not your username", "Not a common password", "Not in a known data breach". No composition rules (capitals, symbols) are required.
 
-**Screen `verify` — "Enter your code"**. Blocks: `otp` (6 digits, `maxAttempts: 3`), `text`, `button`.
+**Screen `device`** ("Trust this device?"). Shown only with `trustDevice`. Text "You won’t need a code for 90 days." Button **Finish**.
 
-Copy: Title "Enter your code". Body "We sent a 6-digit code to {maskedPhone}. It's the number we have on file." Helper "No access to that phone? Call us on +1 800 555 0100." Button "Verify": `callApi` `otpVerify` (id exactly `otpVerify`) → `credentials`. Ghost "Send a new code" after 30 seconds. Third wrong code: S-`OTP_INVALID` third form; button "Start again" → `intro`. The registration session lasts 15 minutes from `identify`; after that `REGISTRATION_EXPIRED`.
-
-**Screen `credentials` — "Choose your login"**. Blocks: `textInput` x3, `text` x5 (rules), `alert`, `button`. `onEnter` calls `policy`.
-
-| Label (bind) | Block | Required | Rule | Error |
+| Field | Block | Required | Validation | Message |
 |---|---|---|---|---|
-| Username (`rg.username`) | `textInput` | Yes | 6 to 30 characters; letters, digits, `.`, `_`, `-`; starts with a letter; not case-sensitive; not already used | Format: "Use 6 to 30 letters, numbers, dots, dashes or underscores. Start with a letter." Taken: "That username is taken. Try another." |
-| New password (`rg.password`) | `textInput`, `secure` | Yes | The bank's rules (below) | Per rule, below |
-| Re-enter your new password (`rg.confirm`) | `textInput`, `secure` | Yes | Equals the password | "The two passwords don't match." |
+| Trust this device | `toggle`, sub-line "Turn off on a public or shared device." Default on | No | none | none |
+| Device name | `text`, max 30, default "My phone" (shown when the toggle is on) | Yes | Not empty | "This is required." |
 
-Security requirements shown as a live list (`text`, caption), values from `policy`: "Password must contain {differentChars} different characters", "Password must contain at least {minLength} characters", "Password must not exceed {maxLength} characters", "Password must not contain username". Rules (the same as `cab.password.policy`): at least 8 characters, at most 100, at least 5 different characters, must not contain the username (ignoring case). Messages per problem code (shown together, one line each): `MIN_LENGTH` "Use at least 8 characters.", `MAX_LENGTH` "Use 100 characters or fewer.", `DIFFERENT_CHARS` "Use at least 5 different characters.", `CONTAINS_USERNAME` "Your password must not contain your username." Alert (error) for `POLICY` repeats "That password doesn't meet the security requirements." above those lines. Button "Create my login": `validate`, `callApi` `complete` → `device`. The demo password `Bwx!Demo2026` passes all four rules.
+**Result** ("You’re registered", green, text "Sign in with your username and password."). Chip Done. Rows "Username", "This device" ("Trusted" or "Not trusted"). Buttons **Sign in** (opens `sign-in` with `{user}`) and **Done**.
 
-**Screen `device` — "Remember this device?"**. Blocks: `toggle`, `textInput`, `alert`, `button`, `button`.
-
-| Label (bind) | Block | Required | Rule | Error |
-|---|---|---|---|---|
-| Remember this device (`rg.remember`) | `toggle` (default off), helper "Next time we'll ask for an extra code only on devices we don't know." | Yes | – | – |
-| Device name (`rg.deviceName`) | `textInput`, shown when the toggle is on, default from the platform ("Jordan's iPhone") | Yes when shown | 2 to 30 characters, letters, digits, spaces, `'`, `-` | "Name this device with 2 to 30 letters or numbers." |
-
-Copy: Title "Remember this device?". Body "Only do this on a phone or computer that is yours." Alert (info): "You can set up your fingerprint, face or a quick PIN after you sign in." Buttons: "Remember this device" (primary; `validate`, `callApi` `bind`) → `done`; "Not now" (ghost) → `done` without a call.
-
-**Screen `done` — "You're registered"** (terminal). `result` (success). Title "You're registered". Text "Sign in with the username {username} and your new password." Meta "Registered {registeredAt}". Buttons: "Sign in" (`toJourney: sign-in`, `{username}`) and, in an `exit` ghost button, "Done". If the device was bound the text adds "This device is remembered as {deviceName}."
-
-**Screen `alreadyRegistered` — "You're already registered"** (terminal). `result` (tone success; the wording is neutral). Title "You're already registered". Text "Sign in with your username. If you've forgotten it or your password, we can help." Buttons "Sign in" (`toJourney: sign-in`), "Forgot username" (`toJourney: forgot-username`), "Forgot password" (`toJourney: reset-password`). Shown only after the card or account details and the date of birth matched, so it does not tell a stranger who banks with us.
-
-**Screen `locked` — "Too many tries"** (terminal). `result` (error). Title "Too many tries". Text "For your security, try again in 30 minutes, or call us." Buttons "Contact us" (`toJourney: contact-support`), "Done".
-
-States: Loading: buttons disabled with a spinner; the picture code shows "-----" while loading (as CAB). 10 seconds without an answer shows the step's timeout alert. Empty: n/a.
+**States**
+- Loading: busy text on the button as above.
+- Empty: not applicable.
+- Error: "We couldn’t reach the bank. Nothing was changed." The Service down switch shows the standard connection sheet ("We couldn’t reach the bank", "Nothing was sent and you haven’t been charged. Try again in a moment.", **Try again**). Nothing is registered.
+- Timeout: "This is taking longer than expected. Nothing was changed."
+- Locked: as above.
 
 #### 4. Sandbox errors
 
-| Code | Message the person sees | Shows on | Button |
+| Code | Message | Shows on | Button |
 |---|---|---|---|
-| `CARD_INVALID` | "That card number isn't right. Check the 16 digits." (does not count as a try) | `identifyCard` | Change card number |
-| `CAPTCHA_WRONG` | "That code doesn't match. Check it or ask for a new one." | `identifyCard`, `identifyAccount` | New code |
-| `NOT_FOUND` | "We couldn't match those details. Check them and try again. {n} tries left." (same for any wrong card, account number, expiry or date) | `identifyCard`, `identifyAccount`, alert | Change details |
-| `LOCKED` | "Too many tries. For your security, try again in 30 minutes, or call us." | `locked` | Contact us |
-| `CARD_BLOCKED` | "This card is blocked. Use your account number instead, or call us." | `identifyCard`, alert | Use my account number |
-| `ACCOUNT_CLOSED` | "This account is closed. Contact us if you think that's wrong." | `identifyAccount`, alert | Contact us |
-| `ALREADY_REGISTERED` | "You're already registered." (screen text above) | `alreadyRegistered` | Sign in |
-| `OTP_INVALID` | "That code isn't right. {n} tries left." After the third: "Too many wrong codes. Start again." | `verify` | Try again / Start again |
-| `OTP_REQUIRED` | "Confirm with your one-time code first." | `credentials` (if `complete` is called without it) | Back to code |
-| `REGISTRATION_EXPIRED` | "This took too long and was closed for your security. Start again." | `intro` (sent back) | Start again |
-| `USERNAME_INVALID` | "Use 6 to 30 letters, numbers, dots, dashes or underscores. Start with a letter." | `credentials` | Change username |
-| `USERNAME_TAKEN` | "That username is taken. Try another." | `credentials` | Change username |
-| `MISMATCH` | "The two passwords don't match." | `credentials` | Re-enter |
-| `POLICY` | "That password doesn't meet the security requirements." with the per-problem lines | `credentials` | Change password |
-| `DEVICE_NAME_INVALID` | "Name this device with 2 to 30 letters or numbers." | `device` | Change name |
-| `TIMEOUT` | "This is taking longer than expected. Nothing was changed." On `complete` the text adds: "If you can't sign in later, register again." | The step that was running | Try again |
-| `SERVICE_UNAVAILABLE` | S-`SERVICE_UNAVAILABLE` (README 1.6) | The step that was running | Try again / Back |
-
-As in CAB, business outcomes (`NOT_FOUND`, `CAPTCHA_WRONG`, `ALREADY_REGISTERED`, `MISMATCH`, `POLICY`, `USERNAME_TAKEN`, `LOCKED`) come back as data `{ ok: false, code }` so the journey routes on them; misuse throws.
+| `NOT_MATCHED` | "We couldn’t match those details. Check them and try again." | `find` | Try again |
+| `ALREADY_REGISTERED` | "You’re already registered. Sign in, or reset your password if you’ve forgotten it." | `find` | Sign in |
+| `ID_LOCKED` | "Too many tries. For your security, try again in 30 minutes, or contact us." | `find`, `code` | Contact us |
+| `OTP_INVALID` | "That code isn’t right. Check the latest message and try again." | `code` | Try again |
+| `OTP_EXPIRED` | "That code has expired. Ask for a new one." | `code` | Resend code |
+| `USERNAME_TAKEN` | "That username is taken. Try another." | `creds` | Change username |
+| `SERVICE_UNAVAILABLE` | "We couldn’t reach the bank. Nothing was changed." | any step with a call | Try again |
+| `TIMEOUT` | "This is taking longer than expected. Nothing was changed." | any step with a call | Try again |
+| `JOURNEY_DISABLED` | "This isn’t available at your bank." | whole journey | none |
 
 #### 5. Adapters
 
-| Integration id | Adapter | Request | Response | Error codes | Status | moneyMoving | requiresOtp |
-|---|---|---|---|---|---|---|---|
-| `captcha` | `bank.captcha.generate` | – | `{ serviceKey, text }` (the sandbox shows the text) | `TIMEOUT`, `SERVICE_UNAVAILABLE` | (planned; pattern `cab.captcha.generate`) | No | No |
-| `identify` | `bank.registration.identify` | `{ method: "card" \| "account" \| "application", card?, expiry?, account?, dob?, applicationId?, captchaKey, captchaValue }` | `{ ok: true, registrationId, firstName, maskedPhone }` and sends a code (as `bank.otp.send`) or `{ ok: false, code, attemptsLeft? }` | `CARD_INVALID`, `CAPTCHA_WRONG`, `NOT_FOUND`, `LOCKED`, `CARD_BLOCKED`, `ACCOUNT_CLOSED`, `ALREADY_REGISTERED` | (planned; pattern `cab.enroll.retail`) | No | No (starts the code) |
-| `otpVerify` | `bank.otp.verify` | `{ code }` | `{ verified: true }` | `OTP_INVALID` | Existing | No | No |
-| `policy` | `bank.password.policy` | – | `{ minLength: 8, maxLength: 100, differentChars: 5, notContainUsername: true }` | `TIMEOUT`, `SERVICE_UNAVAILABLE` | (planned; pattern `cab.password.policy`) | No | No |
-| `complete` | `bank.registration.complete` | `{ registrationId, username, password, confirm }` | `{ ok: true, username, registeredAt }` or `{ ok: false, code, problems? }` | `OTP_REQUIRED`, `REGISTRATION_EXPIRED`, `USERNAME_INVALID`, `USERNAME_TAKEN`, `MISMATCH`, `POLICY` | (planned; pattern `cab.activate.setPassword`) | No | Yes |
-| `bind` | `bank.device.bind` | `{ registrationId, deviceName }` | `{ ok: true, deviceId, deviceName }` | `DEVICE_NAME_INVALID`, `REGISTRATION_EXPIRED` | (planned) | No | No (uses the registration just completed) |
-
-Sandbox rules: 3 failed `identify` calls (only `NOT_FOUND` counts; `CAPTCHA_WRONG` and `CARD_INVALID` do not) lock registration for 30 minutes (`MAX_FAILED_LOGINS` and `LOCK_MINUTES` in `cab.ts`); `registrationId` lasts 15 minutes; `ALREADY_REGISTERED` is checked only after the identifying details match; `complete` is idempotent for the same registration and username; usernames `alex.morgan`, `admin` and `support` are taken; the person is told nothing about which field was wrong.
+| Integration id | Adapter | Request | Response | Errors | Status |
+|---|---|---|---|---|---|
+| `verifyCustomer` | `bank.registration.verify` | `{customerId or cardNumber, dateOfBirth}` | `{registrationToken, maskedMobile}` | `NOT_MATCHED`, `ALREADY_REGISTERED`, `ID_LOCKED`, `SERVICE_UNAVAILABLE`, `TIMEOUT` | (planned). The CAB twin is `cab.enroll.retail` |
+| `sendOtp` / `verifyOtp` | `bank.otp.send` / `bank.otp.verify` | `{channel}` / `{code}` | `{sent}` / `{verified}` | `OTP_INVALID`, `OTP_EXPIRED`, `ID_LOCKED` | Existing (`packages/mock-bank-api/src/index.ts`); CAB twin `cab.activate.validate` |
+| `passwordPolicy` | `bank.password.policy` | `{username}` | the rules and the breach and common-password checks | none | (planned). The CAB twin is `cab.password.policy` |
+| `completeRegistration` | `bank.registration.complete` | `{registrationToken, username, password, trustDevice, deviceName}` | `{username}` | `USERNAME_TAKEN`, `POLICY`, `SERVICE_UNAVAILABLE`, `TIMEOUT` | (planned). The CAB twin is `cab.activate.setPassword` |
 
 #### 6. Permissions, step-up and limits
 
-No permission and no session. Step-up `otp` once (`verify`) before credentials are created. Limits: 3 identify tries then 30 minutes; 3 code tries; resend after 30 seconds; registration session 15 minutes; one login per customer. Passwords are never shown back; the username is.
+None before sign-in. The one-time code is the step-up. Limits: 3 wrong identity checks or codes lock the journey for 30 minutes (2 minutes in the prototype); at most 3 resends of the code; password 12 to 64 characters; a trusted device skips the code for 90 days.
 
 #### 7. Result and links out
 
-Result: `done`. Receipt: none. Notifications: email and text "You registered for BankWorkx® digital banking on 3 Nov 2026. If this wasn't you, call +1 800 555 0100 now." (planned, sandbox records it); if a device was remembered, a second line names it. Links out: Sign in (`sign-in`, `{username}`), Forgot username (`forgot-username`), Forgot password (`reset-password`), Contact us (`contact-support`), Open an account (`open-account`).
+Result as above. Notifications raised (planned): a text and an email "You registered for BankWorkx® digital banking" to the contacts on file; if the device is trusted, "A trusted device was added". Links out: `sign-in`, `contact-support`, `reset-password`.
 
 #### 8. Acceptance criteria
 
-- AC-1: An existing customer is identified by card number, expiry and date of birth, or by account number and date of birth, and a picture code.
-- AC-2: A card number that fails the Luhn check is refused before any lookup and does not count as a try.
-- AC-3: Wrong details give one message that does not say which field is wrong; three failures lock registration for 30 minutes.
-- AC-4: A blocked card and a closed account give their own messages.
-- AC-5: A customer who is already registered, and whose details match, is told so and offered sign-in and recovery.
-- AC-6: A wrong picture code is refused and a new one can be asked for.
-- AC-7: The login cannot be created until the one-time code is verified; three wrong codes stop the step.
-- AC-8: The username follows the format rule and must be unused; the password follows the four rules and must be typed twice the same.
-- AC-9: On success the customer is told the username and is offered Sign in; a notification is raised.
-- AC-10: Remembering the device needs a valid name and creates a trusted device; "Not now" skips it.
-- AC-11: Arriving from `track-application` with an application number skips the card or account step.
-- AC-12: A timeout on creating the login does not create it, and a retry works; an unavailable service keeps what was entered.
-- AC-13: A registration older than 15 minutes is refused.
+- AC-1: The customer ID needs 8 digits, a card number must pass the check-digit test, and the date must be real, in the past, and 18 or more years ago.
+- AC-2: A customer who does not match gets one message that does not say which part failed; the third failure locks the journey.
+- AC-3: A customer who is already registered is told to sign in or reset the password.
+- AC-4: The code goes to the mobile number on file, shown only as its last 4 digits; a wrong code counts towards the same lock; an expired code asks for a new one; at most 3 resends.
+- AC-5: The password follows the four visible rules plus the breach and used-before checks, and the checklist updates as the person types.
+- AC-6: The username follows the format and cannot be one that is taken.
+- AC-7: Terms must be ticked.
+- AC-8: With `trustDevice` on the device screen is shown and the receipt says Trusted or Not trusted; with it off the screen is absent.
+- AC-9: With `applicationId` the identity screen is skipped.
+- AC-10: With `allowCard` off only the customer ID is offered.
+- AC-11: When the bank is unavailable or times out nothing is registered.
 
 #### 9. Scenarios
 
-Persona `jordan` (code `482100`) unless stated. Sandbox clock `now: 2026-11-03T10:00:00Z`. Picture code is read from the screen.
+Synthetic persona `jordan` (existing customer, not registered).
 
-| Id | Covers | Setup / conditions | Steps | Expected |
+| # | Covers | Persona / setup | Conditions | Steps and expected result |
 |---|---|---|---|---|
-| T-1 | AC-1, AC-7, AC-8, AC-9, AC-10 | – | My card `5555 5555 5555 4444`, `08 / 29`, `22/07/1988`, right picture code; code `482100`; username `jordan.lee`, password `Bwx!Demo2026` twice; remember this device as "Jordan's iPhone" | Ends on `done` with "jordan.lee"; device bound; notification recorded; Sign in button present |
-| T-2 | AC-1 | – | My account number `7700002208`, `22/07/1988` | Reaches `verify`; the masked phone `+• ••• ••• 0177`-style text is shown and a code is sent |
-| T-3 | AC-2 | – | Card `4242 4242 4242 4241` | "That card number isn't right. Check the 16 digits."; adapter not locked: a later right attempt still has 3 tries |
-| T-4 | AC-3 | – | Right card, wrong date `23/07/1988` three times | Messages with 2 and 1 tries left; third: `locked` screen; a fourth with all-right details is still refused |
-| T-5 | AC-4 | – | Old card `4242 4242 4242 4242`, `03 / 27` | `CARD_BLOCKED` message with Use my account number button |
-| T-6 | AC-5 | Persona `alex` | Account `7700004410`, `09/01/1986` | `alreadyRegistered` with Sign in, Forgot username, Forgot password |
-| T-7 | AC-5 | Persona `alex` | Account `7700004410`, wrong date | `NOT_FOUND` message; the screen does not say Alex is registered |
-| T-8 | AC-6 | – | Wrong picture code, then New code, then the new right one | "That code doesn't match. Check it or ask for a new one."; then continues |
-| T-9 | AC-7 | – | Wrong codes `111111`, `222222`, `333333` | "That code isn't right. 2 tries left.", "1 tries left.", then "Too many wrong codes. Start again."; Start again returns to `intro`; `complete` called directly gives `OTP_REQUIRED` |
-| T-10 | AC-8 | – | Username `ab`; `1jordan`; `alex.morgan`; passwords `short`, `aaaaaaaa`, `jordan.lee1`, 101 characters; mismatched confirm | Format message; format message; taken message; `MIN_LENGTH`; `DIFFERENT_CHARS`; `CONTAINS_USERNAME`; `MAX_LENGTH`; mismatch message; no login created until all are right |
-| T-11 | AC-10 | – | Remember with name "J" then "Jordan's iPhone"; or "Not now" | "Name this device with 2 to 30 letters or numbers."; then bound; Not now: no `bank.device.bind` call |
-| T-12 | AC-11 | Open with `{applicationId: "APP-20261015-0003"}` (persona `sam`, code `123456`) | Open | `intro` skipped; code sent; after the code, `credentials` |
-| T-13 | AC-12 | `conditions.timeout: ["bank.registration.complete"]`, `latencyMs: 10000` | Create my login | Timeout message with "If you can't sign in later, register again."; no login exists; after clearing and pressing Try again, one login exists |
-| T-14 | AC-12 | `conditions.unavailable: ["bank.registration.identify"]` | Continue | Unavailable message; card, expiry and date are still filled; no code sent |
-| T-15 | AC-13 | After `verify`, `now` moved to `2026-11-03T10:16:00Z` | Create my login | "This took too long and was closed for your security. Start again." |
+| T-1 | AC-1 | `jordan` | none | Customer ID "1234": "Enter your 8-digit customer ID." Year 2015: "You need to be 18 or over to register online." 31 February: "That date doesn’t exist." |
+| T-2 | AC-2 | `jordan` | none | Customer ID 20481993 with the wrong date of birth, three times: the first two show "We couldn’t match those details. Check them and try again."; the third shows the "Too many tries" card. |
+| T-3 | AC-3 | `jordan` | none | Customer ID 20440010, born 1 Jan 1990: "You’re already registered. Sign in, or reset your password if you’ve forgotten it." |
+| T-4 | AC-4 | `jordan` | none | Valid details: "We sent a 6-digit code to ••• 0177." Code 000000: "That code isn’t right. Check the latest message and try again." Code 999999: "That code has expired. Ask for a new one." The 4th Resend: "You have asked for the maximum number of codes. Try again later." |
+| T-5 | AC-5, AC-6, AC-7 | `jordan` | none | Username "admin": "That username is taken. Try another." Password "short": "Use at least 12 characters. Three or four unrelated words work well." Password containing the username: "Don’t use your username in your password." Different confirmation: "The two passwords don’t match." Terms unticked: "Please agree to continue." |
+| T-6 | AC-8 | `jordan` | none | Trust on, device name "My phone": result row "This device" "Trusted". Toggle off: "Not trusted". With `trustDevice` off: no device screen. |
+| T-7 | AC-9 | `jordan`, `applicationId: "APP-100235"` | none | The first screen is "Enter your code". |
+| T-8 | AC-10 | `jordan`, `allowCard` off | none | No Customer ID or Card number chips. |
+| T-9 | AC-11 | `jordan` | `unavailable: ["bank.registration.complete"]` (prototype: Service down on) | Connection sheet; nothing registered; the username can still be used afterwards. |
+| T-10 | AC-11 | `jordan` | `timeout: ["bank.registration.complete"]`, `latencyMs: 10000` | After 10 seconds: "This is taking longer than expected. Nothing was changed." |
 
 #### 10. Expected mutation-check survivors
 
-| Survivor | Why it stays alive |
-|---|---|
-| Registration session length 15 minutes changed to 14 or 16 | T-15 uses 16 minutes; the boundary is not tested. |
-| Maximum password length 100 raised to 102 | T-10 tests a 101-character password, which a limit of 101 or less refuses, but a limit of 102 or more would not be caught. |
-| Reserved usernames other than `alex.morgan` | Only `alex.morgan` is exercised. |
-| The 30-second resend delay | Covered by the `otp` block's own tests, not a scenario clock. |
+The breach list and the common-password list are a short sandbox sample; a mutation that removes one word survives; expected. The 90-day trust period is stated in text only and not asserted; expected. The lock length survives (2 minutes in the sandbox); expected. Everything else: none expected.
 
 ---
 
@@ -1851,819 +1736,766 @@ The rule that the new password may not contain a common word survives if T-6 onl
 
 ### ★ Set up quick sign in — `setup-quick-login`
 
-**Prototype note:** Quick sign-in set-up is now also a step of `sign-in`; the prototype PIN rules (6 digits, no repeats, runs, 112233, 123123, 121212, 696969, 000111 or phone digits) apply here.
+**Catalog:** slug `setup-quick-login` (name in the prototype "Quick sign-in"), workspace `personal`, category Signing in and security (prototype tag "Sign-in and security"), core no, can a bank switch it off: yes (basic entry, kept in the Lean preset). Options (key, label, default): `allowBio` "Offer Face ID / fingerprint" (on); `allowPasskey` "Offer passkeys" (on); `allowPin` "Offer a 6-digit quick PIN" (on). Research: `research/setup-quick-login.md`. Built in `design/bankworkx-r1/src/journeys/55-security.js`, on the sign-in model `SI` from `48-sign-in.js`.
+
+The lean rework removed the per-device list of methods and the "use on all my devices" choice. What remains: this device has one quick method, or none. The person turns one on (with a code) or turns it off (no code), and sees what is on now.
 
 #### 1. Summary
 
-| Item | Value |
+| Field | Value |
 |---|---|
 | Slug | `setup-quick-login` |
-| Purpose | Let the person choose how they sign in on this device: username and password, biometrics (fingerprint or face), or a six-digit quick PIN. |
-| Release | 1 |
-| Workspace | `personal` |
-| Status | New. Built from the CAB fixture `default-sign-in` (`choose`, `pin-new`, `pin-confirm`, `pin-intro`, `biometric`, `password-set`, `done`) and `cab.device.options` / `cab.device.setDefault`. |
-| Channels | Web (quick PIN and password only), mobile (all three) |
-| Starting pattern | CAB `default-sign-in` |
-| Who may use it | A signed-in person with `security.manage`. |
+| Purpose | Choose how this device signs the person in without the password: Face ID or fingerprint, a passkey, or a 6-digit PIN. Shows what is on now and lets the person turn it off. |
+| Release / workspace | 1 / Personal |
+| Status | Built in the prototype as a form journey (`submit: "Turn on"`, permission `accounts.view`). The phone's biometric and passkey prompts are simulated by a wait. No money moves. |
+| Channels | Web (passkey, PIN) and mobile (all three) |
+| Starting pattern | `fixtures/cab.ts` (device options, `cab.device.setDefault`, `cab.device.verifyPin`) |
+| Who may use it | Anyone signed in to Personal (`accounts.view`), for the device in their hand. |
 
 #### 2. Entry points
 
-| Place | Launch point | Passes | Permission |
-|---|---|---|---|
-| `sign-in` › after a new-device code | Remember this device | – (with `returnTo`) | session |
-| More › settings › security › Quick PIN | Set up | – | `security.manage` |
-| More › settings › security › Default sign in | Change | – | `security.manage` |
-| More › settings › security › Biometrics | Toggle on | `{mode: "biometric"}` | `security.manage` |
-| `change-quick-pin` | "I forgot my PIN" | `{mode: "pin"}` | `security.manage` |
-
-When opened from Settings it starts at `choose` (or goes straight to the screen named by `{mode}`).
+| Place › label | Passes in | Permission |
+|---|---|---|
+| More › Security › Quick sign-in | none | `accounts.view` |
+| `sign-in` › Sign in faster (offered after a password sign-in) | none | `accounts.view` |
+| Deep link `/personal/j/setup-quick-login` | none | `accounts.view` |
 
 #### 3. Screens
 
-**Screen `choose` — "Sign in faster"** (blocks: `text`, `select` with `variant: "rows"`, `button`)
-`onEnter` calls `deviceOptions` and saves it as `signin`, so the current default starts ticked.
+Steps in order: `method`, `bio` (Face ID or fingerprint, passkey), `code` (when turning on), then the result.
 
-| Field | Block | Required | Rule | Error message |
+**Screen `method`** ("Quick sign-in"). Text "Sign in on this device without your password." Button **Continue**.
+
+At the top a card shows this device's name (for example "iPhone 15"), "This device", and a chip with what is on now: "Face ID or fingerprint", "Passkey", "Quick PIN", or "Off".
+
+| Field | Block | Required | Validation | Message |
 |---|---|---|---|---|
-| Sign in with | `select` rows: `password`, `biometric`, `pin` | Yes | One of the three | "Choose how you want to sign in." |
+| (no label) | `cards`: "Face ID or fingerprint" (with `allowBio`), "Passkey" (with `allowPasskey`), "6-digit PIN" (with `allowPin`), each with chip "On" when it is the current method and then not selectable; "Turn off" with the sub-line "You will use your password." (only when a method is on) | Yes | One of the cards | "This is required." |
+| Choose a PIN | `password`, placeholder "6 digits", max 6 (when "6-digit PIN" is chosen) | Yes | Exactly 6 digits; not a repeat or a run; no digits from the phone number | "Use exactly 6 digits." and "That PIN is too easy to guess. Avoid repeats and runs like 111111 or 123456." and "Don’t use digits from your phone number." |
+| Confirm PIN | `password`, max 6 (same condition) | Yes | Same as the PIN | "The PINs don’t match." |
 
-Row copy: "Username & password" (status word "Default sign in" when it is the default); "Biometric" ("Default sign in", "Enabled", or on a device without it "Not available on this device", row disabled); "PIN" ("Default sign in", "Generated" when a PIN is set). Title: "Please select your default sign in option." Button "Continue" (`validate`, then `navigate`): `pin` → `pinNew`; `biometric` → `biometric`; `password` → `passwordSet`.
+Too-easy PINs: six equal digits, ascending or descending runs, three repeated pairs (121212), and 112233, 123123, 696969, 000111. Choosing "Turn off" and continuing ends the journey (no code); the result says it is off.
 
-**Screen `pinNew` — "Enter new Sign in PIN"** (blocks: `text`, `otp`: `length: 6`, `keypad: true`, `masked: true`, hint "Step 1 of 2")
+**Screen `bio`** ("Confirm on this device"; for Face ID or fingerprint, and passkey). Text "Look at your phone or use your fingerprint." or "Use your device lock to create a passkey." Button **Continue**, busy "Waiting for your device…" (about 0.9 seconds). A failed prompt shows "We couldn’t confirm it was you. Try again." (planned; the prototype never fails it).
 
-| Field | Block | Required | Rule | Error message |
+**Screen `code`** ("Enter your code"; every choice except "Turn off"). Text "Sent to the phone ending 0142." Button **Turn on**, busy "Checking your code…" (about 0.6 seconds).
+
+| Field | Block | Required | Validation | Message |
 |---|---|---|---|---|
-| New PIN | `otp` (masked keypad) | Yes | Exactly 6 digits; not all the same digit; not a straight run up or down (`123456`, `654321`) | "A PIN is six digits." / "That PIN is too easy to guess. Avoid repeated or running numbers like 111111 or 123456." |
+| Code | `text`, placeholder "6 digits", max 6, hint "{n} tries left" after a wrong code | Yes | Exactly 6 digits | "Enter the 6 digits." |
 
-Button "Continue" → `pinConfirm`.
+A wrong code: "That code isn’t right. Try again." An expired code: "That code has expired. Go back to get a new one." Three wrong codes: "Too many wrong codes. Nothing was changed. Go back to start again."
 
-**Screen `pinConfirm` — "Re-enter new Sign in PIN"** (same block, hint "Step 2 of 2")
-Alert (error): "The PINs do not match. Enter the same PIN twice." (shown after a mismatch). Button "Continue": if equal → `pinIntro`; otherwise stays.
+**Result.** "Quick sign-in is on" or "Quick sign-in is off" (green). Rows "Device" (the device name) and "Method" ("Face ID or fingerprint", "Passkey", "Quick PIN" or "Off"). Buttons **Back to security**, **Done**. A note "Quick sign-in turned on for {device}" or "Quick sign-in turned off" is added to the notification list. Turning on a method replaces the one that was on.
 
-**Screen `pinIntro` — "PIN sign in"** Text: "Do you want to set up PIN authentication for secure and convenient sign in?" Button "Set as default" (`callApi setDefault`, `mode: "pin"`, `pin`) → `done`. Button "Not now" (ghost) → exit without saving.
-
-**Screen `biometric` — "Biometric"** (mobile) Text: "You can use your device biometrics to simplify Sign In." Button "Turn on" (opens the phone prompt; sandbox stand-in), then "Set as default" (`callApi setDefault`, `mode: "biometric"`) → `done`. If `biometricAvailable` is false: alert (warning) "This device doesn't have fingerprint or face sign-in set up. Turn it on in your device settings, then try again." and the button is disabled.
-
-**Screen `passwordSet` — "Username & password"** Text: "Sign in with your username and password." Button "Set as default" (`mode: "password"`) → `done`.
-
-**Screen `done` — "All set"** (terminal)
-Alert (success): "You have successfully set the sign in method below as your default." `sectionHeader` "Default sign in" with the action "Change" → `choose`. `reviewSummary` row: label "PIN SIGN IN", "BIOMETRIC" or "USERNAME & PASSWORD"; value "Generated" (PIN) or "Enabled". Caption: "You can change this any time in More › Settings › Security." Button "Done" (primary): `exit` (returns to `signedIn` when `returnTo` was set, else to Settings › Security).
-
-States: **Loading** – skeleton rows on `choose`; spinner on every "Set as default". **Error / timeout / unavailable** – see below; the screen stays and nothing is saved.
+**States**
+- Loading: busy text on the button as above.
+- Empty: not applicable. If all three methods are off in the bank configuration, only "Turn off" can show, and the entry hides.
+- Error: the Service down switch shows the standard connection sheet ("We couldn’t reach the bank", "Nothing was sent and you haven’t been charged. Try again in a moment."); otherwise "This isn’t available right now. Nothing was changed. Try again in a few minutes." with **Try again**.
+- Timeout: "This is taking longer than expected. Nothing was changed."
 
 #### 4. Sandbox errors
 
-| Code | Message the person sees | Screen | Button |
+| Code | Message | Shows on | Button |
 |---|---|---|---|
-| `PIN_INVALID` (existing, "A PIN is six digits") | "A PIN is six digits." | `pinNew` | Edit |
-| `PIN_TOO_SIMPLE` (planned) | "That PIN is too easy to guess. Avoid repeated or running numbers like 111111 or 123456." | `pinNew` | Edit |
-| `INVALID_MODE` (existing; misuse) | "We couldn't save this setting. Try again." | the saving screen | Try again |
-| `STEP_UP_REQUIRED` (planned; when opened from Settings and the last step-up is older than 300 s) | "For your security, confirm it's you first." | step-up dialog, then the journey resumes | Confirm |
-| `BIOMETRIC_UNAVAILABLE` (planned) | "This device doesn't have fingerprint or face sign-in set up. Turn it on in your device settings, then try again." | `biometric` | Back |
-| `TIMEOUT` | "This is taking longer than expected. Nothing was changed." | saving screen | Try again |
-| `SERVICE_UNAVAILABLE` | Standard S-`SERVICE_UNAVAILABLE` | saving screen | Try again |
-| `SESSION_EXPIRED` | Standard S-`SESSION_EXPIRED` | Landing | Sign in |
-
-The mismatch message is local to the journey (no adapter call).
+| `BIO_FAILED` (planned) | "We couldn’t confirm it was you. Try again." | `bio` | Try again |
+| `OTP_INVALID` | "That code isn’t right. Try again." | `code` | Try again |
+| `OTP_EXPIRED` | "That code has expired. Go back to get a new one." | `code` | Back |
+| `OTP_LOCKED` | "Too many wrong codes. Nothing was changed. Go back to start again." | `code` | Back to start |
+| `TIMEOUT` | "This is taking longer than expected. Nothing was changed." | `bio`, `code` | Try again |
+| `SERVICE_UNAVAILABLE` | "This isn’t available right now. Nothing was changed. Try again in a few minutes." | `bio`, `code` | Try again |
+| `JOURNEY_DISABLED` | "This isn’t available at your bank." | whole journey | none |
+| `PERMISSION_DENIED` (planned) | Standard message | whole journey | Back |
 
 #### 5. Adapters
 
-| Integration id | Adapter | Request | Response | Error codes | Status | moneyMoving | requiresOtp |
-|---|---|---|---|---|---|---|---|
-| `deviceOptions` | `bank.device.options` | `{ deviceId }` | `{ default, pinSet, biometricAvailable }` | `TIMEOUT`, `SERVICE_UNAVAILABLE` | Planned (CAB: `cab.device.options`) | No | No |
-| `setDefault` | `bank.device.setDefault` | `{ mode: "password" \| "pin" \| "biometric", pin? }` | `{ ok: true, default }` | `INVALID_MODE`, `PIN_INVALID`, `PIN_TOO_SIMPLE`, `BIOMETRIC_UNAVAILABLE`, `STEP_UP_REQUIRED`, `SESSION_EXPIRED` | Planned (CAB: `cab.device.setDefault`) | No | Via step-up |
+| Integration id | Adapter | Request | Response | Errors | Status |
+|---|---|---|---|---|---|
+| `deviceOptions` | `cab.device.options` | none | `{mode, pinSet, biometricAvailable}` | none | Existing for the CAB access journeys (`packages/mock-bank-api/src/cab.ts`); a `bank.devices.options` twin is (planned) |
+| `sendOtp` / `verifyOtp` | `bank.otp.send` / `bank.otp.verify` | `{channel}` / `{code}` | `{sent}` / `{verified}` | `OTP_INVALID`, `OTP_EXPIRED`, `OTP_LOCKED` | Existing (`packages/mock-bank-api/src/index.ts`) |
+| `setQuickSignIn` | `bank.devices.setQuickSignIn` | `{method: "face" \| "passkey" \| "pin" \| "off", pin?}` | `{device, method}` | `PIN_WEAK`, `OTP_REQUIRED`, `SERVICE_UNAVAILABLE`, `TIMEOUT` | (planned). The CAB twin is `cab.device.setDefault` |
+
+Biometric and passkey prompts are made by the phone or browser and send the bank only a public key (planned).
 
 #### 6. Permissions, step-up and limits
-Permission `security.manage`. Step-up level `stepup`: not asked when launched straight after a new-device sign-in (that counts as a step-up for 300 s); asked when launched from Settings. Limits: one PIN per device, six digits.
+
+`accounts.view`. Step-up: a one-time code (6 digits, 3 tries) to turn a method on; none to turn it off (it makes the device safer). Limits: one method per device; a PIN is exactly 6 digits.
 
 #### 7. Result and links out
-Result screen `done`. No receipt. Notification: "Quick sign in changed on {deviceName}" (in-app, planned). Buttons lead back to `signedIn` (from sign-in) or Settings › Security.
+
+Result as above. Notifications raised (planned): "Quick sign-in was turned on for {device}" or "turned off" by text and email. Links out: More (security), `change-quick-pin`, `trusted-devices`, `sign-in`.
 
 #### 8. Acceptance criteria
-- **AC-1.** The current default is shown ticked, with status words, when the journey opens.
-- **AC-2.** A six-digit PIN entered twice the same way is saved as the default and the next sign-in on that device offers the PIN pop-up.
-- **AC-3.** A PIN that is not six digits, or is a repeated or running number, is refused with the exact message and nothing is saved.
-- **AC-4.** Two different PINs are refused with "The PINs do not match."
-- **AC-5.** Biometrics can be chosen only when the device supports them.
-- **AC-6.** Choosing "Username & password" saves it as the default; the PIN, if set, is kept.
-- **AC-7.** From Settings the journey asks for a step-up first; right after a new-device sign-in it does not.
-- **AC-8.** On a timeout or unavailable service nothing is saved and the standard message shows.
+
+- AC-1: The screen shows this device and what is on now, and offers only the methods that are on in the bank configuration.
+- AC-2: The current method is shown "On" and cannot be chosen again; "Turn off" appears only when a method is on.
+- AC-3: A PIN must be 6 digits, not a repeat or run, not contain digits of the phone number, and be confirmed.
+- AC-4: Face ID or fingerprint and passkey go through the device confirmation before the code.
+- AC-5: Turning a method on needs a one-time code; three wrong codes end the attempt with nothing changed.
+- AC-6: Turning off needs no code and the device returns to password sign-in.
+- AC-7: The result shows the device and the method now on.
+- AC-8: When the bank is unavailable or times out nothing is changed.
 
 #### 9. Scenarios
 
-| ID | Covers | Persona | Setup and conditions | Expected |
+Synthetic persona `alex`, device "iPhone 15", with quick sign-in off.
+
+| # | Covers | Persona / setup | Conditions | Steps and expected result |
 |---|---|---|---|---|
-| T-1 | AC-1 | `alex.morgan` | Default `password`, PIN not set. | Password row shows "Default sign in"; PIN row shows no status. |
-| T-2 | AC-2 | `alex.morgan` | Enter `482916` twice, "Set as default". | `setDefault` mode `pin`; `bank.device.options` then returns `default: pin`, `pinSet: true`. |
-| T-3 | AC-3 | `alex.morgan` | `12345`; `111111`; `123456`. | Messages as above; nothing saved. |
-| T-4 | AC-4 | `alex.morgan` | `482916` then `482917`. | Mismatch alert; stays on `pinConfirm`. |
-| T-5 | AC-5 | `alex.morgan` | `biometricAvailable: false`. | Biometric row disabled; `biometric` screen shows the warning. |
-| T-6 | AC-6 | `alex.morgan` | PIN set, choose password. | `default: password`, `pinSet: true`. |
-| T-7 | AC-7 | `alex.morgan` | `now` 6 minutes after sign-in, launch from Settings. | `STEP_UP_REQUIRED`, step-up dialog; after it the journey continues. Second case: 1 minute after sign-in, no dialog. |
-| T-8 | AC-8 | `alex.morgan` | `conditions.timeout: ["bank.device.setDefault"]`. | Timeout message; `default` unchanged. |
-| T-9 | AC-8 | `alex.morgan` | `conditions.unavailable: ["bank.device.setDefault"]`. | Unavailable message; `default` unchanged. |
+| T-1 | AC-1, AC-4, AC-5, AC-7 | `alex` | none | Choose "Face ID or fingerprint", wait, code 482100: "Quick sign-in is on", rows Device "iPhone 15", Method "Face ID or fingerprint". |
+| T-2 | AC-3 | `alex` | none | "6-digit PIN" with 111111: "That PIN is too easy to guess. Avoid repeats and runs like 111111 or 123456." With 123456 the same. With digits "014204": "Don’t use digits from your phone number." With confirmation 111112: "The PINs don’t match." |
+| T-3 | AC-5 | `alex` | none | PIN 504719 twice, code 000000: "That code isn’t right. Try again." and "2 tries left"; three times: "Too many wrong codes. Nothing was changed. Go back to start again." |
+| T-4 | AC-2, AC-6 | `alex`, quick sign-in on (PIN) | none | The PIN card shows "On" and is disabled; choose "Turn off": no code step, "Quick sign-in is off", Method "Off". |
+| T-5 | AC-1 | `alex`, `allowPin` off, `allowPasskey` off | none | Only "Face ID or fingerprint" is offered. |
+| T-6 | AC-8 | `alex` | `unavailable: ["bank.devices.setQuickSignIn"]` (prototype: Service down on) | Connection sheet; nothing is changed. |
+| T-7 | AC-8 | `alex` | `timeout: ["bank.devices.setQuickSignIn"]`, `latencyMs: 10000` | After 10 seconds: "This is taking longer than expected. Nothing was changed." |
 
 #### 10. Expected mutation-check survivors
-| Mutant | Why it survives |
-|---|---|
-| Biometric prompt skipped | The sandbox has no real fingerprint or face prompt. |
-| `masked: true` or `keypad: true` removed on the PIN block | Display only; the stored PIN is the same. |
 
-**Prototype reconciliation (from `sign-in`).** In the prototype the first set-up of quick sign-in is the last step of `sign-in` ("Sign in faster next time"), offered on a device the person has not refused to trust. Methods follow the bank options: Face ID or fingerprint (`allowBio`), passkey (`allowPasskey`, a new method), 6-digit quick PIN (`allowQuickPin`), or "Not now". PIN rules are stricter than the text above: exactly 6 digits; not one digit repeated (111111); not a run up or down (123456, 654321); not a repeated pair (121212, 696969); not 112233, 123123 or 000111; and not containing the last four digits of the phone. Messages: "Use exactly 6 digits." / "That PIN is too easy to guess. Avoid repeats and runs like 111111 or 123456. (PIN_WEAK)" / "Don't use digits from your phone number. (PIN_WEAK)" / "The PINs don't match." This journey stays the place to change the method later. The first-time offer in the prototype is not limited to a trusted device (a known device also sees it); the lead should settle that.
+The device prompt is simulated, so a mutation that skips the `bio` step survives; expected until real biometrics are built. The too-easy PIN list is a short sample; a mutation that removes one entry survives; expected. The notification text is not asserted; expected. Everything else: none expected.
 
 ---
 
 ### ★ Forgot username — `forgot-username`
 
+**Catalog:** slug `forgot-username`, workspace `public`, category Signing in and security (prototype tag "Sign-in and security"), core no, can a bank switch it off: yes (basic entry, kept in the Lean preset). Options (key, label, default): `allowEmail` "Let people identify with an email address" (on). Research: `research/forgot-username.md`. Built in `design/bankworkx-r1/src/journeys/52-register-recover.js`, with the helper object `RC` shared with `register-digital-banking` and `reset-password`.
+
+The lean rework removed the security questions and showing the username on screen. What remains: say who you are with a mobile number (or email) and a date of birth, confirm a one-time code, and the bank sends the username to the contact it already holds. The username is never shown.
+
 #### 1. Summary
 
-| Item | Value |
+| Field | Value |
 |---|---|
 | Slug | `forgot-username` |
-| Purpose | Prove who the person is, then show their username. |
-| Release | 1 |
-| Workspace | `public` |
-| Status | New. Built from CAB `cant-sign-in` (screens `email`, `phone`, `dob`, `found`, `channel`, `otp`) and `cab.recover.verifyUser`, `cab.captcha.generate`. |
-| Channels | Web, mobile |
-| Starting pattern | CAB `cant-sign-in` |
-| Who may use it | Anyone. |
+| Purpose | Let a registered customer who forgot the username get it by message at the mobile number or email already on file. |
+| Release / workspace | 1 / Public (before sign-in) |
+| Status | Built in the prototype as a two-screen form journey (`submit: "Send my username"`). Starting pattern in code: `cab.recover.verifyUser` in `packages/mock-bank-api/src/cab.ts`. No money moves. |
+| Channels | Web and mobile |
+| Starting pattern | `fixtures/cab.ts` (recover) |
+| Who may use it | Anyone with the contact details and date of birth on a profile. No permission. |
 
-CAB shows the username straight after the details match. BankWorkx® shows it only **after** the one-time code, so details found in a leaked document are not enough.
+**Sandbox profiles (not shown on screen).** `alex.morgan` (mobile 5550104410, email `alex.morgan@example.com`), `sam.rivera` (5550107731, `sam.rivera@example.com`), `locked.user` (5550109012, `lee.carter@example.com`); all born 1 Jan 1990. One-time code: any 6 digits is accepted, `000000` is wrong, `999999` is expired. Three wrong identity checks or codes lock the journey; the prototype shortens the 30 minutes to 2 minutes.
 
 #### 2. Entry points
 
-| Place | Launch point | Passes | Permission |
-|---|---|---|---|
-| `sign-in` screen | Forgot username? | – | none |
-| `reset-password` › found screen | "I don't know my username" | – | none |
-
-Leads to: `sign-in` (with `{username}`) or `reset-password`.
+| Place › label | Passes in | Permission |
+|---|---|---|
+| `sign-in` › Forgot username? | none | none |
+| Deep link `/public/j/forgot-username` | none | none |
 
 #### 3. Screens
 
-**Screen `details` — "Let's find your username"** (blocks: `text`, `textInput` ×3, picture code `text` + `textInput`, `alert`, `button`)
-`onEnter`: `callApi captcha` (saved as `captcha`).
+Steps in order: `find`, `code`, then the result.
 
-| Field | Block | Required | Rule | Error message |
+**Screen `find`** ("Forgot your username?"). Text "Tell us how to find you." Button **Continue**, busy "Checking your details…" (about 0.8 seconds).
+
+| Field | Block | Required | Validation | Message |
 |---|---|---|---|---|
-| Email | `textInput`, keyboard email | Yes | Pattern `^[^@\s]+@[^@\s]+\.[^@\s]+$` | "Enter a valid email address." |
-| Phone number | `textInput`, keyboard phone | Yes | Pattern `^[0-9 +()-]{7,20}$`; at least 7 digits. The last 8 digits are compared. | "Enter at least 7 digits." |
-| Date of birth | `textInput` placeholder "DD / MM / YYYY" (`datePicker` planned) | Yes | Pattern `^[0-9]{2} ?/ ?[0-9]{2} ?/ ?[0-9]{4}$`; a real date in the past | "Use the format DD / MM / YYYY." / "Enter a date of birth in the past." |
-| Code (picture code) | `textInput`, placeholder "Enter the above text here" | Yes | Matches the picture text; not case sensitive | "Enter the code shown above." |
+| (no label) | `chips`: Mobile number, Email. Shown only with `allowEmail`. Default Mobile number | No | One of two | none |
+| Mobile number | `tel`, placeholder "Mobile number", max 20 (when Mobile number is chosen) | Yes | 7 to 18 digits, spaces, brackets, dashes, optional leading + | "Enter a valid mobile number." |
+| Email | `email`, placeholder "name@example.com", max 80 (when Email is chosen) | Yes | `name@host.tld` shape | "Enter a valid email address." |
+| Date of birth | `select` Day, 1 to 31 (half width) | Yes | A day | "This is required." |
+| Month | `select`, January to December (half width) | Yes | A month | "This is required." |
+| Year | `text`, placeholder "1990", max 4 | Yes | 4 digits starting 19 or 20; a real date; in the past | "Enter a 4-digit year." and "That date doesn’t exist." and "Enter a date in the past." |
 
-Copy: title "Let's find your username"; body "Enter the details we hold for you." The picture code appears as large text (e.g. `k8m2q`). Alert (error, `CAPTCHA_WRONG`): "That code doesn't match. Check it or ask for a new one." Button "New code" (ghost): `callApi captcha`. Button "Continue": `validate`, `callApi verifyUser`, `navigate`: ok → `channel`; `CAPTCHA_WRONG` → stays; `NOT_FOUND` → `notFound`; status `NEW` → `notActive`.
+No profile has that contact and that date of birth: "We couldn’t match those details. Check them and try again." The message never says which part did not match. The third no-match locks the screen: the fields are replaced by a card "Too many tries", "For your security, try again in 30 minutes, or contact us.", button **Contact us** (`contact-support`); the step is blocked with "Too many tries. Try again in 30 minutes."
 
-**Screen `channel` — "Security code"** (blocks: `text`, `select`, `button`)
+**Screen `code`** ("Enter your code"). Card "Code sent", "We sent a 6-digit code to {where}." where {where} is the mobile as "••• {last 4 digits}" or the email as "{first letter}•••@{domain}". Button **Send my username**, busy "Checking your code…" (about 0.7 seconds). The card has **Resend code**.
 
-| Field | Block | Required | Rule | Error message |
+| Field | Block | Required | Validation | Message |
 |---|---|---|---|---|
-| Send the code by | `select`, choices `sms` ("Text message to {maskedPhone}") and `email` ("Email to {maskedEmail}") | Yes | One of the two | "Choose where to send the code." |
+| 6-digit code | `text`, placeholder "000000", max 6 | Yes | Exactly 6 digits | "Enter the 6 digits from the message." |
 
-Button "Send code": `callApi otpSend` → `code`.
+**Resend code**: "New code sent. The old code no longer works." After 3 resends: "You have asked for the maximum number of codes. Try again later." A wrong code clears the field and counts towards the same lock as the identity check: "That code isn’t right. Check the latest message and try again." An expired code: "That code has expired. Ask for a new one."
 
-**Screen `code` — "Enter your code"** (blocks: `otp`, `button`) `otp` block, 6 digits, `resendAfterSeconds: 30`, hint "Please enter the 6-digit security code we sent to {maskedPhone}". Button "Verify": `callApi otpVerify` (id `otpVerify`, `lockAfter: 3`, `lockTo: "otpLocked"`), then `callApi getUsername`, then `navigate` → `found`. Toast on a wrong code: "That code isn't right. {n} tries left."
+**Result** ("We sent your username", green, text "Check your messages. We never send your password."). Chip Sent. Row "Sent to" (the masked contact). Buttons **Sign in** (opens `sign-in`), **Reset password** (opens `reset-password`), **Done**.
 
-**Screen `found` — "Here's your username"** (terminal) Result (success): title "Welcome back, {firstName}", text "Your username is {username}." Buttons: "Sign in as {username}" (primary) → `sign-in` `{username}`; "Reset my password" (secondary) → `reset-password`. Caption: "We also sent your username to {maskedEmail}." (planned notification).
-
-**Terminal screens:** `notFound` – error "We couldn't find a matching profile", text "Check the email, phone number and birth date, or call support.", buttons "Try again" → `details`, "Contact us" → `contact-support`. `notActive` – error "Your profile isn't active yet", text "Finish setting up digital banking first.", buttons "Register" → `register-digital-banking`, "Track my application" → `track-application`. `otpLocked` – error "Too many incorrect codes", text "For your security we've paused this for 30 minutes. Try again later.", button "Done".
-
-States: **Loading** – spinner on buttons; picture code shows `-----` until it arrives. **Timeout** after 10 s: "This is taking longer than expected. Nothing was changed." with "Try again". **Empty:** none.
+**States**
+- Loading: busy text on the button as above.
+- Empty: not applicable.
+- Error: "We couldn’t reach the bank. Nothing was changed." The Service down switch shows the standard connection sheet ("We couldn’t reach the bank", "Nothing was sent and you haven’t been charged. Try again in a moment.", **Try again**).
+- Timeout: "This is taking longer than expected. Nothing was changed."
+- Locked: as above.
 
 #### 4. Sandbox errors
 
-| Code | Message | Screen | Button |
+| Code | Message | Shows on | Button |
 |---|---|---|---|
-| `CAPTCHA_WRONG` | "That code doesn't match. Check it or ask for a new one." | `details` | New code |
-| `NOT_FOUND` | "We couldn't find a matching profile." (`notFound`) | `notFound` | Try again |
-| `OTP_INVALID` | "That code isn't right. {n} tries left." Third wrong: `otpLocked` text. | `code` | Try again |
-| `OTP_REQUIRED` | Standard S-`OTP_REQUIRED` (if `getUsername` is called before the code) | `code` | Back to code |
-| `TIMEOUT` | "This is taking longer than expected. Nothing was changed." | the calling screen | Try again |
-| `SERVICE_UNAVAILABLE` | Standard S-`SERVICE_UNAVAILABLE` | the calling screen | Try again |
+| `NOT_FOUND` | "We couldn’t match those details. Check them and try again." | `find` | Try again |
+| `ID_LOCKED` | "Too many tries. For your security, try again in 30 minutes, or contact us." | `find`, `code` | Contact us |
+| `OTP_INVALID` | "That code isn’t right. Check the latest message and try again." | `code` | Try again |
+| `OTP_EXPIRED` | "That code has expired. Ask for a new one." | `code` | Resend code |
+| `SERVICE_UNAVAILABLE` | "We couldn’t reach the bank. Nothing was changed." | any step with a call | Try again |
+| `TIMEOUT` | "This is taking longer than expected. Nothing was changed." | any step with a call | Try again |
+| `JOURNEY_DISABLED` | "This isn’t available at your bank." | whole journey | none |
 
 #### 5. Adapters
 
-| Integration id | Adapter | Request | Response | Error codes | Status | moneyMoving | requiresOtp |
-|---|---|---|---|---|---|---|---|
-| `captcha` | `bank.captcha.generate` (CAB: `cab.captcha.generate`) | `{}` | `{ serviceKey, text }` | `TIMEOUT`, `SERVICE_UNAVAILABLE` | Planned | No | No |
-| `verifyUser` | `bank.recover.verifyUser` (CAB: `cab.recover.verifyUser`) | `{ captchaKey, captchaValue, email, phone, dob }` | `{ ok: true, firstName, status, maskedEmail, maskedPhone }` or `{ ok: false, code: "CAPTCHA_WRONG" \| "NOT_FOUND" }` (CAB also returns `username`; BankWorkx® does not) | `TIMEOUT`, `SERVICE_UNAVAILABLE` | Planned | No | No |
-| `otpSend` / `otpVerify` | `bank.otp.send` / `bank.otp.verify` | `{ channel }` / `{ code }` | see `sign-in` | `OTP_INVALID` | Existing | No | – |
-| `getUsername` | `bank.recover.getUsername` | `{}` (after verifyUser) | `{ username }` | `VERIFY_FIRST`, `OTP_REQUIRED` | Planned | No | Yes |
+| Integration id | Adapter | Request | Response | Errors | Status |
+|---|---|---|---|---|---|
+| `findProfile` | `bank.recover.verifyUser` | `{mobile or email, dateOfBirth}` | `{recoveryToken, maskedContact}` | `NOT_FOUND`, `ID_LOCKED`, `SERVICE_UNAVAILABLE`, `TIMEOUT` | (planned). The CAB twin is `cab.recover.verifyUser` |
+| `sendOtp` / `verifyOtp` | `bank.otp.send` / `bank.otp.verify` | `{channel}` / `{code}` | `{sent}` / `{verified}` | `OTP_INVALID`, `OTP_EXPIRED`, `ID_LOCKED` | Existing (`packages/mock-bank-api/src/index.ts`) |
+| `sendUsername` | `bank.recover.sendUsername` | `{recoveryToken}` | `{sent}` | `OTP_REQUIRED`, `SERVICE_UNAVAILABLE`, `TIMEOUT` | (planned) |
 
 #### 6. Permissions, step-up and limits
-None needed. Limits: 3 wrong codes pause the journey for 30 minutes; 5 failed detail checks in an hour show "Too many tries. Try again later." (planned, `RATE_LIMITED`).
+
+None before sign-in. The one-time code is the step-up. Limits: 3 wrong identity checks or codes lock the journey for 30 minutes (2 minutes in the prototype); at most 3 resends. The username goes only to the contact on file, never to a contact typed in this journey.
 
 #### 7. Result and links out
-Result `found`. Notification: email "Your username was requested" to the address on file (planned). Links: `sign-in`, `reset-password`.
+
+Result as above. Notification: the message that carries the username (planned text: "Your BankWorkx® username is {username}. If you didn’t ask for this, call us."). Links out: `sign-in`, `reset-password`, `contact-support`.
 
 #### 8. Acceptance criteria
-- **AC-1.** Matching email, phone, date of birth and picture code lead to a code step; the username is not shown before the code is verified.
-- **AC-2.** A wrong picture code is refused with the exact message and a new code can be asked for.
-- **AC-3.** Details that match no profile end on `notFound`.
-- **AC-4.** A right code (`482100`) shows the username; three wrong codes end on `otpLocked`.
-- **AC-5.** A profile that is not yet active is sent to `notActive`.
-- **AC-6.** `getUsername` without a verified code answers `OTP_REQUIRED`.
-- **AC-7.** On a timeout or unavailable service nothing is shown or changed.
+
+- AC-1: A match needs the contact and the date of birth together; the message after a miss does not say which part failed.
+- AC-2: The mobile number and the email follow the formats above; the date must be real and in the past (no age rule).
+- AC-3: The code goes to the contact the person typed only when it matches the profile, and the screen shows it masked.
+- AC-4: A wrong code counts towards the same lock as the identity check; three misses lock the journey; an expired code asks for a new one; at most 3 resends.
+- AC-5: The username is never shown on screen; the result says it was sent and shows where.
+- AC-6: With `allowEmail` off only the mobile number is offered.
+- AC-7: When the bank is unavailable or times out nothing is sent.
 
 #### 9. Scenarios
 
-| ID | Covers | Persona | Setup and conditions | Expected |
+Synthetic persona `alex`.
+
+| # | Covers | Persona / setup | Conditions | Steps and expected result |
 |---|---|---|---|---|
-| T-1 | AC-1, AC-4 | `alex.morgan` | Email `alex.morgan@example.com`, phone `+1 415 555 0142`, DOB `14 / 03 / 1988`, right picture code, then code `482100`. | `channel`, `code`, then `found`: "Your username is alex.morgan". Username never appears earlier. |
-| T-2 | AC-2 | `alex.morgan` | Picture code typed wrong. | `CAPTCHA_WRONG` alert; "New code" gives a different code. |
-| T-3 | AC-3 | any | Wrong DOB. | `notFound`. |
-| T-4 | AC-4 | `alex.morgan` | Three wrong codes. | `OTP_INVALID` ×3, `otpLocked`. |
-| T-5 | AC-5 | `demo.inactive` | Right details. | `notActive`. |
-| T-6 | AC-6 | `alex.morgan` | Call `getUsername` straight after `verifyUser`. | `OTP_REQUIRED`. |
-| T-7 | AC-7 | `alex.morgan` | `conditions.timeout: ["bank.recover.verifyUser"]`. | Timeout message; no username. |
-| T-8 | AC-7 | `alex.morgan` | `conditions.unavailable: ["bank.recover.getUsername"]`. | Unavailable message; no username shown. |
+| T-1 | AC-1, AC-3, AC-5 | `alex` | none | Mobile 5550104410, born 1 Jan 1990, code 482100: "We sent your username", row "Sent to" "••• 4410". The username is not on screen. |
+| T-2 | AC-2, AC-3 | `alex` | none | Email `alex.morgan@example.com`: "We sent a 6-digit code to a•••@example.com." Mobile "12": "Enter a valid mobile number." 31 February: "That date doesn’t exist." |
+| T-3 | AC-1, AC-4 | `alex` | none | Mobile 5550104410 with the wrong birth year, three times: two "We couldn’t match those details. Check them and try again." then the "Too many tries" card. |
+| T-4 | AC-4 | `alex` | none | Code 000000: "That code isn’t right. Check the latest message and try again." Code 999999: "That code has expired. Ask for a new one." The 4th Resend: "You have asked for the maximum number of codes. Try again later." |
+| T-5 | AC-6 | `alex`, `allowEmail` off | none | No Mobile number or Email chips; only the mobile field. |
+| T-6 | AC-7 | `alex` | `unavailable: ["bank.recover.sendUsername"]` (prototype: Service down on) | Connection sheet; nothing sent. |
+| T-7 | AC-7 | `alex` | `timeout: ["bank.recover.sendUsername"]`, `latencyMs: 10000` | After 10 seconds: "This is taking longer than expected. Nothing was changed." |
 
 #### 10. Expected mutation-check survivors
-| Mutant | Why it survives |
-|---|---|
-| Phone compare uses the last 7 instead of 8 digits | The seed numbers differ in other digits, so no scenario separates 7 from 8 (the same limit exists in CAB). |
-| `RATE_LIMITED` threshold changed | The sandbox has no hourly counter (planned only). |
 
-**Prototype reconciliation (from `sign-in`).** The prototype `sign-in` links "Forgot username?" to this journey with no launch values, so nothing in this block changes. Its other two links use different slugs from this file: "Forgot password?" opens `forgot-password` (this file: `reset-password`) and "Register" opens `register` (this file: `register-digital-banking`). The lead should settle one name for each.
+The exact lock length survives (2 minutes in the sandbox); expected. The text of the message that carries the username is not asserted; expected. Everything else: none expected.
 
 ---
 
 ### ★ Reset password — `reset-password`
 
+**Catalog:** slug `reset-password`, workspace `public`, category Signing in and security (prototype tag "Sign-in and security"), core no, can a bank switch it off: yes (basic entry, kept in the Lean preset). Options (key, label, default): `allowUnlock` "Offer unlock without a new password" (on). Research: `research/reset-password.md`. Built in `design/bankworkx-r1/src/journeys/52-register-recover.js`, with the helper object `RC` shared with `register-digital-banking` and `forgot-username`. This one journey covers three catalog entries: `reset-password` (mode `reset`), `unlock-account` (mode `unlock`) and `forgot-password` (mode `reset`). The last two are short alias blocks that follow this one.
+
+The lean rework removed security questions, the reset link by email and the choice of channel. What remains: say who you are with a username or email, confirm a one-time code sent to the mobile number on file, then either choose a new password or just unlock the profile and keep the old password.
+
 #### 1. Summary
 
-| Item | Value |
+| Field | Value |
 |---|---|
 | Slug | `reset-password` |
-| Purpose | Prove who the person is with a one-time code, then choose a new password. Also unlocks and un-expires the profile. |
-| Release | 1 |
-| Workspace | `public` |
-| Status | New. Built from CAB `cant-sign-in` (`email`, `phone`, `dob`, `found`, `channel`, `otp`, `new-password`, `reset-done`, `otp-locked`, `not-found`) and `cab.recover.verifyUser`, `cab.recover.resetPassword`, `cab.password.policy`. |
-| Channels | Web, mobile |
-| Starting pattern | CAB `cant-sign-in` |
-| Who may use it | Anyone. |
+| Purpose | Get back into a profile that is locked or whose password is forgotten, by proving who the person is with a one-time code, then choosing a new password or unlocking and keeping the current one. |
+| Release / workspace | 1 / Public (before sign-in) |
+| Status | Built in the prototype as one form journey with two modes (`submit: "Finish"`; the unlock mode ends with **Unlock account**). Starting pattern in code: `cab.recover.verifyUser` and `cab.recover.resetPassword` in `packages/mock-bank-api/src/cab.ts`. |
+| Channels | Web and mobile |
+| Starting pattern | `fixtures/cab.ts` (recover, reset password) |
+| Who may use it | Anyone who knows the username or email on the profile. No permission. |
+
+**Sandbox profiles (not shown on screen).** `alex.morgan` (email `alex.morgan@example.com`, mobile ending 4410), `sam.rivera` (`sam.rivera@example.com`, ending 7731), `locked.user` (`lee.carter@example.com`, ending 9012, shown as locked by `sign-in`). One-time code: any 6 digits is accepted, `000000` is wrong, `999999` is expired. Three wrong identity checks or codes lock the journey; the prototype shortens the 30 minutes to 2 minutes.
 
 #### 2. Entry points
 
-| Place | Launch point | Passes | Permission |
-|---|---|---|---|
-| `sign-in` screen | Forgot password? | `{username}` if typed | none |
-| `sign-in` › `expired` | Reset password | `{username}` | none |
-| `forgot-username` › `found` | Reset my password | – | none |
-| `unlock-account` › done | Also choose a new password | `{username}` | none |
-
-Leads to: `sign-in`.
+| Place › label | Passes in | Permission |
+|---|---|---|
+| `sign-in` › Forgot password? (`forgot-password`) | `{user}` when known | none |
+| `sign-in` › Account locked › Reset password | `{user}` | none |
+| `unlock-account` (alias) › launched with `{user, mode: "unlock"}`; the prototype `sign-in` locked card has only **Reset password** and **Contact support**, so a link "Unlock without changing my password" there is (planned) | `{user, mode: "unlock"}` | none |
+| `forgot-username` result › Reset password | none | none |
+| Deep link `/public/j/reset-password?mode=unlock` | `{mode}` (`reset`, `unlock`), `{user}` | none |
 
 #### 3. Screens
 
-**Screen `details` — "Let's verify it's you"** Same four fields and rules as `forgot-username` `details` (email, phone, date of birth, picture code), same messages. If `{username}` was passed, a line above reads "Resetting the password for {username}." and the sandbox only accepts a profile with that username (`NOT_FOUND` otherwise). Button "Continue" → `found` (ok), stays on `CAPTCHA_WRONG`, `notFound` on `NOT_FOUND`.
+Steps in order: `identR` (reset) or `identU` (unlock), `code`, then `newpw` (reset) or `unlock` (unlock), then the result.
 
-**Screen `found` — "Welcome back"** (blocks: `text`, `menu`, `divider`)
-Text: "Welcome back, {firstName}!" and "We found you with username: {username}." (the full username is shown here because the person is about to prove ownership with the code; it is hidden in the `notFound` case).
-- If `status == ACTIVE`: menu item "Reset your password" → `channel`; divider "OR"; menu item "Sign in as {username}" → `sign-in`.
-- If `status == NEW`: menu item "Send me a new activation code" (`callApi regenerate`, CAB `cab.activate.regenerate`) → `regenerated`.
+**Screen `identR` ("Reset your password") and `identU` ("Unlock your account").** Button **Continue**, busy "Checking…" (about 0.7 seconds).
 
-**Screen `channel` and `code`** as in `forgot-username` (choose SMS or email; 6-digit code; resend after 30 s; `otpVerify`, `lockAfter: 3`, `lockTo: "otpLocked"`). Button "Verify" → `newPassword`.
-
-**Screen `newPassword` — "Choose a new password"** (blocks: `textInput` ×2 secure, `text` captions, `alert` ×2, `button`) `onEnter`: `callApi policy` (`bank.password.policy`, response `{ minLength: 8, maxLength: 100, differentChars: 5, notContainUsername: true }`).
-
-| Field | Block | Required | Rule | Error message |
+| Field | Block | Required | Validation | Message |
 |---|---|---|---|---|
-| New password | `textInput` secure, placeholder "Enter a new password" | Yes | 8 to 100 characters; at least 5 different characters; must not contain the username | Per problem, below |
-| Re-enter your new password | `textInput` secure | Yes | Equal to the first | "The two passwords don't match." |
+| Username or email | `text`, placeholder "Username or email", max 80. Prefilled with `user` when passed | Yes | 3 to 80 characters without spaces | "Enter your username or the email address we have for you." |
 
-Caption list under the fields (each line turns green with a tick when met; wording from CAB):
-- "Security requirements:"
-- "- Password must contain 5 different characters"
-- "- Password must contain at least 8 characters"
-- "- Password must not exceed 100 characters"
-- "- Password must not contain username"
+No profile matches: "We couldn’t find a profile with those details. Check them and try again." (open point: the product should show a neutral message that does not confirm whether a profile exists, such as "If those details match a profile, we have sent a code"; the prototype confirms it). The third no-match locks the screen: the field is replaced by a card "Too many tries", "For your security, try again in 30 minutes, or contact us.", button **Contact us** (`contact-support`); the step is blocked with "Too many tries. Try again in 30 minutes."
 
-Messages by problem code from `passwordProblems`: `MIN_LENGTH` "Use at least 8 characters."; `MAX_LENGTH` "Use no more than 100 characters."; `DIFFERENT_CHARS` "Use at least 5 different characters."; `CONTAINS_USERNAME` "Your password can't contain your username."; generic alert on `POLICY`: "That password doesn't meet the security requirements."; on `MISMATCH`: "The two passwords don't match." Button "Continue" (label "Change password"): `validate`, `callApi resetPassword`, `navigate`: ok → `done`.
+**Screen `code`** ("Enter your code"). Card "Code sent", "We sent a 6-digit code to ••• {last 4 digits of the mobile}." with the button **Resend code**. Button **Continue**, busy "Checking your code…" (about 0.7 seconds).
 
-**Screen `done` — "Password updated"** (terminal) Result (success): title "Your password has been successfully updated", text "Your current session is closed. Please sign in again using your new password." Button "Sign in" → `sign-in` `{username}`.
+| Field | Block | Required | Validation | Message |
+|---|---|---|---|---|
+| 6-digit code | `text`, placeholder "000000", max 6 | Yes | Exactly 6 digits | "Enter the 6 digits from the message." |
 
-**Terminal screens:** `regenerated` (success "A new activation code is on its way", text "We sent it to {maskedEmail} and {maskedPhone}. Use Register for digital banking with it.", button "Done"); `notFound` (as `forgot-username`); `otpLocked` (error "Too many incorrect codes", "For your security, your profile is locked for 30 minutes. Try again later." button "Unlock account" → `unlock-account`).
+**Resend code**: "New code sent. The old code no longer works." After 3 resends: "You have asked for the maximum number of codes. Try again later." A wrong code clears the field and counts towards the same lock as the identity check: "That code isn’t right. Check the latest message and try again." An expired code: "That code has expired. Ask for a new one."
 
-States: **Loading** – spinner on buttons; policy list shows skeleton lines until `policy` answers. **Timeout** – "This is taking longer than expected. Nothing was changed." **Unavailable** – standard.
+**Screen `newpw`** ("Choose a new password"; reset only). Button **Finish**, busy "Saving your new password…" (about 0.8 seconds).
+
+| Field | Block | Required | Validation | Message |
+|---|---|---|---|---|
+| Password | `password`, placeholder "At least 12 characters", max 64, with a Show or Hide button | Yes | At least 12 and at most 64 characters; not containing the username; not a common password; not in a known data breach; not one used before at the bank | "Use at least 12 characters. Three or four unrelated words work well." / "Use 64 characters or fewer." / "Don’t use your username in your password." / "That password is too common. Try a longer phrase of unrelated words." / "This password has appeared in a data breach, so we can’t accept it." / "Choose a password you haven’t used here before." |
+| Confirm password | `password`, max 64 | Yes | Same as Password | "The two passwords don’t match." |
+
+A live checklist under the fields shows ✓ or ○ for "At least 12 characters", "Not your username", "Not a common password", "Not in a known data breach". No capital or symbol rules.
+
+**Screen `unlock`** ("Unlock your account"; unlock only). Text "Your password stays the same." Button **Unlock account**, busy "Unlocking…" (about 0.7 seconds). No fields.
+
+**Results**
+
+| Mode | Title | Text | Chip | Rows |
+|---|---|---|---|---|
+| Reset | "Password changed" | "Sign in with your new password." | Done (green) | Username, Changed ("Tue 3 Nov 2026") |
+| Unlock, profile was locked | "Account unlocked" | "You can sign in now. Your password hasn’t changed." | Unlocked (green) | Username |
+| Unlock, profile was not locked | "Your account isn’t locked" | "You can sign in now." | none | Username |
+
+Every result has the button **Sign in** (opens `sign-in` with `{user}`) and **Done**. A reset also removes any lock on the profile and clears the failed-attempt counters; the new password becomes one that cannot be reused.
+
+**States**
+- Loading: busy text on the button as above.
+- Empty: not applicable.
+- Error: "We couldn’t reach the bank. Nothing was changed." The Service down switch shows the standard connection sheet ("We couldn’t reach the bank", "Nothing was sent and you haven’t been charged. Try again in a moment.", **Try again**).
+- Timeout: "This is taking longer than expected. Nothing was changed."
+- Locked: as above.
 
 #### 4. Sandbox errors
 
-| Code | Message | Screen | Button |
+| Code | Message | Shows on | Button |
 |---|---|---|---|
-| `CAPTCHA_WRONG` | "That code doesn't match. Check it or ask for a new one." | `details` | New code |
-| `NOT_FOUND` | "We couldn't find a matching profile." | `notFound` | Try again |
-| `OTP_INVALID` | "That code isn't right. {n} tries left." Third: `otpLocked` text. | `code` | Try again |
-| `OTP_REQUIRED` (reset without a verified code) | Standard S-`OTP_REQUIRED` | `code` | Back to code |
-| `VERIFY_FIRST` (misuse) | "We need to check who you are first. Start again." | `details` | Start again |
-| `MISMATCH` | "The two passwords don't match." | `newPassword` | Edit |
-| `POLICY` (with `problems`) | Per-problem line above, plus "That password doesn't meet the security requirements." | `newPassword` | Edit |
-| `TIMEOUT` | "This is taking longer than expected. Nothing was changed." | any | Try again |
-| `SERVICE_UNAVAILABLE` | Standard S-`SERVICE_UNAVAILABLE` | any | Try again |
+| `NOT_FOUND` | "We couldn’t find a profile with those details. Check them and try again." | `identR`, `identU` | Try again |
+| `ID_LOCKED` | "Too many tries. For your security, try again in 30 minutes, or contact us." | ident, `code` | Contact us |
+| `OTP_INVALID` | "That code isn’t right. Check the latest message and try again." | `code` | Try again |
+| `OTP_EXPIRED` | "That code has expired. Ask for a new one." | `code` | Resend code |
+| `SERVICE_UNAVAILABLE` | "We couldn’t reach the bank. Nothing was changed." | any step with a call | Try again |
+| `TIMEOUT` | "This is taking longer than expected. Nothing was changed." | any step with a call | Try again |
+| `JOURNEY_DISABLED` | "This isn’t available at your bank." | whole journey | none |
 
 #### 5. Adapters
 
-| Integration id | Adapter | Request | Response | Error codes | Status | moneyMoving | requiresOtp |
-|---|---|---|---|---|---|---|---|
-| `captcha` | `bank.captcha.generate` | `{}` | `{ serviceKey, text }` | `TIMEOUT`, `SERVICE_UNAVAILABLE` | Planned | No | No |
-| `verifyUser` | `bank.recover.verifyUser` | `{ captchaKey, captchaValue, email, phone, dob, username? }` | `{ ok, username, firstName, status, maskedEmail, maskedPhone }` or `{ ok: false, code }` | as above | Planned (CAB: `cab.recover.verifyUser`) | No | No |
-| `otpSend`, `otpVerify` | `bank.otp.send`, `bank.otp.verify` | see `sign-in` | | `OTP_INVALID` | Existing | No | – |
-| `policy` | `bank.password.policy` (CAB: `cab.password.policy`) | `{}` | `{ minLength, maxLength, differentChars, notContainUsername }` | `TIMEOUT`, `SERVICE_UNAVAILABLE` | Planned | No | No |
-| `resetPassword` | `bank.recover.resetPassword` (CAB: `cab.recover.resetPassword`) | `{ password, confirm }` | `{ ok: true }` or `{ ok: false, code: "MISMATCH" \| "POLICY", problems? }`. On success the failed counter goes to 0, status becomes ACTIVE (clears `LOCKED` and `PASSWORD_EXPIRED`), the verified code is used up, all sessions end. | `VERIFY_FIRST`, `OTP_REQUIRED` | Planned | No | Yes |
-| `regenerate` | `bank.activate.regenerate` (CAB: `cab.activate.regenerate`) | `{}` | `{ ok, sent, maskedEmail, maskedPhone }` | `VERIFY_FIRST` | Planned | No | No |
+| Integration id | Adapter | Request | Response | Errors | Status |
+|---|---|---|---|---|---|
+| `findProfile` | `bank.recover.verifyUser` | `{usernameOrEmail}` | `{recoveryToken, maskedMobile}` | `NOT_FOUND`, `ID_LOCKED`, `SERVICE_UNAVAILABLE`, `TIMEOUT` | (planned). The CAB twin is `cab.recover.verifyUser` |
+| `sendOtp` / `verifyOtp` | `bank.otp.send` / `bank.otp.verify` | `{channel}` / `{code}` | `{sent}` / `{verified}` | `OTP_INVALID`, `OTP_EXPIRED`, `ID_LOCKED` | Existing (`packages/mock-bank-api/src/index.ts`) |
+| `resetPassword` | `bank.recover.resetPassword` | `{recoveryToken, password}` | `{ok}` | `POLICY`, `OTP_REQUIRED`, `SERVICE_UNAVAILABLE`, `TIMEOUT` | (planned). The CAB twin is `cab.recover.resetPassword` |
+| `unlockProfile` | `bank.recover.unlock` | `{recoveryToken}` | `{wasLocked}` | `OTP_REQUIRED`, `SERVICE_UNAVAILABLE`, `TIMEOUT` | (planned) |
 
 #### 6. Permissions, step-up and limits
-None needed. Password rules: 8 to 100 characters, 5 different, no username. Limits: 3 wrong codes; 3 resets per day (planned, `RATE_LIMITED`).
+
+None before sign-in. The one-time code is the step-up. Limits: 3 wrong identity checks or codes lock the journey for 30 minutes (2 minutes in the prototype); at most 3 resends; password 12 to 64 characters. `sign-in` itself locks a profile after 5 wrong passwords or codes.
 
 #### 7. Result and links out
-Result `done`. Notification: "Your BankWorkx® password was changed. Wasn't you? Contact us" (email and in-app). Other devices are signed out. Trusted devices and quick PINs are kept. Link: `sign-in`.
+
+Results as above. Notifications raised (planned): a text and an email "Your BankWorkx® password was changed" or "Your BankWorkx® account was unlocked" to the contacts on file, with a number to call if this was not the person. Links out: `sign-in`, `contact-support`.
 
 #### 8. Acceptance criteria
-- **AC-1.** Matching details and a right picture code lead to `found`; a wrong picture code, or details that match nothing, do not.
-- **AC-2.** The password cannot be changed until the one-time code is verified (`OTP_REQUIRED`).
-- **AC-3.** A new password shorter than 8, longer than 100, with fewer than 5 different characters, or containing the username is refused with the exact line for that problem.
-- **AC-4.** A confirm that differs is refused with "The two passwords don't match."
-- **AC-5.** A good new password ends on `done`, and the new password signs in while the old one does not.
-- **AC-6.** Resetting clears a lock and an expired password.
-- **AC-7.** Three wrong codes end on `otpLocked`.
-- **AC-8.** A profile that is not active is offered a new activation code, not a reset.
-- **AC-9.** On a timeout or unavailable service the password is not changed.
+
+- AC-1: A reset needs the username or email, then a correct code, then a password that follows the rules and is confirmed.
+- AC-2: The code goes to the mobile number on file, shown only as its last 4 digits; a wrong code counts towards the lock; an expired code asks for a new one; at most 3 resends.
+- AC-3: Three wrong identity checks or codes lock the journey with the "Too many tries" card and a link to `contact-support`.
+- AC-4: After a reset the new password works at `sign-in`, the old one does not, the lock is cleared, and the new password cannot be reused later.
+- AC-5: Unlock keeps the password, clears the lock, and tells the person when the profile was not locked.
+- AC-6: With `allowUnlock` off the unlock mode is refused (as if `unlock-account` were off) and `mode: "unlock"` opens a reset.
+- AC-7: The checklist updates as the person types and the messages never show an error code.
+- AC-8: When the bank is unavailable or times out nothing is changed.
 
 #### 9. Scenarios
 
-| ID | Covers | Persona | Setup and conditions | Expected |
+Synthetic persona `alex` (username `alex.morgan`) and `locked.user`.
+
+| # | Covers | Persona / setup | Conditions | Steps and expected result |
 |---|---|---|---|---|
-| T-1 | AC-1, AC-5 | `alex.morgan` | Details, code `482100`, new password `Aurora#Sky2026`. | `done`. Then sign in with the new password succeeds; the old `Bwx!Demo2026` answers `INVALID_CREDENTIALS`. |
-| T-2 | AC-1 | `alex.morgan` | Wrong picture code; then wrong DOB. | `CAPTCHA_WRONG`; then `notFound`. |
-| T-3 | AC-2 | `alex.morgan` | Call `resetPassword` after `verifyUser` but before the code. | `OTP_REQUIRED`; password unchanged. |
-| T-4 | AC-3 | `alex.morgan` | `Ab1!` ; 101 characters; `aaaaaaaa`; `alex.morgan1!`. | `MIN_LENGTH`; `MAX_LENGTH`; `DIFFERENT_CHARS`; `CONTAINS_USERNAME`. |
-| T-5 | AC-4 | `alex.morgan` | Confirm differs. | `MISMATCH`. |
-| T-6 | AC-6 | `demo.locked`, `demo.expired` | Reset each. | Then a sign-in with the new password reaches `signedIn` (no `LOCKED`, no `PASSWORD_EXPIRED`). |
-| T-7 | AC-7 | `alex.morgan` | Three wrong codes. | `otpLocked`. |
-| T-8 | AC-8 | `demo.inactive` | Right details. | `found` shows only "Send me a new activation code"; `regenerated` text. |
-| T-9 | AC-9 | `alex.morgan` | `conditions.timeout: ["bank.recover.resetPassword"]`. | Timeout message; old password still works. |
-| T-10 | AC-9 | `alex.morgan` | `conditions.unavailable: ["bank.recover.resetPassword"]`. | Unavailable message; old password still works. |
+| T-1 | AC-1, AC-4 | `alex` | none | Username `alex.morgan`, code 482100, new password "Granite-Lemon-92-River" twice: "Password changed", rows Username `alex.morgan`, Changed "Tue 3 Nov 2026". Sign in with the new password works. |
+| T-2 | AC-1 | `alex` | none | Password "short": "Use at least 12 characters. Three or four unrelated words work well." Password containing `alex.morgan`: "Don’t use your username in your password." A different confirmation: "The two passwords don’t match." The old password: "Choose a password you haven’t used here before." |
+| T-3 | AC-2 | `alex` | none | Valid username, then "We sent a 6-digit code to ••• 4410." Code 000000: "That code isn’t right. Check the latest message and try again." Code 999999: "That code has expired. Ask for a new one." |
+| T-4 | AC-3 | `alex` | none | Username "nobody" three times: the first two show "We couldn’t find a profile with those details. Check them and try again."; the third shows the "Too many tries" card. |
+| T-5 | AC-5 | `locked.user`, locked at `sign-in` | none | `mode: "unlock"`, valid code: "Account unlocked", "Your password hasn’t changed." Sign in with the old password works. |
+| T-6 | AC-5 | `alex`, not locked | none | Unlock: "Your account isn’t locked", "You can sign in now." |
+| T-7 | AC-6 | `alex`, `allowUnlock` off | none | The unlock link is absent at `sign-in`; `mode: "unlock"` opens the reset screens. |
+| T-8 | AC-7 | `alex` | none | The checklist shows ○ for all four rules on an empty field and ✓ for each rule as it is met. |
+| T-9 | AC-8 | `alex` | `unavailable: ["bank.recover.resetPassword"]` (prototype: Service down on) | Connection sheet; the password is unchanged. |
+| T-10 | AC-8 | `alex` | `timeout: ["bank.recover.resetPassword"]`, `latencyMs: 10000` | After 10 seconds: "This is taking longer than expected. Nothing was changed." The old password still works. |
 
 #### 10. Expected mutation-check survivors
-| Mutant | Why it survives |
-|---|---|
-| Password policy text lines swapped (copy only) | Copy lines are not tied to a rule; T-4 checks the error messages, not the caption list. |
-| `RATE_LIMITED` removed | The sandbox has no daily counter. |
-| "Other devices are signed out" removed | The sandbox keeps one session; there is nothing to observe. |
+
+The breach and common-password lists are a short sandbox sample; removing one word survives; expected. The exact lock length survives (2 minutes in the sandbox); expected. The notification text is not asserted; expected. Everything else: none expected.
 
 ---
 
 ### ★ Unlock account — `unlock-account`
 
-**Prototype note:** The prototype `sign-in` locks after 5 wrong passwords or codes (not 3) and opens this journey with `{user}`; the 30-minute wording here should follow the bank setting.
+**Catalog:** slug `unlock-account`, workspace `public`, category Signing in and security (prototype tag "Sign-in and security"), core no, can a bank switch it off: yes, through the option `allowUnlock` of `reset-password`. Options: none of its own.
 
-#### 1. Summary
+**Alias of `reset-password` with `{mode: "unlock"}`.** The prototype has no separate screens for it (`alias: {id: 'reset-password', params: {mode: 'unlock'}, opt: 'allowUnlock'}`). What differs:
 
-| Item | Value |
-|---|---|
-| Slug | `unlock-account` |
-| Purpose | Get back into a locked profile now, by proving who the person is, instead of waiting 30 minutes. |
-| Release | 1 |
-| Workspace | `public` |
-| Status | New (planned adapters). CAB only unlocks through a password reset; BankWorkx® adds an unlock that does not change the password. |
-| Channels | Web, mobile |
-| Starting pattern | CAB `cant-sign-in` (verify, code) and the `LOCKED` outcome of `cab.auth.signIn` |
-| Who may use it | Anyone. |
+- The screens are "Unlock your account", "Enter your code" and "Unlock your account" (button **Unlock account**); there is no password step. The password is not changed.
+- The receipt is "Account unlocked" (or "Your account isn’t locked" when it was not locked) with a **Sign in** button.
+- Launched with `{user}`; the link on the `sign-in` locked card is (planned), today only a deep link or the catalog entry opens it. The scenarios T-5, T-6 and T-7 of `reset-password` cover it; acceptance criteria AC-5 and AC-6.
 
-#### 2. Entry points
+---
 
-| Place | Launch point | Passes | Permission |
-|---|---|---|---|
-| `sign-in` › `locked` and `otpLocked` | Unlock account | `{username}` | none |
-| `reset-password` › `otpLocked` | Unlock account | `{username}` | none |
-| Landing › sign-in help | Account locked? | – | none |
+### ★ Forgot password — `forgot-password`
 
-Leads to: `sign-in` (and optionally `reset-password`).
+**Catalog:** slug `forgot-password`, workspace `public`, category Signing in and security (prototype tag "Sign-in and security"), core no, can a bank switch it off: yes, together with `reset-password`. Options: none of its own.
 
-#### 3. Screens
+**Alias of `reset-password` with `{mode: "reset"}`.** It is the name that the "Forgot password?" link on `sign-in` and the "Account locked" card call (`alias: {id: 'reset-password', params: {mode: 'reset'}}`). What differs:
 
-**Screen `start` — "Your profile is locked"** (blocks: `text`, `textInput`, `alert`, `button`) `onEnter` calls `lockStatus` if `{username}` is known.
-
-| Field | Block | Required | Rule | Error message |
-|---|---|---|---|---|
-| Username | `textInput` (hidden when passed in) | Yes | Not empty | "Enter your username." |
-
-Copy: title "Your profile is locked"; body "After 3 wrong tries we lock a profile for 30 minutes to keep it safe. It unlocks by itself in about {minutesLeft} minutes, or you can unlock it now." Buttons: "Unlock now" (primary) → `verify`; "I'll wait" (ghost) → `exit`. If `lockStatus` says not locked: → `notLocked`.
-
-**Screen `verify` — "Let's verify it's you"** Same four fields as `reset-password` `details`. Button "Continue" → `channel`; `NOT_FOUND` → `notFound`.
-
-**Screens `channel` and `code`** as in `forgot-username`. The right code (`482100`) → `unlocked`; three wrong ones → `otpLocked`.
-
-**Screen `unlocked` — "Profile unlocked"** (terminal) Result (success): title "Your profile is unlocked", text "You can sign in now. You have 3 tries again." Buttons: "Sign in" (primary) → `sign-in` `{username}`; "Choose a new password too" (secondary) → `reset-password` `{username}`.
-
-**Terminal screens:** `notLocked` – success "Your profile isn't locked", text "You can sign in.", button "Sign in". `notFound` – as before. `otpLocked` – error "Too many incorrect codes", text "Your profile stays locked. The 30 minutes start again now. Try again later or call support.", button "Contact us" → `contact-support`. `limit` – error "Too many unlocks today", text "You've unlocked this profile 3 times today. Call support so we can check it's you.", button "Contact us".
-
-States: **Loading** – spinner. **Timeout / unavailable** – standard messages; the profile stays as it was.
-
-#### 4. Sandbox errors
-
-| Code | Message | Screen | Button |
-|---|---|---|---|
-| `NOT_FOUND` | "We couldn't find a matching profile." | `notFound` | Try again |
-| `CAPTCHA_WRONG` | "That code doesn't match. Check it or ask for a new one." | `verify` | New code |
-| `OTP_INVALID` | "That code isn't right. {n} tries left." Third: `otpLocked`. | `code` | Try again |
-| `OTP_REQUIRED` | Standard S-`OTP_REQUIRED` | `code` | Back to code |
-| `NOT_LOCKED` (planned) | "Your profile isn't locked." | `notLocked` | Sign in |
-| `UNLOCK_LIMIT` (planned) | "You've unlocked this profile 3 times today. Call support so we can check it's you." | `limit` | Contact us |
-| `TIMEOUT` | "This is taking longer than expected. Nothing was changed." | any | Try again |
-| `SERVICE_UNAVAILABLE` | Standard S-`SERVICE_UNAVAILABLE` | any | Try again |
-
-#### 5. Adapters
-
-| Integration id | Adapter | Request | Response | Error codes | Status | moneyMoving | requiresOtp |
-|---|---|---|---|---|---|---|---|
-| `lockStatus` | `bank.account.lockStatus` | `{ username }` | `{ locked, minutesLeft }` (same answer shape for unknown usernames, `locked: false`) | `TIMEOUT`, `SERVICE_UNAVAILABLE` | Planned | No | No |
-| `captcha`, `verifyUser` | `bank.captcha.generate`, `bank.recover.verifyUser` | see `reset-password` | | | Planned | No | No |
-| `otpSend`, `otpVerify` | `bank.otp.send`, `bank.otp.verify` | | | `OTP_INVALID` | Existing | No | – |
-| `unlock` | `bank.account.unlock` | `{ username }` (after verifyUser and the code) | `{ ok: true }` (failed counter 0, status ACTIVE) | `NOT_LOCKED`, `UNLOCK_LIMIT`, `VERIFY_FIRST`, `OTP_REQUIRED` | Planned | No | Yes |
-
-#### 6. Permissions, step-up and limits
-None needed. Lockout: `MAX_FAILED_LOGINS` 3, `LOCK_MINUTES` 30. Unlock limit 3 per day (planned). Code: 3 tries.
-
-#### 7. Result and links out
-Result `unlocked`. Notification: "Your profile was unlocked" (email and in-app). Links: `sign-in`, `reset-password`, `contact-support`.
-
-#### 8. Acceptance criteria
-- **AC-1.** A locked profile shows how long the lock lasts and offers "Unlock now".
-- **AC-2.** The profile unlocks only after matching details and a right code.
-- **AC-3.** After unlocking, the right password signs in and the counter is back to 3 tries.
-- **AC-4.** Unlocking does not change the password.
-- **AC-5.** Three wrong codes keep the profile locked and restart the 30 minutes.
-- **AC-6.** A profile that is not locked is told so.
-- **AC-7.** A fourth unlock in one day is refused.
-- **AC-8.** On a timeout or unavailable service the profile stays locked.
-
-#### 9. Scenarios
-
-| ID | Covers | Persona | Setup and conditions | Expected |
-|---|---|---|---|---|
-| T-1 | AC-1 | `demo.locked` | Open with `{username}`. | Text mentions 30 minutes; "Unlock now" shown. |
-| T-2 | AC-2, AC-3, AC-4 | `demo.locked` | Details, code `482100`. | `unlocked`; sign-in with `Bwx!Demo2026` reaches `signedIn`; password unchanged. |
-| T-3 | AC-2 | `demo.locked` | `unlock` called before the code. | `OTP_REQUIRED`; still `LOCKED`. |
-| T-4 | AC-5 | `demo.locked` | Three wrong codes. | `otpLocked`; sign-in answers `LOCKED`. |
-| T-5 | AC-6 | `alex.morgan` | Open `unlock-account`. | `notLocked`. |
-| T-6 | AC-7 | `demo.locked` | Unlock three times, lock again, try a fourth time. | `UNLOCK_LIMIT`. |
-| T-7 | AC-8 | `demo.locked` | `conditions.timeout: ["bank.account.unlock"]`. | Timeout message; still `LOCKED`. |
-| T-8 | AC-8 | `demo.locked` | `conditions.unavailable: ["bank.account.unlock"]`. | Unavailable message; still `LOCKED`. |
-
-#### 10. Expected mutation-check survivors
-| Mutant | Why it survives |
-|---|---|
-| `minutesLeft` shown wrongly | The sandbox does not run a lock clock (the CAB sandbox does not either); only the text "30 minutes" can be asserted. |
-| `UNLOCK_LIMIT` changed from 3 to 4 | Killed only by T-6, which must run the 4-step sequence; if skipped it survives. |
-
-**Prototype reconciliation (from `sign-in`).** The prototype locks sign-in after **5** wrong passwords or **5** wrong one-time codes, not 3; read "3 wrong tries" above as 5 until the lead settles it. The locked card on `sign-in` shows "Unlock your account", "Confirm it's you with your registered phone and a photo ID check. It takes about 3 minutes.", a button **Unlock my account** that opens this journey with `{user}`, and **Call us instead**. The prototype has no timed unlock (no 30-minute clock); only this journey, or the sandbox shortcut "clear this lock", unlocks.
+- Nothing on the screens: it opens "Reset your password" exactly as `reset-password` does.
+- It exists so a bank can place the link under its own name in menus and the `sign-in` help row; it has no catalog switch of its own.
+- Launched with `{user}` from `sign-in`. Everything is covered by `reset-password` (AC-1 to AC-4, AC-7, AC-8).
 
 ---
 
 ### ★ Change password — `change-password`
 
+**Catalog:** slug `change-password`, workspace `personal`, category Signing in and security (prototype tag "Sign-in and security"), core no, can a bank switch it off: yes (basic entry, kept in the Lean preset). Options (key, label, default): `signOutOthers` "Sign out other devices after a change" (on). Research: `research/change-password.md`. Built in `design/bankworkx-r1/src/journeys/55-security.js`, on the sign-in model `SI` from `48-sign-in.js` (password rules, lock counters, used passwords).
+
+The lean rework removed the strength meter, the forced composition rules (capitals, symbols), the security questions and the reminder to change every 12 months. What remains: confirm the current password, choose a new one that passes the same rules as `sign-in`, and confirm with a one-time code.
+
 #### 1. Summary
 
-| Item | Value |
+| Field | Value |
 |---|---|
 | Slug | `change-password` |
-| Purpose | A signed-in person chooses a new password. |
-| Release | 1 |
-| Workspace | `personal` |
-| Status | New. Password rules and screens from CAB `cant-sign-in` `new-password` and `cab.password.policy`. |
-| Channels | Web, mobile |
-| Starting pattern | CAB `cant-sign-in` (`new-password`, `reset-done`) |
-| Who may use it | A signed-in person with `security.manage`. |
+| Purpose | Let a signed-in customer change the password: current password, a new one checked against live rules, then a code. Wrong current passwords count towards a lock. |
+| Release / workspace | 1 / Personal |
+| Status | Built in the prototype as a three-screen form journey (`submit: "Change password"`, permission `accounts.view`). No money moves. |
+| Channels | Web and mobile |
+| Starting pattern | `fixtures/cab.ts` (password rules and sign-in lock) |
+| Who may use it | Anyone signed in to Personal (`accounts.view`), for their own profile. |
 
 #### 2. Entry points
 
-| Place | Launch point | Passes | Permission |
-|---|---|---|---|
-| More › settings › security | Change password | – | `security.manage` |
-| Login history row detail | Change password | – | `security.manage` |
-| Notification "We saw a sign-in from a new place" | Change password | – | `security.manage` |
-
-Leads to: Landing `sign-in` (all sessions end).
+| Place › label | Passes in | Permission |
+|---|---|---|
+| More › Security › Password | none | `accounts.view` |
+| Login history › Change password | none | `accounts.view` |
+| Notification › New sign-in › Change password | none | `accounts.view` |
+| Deep link `/personal/j/change-password` | none | `accounts.view` |
 
 #### 3. Screens
 
-**Step-up first.** On entry the shell checks the step-up (300 seconds). If it is older, the step-up dialog opens (password or PIN or biometrics, then a one-time code). Cancel returns to Settings › Security and nothing is changed.
+Steps in order: `cur`, `new`, `code`, then the result.
 
-**Screen `form` — "Change password"** (blocks: `textInput` ×3 secure, `text` captions, `alert` ×3, `button`) `onEnter`: `callApi policy`.
+**Screen `cur`** ("Current password"). Button **Continue**, busy "Checking…" (about 0.6 seconds).
 
-| Field | Block | Required | Rule | Error message |
+| Field | Block | Required | Validation | Message |
 |---|---|---|---|---|
-| Current password | `textInput` secure | Yes | Not empty; must be right | "Enter your current password." / "That isn't your current password. {n} tries left." |
-| New password | `textInput` secure | Yes | 8 to 100 characters; 5 different characters; must not contain the username; must differ from the current password | Per problem (see `reset-password`), and `SAME_AS_CURRENT`: "Your new password must be different from your current one." |
-| Re-enter your new password | `textInput` secure | Yes | Equal to the new password | "The two passwords don't match." |
+| Current password | `password`, max 128, with a Show or Hide button | Yes | Equals the current password | "That isn’t your current password." |
 
-Copy: title "Change password"; the same "Security requirements" caption list as `reset-password` (5 different characters, at least 8, not over 100, not the username) plus "- Password must be different from your current password". Button "Change password" (primary): `validate`, `callApi changePassword`, `navigate`. Button "Cancel" (ghost): `exit`.
+After a wrong password a banner shows "{n} attempts left" (or "1 attempt left"), counting down from 5. The counter is the same one `sign-in` uses. The fifth wrong password locks the profile: the field is replaced by the card "Account locked", "Too many wrong passwords.", with the buttons **Reset password** (`forgot-password`) and **Contact support**; the step is blocked ("Locked"). A correct password sets the counter to 0.
 
-**Screen `done` — "Password updated"** (terminal) Result (success): title "Your password has been successfully updated", text "Your current session is closed. Please sign in again using your new password." Button "Sign in" → `sign-in`.
+**Screen `new`** ("New password"). Button **Continue**.
 
-**Terminal screen `locked`.** After three wrong current passwords: error "Your profile is locked", text "Too many wrong passwords. You're signed out, and sign in is blocked for 30 minutes.", button "Unlock account" → `unlock-account`.
+| Field | Block | Required | Validation | Message |
+|---|---|---|---|---|
+| New password | `password`, placeholder "At least 12 characters", max 64, with a Show or Hide button | Yes | Not the current password; at least 12 and at most 64 characters; not containing the username; not a common password; not in a known data breach; not one used before at the bank | "Choose a different password." / "Use at least 12 characters. Three or four unrelated words work well." / "Use 64 characters or fewer." / "Don’t use your username in your password." / "That password is too common. Try a longer phrase of unrelated words." / "This password has appeared in a data breach, so we can’t accept it." / "Choose a password you haven’t used here before." |
+| Confirm new password | `password`, max 64 | Yes | Same as the new password | "The two passwords don’t match." |
 
-States: **Loading** – spinner on the button; policy list skeleton. **Timeout** – "This is taking longer than expected. Nothing was changed." **Unavailable** – standard.
+A live checklist under the fields shows ✓ or ○ for five rules: "At least 12 characters", "Not your username", "Not a common password", "Not in a known data breach", "Not one you used before". No capital or symbol rules.
+
+**Screen `code`** ("Enter your code"). Text "Sent to the phone ending 0142." Button **Confirm**, busy "Checking your code…" (about 0.6 seconds).
+
+| Field | Block | Required | Validation | Message |
+|---|---|---|---|---|
+| Code | `text`, placeholder "6 digits", max 6, hint "{n} tries left" after a wrong code | Yes | Exactly 6 digits | "Enter the 6 digits." |
+
+A wrong code: "That code isn’t right. Try again." An expired code (the field is cleared): "That code has expired. Go back to get a new one." Three wrong codes: "Too many wrong codes. Nothing was changed. Go back to start again."
+
+**Result** ("Password changed", green, text "Use your new password next time you sign in."). Rows "Changed" ("3 Nov 2026"), "Other devices" ("Signed out" with `signOutOthers` on, otherwise "Still signed in"). Buttons **Back to security**, **Done**. A note "Your password was changed" is added to the notification list.
+
+**States**
+- Loading: busy text on the button as above.
+- Empty: not applicable.
+- Error: the Service down switch shows the standard connection sheet ("We couldn’t reach the bank", "Nothing was sent and you haven’t been charged. Try again in a moment."); otherwise "This isn’t available right now. Nothing was changed. Try again in a few minutes." with **Try again**.
+- Timeout: "This is taking longer than expected. Nothing was changed."
+- Locked: as above.
 
 #### 4. Sandbox errors
 
-| Code | Message | Screen | Button |
+| Code | Message | Shows on | Button |
 |---|---|---|---|
-| `STEP_UP_REQUIRED` | "For your security, confirm it's you first." | step-up dialog | Confirm |
-| `WRONG_CURRENT_PASSWORD` (planned, `attemptsLeft`) | "That isn't your current password. {n} tries left." | `form` | Try again |
-| `LOCKED` | `locked` text above | `locked` | Unlock account |
-| `MISMATCH` | "The two passwords don't match." | `form` | Edit |
-| `POLICY` (with `problems`) | Per-problem line plus "That password doesn't meet the security requirements." | `form` | Edit |
-| `SAME_AS_CURRENT` (planned) | "Your new password must be different from your current one." | `form` | Edit |
-| `PERMISSION_DENIED` | "This isn't available for your profile." | `form` | Back |
-| `TIMEOUT` | "This is taking longer than expected. Nothing was changed." | `form` | Try again |
-| `SERVICE_UNAVAILABLE` | Standard S-`SERVICE_UNAVAILABLE` | `form` | Try again |
-| `SESSION_EXPIRED` | Standard S-`SESSION_EXPIRED` | Landing | Sign in |
+| `INVALID_PASSWORD` | "That isn’t your current password." | `cur` | Try again |
+| `ACCOUNT_LOCKED` | "Too many wrong passwords. For your safety this is locked." | `cur` | Reset password |
+| `OTP_INVALID` | "That code isn’t right. Try again." | `code` | Try again |
+| `OTP_EXPIRED` | "That code has expired. Go back to get a new one." | `code` | Back |
+| `OTP_LOCKED` | "Too many wrong codes. Nothing was changed. Go back to start again." | `code` | Back to start |
+| `TIMEOUT` | "This is taking longer than expected. Nothing was changed." | `cur`, `code` | Try again |
+| `SERVICE_UNAVAILABLE` | "This isn’t available right now. Nothing was changed. Try again in a few minutes." | `cur`, `code` | Try again |
+| `JOURNEY_DISABLED` | "This isn’t available at your bank." | whole journey | none |
+| `PERMISSION_DENIED` (planned) | Standard message | whole journey | Back |
 
 #### 5. Adapters
 
-| Integration id | Adapter | Request | Response | Error codes | Status | moneyMoving | requiresOtp |
-|---|---|---|---|---|---|---|---|
-| `policy` | `bank.password.policy` | `{}` | `{ minLength: 8, maxLength: 100, differentChars: 5, notContainUsername: true }` | `TIMEOUT`, `SERVICE_UNAVAILABLE` | Planned | No | No |
-| `changePassword` | `bank.password.change` | `{ current, password, confirm }` | `{ ok: true }` or `{ ok: false, code: "MISMATCH" \| "POLICY" \| "SAME_AS_CURRENT", problems? }` | `STEP_UP_REQUIRED`, `WRONG_CURRENT_PASSWORD`, `LOCKED`, `PERMISSION_DENIED`, `SESSION_EXPIRED` | Planned | No | Yes (via step-up) |
-| `stepUp` | `bank.session.stepUp` | see shell | | | Planned | No | Yes |
+| Integration id | Adapter | Request | Response | Errors | Status |
+|---|---|---|---|---|---|
+| `checkPassword` | `bank.password.check` | `{current}` | `{ok}` | `INVALID_PASSWORD`, `ACCOUNT_LOCKED`, `SERVICE_UNAVAILABLE`, `TIMEOUT` | (planned) |
+| `passwordPolicy` | `bank.password.policy` | `{username, password}` | the rule results, including breach and used-before | none | (planned). The CAB twin is `cab.password.policy` |
+| `sendOtp` / `verifyOtp` | `bank.otp.send` / `bank.otp.verify` | `{channel}` / `{code}` | `{sent}` / `{verified}` | `OTP_INVALID`, `OTP_EXPIRED`, `OTP_LOCKED` | Existing (`packages/mock-bank-api/src/index.ts`) |
+| `changePassword` | `bank.password.change` | `{current, new, signOutOthers}` | `{changedAt}` | `POLICY`, `OTP_REQUIRED`, `SERVICE_UNAVAILABLE`, `TIMEOUT` | (planned) |
 
 #### 6. Permissions, step-up and limits
-Permission `security.manage`. Step-up level `stepup`. Limits: 3 wrong current passwords lock the profile (same counter as sign-in).
+
+`accounts.view`. Step-up: the current password, then a one-time code (6 digits, 3 tries). Limits: 5 wrong current passwords lock the profile (shared with `sign-in`); password 12 to 64 characters. A change takes effect at once.
 
 #### 7. Result and links out
-Result `done`. Notification: "Your BankWorkx® password was changed. Wasn't you? Contact us" (email and in-app). Every session ends, including this one; trusted devices and quick PINs are kept. Link: `sign-in`.
+
+Result as above. Notifications raised (planned): a text and an email "Your BankWorkx® password was changed" with a number to call if it was not the person. Every change is written to the security log (audit). Links out: More (security), `forgot-password` (locked), `contact-support`. With `signOutOthers` on, the bank ends every other session when the password changes (the prototype shows the row but does not change the device list).
 
 #### 8. Acceptance criteria
-- **AC-1.** The form cannot be reached or submitted without a fresh step-up.
-- **AC-2.** A wrong current password is refused with the tries left; the third wrong try locks the profile and signs out.
-- **AC-3.** A new password that breaks a rule is refused with the exact line for that problem.
-- **AC-4.** A new password equal to the current one is refused.
-- **AC-5.** A mismatched confirm is refused.
-- **AC-6.** A good change ends on `done`; the old password then fails and the new one works.
-- **AC-7.** On a timeout or unavailable service the password stays as it was.
+
+- AC-1: A wrong current password shows the message and the attempts left; the fifth locks the profile and offers a reset.
+- AC-2: The new password must differ from the current one and pass every rule, with the message of the first rule it breaks.
+- AC-3: The checklist updates as the person types; the confirmation must match.
+- AC-4: A one-time code is required; a wrong code shows the tries left; three wrong codes end the attempt with nothing changed; an expired code asks to go back.
+- AC-5: After success the new password works at `sign-in`, the old one does not, and it cannot be reused later.
+- AC-6: The result shows the date and whether other devices were signed out, following `signOutOthers`.
+- AC-7: When the bank is unavailable or times out nothing is changed.
 
 #### 9. Scenarios
 
-| ID | Covers | Persona | Setup and conditions | Expected |
+Synthetic persona `alex` (username `alex.morgan`). The sandbox current password is the demo password; the code is the fixed test code.
+
+| # | Covers | Persona / setup | Conditions | Steps and expected result |
 |---|---|---|---|---|
-| T-1 | AC-1 | `alex.morgan` | `now` 6 minutes after sign-in; submit. | `STEP_UP_REQUIRED`; after step-up the form submits. |
-| T-2 | AC-2 | `alex.morgan` | Wrong current password ×1 then ×3. | "2 tries left"; then `LOCKED`, signed out. |
-| T-3 | AC-3 | `alex.morgan` | `Ab1!`; `aaaaaaaa`; `alex.morgan1!`. | `MIN_LENGTH`, `DIFFERENT_CHARS`, `CONTAINS_USERNAME` lines. |
-| T-4 | AC-4 | `alex.morgan` | New equals `Bwx!Demo2026`. | `SAME_AS_CURRENT`. |
-| T-5 | AC-5 | `alex.morgan` | Confirm differs. | `MISMATCH`. |
-| T-6 | AC-6 | `alex.morgan` | New `Aurora#Sky2026`. | `done`; old password answers `INVALID_CREDENTIALS`; new one signs in. |
-| T-7 | AC-7 | `alex.morgan` | `conditions.timeout: ["bank.password.change"]`. | Timeout message; old password still works. |
-| T-8 | AC-7 | `alex.morgan` | `conditions.unavailable: ["bank.password.change"]`. | Unavailable message; old password still works. |
+| T-1 | AC-1 | `alex` | none | A wrong current password: "That isn’t your current password." and "4 attempts left". Five wrong: the "Account locked" card with **Reset password**. |
+| T-2 | AC-2, AC-3 | `alex` | none | New password equal to the current: "Choose a different password." "short": "Use at least 12 characters. Three or four unrelated words work well." Containing `alex.morgan`: "Don’t use your username in your password." A different confirmation: "The two passwords don’t match." |
+| T-3 | AC-4 | `alex` | none | Code 000000: "That code isn’t right. Try again." and "2 tries left"; three times: "Too many wrong codes. Nothing was changed. Go back to start again." Code 999999: "That code has expired. Go back to get a new one." |
+| T-4 | AC-5, AC-6 | `alex`, `signOutOthers` on | none | Current password, new "Harbour-Maple-47-Tide" twice, code 482100: "Password changed", rows "Changed" "3 Nov 2026", "Other devices" "Signed out". Signing in with the new password works. |
+| T-5 | AC-5 | `alex` | none | After T-4, choosing "Harbour-Maple-47-Tide" again as a new password: "Choose a password you haven’t used here before." |
+| T-6 | AC-6 | `alex`, `signOutOthers` off | none | Row "Other devices" "Still signed in". |
+| T-7 | AC-7 | `alex` | `unavailable: ["bank.password.change"]` (prototype: Service down on) | Connection sheet; the password is unchanged. |
+| T-8 | AC-7 | `alex` | `timeout: ["bank.password.change"]`, `latencyMs: 10000` | After 10 seconds: "This is taking longer than expected. Nothing was changed." The old password still works. |
 
 #### 10. Expected mutation-check survivors
-| Mutant | Why it survives |
-|---|---|
-| "Other sessions signed out" removed | The sandbox has one session. |
-| The "different from current" caption line removed | Copy only; T-4 checks the rule, not the caption. |
+
+The breach and common-password lists are a short sandbox sample; removing one word survives; expected. The security-log entry and the notification are not asserted; expected. Signing out other devices is not asserted in the prototype; expected until `bank.password.change` is built. Everything else: none expected.
 
 ---
 
 ### ★ Trusted devices — `trusted-devices`
 
+**Catalog:** slug `trusted-devices`, workspace `personal`, category Signing in and security (prototype tag "Sign-in and security"), core no, can a bank switch it off: yes (basic entry, kept in the Lean preset). This is a **VIEW** (a screen in the More tab, `view: true`, `tab: 'more'`), not a form journey. Options (key, label, default): `limit` "Limit trusted devices to 5" (on); `signOutAll` "Offer “Sign out other devices”" (on). Research: `research/trusted-devices.md`. Built in `design/bankworkx-r1/src/journeys/55-security.js` (object `TD`, devices in `SEC.devices`).
+
+The lean rework removed the per-device detail page, the location map and the rename action. What remains: a list of the devices that skip the new-device code, a code-confirmed Remove for each other device, and one **Sign out other devices** button.
+
 #### 1. Summary
 
-| Item | Value |
+| Field | Value |
 |---|---|
 | Slug | `trusted-devices` |
-| Purpose | See the devices that skip the new-device code, rename them, and remove any that are lost or old. |
-| Release | 1 |
-| Workspace | `personal` |
-| Status | New. No CAB equivalent; devices are the `cab.device.*` idea extended (planned `bank.devices.*`). |
-| Channels | Web, mobile |
-| Starting pattern | CAB `default-sign-in` (device options) for the data, `manage-beneficiary` style list for the screens |
-| Who may use it | A signed-in person with `security.manage`. |
+| Purpose | Show the devices that skip the new-device code, and let the person remove one, or sign out every other device, after confirming with a code. |
+| Release / workspace | 1 / Personal |
+| Status | Built in the prototype as a view in the More tab. The code check and the removal are simulated in the screen itself. No money moves. |
+| Channels | Web and mobile |
+| Starting pattern | `fixtures/cab.ts` (device options) |
+| Who may use it | Anyone signed in to Personal (`accounts.view`), for their own devices. |
 
 #### 2. Entry points
 
-| Place | Launch point | Passes | Permission |
-|---|---|---|---|
-| More › settings › security | Trusted devices | `{deviceId}` optional | `security.manage` |
-| `sign-in` › `trustDevice` | Manage trusted devices (when the limit is reached) | – | `security.manage` |
-| Login history row detail | Manage this device | `{deviceId}` | `security.manage` |
-| Notification "New sign-in on {device}" | Review devices | – | `security.manage` |
+| Place › label | Passes in | Permission |
+|---|---|---|
+| More › Security › Trusted devices | none | `accounts.view` |
+| Notification › New sign-in | none | `accounts.view` |
+| Deep link `/personal/more/trusted-devices` | none | `accounts.view` |
 
-Leads to: Settings › Security. Removing the current device leads to Landing.
+#### 3. Screen
 
-#### 3. Screens
+Route: web `/personal/more/trusted-devices`; mobile More tab, row Trusted devices. Data source: the device list of the signed-in profile (`SEC.devices` in the prototype; `bank.devices.list`, planned).
 
-Step-up first (300 s). Cancel returns to Settings.
+**Header.** Title "Trusted devices". With `limit` on, a small line "{n} of 5" (devices in use against the cap).
 
-**Screen `list` — "Trusted devices"** (blocks: `text`, `dataTable` planned (rows as cards on phones), `alert`, `button`)
+**List.** One card with a row per device, in this order: this device first, then the others by most recent use (the prototype keeps its data order). Each row: an icon (phone, or wallet-style for laptop and tablet), the device name in bold, "Last used {when}" ("Now", "Yesterday, 18:20", "12 Oct 2026"), and on the right the chip **This device** for the current device or a **Remove** button for any other. The current device cannot be removed here.
 
-| Column | Content |
-|---|---|
-| Device | Name and kind icon (phone, laptop). The current one carries the chip "This device". |
-| Last used | `12 Nov 2026 09:14` and place |
-| Trusted since | `04 Sep 2026` |
-| Sign in with | Password, Quick PIN or Biometrics |
+| Device (sandbox) | Last used | Where |
+|---|---|---|
+| iPhone 15 (this device) | Now | Signed in on this device |
+| Work laptop, Chrome | Yesterday, 18:20 | Web browser |
+| Android tablet | 12 Oct 2026 | Mobile app |
 
-Copy: body "These devices don't ask for a code when you sign in. You can have up to 5. Remove any you don't recognise or no longer use." Counter "{n} of 5". Sort: last used, newest first. No filters. Tap a row → `detail`.
-- Seed for Alex: "Alex's iPhone" (this device, Biometrics), "Work laptop (Chrome)" (Password), "Old Android phone" (last used 12 Jul 2026).
-- **Empty.** "No trusted devices yet. Choose Remember this device the next time you sign in." (no button).
-- **Loading.** Skeleton rows. **Error.** Standard `SERVICE_UNAVAILABLE` / `TIMEOUT` panel with "Try again".
+**Remove panel** (opens under the list after **Remove** on a row).
 
-**Screen `detail` — "{deviceName}"** (blocks: `reviewSummary`, `button`) Rows: Name, Model and system (e.g. "iPhone 16, iOS 20"), Trusted since, Last used, Place (approximate), Network address (partly hidden), Sign in with. Buttons: "Rename" → `rename`; "Remove this device" (secondary, danger style) → `confirmRemove`; "Back" → `list`.
+- Title "Remove {device}?" and text "It will ask for a code next time it signs in."
+- Field "Code sent to the phone ending 0142": `text`, placeholder "6 digits", max 6.
+- Buttons **Remove** and **Cancel**.
+- Errors under the field: fewer than 6 digits "Enter the 6 digits."; expired code (`999999`) "That code has expired. Cancel and start again."; wrong code (`000000`) "That code isn’t right. {n} tries left." with n = 2, then 1; bank unavailable "This isn’t available right now. Nothing was changed."
+- Three wrong codes close the panel and show a red banner "Too many wrong codes. Try again later." The Remove buttons and the sign-out button stay unusable until the person leaves and returns.
+- Success: the device row disappears, a toast "Device removed", and a note "{device} was removed from your trusted devices" is added to the notification list.
 
-**Screen `rename` — "Rename device"** (blocks: `textInput`, `button`)
+**Sign out other devices** (button under the list; shown only with `signOutAll`, when there is another device, no panel is open and the screen is not locked). The same panel appears with the title "Sign out other devices?", text "Every other device is signed out and asks for a code next time.", button **Sign out**. Success: only this device stays in the list, a toast "Other devices signed out", and a note "Signed out of all other devices".
 
-| Field | Block | Required | Rule | Error message |
-|---|---|---|---|---|
-| Device name | `textInput` | Yes | 1 to 40 characters; not already used by another of the person's devices (not case sensitive) | "Give this device a name (up to 40 characters)." / "You already have a device called {name}. Choose another name." |
-
-Button "Save" → `callApi rename` → `renamed`. Toast and `renamed` result: "Device renamed to {name}." Button "Done" → `list`.
-
-**Screen `confirmRemove` — "Remove {deviceName}?"** (blocks: `alert`, `reviewSummary`, `button`) Alert (warning): "{deviceName} will be signed out and will ask for a one-time code next time. Its quick PIN and biometrics will be turned off." If it is the current device, an extra alert: "This is the device you're using. You'll be signed out." Summary rows: Device, Last used, Place. Buttons: "Remove device" (primary, danger) → `callApi remove` → `removed`; "Keep device" (ghost) → `detail`.
-
-**Screen `removed` — "Device removed"** (terminal) Result (success): title "{deviceName} was removed", text "It will ask for a one-time code the next time it signs in.", meta "Reference {reference}". Buttons: "Back to devices" → `list`; if it was the current device, "Sign in" → Landing (the app signs out first).
+**States**
+- Loading: skeleton of three rows (planned; the prototype draws at once).
+- Empty: icon, "No trusted devices", "Devices you trust will show here." (only possible if this device is not trusted; planned).
+- Error (bank unavailable): a banner "Some details may be out of date." above the list, and the code check refuses with "This isn’t available right now. Nothing was changed."
+- Timeout: after 10 seconds, "This is taking longer than expected. Nothing was changed." with **Try again** (planned for the view).
+- Locked: the red banner above.
 
 #### 4. Sandbox errors
 
-| Code | Message | Screen | Button |
+| Code | Message | Shows on | Button |
 |---|---|---|---|
-| `STEP_UP_REQUIRED` | "For your security, confirm it's you first." | step-up dialog | Confirm |
-| `DEVICE_NOT_FOUND` (planned) | "That device is no longer on your list." | `list` (after refresh) | Back to devices |
-| `DEVICE_NAME_INVALID` (planned) | "Give this device a name (up to 40 characters)." | `rename` | Edit |
-| `DEVICE_NAME_TAKEN` (planned) | "You already have a device called {name}. Choose another name." | `rename` | Edit |
-| `PERMISSION_DENIED` | "This isn't available for your profile." | `list` | Back |
-| `TIMEOUT` | "This is taking longer than expected. Nothing was changed." | the calling screen | Try again |
-| `SERVICE_UNAVAILABLE` | Standard S-`SERVICE_UNAVAILABLE` | the calling screen | Try again |
-| `SESSION_EXPIRED` | Standard S-`SESSION_EXPIRED` | Landing | Sign in |
+| `OTP_INVALID` | "That code isn’t right." (with the tries left) | remove panel | Remove |
+| `OTP_EXPIRED` | "That code has expired. Cancel and start again." | remove panel | Cancel |
+| `OTP_LOCKED` | "Too many wrong codes. Try again later." | banner | none |
+| `SERVICE_UNAVAILABLE` | "This isn’t available right now. Nothing was changed. Try again in a few minutes." | remove panel | Remove |
+| `TIMEOUT` (planned) | "This is taking longer than expected. Nothing was changed." | remove panel | Try again |
+| `DEVICE_NOT_FOUND` (planned) | "That device is already gone." | list | OK |
+| `JOURNEY_DISABLED` | "This isn’t available at your bank." | whole view | none |
+| `PERMISSION_DENIED` (planned) | Standard message | whole view | Back |
 
 #### 5. Adapters
 
-| Integration id | Adapter | Request | Response | Error codes | Status | moneyMoving | requiresOtp |
-|---|---|---|---|---|---|---|---|
-| `list` | `bank.devices.list` | `{}` | `{ devices: [{ id, name, model, platform, trustedSince, lastUsed, place, ipMasked, method, current }], max: 5 }` | `SESSION_EXPIRED`, `TIMEOUT`, `SERVICE_UNAVAILABLE` | Planned | No | No |
-| `rename` | `bank.devices.rename` | `{ deviceId, name }` | `{ ok: true, name }` | `DEVICE_NOT_FOUND`, `DEVICE_NAME_INVALID`, `DEVICE_NAME_TAKEN`, `STEP_UP_REQUIRED` | Planned | No | Via step-up |
-| `remove` | `bank.devices.remove` | `{ deviceId }` | `{ ok: true, reference }` (the device's quick PIN and biometrics are cleared; its sessions end) | `DEVICE_NOT_FOUND`, `STEP_UP_REQUIRED`, `PERMISSION_DENIED` | Planned | No | Via step-up |
+| Integration id | Adapter | Request | Response | Errors | Status |
+|---|---|---|---|---|---|
+| `devices` | `bank.devices.list` | none | list of `{id, name, kind, lastUsed, current}` | `SERVICE_UNAVAILABLE` | (planned). The prototype reads `SEC.devices` |
+| `sendOtp` / `verifyOtp` | `bank.otp.send` / `bank.otp.verify` | `{channel}` / `{code}` | `{sent}` / `{verified}` | `OTP_INVALID`, `OTP_EXPIRED`, `OTP_LOCKED` | Existing (`packages/mock-bank-api/src/index.ts`) |
+| `removeDevice` | `bank.devices.remove` | `{deviceId}` or `{all: true}` | `{removed}` | `DEVICE_NOT_FOUND`, `OTP_REQUIRED`, `SERVICE_UNAVAILABLE`, `TIMEOUT` | (planned) |
 
 #### 6. Permissions, step-up and limits
-Permission `security.manage`. Step-up `stepup`. Limit: 5 trusted devices; a new device that would be the sixth is refused at sign-in (`DEVICE_LIMIT`).
+
+`accounts.view`. Step-up: a one-time code (6 digits, 3 tries) to remove a device or sign out the others; none to look. Limits: at most 5 trusted devices (with `limit` on); the current device is never removed here.
 
 #### 7. Result and links out
-Result `removed` or `renamed`, with a reference. Notification: "A trusted device was removed: {deviceName}" (email and in-app). If the removed device is not the current one, its next sign-in asks for a code. Links: Settings › Security, `sign-in`.
+
+The result is the updated list with a toast. Notifications raised (planned): a text "A device was removed from your trusted devices" or "Every other device was signed out". Every removal is written to the security log (audit). Links out: More (security), `setup-quick-login`, `change-password`.
 
 #### 8. Acceptance criteria
-- **AC-1.** The list shows each trusted device with its last use, and marks the current one.
-- **AC-2.** The journey cannot change anything without a fresh step-up.
-- **AC-3.** A device can be renamed; empty, over-long or duplicate names are refused with the exact message.
-- **AC-4.** Removing a device needs a second confirmation and then the device disappears from the list.
-- **AC-5.** After removal the device's next sign-in asks for a one-time code and has no quick PIN or biometrics.
-- **AC-6.** Removing the current device signs the person out.
-- **AC-7.** A device removed elsewhere in the meantime is reported as no longer on the list.
-- **AC-8.** On a timeout or unavailable service nothing is changed.
+
+- AC-1: The list shows each device with its last use, the current one marked **This device** without a Remove button.
+- AC-2: Remove asks for a code first; a correct code removes the device and shows the toast and the notification.
+- AC-3: A wrong code shows the tries left; three wrong codes lock the view with "Too many wrong codes. Try again later."; an expired code asks to cancel and start again.
+- AC-4: **Sign out other devices** appears only with `signOutAll` and another device, and after a correct code leaves only this device.
+- AC-5: With `limit` on the header shows "{n} of 5".
+- AC-6: Cancel closes the panel and changes nothing.
+- AC-7: When the bank is unavailable the banner shows and nothing is changed.
 
 #### 9. Scenarios
 
-| ID | Covers | Persona | Setup and conditions | Expected |
+Synthetic persona `alex`, three devices as in the table.
+
+| # | Covers | Persona / setup | Conditions | Steps and expected result |
 |---|---|---|---|---|
-| T-1 | AC-1 | `alex.morgan` | Seed devices. | 3 rows; "Alex's iPhone" has "This device"; sorted by last use. |
-| T-2 | AC-2 | `alex.morgan` | `now` 6 min after sign-in; rename. | `STEP_UP_REQUIRED`; after step-up it succeeds. |
-| T-3 | AC-3 | `alex.morgan` | Rename to an empty name; 41 characters; "Work laptop (Chrome)". | `DEVICE_NAME_INVALID` ×2; `DEVICE_NAME_TAKEN`. Valid name saved: "Device renamed to …". |
-| T-4 | AC-4, AC-5 | `alex.morgan` | Remove "Old Android phone"; then sign in from it. | List has 2 rows; new-device code is asked. |
-| T-5 | AC-6 | `alex.morgan` | Remove the current device. | Signed out; Landing. |
-| T-6 | AC-7 | `alex.morgan` | Remove a device twice. | Second call: `DEVICE_NOT_FOUND`. |
-| T-7 | AC-8 | `alex.morgan` | `conditions.timeout: ["bank.devices.remove"]`. | Timeout message; device still listed. |
-| T-8 | AC-8 | `alex.morgan` | `conditions.unavailable: ["bank.devices.list"]`. | Unavailable panel; no list. |
-| T-9 | AC-8 | `alex.morgan` | `conditions.empty: ["bank.devices.list"]`. | Empty state text. |
+| T-1 | AC-1, AC-5 | `alex` | none | Three rows; "3 of 5"; "This device" on the iPhone 15; Remove on the other two. |
+| T-2 | AC-2 | `alex` | none | Remove "Work laptop, Chrome": panel "Remove Work laptop, Chrome?"; code 482100; the row is gone, toast "Device removed". |
+| T-3 | AC-3 | `alex` | none | Code "12": "Enter the 6 digits." Code 000000: "That code isn’t right. 2 tries left." Three times: the banner "Too many wrong codes. Try again later." Code 999999: "That code has expired. Cancel and start again." |
+| T-4 | AC-4 | `alex` | none | **Sign out other devices**, code 482100: one row left, toast "Other devices signed out". With `signOutAll` off, or with only this device left, the button is absent. |
+| T-5 | AC-6 | `alex` | none | Open the panel, **Cancel**: all rows remain. |
+| T-6 | AC-7 | `alex` | `unavailable: ["bank.devices.remove"]` (prototype: Service down on) | Banner "Some details may be out of date."; a valid code gives "This isn’t available right now. Nothing was changed." and the list is unchanged. |
+| T-7 | AC-7 | `alex` | `timeout: ["bank.devices.remove"]`, `latencyMs: 10000` | After 10 seconds: "This is taking longer than expected. Nothing was changed." (planned for the view). |
 
 #### 10. Expected mutation-check survivors
-| Mutant | Why it survives |
-|---|---|
-| Place or network address shown wrongly | Display data from the seed; no rule depends on it. |
-| "Sort by last used" reversed | Survives unless T-1 asserts order of all three; it does, so it should be killed. |
-| Current-device "sessions end" removed | The sandbox has one session; T-5 asserts the sign-out through the journey result instead. |
+
+The "{n} of 5" count survives when the cap is not asserted against the real device limit; expected. The sort order survives when two devices have the same last use; expected. The security-log entry and the text notification are not asserted; expected. Everything else: none expected.
 
 ---
 
 ### ★ Change quick PIN — `change-quick-pin`
 
-**Prototype note:** The new PIN follows the `sign-in` PIN rules (6 digits; no repeats, runs, 112233, 123123, 121212, 696969, 000111 or phone digits).
+**Catalog:** slug `change-quick-pin`, workspace `personal`, category Signing in and security (prototype tag "Sign-in and security"), core no, can a bank switch it off: yes (basic entry, kept in the Lean preset). Options: none. Research: `research/change-quick-pin.md`. Built in `design/bankworkx-r1/src/journeys/55-security.js`, on the sign-in model `SI` from `48-sign-in.js`.
+
+The lean rework removed the PIN reminder, the "forgot PIN" path inside this journey and the one-time code. What remains: the current PIN is the proof; a new 6-digit PIN replaces it. Three wrong PINs turn quick sign-in off.
 
 #### 1. Summary
 
-| Item | Value |
+| Field | Value |
 |---|---|
 | Slug | `change-quick-pin` |
-| Purpose | Replace the six-digit quick PIN used to sign in on this device. |
-| Release | 1 |
-| Workspace | `personal` |
-| Status | New. Built from CAB `default-sign-in` (`pin-new`, `pin-confirm`, `pin-intro`) with `cab.device.verifyPin` and `cab.device.setDefault`. |
-| Channels | Web, mobile |
-| Starting pattern | CAB `default-sign-in` |
-| Who may use it | A signed-in person with `security.manage` and a PIN already set. |
+| Purpose | Change the 6-digit PIN used for quick sign-in on this device: current PIN, then a new PIN with no repeats or runs. |
+| Release / workspace | 1 / Personal |
+| Status | Built in the prototype as a form journey (`submit: "Change PIN"`, permission `accounts.view`). No money moves. |
+| Channels | Web and mobile |
+| Starting pattern | `fixtures/cab.ts` (`cab.device.verifyPin`) |
+| Who may use it | Anyone signed in to Personal (`accounts.view`) whose device has a quick PIN. |
 
 #### 2. Entry points
 
-| Place | Launch point | Passes | Permission |
-|---|---|---|---|
-| More › settings › security › Quick PIN | Change | – | `security.manage` |
-
-If no PIN is set the row says "Set up" and opens `setup-quick-login` instead. Leads to: Settings › Security.
+| Place › label | Passes in | Permission |
+|---|---|---|
+| More › Security › Quick PIN | none | `accounts.view` |
+| `setup-quick-login` result (PIN on) › Change PIN (planned) | none | `accounts.view` |
+| Deep link `/personal/j/change-quick-pin` | none | `accounts.view` |
 
 #### 3. Screens
 
-Step-up first (300 s).
+Steps in order: `none` (only when there is no PIN), `cur`, `new`, then the result.
 
-**Screen `currentPin` — "Enter your current PIN"** (blocks: `text`, `otp` `length: 6`, `keypad: true`, `masked: true`, `alert`, `button`, `menu`)
+**Screen `none`** ("No quick PIN yet"). Shown instead of the rest when this device has no quick PIN. Text "You haven’t set a quick PIN on this device." Button **Set up quick sign-in** (opens `setup-quick-login`). The step cannot be continued ("Set up first").
 
-| Field | Block | Required | Rule | Error message |
+**Screen `cur`** ("Current PIN"). Button **Continue**, busy "Checking…" (about 0.5 seconds).
+
+| Field | Block | Required | Validation | Message |
 |---|---|---|---|---|
-| Current PIN | `otp` masked keypad | Yes | 6 digits; must match the saved PIN (`bank.device.verifyPin`) | "A PIN is six digits." / "That PIN is not right. {n} tries left." |
+| Current PIN | `password`, placeholder "6 digits", max 6 | Yes | Exactly 6 digits; equals the PIN | "Enter your 6-digit PIN." and "That PIN isn’t right." |
 
-Button "Continue" → `newPin`. Link "I forgot my PIN": explains "You've just confirmed it's you, so you can set a new one." and opens `setup-quick-login` with `{mode: "pin"}` (no current PIN needed). Three wrong PINs share the sign-in counter and end on `locked`.
+After a wrong PIN a banner shows "{n} tries left" (2, then 1). The field is cleared. The third wrong PIN turns quick sign-in off: the field is replaced by the card "Quick PIN turned off", "Too many wrong PINs.", button **Set up again** (opens `setup-quick-login`), and the message "Too many wrong PINs. Quick sign-in is off. Set it up again." A correct PIN sets the counter to 0.
 
-**Screen `newPin` — "Enter new Sign in PIN"** (hint "Step 1 of 2") and **`confirmPin` — "Re-enter new Sign in PIN"** (hint "Step 2 of 2"); same `otp` block.
+**Screen `new`** ("New PIN"). Button **Change PIN**.
 
-| Field | Block | Required | Rule | Error message |
+| Field | Block | Required | Validation | Message |
 |---|---|---|---|---|
-| New PIN | `otp` masked keypad | Yes | Exactly 6 digits; not all the same; not a straight run; different from the current PIN | "A PIN is six digits." / "That PIN is too easy to guess. Avoid repeated or running numbers like 111111 or 123456." / "Choose a PIN different from your current one." |
-| Re-enter new PIN | `otp` masked keypad | Yes | Equal to the new PIN | "The PINs do not match. Enter the same PIN twice." |
+| New PIN | `password`, placeholder "6 digits", max 6, hint "Avoid repeats like 111111 and runs like 123456." | Yes | Exactly 6 digits; not the current PIN; not a repeat or a run; no digits from the phone number | "Use exactly 6 digits." and "Choose a different PIN." and "That PIN is too easy to guess. Avoid repeats and runs like 111111 or 123456." and "Don’t use digits from your phone number." |
+| Confirm new PIN | `password`, max 6 | Yes | Same as the new PIN | "The PINs don’t match." |
 
-Button "Change PIN" on `confirmPin`: `callApi setDefault` (`mode` stays what it was: `pin` if the default was `pin`; otherwise the default is kept and only the PIN is replaced) → `done`.
+Too-easy PINs: six equal digits, ascending or descending runs, three repeated pairs (121212), and 112233, 123123, 696969, 000111.
 
-**Screen `done` — "PIN changed"** (terminal) Result (success): title "Your quick PIN was changed", text "Use the new PIN next time you sign in on this device.". Button "Done" → Settings › Security.
+**Result** ("PIN changed", green, text "Use your new PIN next time."). Row "Device" (the device name). Buttons **Back to security**, **Done**. A note "Your quick PIN was changed" is added to the notification list.
 
-**Terminal screen `locked`.** Error "Your profile is locked", text "Too many wrong PINs. You're signed out, and sign in is blocked for 30 minutes.", button "Unlock account" → `unlock-account`.
-
-States: **Loading** – spinner on buttons. **Timeout / unavailable** – standard messages; the old PIN stays.
+**States**
+- Loading: busy text on the `cur` button.
+- Empty: the `none` screen above.
+- Error: the Service down switch shows the standard connection sheet ("We couldn’t reach the bank", "Nothing was sent and you haven’t been charged. Try again in a moment."); otherwise "This isn’t available right now. Nothing was changed. Try again in a few minutes." with **Try again**.
+- Timeout: "This is taking longer than expected. Nothing was changed."
+- Locked: as above.
 
 #### 4. Sandbox errors
 
-| Code | Message | Screen | Button |
+| Code | Message | Shows on | Button |
 |---|---|---|---|
-| `STEP_UP_REQUIRED` | "For your security, confirm it's you first." | step-up dialog | Confirm |
-| `INVALID_PIN` (`attemptsLeft`) | "That PIN is not right. {n} tries left." | `currentPin` | Try again |
-| `LOCKED` | `locked` text | `locked` | Unlock account |
-| `PIN_INVALID` | "A PIN is six digits." | PIN screens | Edit |
-| `PIN_TOO_SIMPLE` (planned) | "That PIN is too easy to guess. Avoid repeated or running numbers like 111111 or 123456." | `newPin` | Edit |
-| `PIN_SAME_AS_CURRENT` (planned) | "Choose a PIN different from your current one." | `newPin` | Edit |
-| `PIN_NOT_SET` (planned) | "You haven't set a quick PIN yet." | `currentPin` | Set up (→ `setup-quick-login`) |
-| `TIMEOUT` | "This is taking longer than expected. Nothing was changed." | the calling screen | Try again |
-| `SERVICE_UNAVAILABLE` | Standard S-`SERVICE_UNAVAILABLE` | the calling screen | Try again |
-| `SESSION_EXPIRED` | Standard S-`SESSION_EXPIRED` | Landing | Sign in |
-
-The mismatch message is local to the journey.
+| `PIN_WRONG` | "That PIN isn’t right." | `cur` | Try again |
+| `PIN_LOCKED` | "Too many wrong PINs. Quick sign-in is off. Set it up again." | `cur` | Set up again |
+| `TIMEOUT` | "This is taking longer than expected. Nothing was changed." | `cur` | Try again |
+| `SERVICE_UNAVAILABLE` | "This isn’t available right now. Nothing was changed. Try again in a few minutes." | `cur` | Try again |
+| `JOURNEY_DISABLED` | "This isn’t available at your bank." | whole journey | none |
+| `PERMISSION_DENIED` (planned) | Standard message | whole journey | Back |
 
 #### 5. Adapters
 
-| Integration id | Adapter | Request | Response | Error codes | Status | moneyMoving | requiresOtp |
-|---|---|---|---|---|---|---|---|
-| `verifyPin` | `bank.device.verifyPin` (CAB: `cab.device.verifyPin`) | `{ pin }` | `{ ok: true, … }` (the sign-in data is ignored here) or `{ ok: false, code: "INVALID_PIN", attemptsLeft }` | `PIN_NOT_SET`, `LOCKED`, `TIMEOUT`, `SERVICE_UNAVAILABLE` | Planned | No | No |
-| `setDefault` | `bank.device.setDefault` (CAB: `cab.device.setDefault`) | `{ mode: "pin", pin }` | `{ ok: true, default }` | `PIN_INVALID`, `PIN_TOO_SIMPLE`, `PIN_SAME_AS_CURRENT`, `STEP_UP_REQUIRED`, `SESSION_EXPIRED` | Planned | No | Via step-up |
+| Integration id | Adapter | Request | Response | Errors | Status |
+|---|---|---|---|---|---|
+| `verifyPin` | `bank.devices.verifyPin` | `{pin}` | `{ok}` | `PIN_WRONG`, `PIN_LOCKED`, `SERVICE_UNAVAILABLE`, `TIMEOUT` | (planned). The CAB twin is `cab.device.verifyPin` (existing in `packages/mock-bank-api/src/cab.ts`) |
+| `changePin` | `bank.devices.changePin` | `{current, new}` | `{changedAt}` | `PIN_WEAK`, `PIN_LOCKED`, `SERVICE_UNAVAILABLE`, `TIMEOUT` | (planned) |
+
+The PIN is stored hashed on the device; the bank never sees it (planned).
 
 #### 6. Permissions, step-up and limits
-Permission `security.manage`. Step-up `stepup`. Limits: six digits; 3 wrong current PINs lock the profile.
+
+`accounts.view`. Step-up: the current PIN; no code. Limits: 3 wrong PINs turn quick sign-in off; a PIN is exactly 6 digits.
 
 #### 7. Result and links out
-Result `done`. Notification: "Your quick PIN was changed on {deviceName}" (in-app). Links: Settings › Security, `setup-quick-login`, `unlock-account`.
+
+Result as above. Notification raised (planned): "Your quick PIN was changed" by text. Links out: More (security), `setup-quick-login`.
 
 #### 8. Acceptance criteria
-- **AC-1.** The journey needs a fresh step-up and the right current PIN before a new one can be entered.
-- **AC-2.** A wrong current PIN shows the tries left; the third wrong PIN locks the profile.
-- **AC-3.** A new PIN must be six digits, not repeated or running, and different from the current one.
-- **AC-4.** Two different new PINs are refused.
-- **AC-5.** A good change saves the new PIN; the old PIN then fails at sign-in and the new one works.
-- **AC-6.** The default sign-in method is not changed by changing the PIN.
-- **AC-7.** "I forgot my PIN" skips the current PIN only after the step-up.
-- **AC-8.** On a timeout or unavailable service the old PIN stays.
+
+- AC-1: With no quick PIN the person sees "No quick PIN yet" and a way to set one up.
+- AC-2: A wrong current PIN shows "That PIN isn’t right." and the tries left; the third turns quick sign-in off and offers to set it up again.
+- AC-3: The new PIN must be 6 digits, differ from the current one, not be a repeat or run, not contain digits of the phone number, and be confirmed.
+- AC-4: After success the new PIN works for quick sign-in and the old one does not.
+- AC-5: When the bank is unavailable or times out the PIN is unchanged.
 
 #### 9. Scenarios
 
-| ID | Covers | Persona | Setup and conditions | Expected |
+Synthetic persona `alex`, device "iPhone 15", quick PIN set.
+
+| # | Covers | Persona / setup | Conditions | Steps and expected result |
 |---|---|---|---|---|
-| T-1 | AC-1 | `alex.morgan` | PIN `482916` set; `now` 6 min after sign-in. | `STEP_UP_REQUIRED` before `currentPin` is accepted. |
-| T-2 | AC-2 | `alex.morgan` | Wrong current PIN once, then twice more. | "2 tries left"; third → `locked`. |
-| T-3 | AC-3 | `alex.morgan` | New `12345`; `111111`; `123456`; `482916`. | `PIN_INVALID`; `PIN_TOO_SIMPLE` ×2; `PIN_SAME_AS_CURRENT`. |
-| T-4 | AC-4 | `alex.morgan` | `735190` then `735191`. | Mismatch alert. |
-| T-5 | AC-5, AC-6 | `alex.morgan` | Default `biometric`, PIN `482916`; change to `735190`. | `done`; `verifyPin 482916` fails; `735190` works; `default` still `biometric`. |
-| T-6 | AC-7 | `alex.morgan` | Choose "I forgot my PIN". | Opens `setup-quick-login` mode `pin`; no current PIN asked. |
-| T-7 | AC-8 | `alex.morgan` | `conditions.timeout: ["bank.device.setDefault"]`. | Timeout message; `482916` still works. |
-| T-8 | AC-8 | `alex.morgan` | `conditions.unavailable: ["bank.device.setDefault"]`. | Unavailable message; `482916` still works. |
+| T-1 | AC-1 | `alex`, no quick PIN | none | "No quick PIN yet" with **Set up quick sign-in**; the step cannot continue. |
+| T-2 | AC-2 | `alex` | none | A wrong PIN: "That PIN isn’t right." and "2 tries left"; a second: "1 try left"; a third: "Too many wrong PINs. Quick sign-in is off. Set it up again." and the card with **Set up again**. |
+| T-3 | AC-3 | `alex` | none | New PIN equal to the current: "Choose a different PIN." 111111: "That PIN is too easy to guess. Avoid repeats and runs like 111111 or 123456." 5 digits: "Use exactly 6 digits." Confirmation different: "The PINs don’t match." |
+| T-4 | AC-3, AC-4 | `alex` | none | Current 837215, new 504719 twice: "PIN changed", row Device "iPhone 15". Quick sign-in with 504719 works; 837215 does not. |
+| T-5 | AC-5 | `alex` | `unavailable: ["bank.devices.verifyPin"]` (prototype: Service down on) | Connection sheet; the PIN is unchanged. |
+| T-6 | AC-5 | `alex` | `timeout: ["bank.devices.verifyPin"]`, `latencyMs: 10000` | After 10 seconds: "This is taking longer than expected. Nothing was changed." |
 
 #### 10. Expected mutation-check survivors
-| Mutant | Why it survives |
-|---|---|
-| `masked: true` removed on the PIN blocks | Display only. |
-| The "forgot my PIN" link removed | Survives if no scenario follows the link; T-6 does, so it should be killed. |
-| Step-up window changed from 300 to 301 seconds | The scenario clock steps by minutes; a one-second change cannot be told apart. |
 
-**Prototype reconciliation (from `sign-in`).** The new-PIN rules match the quick PIN set-up in `sign-in`: 6 digits; not repeated (111111); not a run (123456, 654321); not a repeated pair (121212, 696969); not 112233, 123123 or 000111; not containing the last four digits of the phone ("Don't use digits from your phone number. (PIN_WEAK)"). In the prototype a wrong quick PIN at sign-in answers `QUICK_PIN_INVALID` ("That PIN isn't right.") and does not yet count toward the lock; this file's shared counter of 3 (now 5 for sign-in) is still the intended rule.
+The too-easy PIN list is a short sample; removing one entry survives; expected. The notification is not asserted; expected. Everything else: none expected.
 
 ---
-
-**README changes needed (from this group).**
-1. Section 5.2: add the launch point `More › settings › security › login history row › This wasn't me` → `new-message` `{topic: "security"}`, `messages.send`.
-2. Section 5.1/5.2: add `Landing › sign-in help › Account locked?` → `unlock-account`, none; and `reset-password` ‹ `unlock-account` done screen "Choose a new password too".
-3. Section 5.2: `trusted-devices` is also launched from `sign-in › trustDevice` (device limit), the login-history row detail and the "New sign-in on {device}" notification; `change-password` from the login-history row detail and the new-place notification.
-4. Section 1.6 or 4.3: add the step-up validity (300 s) and the shared failed-attempt counter (3 total across password, PIN and step-up) as platform rules; add error codes `STEP_UP_FAILED`, `LOCKED`, `INVALID_PIN`, `DEVICE_LIMIT`.
-5. Section 2.3: list the new adapters of this group (`bank.auth.*`, `bank.device.*`, `bank.devices.*`, `bank.recover.*`, `bank.account.*`, `bank.password.*`, `bank.captcha.generate`, `bank.session.keepAlive`, `bank.loginHistory.list`, `bank.system.status`).
 
 ## Personal: Home
 
@@ -3260,220 +3092,366 @@ The 24 and 12 month limits survive a mutation if the date picker itself stops at
 
 ### ★ Open another account — `open-another-account`
 
+**Catalog:** slug `open-another-account`, workspace `personal`, category Accounts (Personal: Accounts), core no, can a bank switch it off: yes (a basic entry, kept in the Lean preset). Options: **Offer the savings account** (`offerSavings`, default on); **Offer currency accounts** (`offerCurrency`, default on). Research: `research/open-another-account.md`. Built in `design/bankworkx-r1/src/journeys/60-account-extras.js`.
+
+There is no purpose-of-account question, opening deposit or "fund from" account. The new account always opens empty. Not to be confused with `open-account` (Public, for new customers).
+
 #### 1. Summary
 
 | Field | Value |
 |---|---|
 | Slug | `open-another-account` |
-| Purpose | An existing customer opens a new current, savings or foreign-currency account, with no paperwork (KYC is already done). |
+| Purpose | An existing customer opens a current, savings or currency account in a few steps, with no paperwork (identity checks are already done). |
 | Release / workspace | 1 / Personal |
-| Status | New (planned). Not to be confused with `open-account` (Public, new customers). |
+| Status | Built in the prototype as a form journey (`submit: "Open account"`, `basic: true`, `confirm` with a code). |
 | Channels | Web and mobile |
-| Starting pattern | None. Product, details, review with terms, result. |
-| Who may use it | `accounts.manage` and KYC `verified` |
+| Starting pattern | Choose, name, review with terms, a code, a result |
+| Who may use it | `accounts.manage` |
 
 #### 2. Entry points
 
 | Place › label | Passes in | Permission |
 |---|---|---|
-| Accounts › list › Open another account | none | `accounts.manage` |
-| Home › Accounts row › Open another account | none | `accounts.manage` |
-| Home › Offer › Apply | `{offerId}` (prefills the product) | `accounts.manage` |
+| Accounts › Open another account | none | `accounts.manage` |
+| Accounts › empty state › Open an account | none | `accounts.manage` |
+| Home › Offer › Apply | `{product}` (`current`, `savings` or `currency`; an unknown value is ignored) | `accounts.manage` |
 
 #### 3. Screens
 
-**`product` — "Choose an account"** (entry). Blocks: `stepper` (product, details, review), `select` tiles (`open.productId`), `alert`, `button`. Tiles come from `bank.products.list` (planned): Everyday current (USD, no fee), Savings plus (USD, 3.10% a year, no fee), Travel EUR (EUR, no fee), Home AED (AED, no fee). Each tile shows name, currency, one line, and a fee line.
+**Screen 1 `product`: Choose an account.** Choice cards, one per product the bank offers: "Current account" ("For everyday spending, with a debit card"), "Savings account" ("Earn interest on money you set aside"; hidden when `offerSavings` is off) and "Currency account" ("Hold and spend in another currency"; hidden when `offerCurrency` is off). Current is always offered. If the customer already holds 6 accounts a red notice shows "You already have 6 accounts, the most you can hold. Close one to open another." and **Continue** is blocked with "You already have 6 accounts, the most you can hold."
 
-- Title "Choose an account". Helper "You can have up to 6 accounts."
-- Field: Product, `select` tiles, required, message "Choose an account type."
-- Button **Continue**. Alert (warning) appears when the person already holds 6 accounts: "You already have 6 accounts, the most you can hold. Close one to open another." and Continue is disabled.
-
-**`details` — "Account details"**. Fields:
-
-| Field | Block | Required | Validation | Error message |
+| Field | Type | Required | Validation | Message |
 |---|---|---|---|---|
-| Account name | `textInput` | Yes (prefilled with the product name) | Same rule as `account-nickname` (2 to 24 characters) | "Enter a name of 2 to 24 characters." |
-| Purpose of account | `select` ("Everyday spending", "Saving", "Travel", "Bills", "Other") | Yes | One of the list | "Choose a purpose." |
-| Opening deposit (optional) | `amountInput` in the new account's currency, from a funding account | No | 0 or between 1 and the funding account's available balance; the sandbox moves it with `bank.transfers.own` (planned) | "The smallest deposit is 1." / "There isn't enough money in {account}." |
-| Fund from | `accountPicker` (shown when a deposit is entered) | Yes if deposit | Must be a USD account if the new account is USD, else the deposit is converted; R1 allows same-currency only | "Choose an account in {currency}." |
+| Account | choice cards | yes | one of the offered products | "Choose an account." |
 
-Button **Continue**.
+**Screen 2 `currency`: Which currency?** (only for a currency account). Chips "Euro (EUR)", "Pound (GBP)", "Dirham (AED)".
 
-**`review` — "Review"**. `reviewSummary` rows: Account type, Name, Currency, Interest ("3.10% a year" or "None"), Fee ("$0"), Opening deposit. `consent` (`open.consent`, `termsVersion` "accounts-v1"): "I have read and agree to the account terms" with a link to the terms; message "Tick the box to continue". Button **Open account**.
+| Field | Type | Required | Validation | Message |
+|---|---|---|---|---|
+| Currency | chips | yes | one of the three | "Choose a currency." |
 
-**`success` — "Account opened"** (terminal). `result` success: title "Account opened", text "{name} ••{mask} is ready. Your IBAN is {iban}.", meta "Ref {reference}". Buttons **View account** (Accounts › detail of the new id), **Done**.
+**Screen 3 `name`: Name your account.** Intro "You can change it later."
 
-**`failed`** (terminal). Error result with the message from section 4 and **Try again**.
+| Field | Type | Required | Validation | Message |
+|---|---|---|---|---|
+| Account name | text, up to 24 characters, sample "Holiday fund" | yes | 2 to 24 characters after trimming | "Use 2 to 24 characters." |
+| | | | letters, digits, spaces and . _ ' & - | "Use letters, numbers and spaces only." |
+| | | | not equal (any case) to the name of an account the customer has | "You already have an account with that name." |
 
-Opening an account is not money-moving unless a deposit is added. With a deposit the screen order is review, consent, OTP (standard block P-OTP below), result. Without a deposit no OTP is asked. (Rule: OTP when `deposit > 0`.)
+**Screen 4 `review`: Review.** Button **Continue**. A list: Account (product name, for a currency account "Euro account", "Pound account" or "Dirham account"), Name, and Currency (currency accounts only). A second list titled **Key facts**:
 
-**`otp`** (only with a deposit): standard OTP screen. Title "Enter your code", body "We sent a 6-digit code to {maskedPhone}.", 6 digits, 3 attempts, resend after 30 s, button **Open and deposit {amount}**; after three wrong codes the `locked` screen: "Too many wrong codes" / "You entered the wrong code 3 times, so we stopped. No money has left your account." with **Start again** and **Close**.
+| Product | Interest rate | Monthly fee | Minimum balance |
+|---|---|---|---|
+| Current account | None | None | None |
+| Savings account | 3.10% a year, variable | None | $1.00 |
+| Currency account | None | None | None |
+
+| Field | Type | Required | Validation | Message |
+|---|---|---|---|---|
+| I agree to the account terms. | checkbox | yes | ticked | "Please agree to continue." |
+
+**Screen 5 `confirm`: Open {name}.** The standard code sheet: "Code sent to ••• 0142." (6 digits). Wrong code: "That code isn’t right. Try again." The button is **Open account**.
+
+**Result** (green). Title "Account opened", text "It’s ready to use.", status chip "Active". Rows: Account (the name), Type, Currency (the chosen currency or USD), Account number (••{last4}), Opened ("3 Nov 2026"). Button **Go to accounts** (Accounts tab). The new account appears in the account list at once with a zero balance.
+
+**States**
+- Loading: the button shows a spinner while the code is checked.
+- Empty: not applicable.
+- Error: unavailable shows "This isn’t available right now. Nothing was changed. Try again in a few minutes."; timeout shows "This is taking longer than expected. Nothing was changed." Both with **Try again**.
+- Stale: if the customer reaches 6 accounts or takes the name in the meantime, the commit fails with the message of that code and the person goes back.
+
+**Home market configuration:** none. The product list, the key facts and the account number length are the same in every market. (The account number is a bank-internal number, not a routing or IBAN value.)
 
 #### 4. Sandbox errors
 
+Codes are for tests and the sandbox; the customer sees only the message.
+
 | Code | Message | Shows on | Button |
 |---|---|---|---|
-| `PRODUCT_NOT_FOUND` (planned) | "That account type isn't available. Choose another." | `failed` | Choose account |
-| `ACCOUNT_LIMIT_REACHED` (planned) | "You already have 6 accounts, the most you can hold. Close one to open another." | `product` | Back |
-| `NAME_INVALID` / `NAME_EXISTS` (planned) | as in `account-nickname` | `details` | Edit |
-| `INVALID_AMOUNT` | "The smallest deposit is 1." | `details` | Change amount |
-| `INSUFFICIENT_FUNDS` | "There isn't enough money in {account}. Available: {balance}. No money has left your account." | `failed` | Change amount |
-| `ACCOUNT_NOT_FOUND` | "We can't find that account. Choose another." | `details` | Choose account |
-| `OTP_INVALID` / `OTP_REQUIRED` | Standard S-`OTP_INVALID` / S-`OTP_REQUIRED` | `otp` | Try again / Back to code |
-| `CORE_UNAVAILABLE` | "We couldn't complete this right now. No money has left your account." | `failed` | Try again |
-| `NOT_SUPPORTED` | "This isn't available for your profile." (KYC not verified) | `failed` | Back |
-| `TIMEOUT` (planned) | "This is taking longer than expected. Nothing was changed." (no deposit); "We didn't get an answer in time. Check Activity before you try again, so you don't pay twice." (with deposit) | `failed` | Try again / Check Activity |
-| `SERVICE_UNAVAILABLE` (planned) | Standard message | `failed` | Try again |
+| `ACCOUNT_LIMIT` | "You already have 6 accounts, the most you can hold." | product, commit | Back |
+| `NAME_TAKEN` | "You already have an account with that name." | name, commit | Change name |
+| `PRODUCT_UNAVAILABLE` | "This account isn’t available right now." | product | Choose another |
+| `OTP_INVALID` | "That code isn’t right. Try again." | code | Try again |
+| `TIMEOUT` | "This is taking longer than expected. Nothing was changed." | the step | Try again |
+| `SERVICE_UNAVAILABLE` | "This isn’t available right now. Nothing was changed. Try again in a few minutes." | the step | Try again |
+| `JOURNEY_DISABLED` | "This isn’t available at your bank." | whole journey | none |
+| `PERMISSION_DENIED` (planned) | Standard message | whole journey | Back |
 
 #### 5. Adapters
 
 | Integration id | Adapter | Request | Response | Errors | Status |
 |---|---|---|---|---|---|
-| `accounts` | `bank.accounts.list` | none | accounts | none | Existing |
-| `products` | `bank.products.list` | `{kind: "account"}` | map of `{id, name, currency, rate, fee, text}` | none | (planned) |
-| `open` | `bank.accounts.open` | `{productId, name, purpose, openingDeposit?, fromAccountId?}` | `{accountId, maskedNumber, iban, currency, reference}` | `PRODUCT_NOT_FOUND`, `ACCOUNT_LIMIT_REACHED`, `NAME_INVALID`, `NAME_EXISTS`, `INVALID_AMOUNT`, `INSUFFICIENT_FUNDS`, `ACCOUNT_NOT_FOUND`, `OTP_REQUIRED`, `CORE_UNAVAILABLE`, `NOT_SUPPORTED`, `TIMEOUT`, `SERVICE_UNAVAILABLE` | (planned). `moneyMoving: true` only when a deposit is given; `requiresOtp: true` only then |
-| `otpSend` / `otpVerify` | `bank.otp.send` / `bank.otp.verify` | `{channel}` / `{code}` | `{sent, maskedPhone}` / `{verified}` | `OTP_INVALID` (with `attempt`) | Existing |
-
-A new EUR or AED account also needs a daily limit for its currency: `limitsByCurrency` for `alex` gets EUR 20,000 and AED 100,000 (planned seed). Without it `bank.limits.get` answers `LIMIT_NOT_SET` today.
+| `accounts` | `bank.accounts.list` | none | map of accounts | none | Existing (`packages/mock-bank-api/src/index.ts`) |
+| `products` | `bank.products.list` | none | the offered products with key facts | none | (planned). The prototype holds the table above |
+| `openAccount` | `bank.accounts.open` | `{product, currency?, name}` | `{accountId, accountNumber, openedOn}` | `ACCOUNT_LIMIT`, `NAME_TAKEN`, `PRODUCT_UNAVAILABLE` | (planned). The prototype adds the account to its own data |
+| `sendOtp` / `verifyOtp` | `bank.otp.send` / `bank.otp.verify` | `{channel}` / `{code}` | `{sent}` / `{verified}` | `OTP_INVALID` | Existing |
 
 #### 6. Permissions, step-up and limits
 
-`accounts.manage`. Step-up `none` without a deposit; `otp` with one. Maximum 6 accounts. Deposit counts against the daily limit of the funding account's currency.
+`accounts.manage`. Step-up: one-time code (6 digits, 3 tries) before the account is opened. Limit: at most 6 accounts. A name is unique per customer, ignoring case.
 
 #### 7. Result and links out
 
-Result as above. Receipt (planned engine receipts): account type, name, IBAN, opening date, deposit if any, reference. Notifications: "Your new account {name} is open" (in-app). Buttons: **View account**, **Done**.
+Result as above. Notifications raised (planned): "Your new account {name} is open". The account is written to the account audit log. Links out: Accounts (the list), `account-details` for the new account.
 
 #### 8. Acceptance criteria
 
-- AC-1: Without a deposit the person opens an account after accepting the terms and without a code; the account appears in the list with a valid IBAN.
-- AC-2: The terms box must be ticked; otherwise "Tick the box to continue".
-- AC-3: With a deposit the person must verify a one-time code before any money moves; the deposit leaves the funding account and arrives in the new one.
-- AC-4: A person with 6 accounts cannot continue and sees the exact message.
-- AC-5: A deposit larger than the funding balance is refused and no account is opened.
-- AC-6: Three wrong codes stop the journey with "Too many wrong codes" and nothing changes.
-- AC-7: Unavailable and timeout leave the account list unchanged.
+- AC-1: A current account can always be chosen; the savings and currency accounts appear only when their options are on.
+- AC-2: A currency account asks for a currency; the other products skip that step.
+- AC-3: The name must be 2 to 24 allowed characters and not already used, with the messages above.
+- AC-4: Review shows the account, the name and the key facts for the chosen product, and cannot continue until the terms are ticked.
+- AC-5: A wrong code opens nothing; the right code opens the account with a zero balance and shows "Account opened".
+- AC-6: With 6 accounts the person cannot continue and sees the limit message.
+- AC-7: The new account shows in the account list and keeps its name and currency.
+- AC-8: When the bank is unavailable or times out nothing is opened.
 
 #### 9. Scenarios
 
+Synthetic persona `alex` with three accounts (Current ••4410, Savings ••7720, Euro account ••3302). The sandbox code is the fixed test code.
+
 | # | Covers | Persona / setup | Conditions | Steps and expected result |
 |---|---|---|---|---|
-| T-1 | AC-1, AC-2 | `alex` | none | Choose Savings plus, name "Rainy day", no deposit, tick terms, Open account. Result with IBAN; `bank.accounts.list` has 5 accounts (planned seed has 4). Without ticking: "Tick the box to continue". |
-| T-2 | AC-3 | `alex` | none | Deposit $500.00 from Main; enter `482100`. Main 8,720.76 becomes 8,220.76; new account 500.00. |
-| T-3 | AC-4 | `alex`, setup: 6 accounts | none | Continue is disabled with the 6-account message. |
-| T-4 | AC-5 | `alex` | none | Deposit $9,000.00 from Main. `INSUFFICIENT_FUNDS` message; account count unchanged. |
-| T-5 | AC-6 | `alex` | none | With a deposit, enter `111111` three times. "Too many wrong codes"; balances unchanged. |
-| T-6 | AC-7 | `alex` | `timeout: ["bank.accounts.open"]` | With a deposit: "We didn't get an answer in time. Check Activity before you try again, so you don't pay twice." |
-| T-7 | AC-7 | `alex` | `unavailable: ["bank.accounts.open"]` | Standard unavailable message; nothing opened. |
+| T-1 | AC-1, AC-4, AC-5, AC-7 | `alex` | none | Choose Savings account, name "Holiday fund", agree, code; result "Account opened", rows as above; the list has four accounts. |
+| T-2 | AC-1 | `alex`, `offerSavings` and `offerCurrency` off | none | Only "Current account" is offered. |
+| T-3 | AC-2 | `alex` | none | Currency account shows "Which currency?"; no choice: "Choose a currency."; Pound gives "Pound account". |
+| T-4 | AC-3 | `alex` | none | "A": "Use 2 to 24 characters." "Holiday #1": "Use letters, numbers and spaces only." "savings": "You already have an account with that name." |
+| T-5 | AC-4 | `alex` | none | On review, Continue without the tick: "Please agree to continue." Savings shows "3.10% a year, variable" and minimum "$1.00". |
+| T-6 | AC-5 | `alex` | none | Wrong code: "That code isn’t right. Try again." and no account is added. |
+| T-7 | AC-6 | `alex` with six accounts | none | The red notice shows and Continue is blocked. |
+| T-8 | AC-8 | `alex` | `unavailable: ["bank.accounts.open"]` (prototype: Service down on) | The connection sheet shows; no account is added. |
+| T-9 | AC-8 | `alex` | `timeout: ["bank.accounts.open"]`, `latencyMs: 10000` | After 10 seconds "This is taking longer than expected. Nothing was changed." No account is added. |
 
 #### 10. Expected mutation-check survivors
 
-The 6-account cap is also checked in the UI (disabled button), so removing only the sandbox rule survives T-3; expected, the UI layer stops it.
+The name-taken rule survives if the sandbox also checks it at commit; expected. The 6-account limit survives if the product step is mutated but the commit still refuses; expected. The audit log entry is not asserted; expected. Everything else: none expected.
 
 ---
 
 ### ★ Create a budget — `create-budget`
+
+**Catalog:** slug `create-budget`, workspace `personal`, category Accounts (Personal: Accounts), core no, can a bank switch it off: yes (a basic entry, kept in the Lean preset). Options: **Offer the 80% alert** (`alertAt80`, default on); **Offer the 100% alert** (`alertAt100`, default on). Research: `research/create-budget.md`. Built in `design/bankworkx-r1/src/journeys/60-account-extras.js`, together with the view `budgets`.
+
+One journey creates, edits and deletes a budget. A budget moves no money and blocks nothing, so it never asks for a code. There is no calendar month, rollover or shared budget; spending is counted over the last 30 days.
 
 #### 1. Summary
 
 | Field | Value |
 |---|---|
 | Slug | `create-budget` |
-| Purpose | Set a monthly (or weekly) spending limit for one category and get an alert as it fills. |
+| Purpose | Set a monthly amount for a spending category and get alerts at 80% and 100%. Edit or delete it later. |
 | Release / workspace | 1 / Personal |
-| Status | Existing, upgraded (`packages/journey-schema/src/fixtures/bankworkx.ts`, `createBudget`, id `jrn_create_budget`). |
-| Channels | Mobile today (`channels: ["mobile"]`, `apps: ["bankworkx"]`); web added. |
-| Starting pattern | The fixture itself. |
+| Status | Built in the prototype as a form journey (`submit: "Create budget"`, `basic: true`). Test parameter `{category: "Health"}`. |
+| Channels | Web and mobile |
+| Starting pattern | Category, amount, alerts, result (delete: one confirm screen) |
 | Who may use it | `accounts.manage` |
-
-**What exists today.** Two working screens. `setup`: a `stepper` (setup, review); a `select` of tiles `budget.category` (Food & Drinks, Shopping, Transport, Health, Travel, Bills, each with an icon); an `amountInput` `budget.limit` in USD labelled "Monthly limit" (helper "Choose an amount from $10 to $100,000", quick amounts 100, 250, 500, 1000, `min 10`, `max 100000`, messages "A budget must be at least $10" and "A budget can be at most $100,000"); a `toggle` `budget.alert` "Alert me at 80%" (helper "We'll tell you when you're close to the limit"). `review`: a `reviewSummary` (Category, Monthly limit, Resets "Every month") and **Create budget**, which calls `createBudget` (`bank.budgets.create` with `{category, limit}`). Then `success` ("Budget created", "{category}: ${limit} a month. You'll see it on your dashboard.") and `failed` ("We couldn't create this budget", "You may already have a budget for this category. Try a different one.", **Try again**). Faults found in the code: the alert toggle is never sent to the adapter; the sandbox saves every new budget with `category: "shopping"` whatever was chosen; every failure shows one message whatever the cause.
-
-**The upgrade.** Send the alert and the period; save the real category; show the specific message for each error code; accept `{category}` from Spending analysis and Transaction detail; add a period choice. No consent and no OTP: a budget moves no money (stated on purpose).
 
 #### 2. Entry points
 
 | Place › label | Passes in | Permission |
 |---|---|---|
-| Accounts › budgets › New budget | `{category}` optional | `accounts.manage` |
-| Accounts › spending analysis › Set a budget | `{category}` | `accounts.manage` |
-| Accounts › transaction detail › Create a budget for {category} | `{category}` | `accounts.manage` |
-| Home › Insights › Budgets tile (when none exists) | none | `accounts.manage` |
+| Accounts › Budgets › New budget, or the empty state button "Create a budget" | none | `accounts.manage` |
+| Accounts › Budgets › a card › Edit | `{budgetId}` | `accounts.manage` |
+| Accounts › Budgets › a card › Delete | `{budgetId, mode: "delete"}` | `accounts.manage` |
+| Transaction › Create a budget for {category} | `{category}` (skips the category step when that category has no budget yet) | `accounts.manage` |
+
+An unknown `budgetId` is treated as a new budget. A `category` that already has a budget is ignored and the category step shows.
 
 #### 3. Screens
 
-**`setup` — "New budget"** (entry; existing, upgraded). `stepper` ["setup", "review"].
+**Screen 1 `cat`: Choose a category** (new budgets only, skipped when `category` is passed). Choice cards for Food, Shopping, Transport, Health, Travel, Bills, Entertainment and Subscriptions. A category that already has a budget shows "Budget set" and cannot be chosen.
 
-| Field | Block | Required | Validation | Error message |
+| Field | Type | Required | Validation | Message |
 |---|---|---|---|---|
-| Category | `select` tiles, label "What are you budgeting for?", choices Food & Drinks, Shopping, Transport, Health, Travel, Bills (prefilled from `{category}`) | Yes | One of the six; not an existing budget | "Choose a category." / "You already have a {name} budget" |
-| Monthly limit | `amountInput` USD, helper "Choose an amount from $10 to $100,000", quick amounts 100, 250, 500, 1000 | Yes | 10 to 100,000, two decimals | "A budget must be at least $10" / "A budget can be at most $100,000" |
-| Period (new) | `select` chips: Monthly (default), Weekly | Yes | One of two | "Choose how often it resets." |
-| Alert me at 80% | `toggle`, helper "We'll tell you when you're close to the limit" | No (default on) | none | none |
+| Category | choice cards | yes | one without a budget | "Choose a category." |
 
-Button **Continue** (validate, then `review`). A tile for a category the person already budgets shows "Already set" and is not selectable (the list comes from `bank.budgets.list`, loaded `onEnter`).
+**Screen 2 `amt`: Monthly amount** (not for delete). A card shows the category and "Spent in the last 30 days: $x".
 
-**`review` — "Review budget"** (existing, upgraded). `reviewSummary` rows: Category, Limit ("${limit} a month" or "a week"), Resets ("Every month" or "Every Monday"), Alert ("At 80%" or "Off"). Button **Create budget** (calls `createBudget` with `{category, limit, period, alert}`; `onError` navigates to `failed`; success to `success`). Link **Edit** (back to `setup`).
+| Field | Type | Required | Validation | Message |
+|---|---|---|---|---|
+| Amount per month | amount in dollars, placeholder "0.00" | yes | at least $10 | "The smallest budget is $10.00." |
+| | | | at most $100,000 | "The most is $100,000.00." |
 
-**`success` — "Budget created"** (terminal; existing text kept). Text "{category}: ${limit} a month. You'll see it on your dashboard." Buttons **View budgets** (Accounts › budgets), **Done**.
+**Screen 3 `alerts`: Alerts** (not for delete). Button **Create budget**, or **Save budget** when editing.
 
-**`failed` — "Budget not created"** (terminal; upgraded). `result` error whose text is chosen by code (section 4). Button **Try again** (back to `setup`) and **Close**.
+| Field | Type | Required | Validation | Message |
+|---|---|---|---|---|
+| Alert me at 80% | switch, "When you’ve used most of it" (shown when `alertAt80` is on; default on) | no | none | none |
+| Alert me at 100% | switch, "When you reach the limit" (shown when `alertAt100` is on; default on) | no | none | none |
 
-States: Loading — `setup` shows skeleton tiles until the budget list loads; Create budget has a spinner. Empty — not applicable. Error — as above.
+**Screen 4 `del`: Delete this budget?** (delete mode only). Rows Category and Amount per month. Button **Delete budget**.
+
+**Result** (green). New: title "Budget created", text "{category}: $x a month."; edit: "Budget saved"; delete: "Budget deleted", text "{category} is no longer tracked." Rows (create and edit): Category, Amount per month, Alert at 80% (On or Off), Alert at 100% (On or Off). Button **See budgets** (the `budgets` view).
+
+**States**
+- Loading: the button shows a spinner while saving.
+- Empty: not applicable.
+- Error: unavailable shows "This isn’t available right now. Nothing was changed. Try again in a few minutes."; timeout shows "This is taking longer than expected. Nothing was changed." Both with **Try again**.
+- Stale: a budget deleted elsewhere: "We can’t find that budget."
+
+**Home market configuration:** none. Amounts are in the home currency, shown here as dollars.
 
 #### 4. Sandbox errors
 
 | Code | Message | Shows on | Button |
 |---|---|---|---|
-| `INVALID_AMOUNT` | "A budget must be between $10 and $100,000" | `setup` (on the limit) | Change amount |
-| `CATEGORY_REQUIRED` | "Choose a category" | `setup` | Choose category |
-| `BUDGET_EXISTS` | "You already have a {name} budget" | `failed` with text "You already have a {name} budget. Choose a different category." | Try again |
-| `NOT_SUPPORTED` | "This isn't available for your profile." | `failed` | Back |
-| `TIMEOUT` (planned) | "This is taking longer than expected. Nothing was changed." | `failed` | Try again |
-| `SERVICE_UNAVAILABLE` (planned) | Standard message | `failed` | Try again |
-
-The wording of the first three is the sandbox's own (`index.ts`, `bank.budgets.create`).
+| `BUDGET_EXISTS` | "You already have a budget for this category." | category, commit | Choose category |
+| `BUDGET_NOT_FOUND` | "We can’t find that budget." | edit, delete | See budgets |
+| `TIMEOUT` | "This is taking longer than expected. Nothing was changed." | the step | Try again |
+| `SERVICE_UNAVAILABLE` | "This isn’t available right now. Nothing was changed. Try again in a few minutes." | the step | Try again |
+| `JOURNEY_DISABLED` | "This isn’t available at your bank." | whole journey | none |
+| `PERMISSION_DENIED` (planned) | Standard message | whole journey | Back |
 
 #### 5. Adapters
 
 | Integration id | Adapter | Request | Response | Errors | Status |
 |---|---|---|---|---|---|
-| `budgets` | `bank.budgets.list` | none | map of `{id, name, category, limit, spent}` | none | Existing |
-| `createBudget` | `bank.budgets.create` | Today `{category, limit}`; upgraded `{category, limit, period, alert}` | `{budgetId, name, limit}` (upgraded adds `period`, `alert`, `category` stored as chosen, not always "shopping") | `INVALID_AMOUNT`, `CATEGORY_REQUIRED`, `BUDGET_EXISTS`, `NOT_SUPPORTED`, `TIMEOUT`, `SERVICE_UNAVAILABLE` | Existing, upgraded. `moneyMoving: false`, `requiresOtp: false` |
+| `budgets` | `bank.budgets.list` | none | map of budgets | none | Existing (`packages/mock-bank-api/src/index.ts`) |
+| `createBudget` | `bank.budgets.create` | `{category, limit}` | `{budgetId, name, limit}` | `INVALID_AMOUNT`, `CATEGORY_REQUIRED`, `BUDGET_EXISTS` | Existing (limit from 10 to 100,000) |
+| `updateBudget` | `bank.budgets.update` | `{budgetId, limit, alert80, alert100}` | `{budgetId}` | `BUDGET_NOT_FOUND` | (planned). The prototype keeps budgets on its own data |
+| `deleteBudget` | `bank.budgets.delete` | `{budgetId}` | `{budgetId}` | `BUDGET_NOT_FOUND` | (planned) |
+| `spending` | `bank.spending.byCategory` | `{days: 30}` | amounts per category | none | (planned). The prototype adds current account activity and journey payments |
 
 #### 6. Permissions, step-up and limits
 
-`accounts.manage`; step-up `none`. Limits: $10 to $100,000 per budget. At most one budget per category.
+`accounts.manage` to change, `accounts.view` to see the list. Step-up: none, no money moves. Limits: one budget per category, $10.00 to $100,000.00 a month.
 
 #### 7. Result and links out
 
-Result as above; no receipt. Notification when spent reaches 80% (if Alert is on) and 100%: "{Category} budget is {pct}% used" (the existing `notifications` wording). Buttons: **View budgets** (shell), **Done** (origin).
+Result as above. Notifications raised (planned): "You have used 80% of your {category} budget" and "You have reached your {category} budget", only for the alerts that are on. Links out: `budgets`.
 
 #### 8. Acceptance criteria
 
-- AC-1: A new budget with a valid category and limit appears in the budgets list with spent $0.00.
-- AC-2: A limit under $10 or over $100,000 is refused with the exact message.
-- AC-3: A second budget for the same category is refused with "You already have a {name} budget".
-- AC-4: The category the person chose is the category saved (not "shopping").
-- AC-5: The alert choice and the period are saved with the budget.
-- AC-6: The journey never asks for a code or consent and never changes an account balance.
-- AC-7: A timeout or an unavailable service creates no budget.
+- AC-1: A budget needs a category without a budget and an amount from $10.00 to $100,000.00, with the messages above.
+- AC-2: With `category` passed (and free) the category step is skipped.
+- AC-3: The alert switches appear only for the options that are on, both on by default.
+- AC-4: Creating saves one budget and shows "Budget created"; a second budget for the same category is refused.
+- AC-5: Edit changes the amount and the alerts and shows "Budget saved"; the category cannot be changed.
+- AC-6: Delete asks once, removes the budget and shows "Budget deleted"; the category can be budgeted again.
+- AC-7: No code is asked at any point.
+- AC-8: When the bank is unavailable or times out nothing is changed.
 
 #### 9. Scenarios
 
+Synthetic persona `alex` with three budgets: Food $300, Subscriptions $40, Entertainment $25.
+
 | # | Covers | Persona / setup | Conditions | Steps and expected result |
 |---|---|---|---|---|
-| T-1 | AC-1, AC-4, AC-5, AC-6 | `alex` | none | Transport, $250, monthly, alert on. Budgets list now has 4; the new one has category transport, spent 0, alert on; balances unchanged. |
-| T-2 | AC-2 | `alex` | none | $5 and $150,000 give the two messages; no call. |
-| T-3 | AC-3 | `alex` | none | Food & Drinks, $500: `BUDGET_EXISTS`; text "You already have a Food & Drinks budget". |
-| T-4 | AC-1 | `alex` | none | Open with `{category: "Health"}`: the Health tile is preselected. |
-| T-5 | AC-7 | `alex` | `timeout: ["bank.budgets.create"]` | Failed screen with timeout copy; list still 3. |
-| T-6 | AC-7 | `alex` | `unavailable: ["bank.budgets.create"]` | Failed screen with the standard message; list still 3. |
+| T-1 | AC-1, AC-2, AC-4 | `alex`, `category: "Health"` | none | The category step is skipped; amount 5: "The smallest budget is $10.00."; 150 creates "Budget created", "Health: $150.00 a month." |
+| T-2 | AC-1 | `alex` | none | In the category step Food is marked "Budget set" and cannot be chosen. Amount 200000: "The most is $100,000.00." |
+| T-3 | AC-3 | `alex`, `alertAt100` off | none | Only "Alert me at 80%" is shown. |
+| T-4 | AC-5 | `alex`, `budgetId` of Food | none | Amount prefilled 300; change to 350; button **Save budget**; result "Budget saved". |
+| T-5 | AC-6 | `alex`, Food with `mode: "delete"` | none | Rows Category and Amount; **Delete budget**; "Budget deleted"; Food can be chosen again. |
+| T-6 | AC-4 | `alex`, create Food through a stale form | none | `BUDGET_EXISTS`: "You already have a budget for this category." |
+| T-7 | AC-7 | `alex` | none | No code screen appears in create, edit or delete. |
+| T-8 | AC-8 | `alex` | `unavailable: ["bank.budgets.create"]` (prototype: Service down on) | The connection sheet shows; no budget is added. |
+| T-9 | AC-8 | `alex` | `timeout: ["bank.budgets.create"]`, `latencyMs: 10000` | After 10 seconds "This is taking longer than expected. Nothing was changed." No budget is added. |
 
 #### 10. Expected mutation-check survivors
 
-None expected. (`requiresOtp: false` is deliberate; there is no OTP rule to mutate.)
+The amount ceiling survives if the adapter also enforces it; expected. "Category already has a budget" survives if the category card is disabled and the commit also refuses; expected. Notifications are not asserted; expected. Everything else: none expected.
 
 ---
+
+### ★ Budgets — `budgets`
+
+**Catalog:** slug `budgets`, workspace `personal`, category Accounts (Personal: Accounts), core no, can a bank switch it off: yes (a view in the Accounts tab). Options: none of its own. Research: `research/create-budget.md`. Built in `design/bankworkx-r1/src/journeys/60-account-extras.js` (a view: `view: true`, `tab: "acc"`).
+
+This is a **view** (a screen in a tab), not a flow. It lists the budgets and sends the person to `create-budget` for every change.
+
+#### 1. Summary
+
+| Field | Value |
+|---|---|
+| Slug | `budgets` |
+| Purpose | Show every monthly budget with progress and a way to add, edit or delete one. |
+| Release / workspace | 1 / Personal |
+| Status | Built in the prototype as a view (`perm: "accounts.view"`). |
+| Channels | Web and mobile |
+| Route | Accounts tab › Budgets (web and mobile) |
+| Data source | The budget list and the last 30 days of spending per category |
+
+#### 2. Entry points
+
+| Place › label | Passes in | Permission |
+|---|---|---|
+| Accounts › Budgets | none | `accounts.view` |
+| `create-budget` result › See budgets | none | `accounts.view` |
+
+#### 3. The screen
+
+Title "Budgets". One card per budget, in the order created:
+
+| Part | Content |
+|---|---|
+| Name | The category, in bold |
+| Detail | "$spent of $amount · last 30 days" |
+| Status chip | "On track" (green) below 80%; "Close to limit" (amber) from 80% to below 100%; "Over budget" (red) from 100% |
+| Progress bar | Width is the share used, capped at 100%; colour follows the chip; named "{category} budget" for screen readers |
+| Buttons | **Edit** (`create-budget` with `{budgetId}`) and **Delete** (`create-budget` with `{budgetId, mode: "delete"}`) |
+
+Under the cards a **New budget** button (`create-budget`), shown while at least one budget exists and fewer than 8 categories are budgeted.
+
+Spending counted: money out of the current account in the last 30 days in that category, plus payments made through journeys. A budget with no spending shows an empty bar and "On track". There is no filter or sort; the order is the order created.
+
+**States**
+- Loading (planned): a skeleton card per budget.
+- Empty: "No budgets yet" with "Set a monthly amount for a category and we’ll tell you as you get close." and the button **Create a budget**.
+- Error (the prototype’s Service down switch): "We couldn’t load your budgets" with "Nothing was changed. Try again in a moment."
+- Drill-downs: Edit, Delete and New budget open `create-budget`; the result of that journey returns here.
+
+**Home market configuration:** none.
+
+#### 4. Sandbox errors
+
+| Code | Message | Shows on | Button |
+|---|---|---|---|
+| `SERVICE_UNAVAILABLE` | "We couldn’t load your budgets. Nothing was changed." | the view | Try again |
+| `TIMEOUT` (planned) | "This is taking longer than expected. Nothing was changed." | the view | Try again |
+
+#### 5. Adapters
+
+| Integration id | Adapter | Request | Response | Errors | Status |
+|---|---|---|---|---|---|
+| `budgets` | `bank.budgets.list` | none | map of budgets | none | Existing (`packages/mock-bank-api/src/index.ts`) |
+| `spending` | `bank.spending.byCategory` | `{days: 30}` | amounts per category | none | (planned) |
+
+#### 6. Permissions, step-up and limits
+
+`accounts.view` to see the view; Edit, Delete and New budget need `accounts.manage` (see `create-budget`). No step-up.
+
+#### 7. Result and links out
+
+No result screen. Links out: `create-budget`.
+
+#### 8. Acceptance criteria
+
+- AC-1: Each budget shows the category, spent of amount for the last 30 days, a bar and a chip.
+- AC-2: The chip is "On track" below 80%, "Close to limit" from 80% and "Over budget" from 100%, and the bar never shows more than 100%.
+- AC-3: With no budgets the empty state shows with one button **Create a budget**.
+- AC-4: Edit and Delete open `create-budget` for that budget; New budget opens it for a new one.
+- AC-5: **New budget** is hidden when all 8 categories have a budget.
+- AC-6: When the bank is unavailable the error state shows and nothing is changed.
+
+#### 9. Scenarios
+
+Synthetic persona `alex` with budgets Food $300, Subscriptions $40, Entertainment $25.
+
+| # | Covers | Persona / setup | Conditions | Steps and expected result |
+|---|---|---|---|---|
+| T-1 | AC-1, AC-2 | `alex` | none | Three cards; the chips follow the spending (Close to limit once spent reaches 80% of the amount, for example $32.00 of $40.00). |
+| T-2 | AC-2 | `alex`, Food $300 with $320 spent | none | Chip "Over budget", bar full and red. |
+| T-3 | AC-3 | `alex`, all budgets deleted | none | "No budgets yet" and **Create a budget**. |
+| T-4 | AC-4 | `alex` | none | Edit opens the amount step with the current value; Delete opens "Delete this budget?". |
+| T-5 | AC-5 | `alex`, budgets in all 8 categories | none | No **New budget** button. |
+| T-6 | AC-6 | `alex` | `unavailable: ["bank.budgets.list"]` (prototype: Service down on) | "We couldn’t load your budgets". |
+| T-7 | AC-6 | `alex` | `timeout: ["bank.budgets.list"]`, `latencyMs: 10000` | After 10 seconds "This is taking longer than expected. Nothing was changed." with **Try again**. |
+
+#### 10. Expected mutation-check survivors
+
+The chip thresholds survive when the amounts in the scenarios sit well away from 80% and 100%; add edge amounts to kill them. The bar cap at 100% survives if only the chip is asserted; expected. Everything else: none expected.
+
+---
+
 ## Personal: Payments
 
 ### Rules and building blocks shared by every journey in this group
@@ -4487,122 +4465,148 @@ The sample references, the late-fee percentage and the 1.8 card maximum survive 
 ---
 ### ★ Mobile top-up — `mobile-topup`
 
+**Catalog:** slug `mobile-topup`, workspace `personal`, category Payments (Personal: Payments), core no, can a bank switch it off: yes (a basic entry, kept in the Lean preset). Options: **Let people save numbers** (`saveNumbers`, default on). Research: `research/mobile-topup.md`. Built in `design/bankworkx-r1/src/journeys/61-topup-card-extras.js`.
+
+There is no bundle or data-plan choice and no free-amount field. The operators are a generic list that stands for the bank’s own directory; the number format follows the bank’s home market. No screen names a country or a real operator.
+
 #### 1. Summary
 
 | Field | Value |
 |---|---|
 | Slug | `mobile-topup` |
-| Purpose | Add credit to a mobile number from an account. |
+| Purpose | Add credit to a mobile number: choose the operator, the number, an amount and the account to pay from. |
 | Release / workspace | 1 / Personal |
-| Status | New (planned journey). The adapter `bank.topup.create` and the list `bank.carriers.list` already exist in the sandbox (`index.ts`) but no journey uses them. |
+| Status | Built in the prototype as a form journey (`submit: "Top up"`, `money: true`, `confirm` with a code, `call` at review). Test parameter `{operatorId: "aster"}`. |
 | Channels | Web and mobile |
-| Starting pattern | `fixtures/pay-bill.ts` (choose, enter, review, consent, OTP, result) |
+| Starting pattern | Operator, number, amount, account, review with a number check, a code, a result |
 | Who may use it | `payments.create` |
-
-**What exists today in the sandbox.** `bank.carriers.list` returns Jazz, Zong, Telenor, Ufone (Pakistan). `bank.topup.create` takes `{fromAccountId, amount}` and ignores any carrier or number. It enforces one rule for every currency: **50 to 5,000** (`INVALID_AMOUNT`, "Top-up must be between 50 and 5,000"), which is a Pakistani rupee rule. It then needs the code (`OTP_REQUIRED`), checks `CORE_UNAVAILABLE`, `ACCOUNT_NOT_FOUND`, `INSUFFICIENT_FUNDS`, `LIMIT_EXCEEDED`, and answers `{reference (TOP-…), newBalance}`.
-
-**The generalisation (planned).** The range belongs to the currency. A table in the sandbox, returned by `bank.carriers.list` as `min`, `max` and `presets`:
-
-| Currency | Min | Max | Quick amounts |
-|---|---|---|---|
-| USD | 5.00 | 200.00 | 10, 20, 50, 100 |
-| EUR | 5.00 | 200.00 | 10, 20, 50, 100 |
-| GBP | 5.00 | 150.00 | 10, 20, 50, 100 |
-| AED | 10.00 | 500.00 | 25, 50, 100, 200 |
-| PKR (existing rule, kept) | 50 | 5,000 | 100, 300, 500, 1,000 |
-| any other | the USD range converted at the mid rate, rounded to the currency | | |
-
-The adapter also takes `carrierId` and `number` and checks them. Alex's carriers (planned seed, synthetic): Aster Mobile, Brightline, Cobalt Wireless, all USD. The Meezan list stays as it is.
 
 #### 2. Entry points
 
 | Place › label | Passes in | Permission |
 |---|---|---|
 | Home › + Top up | none | `payments.create` |
-| Payments › hub › Top-up | `{carrierId}` optional | `payments.create` |
-| Payments › tracker › payment (top-up) › Repeat payment | `{paymentId}` (prefills carrier and number) | `payments.create` |
+| Payments › Mobile top-up | none | `payments.create` |
+| Deep link `/personal/j/mobile-topup?operatorId=aster` | `{operatorId}` (`aster`, `bright` or `cobalt`; skips the operator step) | `payments.create` |
 
 #### 3. Screens
 
-**`number` — "Top up a mobile"** (entry). `stepper` ["number", "review", "otp"]. onEnter: `accounts`, `carriers`.
+**Screen 1 `op`: Choose your operator** (skipped when `operatorId` is passed). Choice cards: "Aster Mobile", "Brightline", "Cobalt Wireless". Changing the operator clears the number and the amount.
 
-| Field | Block | Required | Validation | Error message |
+| Field | Type | Required | Validation | Message |
 |---|---|---|---|---|
-| Who | `select` chips: **My number** (+1 415 555 0142 from the profile), **Another number** | Yes (default My number) | One of two | "Choose whose number to top up." |
-| Mobile number | `textInput`, keyboard number, shown for Another number | Yes | After removing spaces and dashes: `^\+?[0-9]{8,15}$` | "Enter a mobile number of 8 to 15 digits." |
-| Carrier | `select` tiles from `ctx.carriers` | Yes | One of the list | "Choose a carrier." |
-| Amount | `amountInput` in the account's currency, quick amounts from the table, helper "From $5.00 to $200.00" | Yes | Between the currency's min and max; at most the currency's decimals | "Top-up must be between $5.00 and $200.00" (existing wording, currency formatted) |
-| Pay from | `accountPicker` `top.fromAccountId` | Yes | `canDebit`; must hold enough | "Choose an account to pay from." |
+| Operator | choice cards | yes | one of the list | "Choose an operator." |
 
-Button **Review top-up**. Helper under the number: "Top-ups arrive within a minute."
+**Screen 2 `num`: Mobile number.** A card shows the operator (with **Change** unless the operator was passed in). Saved numbers for that operator whose format is valid are offered as cards (name and "•••• {last 4}") plus "Another number". Sample numbers: "My phone" and "Maya" with Aster Mobile, "Lena" with Brightline. With no saved number the number field shows at once.
 
-**`review` — "Review top-up"**. Rows: Number, Carrier, Amount, Fee "$0.00", From. Consent (`termsVersion` "topup-v1"): "I confirm the number and amount are correct". Alert (info): "Top-ups can't be reversed once sent." Button **Confirm and send code**.
+| Field | Type | Required | Validation | Message |
+|---|---|---|---|---|
+| Saved number | choice cards (shown when there is a saved number for this operator) | yes | one choice | "Choose a number." |
+| Mobile number | phone, placeholder follows the market (shown with no saved number or after "Another number") | yes | the market format below; spaces, brackets and hyphens are ignored | the market message below |
 
-**`otp`** — shared C; button **Top up $20.00**. **`success` — "Top-up sent"**: text "$20.00 to +1 415 555 0142 on Aster Mobile", meta "Ref {reference}"; buttons **Track payment**, **View receipt**, **Top up again**, **Done**. **`locked`**, **`timeout`**, **`unavailable`**, **`failed`** — shared C.
+**Screen 3 `amt`: Choose an amount.** Choice cards of fixed amounts for the chosen operator: Aster Mobile $5, $10, $20, $50; Brightline $10, $20, $30, $50; Cobalt Wireless $5, $10, $25, $100.
+
+| Field | Type | Required | Validation | Message |
+|---|---|---|---|---|
+| Amount | choice cards | yes | one of the list | "Choose an amount." |
+
+**Screen 4 `from`: Pay from.** One select of the customer’s dollar accounts, each as "{name} ••{last4} · {available}".
+
+| Field | Type | Required | Validation | Message |
+|---|---|---|---|---|
+| Account | select | yes | chosen | "Choose an account to pay from." |
+| | | | amount not above the available balance | "Not enough in this account." |
+
+**Screen 5 `review`: Review.** Rows Operator, Number ("•••• {last 4}"), Amount, From ("{name} ••{last4}"). Optional, when `saveNumbers` is on and the number is not saved yet: switch "Save this number" and, when on, a text field "Name" (up to 20 characters, placeholder "For example, Mum"; "Use at least 2 characters." when 1 character). Pressing the button shows "Checking the number…" for about 0.6 seconds and checks the number and the daily limit.
+
+**Screen 6 `confirm`: Authorise {amount} top-up.** The standard code sheet: "Code sent to ••• 0142." (6 digits). Wrong code: "That code isn’t right. Try again." The button is **Top up**.
+
+**Result** (green). Title "Top-up sent", text "{amount} added to •••• {last 4}.", status "Completed". Rows Operator, Number, Amount, From, Date ("3 Nov 2026"). Button **Top up again**. The payment shows in the activity list in the category Bills as "{operator} top-up".
+
+**States**
+- Loading: "Checking the number…" at review, a spinner on the code step.
+- Empty: not applicable.
+- Error: unavailable shows "This isn’t available right now. Nothing was changed. Try again in a few minutes."; timeout shows "We didn’t get an answer in time. Check Activity before you try again, so you don’t pay twice." Both with a button to retry or check Activity.
+- Stale: the balance is checked again when the code is entered; if it is too low: "Not enough in this account."
+
+**Home market configuration** (the number rule only; amounts and operators are the same everywhere)
+
+| Market | Number rule | Message | Placeholder | Sample |
+|---|---|---|---|---|
+| Market A (routing number and account) | 10 digits | "Enter the 10-digit number." | "10 digits" | 5550123456 |
+| Market B (sort code and account) | 11 digits starting 07 | "Enter 11 digits, starting 07." | "07…" | 07700900123 |
+| Market C (IBAN) | 8 to 12 digits | "Enter 8 to 12 digits." | "8 to 12 digits" | 15112345678 |
+| Market D (IBAN, mobile alias) | 10 digits starting 05 | "Enter 10 digits, starting 05." | "05…" | 0501234567 |
 
 #### 4. Sandbox errors
 
+Codes are for tests and the sandbox; the customer sees only the message.
+
 | Code | Message | Shows on | Button |
 |---|---|---|---|
-| `INVALID_AMOUNT` (existing) | "Top-up must be between {min} and {max}" (sandbox text "Top-up must be between 50 and 5,000" for PKR) | `number` | Change amount |
-| `CARRIER_NOT_FOUND` (planned) | "Choose a carrier." | `number` | Choose carrier |
-| `NUMBER_INVALID` (planned) | "Enter a mobile number of 8 to 15 digits." | `number` | Edit |
-| `NUMBER_NOT_ACTIVE` (planned; sandbox rule: numbers ending in `0000`) | "This number can't be topped up. Check it and try again. No money has left your account." | `number` | Edit number |
-| `ACCOUNT_NOT_FOUND` | S-`ACCOUNT_NOT_FOUND` | `failed` | Choose account |
-| `INSUFFICIENT_FUNDS` | S-`INSUFFICIENT_FUNDS` | `failed` | Change amount |
-| `LIMIT_EXCEEDED` | S-`LIMIT_EXCEEDED` | `failed` | Change amount |
-| `OTP_INVALID` / `OTP_REQUIRED` | S-`OTP_INVALID` / S-`OTP_REQUIRED` | `otp` / `failed` | Try again / Back to code |
-| `CORE_UNAVAILABLE` | S-`CORE_UNAVAILABLE` | `failed` | Try again |
-| `NOT_SUPPORTED` | S-`NOT_SUPPORTED` | `failed` | Back |
-| `TIMEOUT` / `SERVICE_UNAVAILABLE` (planned) | shared C | `timeout` / `unavailable` | Check Activity / Try again |
+| `NUMBER_NOT_FOUND` | "We can’t top up this number. Check it and try again." | review (a number ending 0000) | Change number |
+| `OPERATOR_UNAVAILABLE` | "The operator isn’t available right now. Try again later." | review (a number ending 1111) | Try again |
+| `TOPUP_LIMIT` | "You’ve reached today’s top-up limit for this number." | review, commit | Change amount |
+| `INSUFFICIENT_FUNDS` | "Not enough in this account." | from, commit | Change account |
+| `OTP_INVALID` | "That code isn’t right. Try again." | code | Try again |
+| `TIMEOUT` | "We didn’t get an answer in time. Check Activity before you try again, so you don’t pay twice." | review, code | Check Activity |
+| `SERVICE_UNAVAILABLE` | "This isn’t available right now. Nothing was changed. Try again in a few minutes." | the step | Try again |
+| `JOURNEY_DISABLED` | "This isn’t available at your bank." | whole journey | none |
+| `PERMISSION_DENIED` (planned) | Standard message | whole journey | Back |
 
 #### 5. Adapters
 
 | Integration id | Adapter | Request | Response | Errors | Status |
 |---|---|---|---|---|---|
-| `accounts` | `bank.accounts.list` | none | accounts | none | Existing |
-| `carriers` | `bank.carriers.list` | none | map of `{id, name}` (planned adds `currency`, `min`, `max`, `presets`) | none | Existing, extended |
-| `otpSend`, `otpVerify` | `bank.otp.*` | as C | as C | `OTP_INVALID` | Existing |
-| `topup` | `bank.topup.create` | Today `{fromAccountId, amount}`. Upgraded adds `carrierId`, `number` | `{reference (TOP-…), newBalance}` (upgraded adds `number`, `carrierId`) | `OTP_REQUIRED`, `CORE_UNAVAILABLE`, `INVALID_AMOUNT`, `ACCOUNT_NOT_FOUND`, `INSUFFICIENT_FUNDS`, `LIMIT_EXCEEDED` (planned: `CARRIER_NOT_FOUND`, `NUMBER_INVALID`, `NUMBER_NOT_ACTIVE`, `TIMEOUT`, `SERVICE_UNAVAILABLE`) | Existing, upgraded. Money-moving; OTP |
-
-Worked example: Alex tops up **$20.00** on Aster Mobile for `+1 415 555 0142` from Main. New balance **8,700.76**; reference `TOP-20261102-0931`.
+| `carriers` | `bank.carriers.list` | none | operators and their amounts | none | Existing (`packages/mock-bank-api/src/index.ts`) |
+| `accounts` | `bank.accounts.list` | none | map of accounts | none | Existing |
+| `checkNumber` | `bank.topup.check` | `{operatorId, number, amount}` | `{ok}` | `NUMBER_NOT_FOUND`, `OPERATOR_UNAVAILABLE`, `TOPUP_LIMIT` | (planned). The prototype checks the number and the limit itself |
+| `createTopup` | `bank.topup.create` | `{operatorId, number, amount, fromAccountId}` | `{reference, newBalance}` | `OTP_REQUIRED`, `INVALID_AMOUNT`, `ACCOUNT_NOT_FOUND`, `INSUFFICIENT_FUNDS`, `LIMIT_EXCEEDED`, `CORE_UNAVAILABLE` | Existing. Its amount rule (50 to 5,000) is for a different currency and must change to the fixed list |
+| `savedNumbers` | `bank.topup.numbers` | none | saved numbers | none | (planned) |
+| `sendOtp` / `verifyOtp` | `bank.otp.send` / `bank.otp.verify` | `{channel}` / `{code}` | `{sent}` / `{verified}` | `OTP_INVALID` | Existing |
 
 #### 6. Permissions, step-up and limits
 
-`payments.create`; step-up `otp`. Amount range by currency (table above). Counts toward the daily limit (existing). No cooling-off. Business context: `WRONG_CONTEXT`.
+`payments.create`. Step-up: one-time code (6 digits, 3 tries) for every top-up. Limits: the amount must be one of the operator’s fixed amounts; at most $300.00 a day to one number; the account’s available balance.
 
 #### 7. Result and links out
 
-Receipt: carrier, number, amount, from, reference, time. Notification: in-app and SMS "Top-up sent to {number}. Ref {reference}." Buttons: **Track payment**, **View receipt**, **Top up again**, **Done**.
+Result as above. Notifications raised (planned): "{amount} added to the number ending {last 4}". The payment is written to activity and to the audit log. Links out: Activity; `mobile-topup` again.
 
 #### 8. Acceptance criteria
 
-- AC-1: A top-up inside the currency's range, with a valid number and a verified code, debits exactly the amount and returns a `TOP-` reference.
-- AC-2: An amount outside the range is refused with the range for that currency; for PKR the existing 50 to 5,000 still applies.
-- AC-3: A number that is too short, too long or not numeric is refused on the form.
-- AC-4: A number the carrier cannot top up (ending `0000`) is refused and no money leaves.
-- AC-5: Money cannot leave before the code is verified.
-- AC-6: Not enough money or a daily limit hit moves no money.
-- AC-7: Three wrong codes stop the journey.
-- AC-8: Timeout and unavailable states move no money and say so.
+- AC-1: Only the operator’s own amounts can be chosen.
+- AC-2: The number must match the home market rule, with the market message; spaces, brackets and hyphens are ignored.
+- AC-3: Saved numbers for the chosen operator are offered; "Another number" shows the number field.
+- AC-4: A top-up that would take one number above $300.00 for the day is refused with "You’ve reached today’s top-up limit for this number."
+- AC-5: An amount above the available balance is refused with "Not enough in this account." and nothing is taken.
+- AC-6: A wrong code takes no money; the right code takes the amount once, adds it to the activity list and shows "Top-up sent".
+- AC-7: With `saveNumbers` on, "Save this number" appears for a new number and adds it with the name given; with it off the switch is absent.
+- AC-8: A number ending 0000 or 1111 is refused at review with the messages above.
+- AC-9: With `operatorId` passed the operator step is skipped and **Change** is not shown.
+- AC-10: On timeout the person is told to check Activity first; when the bank is unavailable nothing is taken.
 
 #### 9. Scenarios
 
+Synthetic persona `alex` with Current ••4410 ($8,102.40 available). The home market is Market A unless stated. The sandbox code is the fixed test code.
+
 | # | Covers | Persona / setup | Conditions | Steps and expected result |
 |---|---|---|---|---|
-| T-1 | AC-1 | `alex` | none | My number, Aster Mobile, $20.00, Main, `482100`. Main 8,700.76; `TOP-20261102-0931`. |
-| T-2 | AC-2 | `alex`; `ayesha` (PKR) | none | Alex: $4.99 and $200.01 give "Top-up must be between $5.00 and $200.00". Ayesha: 49 and 5,001 give the PKR range. |
-| T-3 | AC-3 | `alex` | none | `1234567` and `+1 415 ABC 0142`: "Enter a mobile number of 8 to 15 digits." |
-| T-4 | AC-4 | `alex` | none | `+1 415 555 0000`: `NUMBER_NOT_ACTIVE`; Main unchanged. |
-| T-5 | AC-5 | `alex` | none | Direct `bank.topup.create` without OTP: `OTP_REQUIRED`. |
-| T-6 | AC-6 | `alex`, setup balance 10.00 | none | $20.00: `INSUFFICIENT_FUNDS`. With `usedToday` 49,990: `LIMIT_EXCEEDED`. |
-| T-7 | AC-7 | `alex` | none | `111111` three times: `locked`. |
-| T-8 | AC-8 | `alex` | `timeout: ["bank.topup.create"]` | `timeout` screen; balance unchanged. |
-| T-9 | AC-8 | `alex` | `unavailable: ["bank.topup.create"]` | `unavailable` screen. |
+| T-1 | AC-1, AC-6 | `alex` | none | Aster Mobile, "My phone", $20, Current, code: "Top-up sent", "$20.00 added to •••• 3456."; balance falls by $20.00. |
+| T-2 | AC-2 | `alex`, "Another number" | none | "12345": "Enter the 10-digit number."; "(555) 012-3456" is accepted. In Market B "0712345678" gives "Enter 11 digits, starting 07." |
+| T-3 | AC-3 | `alex` | none | Aster Mobile offers "My phone" and "Maya"; Brightline offers "Lena". |
+| T-4 | AC-4 | `alex`, six $50 top-ups to one number, then one more $50 | none | The next review says "You’ve reached today’s top-up limit for this number." |
+| T-5 | AC-5 | `alex`, an account with $4 available | none | $5 gives "Not enough in this account." |
+| T-6 | AC-6 | `alex` | none | Wrong code: "That code isn’t right. Try again." and no money moves. |
+| T-7 | AC-7 | `alex`, `saveNumbers` on, then off | none | New number: switch and Name shown; saved as "Family"; with the option off no switch. |
+| T-8 | AC-8 | `alex`, number ending 0000, then 1111 | none | "We can’t top up this number. Check it and try again."; "The operator isn’t available right now. Try again later." |
+| T-9 | AC-9 | `alex`, `operatorId: "aster"` | none | Starts at the number step; no **Change**. |
+| T-10 | AC-10 | `alex` | `unavailable: ["bank.topup.create"]` (prototype: Service down on) | The connection sheet shows; no money moves. |
+| T-11 | AC-10 | `alex` | `timeout: ["bank.topup.create"]`, `latencyMs: 10000` | After 10 seconds "We didn’t get an answer in time. Check Activity before you try again, so you don’t pay twice." |
 
 #### 10. Expected mutation-check survivors
 
-The range check exists in the form (`amountInput` validation) and the adapter; the adapter-only mutant is killed by the direct call in T-2. `CARRIER_NOT_FOUND` survives (the tiles only offer real carriers). Others: none expected.
+The "not above the balance" check at the account step survives because the commit checks it again; expected. The daily limit at review survives for the same reason. The save-number name length survives if the sandbox does not assert saved names; expected. Everything else: none expected.
 
 ---
 
@@ -5568,1674 +5572,1824 @@ The "per transaction not above daily" and "daily not above monthly" rules surviv
 
 ### ★ Freeze card — `freeze-card`
 
-**Catalog:** slug `freeze-card`, workspace `personal`, category Cards (Personal: Cards), core no, can a bank switch it off: yes (only together with `card-controls`). Options: none of its own.
+**Catalog:** slug `freeze-card`, workspace `personal`, category Cards (Personal: Cards), core no, can a bank switch it off: yes, as its own entry (it is a separate switch in the catalog; turning it off hides this route only and leaves `card-controls` and its freeze option on). Options: none of its own. Registered in `design/bankworkx-r1/src/journeys/06-aliases.js` with permission `accounts.view`.
 
-**Alias of `card-controls`:** freezing and unfreezing live in two places and there is no separate catalog entry in the prototype:
+**Alias of `card-controls`** with `{mode: "freeze"}`. What differs:
 
-- On the Cards screen, **Freeze** and **Unfreeze** are instant (toasts "Card frozen" and "Card unfrozen"). A card that is not active cannot be frozen ("Only an active card can be frozen."); a card that is not frozen cannot be unfrozen ("This card isn’t frozen."). If the bank is unavailable the standard connection sheet shows and the card is unchanged.
-- In `card-controls` (launch parameter `{cardId, mode: "freeze"}` or `"unfreeze"`, or the "Freeze card" / "Unfreeze card" choice) the change goes through review. Freezing needs no code; **unfreezing asks for a one-time code** (6 digits, 3 tries) because it makes the card easier to use. Result titles "Card frozen" and "Card unfrozen".
-- Open point: the Cards screen unfreezes without a code, while `card-controls` asks for one. The product rule is a code; the Cards screen should follow (see `cards` T-6).
-- Error codes: `CARD_NOT_ACTIVE`, `CARD_NOT_FROZEN`, `OTP_INVALID`, `OTP_LOCKED`. Adapters `bank.cards.freeze` and `bank.cards.unfreeze` (planned, used by `cards`) and `bank.cards.updateControls` (planned). Acceptance criteria AC-1, AC-2 and AC-12 and scenarios T-1, T-2, T-8 and T-10 of `card-controls` cover it.
+- It opens `card-controls` already on the freeze change: "What do you want to change?" is skipped. With a `cardId` the card choice is skipped too. Review shows "Card: Active → Frozen", the button reads **Save changes**, no code is asked, and the result is "Card frozen" with **Go to cards**.
+- Unfreezing is not part of this entry. It is `card-controls` with `{mode: "unfreeze"}` and asks for a one-time code (6 digits, 3 tries) because it makes the card easier to use.
+- On the Cards screen **Freeze** and **Unfreeze** are instant (toasts "Card frozen" and "Card unfrozen"; "Only an active card can be frozen." and "This card isn’t frozen." when the state is wrong; the connection sheet when the bank is unavailable). Open point: this instant unfreeze has no code, while `card-controls` asks for one; the product rule is a code and the Cards screen should follow (see `cards` T-6). Acceptance criteria AC-1, AC-2, AC-9 and AC-12 and scenarios T-1, T-2, T-8, T-10 and T-11 of `card-controls` cover it.
 
 ---
 
 ### ★ Virtual card — `virtual-card`
 
+**Catalog:** slug `virtual-card`, workspace `personal`, category Cards (Personal: Cards), core no, can a bank switch it off: yes (a basic entry, kept in the Lean preset). Options: **Offer a 3 year card as well as single use** (`allowThreeYears`, default on). Research: `research/virtual-card.md`. Built in `design/bankworkx-r1/src/journeys/62-card-service.js`, on the shared card data `CRD` from `24-cards.js`.
+
+The card is named after its purpose; there is no nickname field and no merchant lock. A virtual card is linked to one of the customer’s active cards, has its own limit, and its details are shown once after a code.
+
 #### 1. Summary
 
-| Item | Value |
+| Field | Value |
 |---|---|
 | Slug | `virtual-card` |
-| Purpose | Create a card number for online shopping, show its details once, and delete it |
-| Release | 1 |
-| Workspace | Personal |
-| Status | New (draft). Needs the planned cards domain |
-| Channels | Web, mobile |
-| Starting pattern | Create-and-reveal (details → code → reveal with step-up) |
-| Who may use it | Personal context holding `cards.manage` |
-
-A virtual card is a second card number linked to a real card. It spends from the same account, has its own limit and can be deleted without touching the real card. Each real card may have up to 3 live virtual cards.
+| Purpose | Create a virtual card for online shopping, subscriptions or a single payment, with its own limit. |
+| Release / workspace | 1 / Personal |
+| Status | Built in the prototype as a form journey (`submit: "Create card"`, `confirm` with a code). |
+| Channels | Web and mobile |
+| Starting pattern | Which card (when more than one), purpose, limit, how long (optional), review, a code, a result showing the details once |
+| Who may use it | `accounts.manage`, for their own cards. |
 
 #### 2. Entry points
 
-| Place › label | Passed | Permission |
+| Place › label | Passes in | Permission |
 |---|---|---|
-| Cards › card › Virtual card | `{cardId}` (the parent) | `cards.manage` |
-| Card detail › Virtual cards list › a virtual card | `{cardId}` (the virtual card, opens reveal/delete) | `cards.manage` |
+| Cards › Virtual card | `{cardId}` (optional; a card that is not an active physical card is ignored) | `accounts.manage` |
+
+The card step is skipped when the card was passed in, or when the customer has only one active physical card.
 
 #### 3. Screens
 
-**Screen `home` — "Virtual cards".** Lists the virtual cards of the parent (`bank.cards.issued` filtered by `parentCardId`) with nickname, `••last4`, expiry, limit, status chip. Buttons: "Create a virtual card" (to `create`; disabled with helper "You have 3 virtual cards. Delete one to make another." when 3 are live), a row tap opens `manage`. Empty: "You don't have a virtual card yet. Use one to shop online without sharing your real card number."
+**Screen 1 `card`: Link to which card?** A red notice shows the reason when the card cannot be used.
 
-**Screen `create` — "New virtual card".**
-
-| Field | Block | Required | Rule | Error message |
+| Field | Type | Required | Validation | Message |
 |---|---|---|---|---|
-| Nickname | `textInput` bind `vc.nickname` (pattern `^.{2,24}$`) | Yes | 2 to 24 characters | "Give it a name of 2 to 24 characters, for example Online shopping." |
-| Spending limit | `amountInput` bind `vc.spendLimit` (quick 50, 100, 250, 500) | Yes | 1 to the parent's per-transaction ceiling | "Enter an amount from 1 to {{ctx.parent.ceilings.perTransaction}}." |
-| How long | `select` chips bind `vc.expiresInMonths`: 1, 3, 12 months | Yes | One of the three | "Choose how long the card lasts." |
-| Use once only | `toggle` bind `vc.singleUse` | No | none | none |
+| Card | select (active physical cards, for example "Everyday debit ••9021") | yes | active, not virtual | "Choose an active card to link this to." |
+| | | | fewer than 5 active virtual cards on it | "You have 5 virtual cards on this card, the most you can have. Delete one first." |
 
-Helper under limit: "The card can't spend more than this in total." Alert info "Money comes from {{parent.accountName}}. The virtual card works only online." Button "Continue" (`validate`, `callApi otpSend`, navigate `code`).
+**Screen 2 `purpose`: What is it for?** Choice cards: "Online shopping" ("Use it with any online shop"), "Subscriptions" ("For regular payments"), "One-time purchase" ("Closes after one payment"). The same card notice shows. Choosing One-time purchase sets the length to single use.
 
-**Screen `code`**: standard. Button "Create card" calls `otpVerify`, `create` (`bank.cards.virtual.create`), then navigates to `reveal`.
+| Field | Type | Required | Validation | Message |
+|---|---|---|---|---|
+| Purpose | choice cards | yes | one chosen | "Choose a purpose." |
 
-**Screen `reveal` — "Your virtual card".** Needs step-up: `onEnter` calls `bank.cards.virtual.reveal`. If the answer is `STEP_UP_REQUIRED` the standard step-up sheet appears (planned `bank.session.stepUp`) and the call is retried. Shows number with spaces, expiry, security code, limit, "Copy number" and "Copy security code" (`share` actions). `alert` warning "We show these details once on this screen. Don't screenshot or share them." Details auto-hide after 60 seconds. Buttons "Done" (to `home`), "Delete this card" (to `confirmDelete`).
+**Screen 3 `limit`: Spending limit.**
 
-**Screen `manage` — "{{nickname}} ••{{last4}}".** Shows limit used, status, expiry. Buttons "Show card details" (to `reveal`), "Delete this card" (to `confirmDelete`), "Back".
+| Field | Type | Required | Validation | Message |
+|---|---|---|---|---|
+| Limit | amount in dollars, placeholder "0.00"; hint "The most it can spend in one payment." (one-time) or "The most it can spend in a month." | yes | at least $1 | "The smallest limit is $1.00." |
+| | | | at most $5,000 | "The most is $5,000.00." |
 
-**Screen `confirmDelete` — "Delete this virtual card?"** Text "Shops that already have this number won't be able to charge it again." Buttons "Delete card" (`callApi delete`, navigate `deleted`), "Keep it".
+**Screen 4 `expiry`: How long should it last?** Shown only when `allowThreeYears` is on and the purpose is not One-time purchase. Choice cards "Single use" ("Closes after one payment") and "3 years" ("Until it expires or you delete it"). With the option off, every virtual card is single use and this screen is skipped.
 
-**Screens `deleted`** (terminal, "Virtual card deleted"), **`locked`**, **`failed`** standard.
+**Screen 5 `review`: Review.** Rows Linked to, Purpose, Limit ("$x per payment" for one-time, otherwise "$x a month"), Lasts ("One payment" or "3 years").
+
+**Screen 6 `confirm`: Create a virtual card.** The standard code sheet: "Code sent to ••• 0142. You’ll see the card details once." (6 digits). Wrong code: "That code isn’t right. Try again." The button is **Create card**.
+
+**Result** (green). Title "Virtual card ready", text "Save these details now. We won’t show the number again.", status "Single use" or "Active". Rows Card number (with **Copy**), Expiry (Copy), Security code (Copy), Limit, Purpose. Button **Go to cards**. The new card appears in the card list, linked to its parent, with online and international on and cash and contactless off.
+
+**States**
+- Loading: a spinner on the code step.
+- Empty: not applicable.
+- Error: unavailable shows "This isn’t available right now. Nothing was changed. Try again in a few minutes."; timeout shows "This is taking longer than expected. Nothing was changed." Both with **Try again**; no card is made.
+- Stale: if the parent card stopped being active or reached 5 virtual cards, the commit fails with the message of that code.
+
+**Home market configuration:** none.
 
 #### 4. Sandbox errors
 
-| Code | Message | Screen | Button |
+| Code | Message | Shows on | Button |
 |---|---|---|---|
-| `CARD_NOT_FOUND` | "We can't find that card." | `failed` | Back to cards |
-| `CARD_NOT_ACTIVE` | "Your card must be active to create a virtual card from it." | `failed` | Go to card |
-| `VIRTUAL_LIMIT_REACHED` | "You already have 3 virtual cards for this card. Delete one first." | `home` | Manage cards |
-| `LIMIT_ABOVE_CEILING` | "The most a virtual card can be is {{ceiling}}." | `create` | Change limit |
-| `STEP_UP_REQUIRED` | "For your security, confirm it's you first." | `reveal` | Confirm |
-| `CARD_ALREADY_BLOCKED` | "This virtual card is already deleted." | `failed` | Back |
-| `OTP_INVALID`, `OTP_REQUIRED` | Standard | `code` | Try again / Back to code |
-| `TIMEOUT` | "This is taking longer than expected. Nothing was changed." | `failed` | Try again |
-| `SERVICE_UNAVAILABLE`, `PERMISSION_DENIED`, `WRONG_CONTEXT`, `SESSION_EXPIRED` | Standard | `failed` | Try again / Back / Switch / Sign in |
+| `CARD_NOT_FOUND` | "Choose an active card to link this to." | card, purpose, commit | Choose card |
+| `VIRTUAL_LIMIT` | "You have 5 virtual cards on this card, the most you can have. Delete one first." | card, purpose, commit | Back |
+| `LIMIT_INVALID` | "Choose a limit within what the card allows." | limit, commit | Change limit |
+| `OTP_INVALID` | "That code isn’t right. Try again." | code | Try again |
+| `TIMEOUT` | "This is taking longer than expected. Nothing was changed." | the step | Try again |
+| `SERVICE_UNAVAILABLE` | "This isn’t available right now. Nothing was changed. Try again in a few minutes." | the step | Try again |
+| `JOURNEY_DISABLED` | "This isn’t available at your bank." | whole journey | none |
+| `PERMISSION_DENIED` (planned) | Standard message | whole journey | Back |
 
 #### 5. Adapters
 
 | Integration id | Adapter | Request | Response | Errors | Status |
 |---|---|---|---|---|---|
-| `cards` | `bank.cards.issued` | none | cards | `NOT_SUPPORTED` | (planned) |
-| `parent` | `bank.cards.get` | `{cardId}` | card | `CARD_NOT_FOUND` | (planned) |
-| `create` | `bank.cards.virtual.create` | `{cardId, nickname, spendLimit, expiresInMonths, singleUse}` | `{cardId, last4, expiry, status}` | section 4 | (planned) |
-| `reveal` | `bank.cards.virtual.reveal` | `{cardId}` | `{number, cvv, expiry}` | `CARD_NOT_FOUND`, `STEP_UP_REQUIRED` | (planned) |
-| `delete` | `bank.cards.virtual.delete` | `{cardId}` | `{status: "blocked"}` | `CARD_NOT_FOUND`, `CARD_ALREADY_BLOCKED` | (planned) |
+| `cards` | `bank.cards.list` | none | map of cards | none | Existing (`packages/mock-bank-api/src/index.ts`) |
+| `createVirtualCard` | `bank.cards.createVirtual` | `{parentCardId, purpose, limit, single}` | `{cardId, number, expiry, cvv}` | `CARD_NOT_FOUND`, `VIRTUAL_LIMIT`, `LIMIT_INVALID` | (planned). The prototype makes a test number that passes the check digit |
+| `sendOtp` / `verifyOtp` | `bank.otp.send` / `bank.otp.verify` | `{channel}` / `{code}` | `{sent}` / `{verified}` | `OTP_INVALID` | Existing |
+
+The full number and security code are returned once, shown once and never stored or logged afterwards.
 
 #### 6. Permissions, step-up and limits
 
-`cards.manage`. Create: `otp`. Reveal: `stepup` (re-confirm, then the existing code). Delete: `none`. Limits: spending limit up to the parent's per-transaction ceiling; 3 live virtual cards per parent. The card number appears only in the `reveal` response; it is never stored in journey data or logs.
+`accounts.manage`. Step-up: one-time code (6 digits, 3 tries) before the card is made. Limits: $1.00 to $5,000.00; at most 5 active virtual cards per card. The virtual card spends from the parent’s account.
 
 #### 7. Result and links out
 
-Result: the `reveal` screen is the success state (no `result` block); the receipt is none. Notifications: "Virtual card {{nickname}} created" and "Virtual card {{nickname}} deleted". Links out: card detail (shows the virtual cards list), Card transactions (virtual card spending appears under the parent).
+Result as above. Notifications raised (planned): "A virtual card was created on your card ending {last4}". The creation is written to the card change log (audit). Links out: `cards`, `card-controls` (to freeze or limit the virtual card).
 
 #### 8. Acceptance criteria
 
-- AC-1: A virtual card is created only after a verified one-time code.
-- AC-2: The full number and security code are shown only after step-up and are never kept in the journey data.
-- AC-3: The limit cannot exceed the parent card's per-transaction ceiling.
-- AC-4: At most 3 live virtual cards per card; the fourth is refused.
-- AC-5: A virtual card cannot be created from a frozen, blocked or inactive card.
-- AC-6: Deleting a virtual card blocks it and leaves the parent card untouched.
-- AC-7: A nickname is required.
-- AC-8: A timeout or unavailable service creates nothing and says so.
+- AC-1: The card must be an active physical card with fewer than 5 virtual cards.
+- AC-2: The limit is from $1.00 to $5,000.00 with the messages above.
+- AC-3: A one-time purchase is always single use and shows the limit "per payment".
+- AC-4: With `allowThreeYears` on a shopping or subscriptions card can last 3 years; with it off every card is single use.
+- AC-5: A wrong code makes no card; the right code makes the card and shows its details once with Copy.
+- AC-6: The card is linked to its parent, online and international on, cash and contactless off.
+- AC-7: The details are not shown again after the result.
+- AC-8: When the bank is unavailable or times out no card is made.
 
 #### 9. Scenarios
 
-| # | Covers | Persona and setup | Outcome |
-|---|---|---|---|
-| T-1 | AC-1, AC-2 | `alex`, parent `card_9021`; "Online shopping", 250, 3 months | Code `482100`; reveal asks step-up; shows number once; `dataModel` holds no card number |
-| T-2 | AC-1 | `alex` | Skip the code: `OTP_REQUIRED` |
-| T-3 | AC-3 | `alex` | Limit 5,000: `LIMIT_ABOVE_CEILING` |
-| T-4 | AC-4 | `alex`; setup three live virtual cards | Fourth: `VIRTUAL_LIMIT_REACHED` |
-| T-5 | AC-5 | `alex`; `card_9021` frozen | `CARD_NOT_ACTIVE` |
-| T-6 | AC-6 | `alex`; delete virtual card | Virtual `blocked`; parent `active` |
-| T-7 | AC-7 | `alex`; empty nickname | Validation message; no call |
-| T-8 | AC-8 | conditions `timeout: ["bank.cards.virtual.create"]` | Timeout text; no new card |
-| T-9 | AC-8 | conditions `unavailable: ["bank.cards.virtual.create"]` | `SERVICE_UNAVAILABLE`; no new card |
+Synthetic persona `alex`, Everyday debit ••9021 (one existing virtual card ••6150), Aurora credit ••3318. The sandbox code is the fixed test code.
+
+| # | Covers | Persona / setup | Conditions | Steps and expected result |
+|---|---|---|---|---|
+| T-1 | AC-1, AC-5, AC-6 | `alex`, `cardId: "card_9021"` | none | Online shopping, limit 200, review "Linked to Everyday debit ••9021", code: "Virtual card ready", details with Copy. |
+| T-2 | AC-2 | `alex` | none | 0.5: "The smallest limit is $1.00."; 6000: "The most is $5,000.00." |
+| T-3 | AC-3 | `alex` | none | One-time purchase: hint "The most it can spend in one payment."; review "$x per payment", "One payment". |
+| T-4 | AC-4 | `alex`, `allowThreeYears` on, then off | none | Online shopping shows "How long should it last?"; "3 years" gives "3 years" on review; with the option off the screen is absent. |
+| T-5 | AC-1 | `alex`, four more virtual cards on ••9021 | none | A sixth: "You have 5 virtual cards on this card, the most you can have. Delete one first." |
+| T-6 | AC-5 | `alex` | none | Wrong code: "That code isn’t right. Try again." and no card is made. |
+| T-7 | AC-7 | `alex`, after T-1 | none | Cards shows the new card as "Online shopping ••{last4}" with no number or code. |
+| T-8 | AC-8 | `alex` | `unavailable: ["bank.cards.createVirtual"]` (prototype: Service down on) | The connection sheet shows; no card is made. |
+| T-9 | AC-8 | `alex` | `timeout: ["bank.cards.createVirtual"]`, `latencyMs: 10000` | After 10 seconds "This is taking longer than expected. Nothing was changed." |
 
 #### 10. Expected mutation-check survivors
 
-- Journey `pattern` on nickname: survives because T-7 only proves "required"; the sandbox does not check length. Decision: treat as a **killed** mutant by adding a 1-character name case to T-7 (survivor none expected).
-- Auto-hide timer (60 s) is not testable in a scenario: **survives**, reason "the sandbox has no clock-driven UI".
+The per-month versus per-payment hint survives if only the limit value is asserted; expected. The 5-card rule survives at the first two screens because the commit checks it again; expected. The audit entry is not asserted; expected. Everything else: none expected.
 
 ---
 
-### ★ Replace card — `replace-card`
+### ★ Replace a card — `replace-card`
+
+**Catalog:** slug `replace-card`, workspace `personal`, category Cards (Personal: Cards), core no, can a bank switch it off: yes (a basic entry, kept in the Lean preset). Options: **Charge a fee for express delivery** (`expressFee`, default on; the fee is $15.00). Research: `research/replace-card.md`. Built in `design/bankworkx-r1/src/journeys/62-card-service.js`, on the shared card data `CRD` from `24-cards.js`.
+
+A lost or stolen card is blocked at the "What happened?" step, before the rest of the order, so the block does not wait for a code. A code is asked only when there is a fee to pay.
 
 #### 1. Summary
 
-| Item | Value |
+| Field | Value |
 |---|---|
 | Slug | `replace-card` |
-| Purpose | Get a new card because the old one is lost, stolen or damaged |
-| Release | 1 |
-| Workspace | Personal |
-| Status | New (draft). Needs the planned cards domain |
-| Channels | Web, mobile |
-| Starting pattern | Reason → delivery → review (fee, consent) → code → result |
-| Who may use it | Personal context holding `cards.manage` |
+| Purpose | Order a replacement for a lost, stolen, damaged or expired card. A lost or stolen card is blocked straight away. |
+| Release / workspace | 1 / Personal |
+| Status | Built in the prototype as a form journey (`submit: "Order card"`, `money: true`; step-up is `none` unless a fee applies). Test parameters `{cardId: "card_9021", reason: "damaged"}`. |
+| Channels | Web and mobile |
+| Starting pattern | Which card, reason (with the block), delivery, review, a code only for a fee, a result |
+| Who may use it | `accounts.manage`, for their own cards. |
 
 #### 2. Entry points
 
-| Place › label | Passed | Permission |
+| Place › label | Passes in | Permission |
 |---|---|---|
-| Cards › card › Replace card | `{cardId, reason}` | `cards.manage` |
-| `freeze-card` result (block) › Get a new card | `{cardId}` with `returnTo` | `cards.manage` |
-| `activate-card` (blocked card) › Replace card | `{cardId}` | `cards.manage` |
+| Cards › Replace | `{cardId}` | `accounts.manage` |
+| Cards › a blocked or expired card › Replace | `{cardId}` | `accounts.manage` |
+| Deep link `/personal/j/replace-card?cardId=card_9021&reason=damaged` | `{cardId}`, optional `reason` (`lost`, `stolen`, `damaged`, `expired`) | `accounts.manage` |
+
+With a `cardId` the card is fixed and "Which card?" is skipped. Without one the first blocked or expired physical card is preselected.
 
 #### 3. Screens
 
-**Screen `reason` — "Why do you need a new card?"** `onEnter`: `callApi card`. `select` rows bind `rep.reason`:
+**Screen 1 `pick`: Which card?** (skipped when `cardId` is passed). A red notice shows the reason when the card cannot be replaced.
 
-| Choice | Label | Help text | Fee |
-|---|---|---|---|
-| `lost` | "I lost it" | "We'll block the old card right away." | 5.00 |
-| `stolen` | "It was stolen" | "We'll block the old card right away. No fee." | 0.00 |
-| `damaged` | "It's damaged" | "The old card keeps working until the new one is activated." | 5.00 |
-
-| Field | Block | Required | Rule | Error message |
+| Field | Type | Required | Validation | Message |
 |---|---|---|---|---|
-| Reason | `select` | Yes | One of the three | "Choose why you need a new card." |
+| Card | select (physical cards that are not replaced; a virtual card can only arrive by a deep link) | yes | an existing card | "We can’t find that card." |
+| | | | not virtual | "Virtual cards can’t be replaced. Create a new one instead." |
+| | | | not already replaced | "This card has already been replaced." |
+| | | | activated | "This card isn’t active yet." |
+| | | | no replacement already ordered | "A replacement is already on its way. It arrives by {date}." |
 
-For `stolen`, an `alert` warning shows: "If someone has used your card, report those payments next. We'll show you how after this." Button "Continue" (`validate`, navigate `delivery`).
-Empty/blocked: if the card already has a replacement in progress the screen shows `alert` "A new card for this one is already on its way (arrives by {{date}})." and the button "Back to cards".
+**Screen 2 `reason`: What happened?** Choice cards: "Lost" ("We block it now"), "Stolen" ("We block it now"), "Damaged" ("It keeps working until the new one arrives"), "Expired" ("Your card has run out"; unavailable unless the card has expired or has 60 days or fewer left). The button reads **Block card and continue** for Lost and Stolen, otherwise **Continue**, and shows "Please wait…" for about 0.6 seconds. Pressing it checks the card again and, for Lost and Stolen, blocks the card at once.
 
-**Screen `delivery` — "Where should we send it?"** `select` tiles bind `rep.delivery`: "To my home address" (shows the address on file, masked as "12 •••• Street, San Francisco"; read-only, with `text` "To change your address, update your profile first." and link to `update-profile`), "Collect at a branch" (opens the branch choice via planned `find-branch-atm` with `returnTo`; sets `rep.branchId`).
-
-| Field | Block | Required | Rule | Error message |
+| Field | Type | Required | Validation | Message |
 |---|---|---|---|---|
-| Delivery | `select` | Yes | One of two | "Choose how you'll get your card." |
-| Branch | from `find-branch-atm` | Yes when collecting | Must be set | "Choose a branch to collect from." |
+| Reason | choice cards | yes | one chosen | "Choose a reason." |
 
-Buttons "Continue" (to `review`), "Back".
+**Screen 3 `delivery`: Delivery.** After a block a green card shows "{card} is blocked" and "No one can use it. This can’t be undone."
 
-**Screen `review` — "Review your request".** `reviewSummary` rows: Card "{{card.name}}"; Reason "Lost / Stolen / Damaged"; Delivery "Home address" or branch name; Arrives "By {{deliveryBy}} (5 working days)"; Fee "5.00 USD from {{account.name}} ••{{n}}" or "Free". `alert` info "Your new card has a new number and expiry date. Regular payments set up with the old number may need updating." `consent` bind `rep.consent` (termsVersion `cards-v1`), text "I agree to the card fee and to BankWorkx blocking the old card where I said it was lost or stolen." validation `mustBeTrue`: "Tick the box to continue." Button "Request card" (`validate`, `callApi otpSend`, navigate `code`).
+| Field | Type | Required | Validation | Message |
+|---|---|---|---|---|
+| Send it to | choice cards "Home address" (the address on file) or "Another address" | yes | one chosen | none |
+| Address line | text, up to 60 characters (shown for another address) | yes | at least 3 characters | the standard short-field message (planned wording) |
+| City | text, half width, up to 40 characters (same) | yes | at least 2 characters | the standard short-field message (planned wording) |
+| Postcode | text, half width (same; not shown in Market D) | yes | 3 to 10 letters, digits, spaces or hyphens | "Enter a valid postcode." |
+| How fast? | choice cards "Standard" (by the 5th working day, "Free") or "Express" (by the 2nd working day, "$15.00" with `expressFee`, otherwise "Free") | yes | one chosen | none |
 
-**Screen `code`**: standard. Button "Confirm and request" calls `otpVerify`, `replace`, then `done`.
+**Screen 4 `review`: Review.** The button shows "Checking…" for about 0.5 seconds. Rows Card, Reason, Deliver to, Delivery ("Standard, by {date}" or "Express, by {date}"), Fee ("Free" or "$15.00"), and "Old card: Blocked" for Lost and Stolen. The account is checked: a fee above the available balance is refused.
 
-**Screen `done` (terminal) — "New card on its way".** `result` success, text "Your new card will arrive by {{result.deliveryBy}}. We've {{blockedText}}.", meta "Ref {{result.reference}}". Where `blockedText` is "blocked your old card" (lost, stolen) or "kept your old card working until you activate the new one" (damaged). Buttons: "Report a payment I don't recognise" (stolen only; `navigate toJourney dispute-transaction`), "Go to cards".
+**Screen 5 `confirm`** (only when the fee is above zero): Authorise $15.00 delivery fee. The standard code sheet: "Code sent to ••• 0142." (6 digits). Wrong code: "That code isn’t right. Try again."
 
-`locked`, `failed` standard.
+**Result** (green). Title "Card blocked and replacement ordered" (Lost or Stolen) or "Replacement ordered", text "It arrives by {date}.", status "On its way". Rows Old card (with "(blocked)" when blocked), New card ("••{last4}"), Deliver to, Arrives by, Fee. Button **Go to cards**. The new card appears as Not activated (see `activate-card`). The old card becomes Replaced, except for a Damaged card that has not expired, which keeps working until the new one is activated.
+
+**States**
+- Loading: "Please wait…", "Checking…" and a spinner on the code step.
+- Empty: not applicable.
+- Error: unavailable shows "This isn’t available right now. Try again in a few minutes. If your card is lost or stolen, call us."; timeout shows "This is taking longer than expected. Check your cards before you try again." Both with **Try again**.
+- Stale: a second order for the same card is refused with "A replacement is already on its way."
+
+**Home market configuration** (the home address on file and the postcode rule)
+
+| Market | Home address shown (synthetic) | Postcode asked for another address |
+|---|---|---|
+| Market A (routing number and account) | 12 Example Street, Springfield 62704 | yes |
+| Market B (sort code and account) | 12 Example Road, London SW1A 1AA | yes |
+| Market C (IBAN) | Beispielstrasse 5, Berlin 10115 | yes |
+| Market D (IBAN, mobile alias) | Example Tower, Flat 1204, Dubai | no |
 
 #### 4. Sandbox errors
 
-| Code | Message | Screen | Button |
+| Code | Message | Shows on | Button |
 |---|---|---|---|
-| `CARD_NOT_FOUND` | "We can't find that card." | `failed` | Back to cards |
-| `REPLACEMENT_PENDING` | "A new card for this one is already on its way. You can ask again if it hasn't arrived after {{date}}." | `reason` | Back to cards |
-| `REASON_INVALID` | "Choose why you need a new card." | `reason` | Choose |
-| `INSUFFICIENT_FUNDS` | "There isn't enough money in {{account}} for the 5.00 fee. Available: {{balance}}. No card was ordered." | `failed` | Back to cards |
-| `ACCOUNT_NOT_FOUND` | "We can't find the account that pays the fee. Choose another." | `failed` | Back |
-| `CORE_UNAVAILABLE` | "We couldn't complete this right now. No money has left your account." | `failed` | Try again |
-| `OTP_INVALID`, `OTP_REQUIRED` | Standard | `code` | Try again / Back to code |
-| `TIMEOUT` | "We didn't get an answer in time. Check your account activity before you try again, so you aren't charged twice." | `failed` | Check Activity |
-| `SERVICE_UNAVAILABLE` | Standard | `failed` | Try again |
-| `PERMISSION_DENIED`, `WRONG_CONTEXT`, `SESSION_EXPIRED` | Standard | `failed` | Back / Switch / Sign in |
+| `CARD_NOT_FOUND` | "We can’t find that card." | pick, reason, commit | Choose card |
+| `REPLACEMENT_PENDING` | "A replacement is already on its way." | reason, commit | Back to cards |
+| `INSUFFICIENT_FUNDS` | "Not enough in your account to pay the delivery fee." | review, commit | Choose Standard |
+| `OTP_INVALID` | "That code isn’t right. Try again." | code | Try again |
+| `TIMEOUT` | "This is taking longer than expected. Check your cards before you try again." | the step | Try again |
+| `SERVICE_UNAVAILABLE` | "This isn’t available right now. Try again in a few minutes. If your card is lost or stolen, call us." | the step | Try again |
+| `JOURNEY_DISABLED` | "This isn’t available at your bank." | whole journey | none |
+| `PERMISSION_DENIED` (planned) | Standard message | whole journey | Back |
 
 #### 5. Adapters
 
 | Integration id | Adapter | Request | Response | Errors | Status |
 |---|---|---|---|---|---|
-| `card` | `bank.cards.get` | `{cardId}` | card | `CARD_NOT_FOUND` | (planned) |
-| `replace` | `bank.cards.replace` | `{cardId, reason, delivery, branchId?}` | `{reference, newCardId, fee, feeCurrency, deliveryBy, oldCardStatus}` | section 4 | (planned) |
-| `otpSend`, `otpVerify` | existing | | | `OTP_INVALID` | Existing |
-
-`moneyMoving: true` (the fee), `requiresOtp: true`. Lost and stolen set the old card to `blocked` and its virtual cards to `blocked`; damaged leaves it `active` until the new card is activated, then marks it `replaced`.
+| `cards` | `bank.cards.list` | none | map of cards | none | Existing (`packages/mock-bank-api/src/index.ts`) |
+| `blockCard` | `bank.cards.block` | `{cardId, reason}` | `{cardId, status}` | `CARD_NOT_FOUND` | (planned). Used at the reason step for Lost and Stolen |
+| `replaceCard` | `bank.cards.replace` | `{cardId, reason, address, speed}` | `{newCardId, last4, arrivesBy, fee}` | `CARD_NOT_FOUND`, `REPLACEMENT_PENDING`, `INSUFFICIENT_FUNDS` | (planned) |
+| `sendOtp` / `verifyOtp` | `bank.otp.send` / `bank.otp.verify` | `{channel}` / `{code}` | `{sent}` / `{verified}` | `OTP_INVALID` | Existing |
 
 #### 6. Permissions, step-up and limits
 
-`cards.manage`. Step-up `otp`. The fee does not use the daily transfer limit. Check 3: `OTP_REQUIRED` from the sandbox if the code was not verified.
+`accounts.manage`. Step-up: **none** when the delivery is free (the block and the order); a **one-time code** (6 digits, 3 tries) when there is a fee. Limits: one replacement at a time per card. The fee is taken from the card’s account and shown in activity as "Card delivery fee".
 
 #### 7. Result and links out
 
-Result `done`; receipt shows card, reason, fee, account, reference, date. Notification: "New card ordered for ••{{last4}}, arriving by {{date}}" and, for lost or stolen, "Card ••{{last4}} blocked". Links: card detail, `activate-card` (when the new card arrives), `dispute-transaction`.
+Result as above. Notifications raised (planned): "Your card ending {last4} was blocked" and "A replacement card is on its way, arriving by {date}". The block and the order are written to the card change log (audit). Links out: `cards`, `activate-card`.
 
 #### 8. Acceptance criteria
 
-- AC-1: A replacement needs a reason, a delivery choice, consent and a verified one-time code.
-- AC-2: Lost and stolen cards are blocked at once, with their virtual cards.
-- AC-3: A damaged card keeps working until the new card is activated.
-- AC-4: The fee is 5.00 for lost or damaged and free for stolen, taken from the card's account.
-- AC-5: Not enough money for the fee orders no card and takes no money.
-- AC-6: Only one replacement per card at a time.
-- AC-7: A stolen-card result offers to report payments the person doesn't recognise.
-- AC-8: A timeout leaves things unchanged and tells the person to check Activity; an unavailable service orders nothing.
-- AC-9: Three wrong codes order nothing.
+- AC-1: Lost and Stolen block the card when the person presses **Block card and continue**, before delivery is chosen and without a code.
+- AC-2: Damaged leaves the old card working; Expired is offered only for an expired card or one with 60 days or fewer left.
+- AC-3: Virtual, not-activated, already-replaced and already-replacing cards are refused with the messages above.
+- AC-4: The delivery address is the home address or another address with a valid postcode (none in Market D).
+- AC-5: Standard is free; Express costs $15.00 only while `expressFee` is on.
+- AC-6: No code is asked for a free order; a code is asked when there is a fee, and a wrong code orders nothing.
+- AC-7: A fee above the available balance is refused and nothing is ordered.
+- AC-8: The result shows the new card as Not activated with an arrival date; a second order for the same card is refused.
+- AC-9: When the bank is unavailable or times out nothing is ordered; a block already made stays.
 
 #### 9. Scenarios
 
-| # | Covers | Persona and setup | Outcome |
-|---|---|---|---|
-| T-1 | AC-1, AC-2, AC-4 | `alex`, `card_9021`, `lost`, home | Fee 5.00 from Main (8,720.76 → 8,715.76); old card `blocked`; new card `inactive` |
-| T-2 | AC-3, AC-4 | `alex`, `damaged` | Old card `active`; fee 5.00 |
-| T-3 | AC-2, AC-4, AC-7 | `alex`, `stolen` | Fee 0.00; dispute button visible |
-| T-4 | AC-5 | `alex`; setup Main balance 2.00 | `INSUFFICIENT_FUNDS`; no card ordered; balance 2.00 |
-| T-5 | AC-6 | `alex`; second request | `REPLACEMENT_PENDING` |
-| T-6 | AC-1 | `alex` | Skip consent: "Tick the box to continue." Skip code: `OTP_REQUIRED` |
-| T-7 | AC-9 | `alex` | Code `111111` x3: `locked`; no card ordered |
-| T-8 | AC-8 | conditions `timeout: ["bank.cards.replace"]` | Timeout text with Check Activity; balance unchanged in sandbox |
-| T-9 | AC-8 | conditions `unavailable: ["bank.cards.replace"]` | `SERVICE_UNAVAILABLE`; nothing ordered |
+Synthetic persona `alex`, Everyday debit ••9021, Aurora credit ••3318, Spare debit ••7745 (not activated). The home market is Market A unless stated. The sandbox code is the fixed test code.
+
+| # | Covers | Persona / setup | Conditions | Steps and expected result |
+|---|---|---|---|---|
+| T-1 | AC-1, AC-4, AC-5, AC-6, AC-8 | `alex`, `cardId: "card_9021"`, Lost, home address, Standard | none | **Block card and continue** blocks ••9021; review shows "Old card: Blocked", Fee "Free"; no code; "Card blocked and replacement ordered"; the new card is Not activated. |
+| T-2 | AC-2, AC-5 | `alex`, `reason: "damaged"`, Express, `expressFee` on | none | Fee "$15.00"; code asked; "Replacement ordered"; the old card is still Active. |
+| T-3 | AC-2 | `alex`, `cardId: "card_9021"` | none | "Expired" is unavailable (the card runs to 09/29). |
+| T-4 | AC-3 | `alex`, no `cardId` | none | Spare debit: "This card isn’t active yet."; after T-1, ••9021: "A replacement is already on its way. It arrives by {date}." |
+| T-5 | AC-4 | `alex`, Another address, then Market D | none | Address "ab": the short-field message; postcode "1": "Enter a valid postcode."; in Market D no postcode field. |
+| T-6 | AC-5 | `alex`, `expressFee` off | none | Express shows "Free"; no code. |
+| T-7 | AC-6 | `alex`, Express with a fee | none | Wrong code: "That code isn’t right. Try again." and nothing is ordered. |
+| T-8 | AC-7 | `alex`, account with less than $15 available, Express | none | "Not enough in your account to pay the delivery fee." |
+| T-9 | AC-9 | `alex` | `unavailable: ["bank.cards.replace"]` (prototype: Service down on) | The connection sheet; no order. |
+| T-10 | AC-9 | `alex` | `timeout: ["bank.cards.replace"]`, `latencyMs: 10000` | After 10 seconds "This is taking longer than expected. Check your cards before you try again." |
 
 #### 10. Expected mutation-check survivors
 
-- Fee amount for damaged vs stolen (swap): killed by T-2 and T-3.
-- Branch required rule when collecting: survives because the sandbox accepts a missing `branchId` for `delivery: "home"` only and T-1/T-2 use home; add a branch scenario, otherwise listed as a survivor "branch path not covered".
+The "Expired only near expiry" rule survives if no scenario uses a card near expiry; add one to kill it. The balance check at review survives because the commit checks it again; expected. The audit entry is not asserted; expected. Everything else: none expected.
 
 ---
 
 ### ★ Card PIN — `card-pin`
 
+**Catalog:** slug `card-pin`, workspace `personal`, category Cards (Personal: Cards), core no, can a bank switch it off: yes (a basic entry, kept in the Lean preset). Options: **Refuse easy PINs (repeats and sequences)** (`blockWeak`, default on). Research: `research/card-pin.md`. Built in `design/bankworkx-r1/src/journeys/62-card-service.js`, on the shared card data `CRD` from `24-cards.js`.
+
+There is no "show PIN" option and no PIN reminder. The PIN is typed twice, never shown, and never stored by the app. A code is always asked first.
+
 #### 1. Summary
 
-| Item | Value |
+| Field | Value |
 |---|---|
 | Slug | `card-pin` |
-| Purpose | Set a PIN on a new card, or change the PIN on a card you already use |
-| Release | 1 |
-| Workspace | Personal |
-| Status | New (draft). Needs the planned cards domain |
-| Channels | Web, mobile |
-| Starting pattern | Step-up → enter PIN twice (masked) → code → result |
-| Who may use it | Personal context holding `cards.pin` |
-
-The PIN is typed into the schema's `otp` block with `masked: true` and `keypad: true`, so only dots appear. It is a PIN, not a one-time code, so the block is bound to `pin.new` and **is not** the `otpVerify` integration (the engine counts wrong attempts only for an integration named exactly `otpVerify`).
+| Purpose | Set or change a card’s PIN after a code. The PIN is never shown. |
+| Release / workspace | 1 / Personal |
+| Status | Built in the prototype as a form journey (`submit: "Save PIN"`). Test parameters `{cardId: "card_9021", smoke: 1}`. |
+| Channels | Web and mobile |
+| Starting pattern | Which card, a code, new PIN twice, result |
+| Who may use it | Anyone signed in to Personal with `accounts.view`, for their own cards. |
 
 #### 2. Entry points
 
-| Place › label | Passed | Permission |
+| Place › label | Passes in | Permission |
 |---|---|---|
-| Cards › card › Set or change PIN | `{cardId}` | `cards.pin` |
-| `activate-card` result › Set my PIN | `{cardId}` with `returnTo` | `cards.pin` |
+| Cards › PIN | `{cardId}` | `accounts.view` |
+
+With a `cardId` the card is fixed and "Which card?" is skipped. Without one the first active or frozen physical card is preselected.
 
 #### 3. Screens
 
-**Screen `start` — "Set a card PIN" / "Change your card PIN"** (title by `ctx.card.pinSet`). `onEnter`: `callApi card`. Text "Your PIN is 4 digits. You use it at cash machines and some shops." Button "Continue". If the card isn't active: `alert` warning "Activate your card before you set a PIN." and button "Activate card". The step-up is raised on this screen: `callApi stepUp` (`bank.session.stepUp`, planned) shows the standard "confirm it's you" sheet (password or biometrics), then navigates to `old` (change) or `new` (first set).
+**Screen 1 `pick`: Which card?** (skipped when `cardId` is passed). A red notice shows the reason when the chosen card cannot be used.
 
-**Screen `old` — "Enter your current PIN"** (change only). `otp` block bind `pin.old`, `length 4`, `masked true`, `keypad true`, no resend. Hint "Enter the 4-digit PIN you use now." Button "Continue".
-
-| Field | Block | Required | Rule | Error message |
+| Field | Type | Required | Validation | Message |
 |---|---|---|---|---|
-| Current PIN | `otp` (masked) | Yes (change) | 4 digits | "Enter your 4-digit PIN." |
+| Card | select (physical cards; replaced cards are left out; for example "Everyday debit ••9021") | yes | the card is active or frozen | not found: "We can’t find that card."; virtual: "Virtual cards don’t have a PIN."; not activated: "Activate this card first."; any other state: "This card can’t be changed." |
 
-**Screen `new` — "Choose a new PIN".** `otp` block bind `pin.new`, `length 4`, masked, keypad. Hint "Don't use your birth year, 1234 or the same digit four times."
+**Screen 2 `code`: Enter your code.** Text "Sent to the phone ending 0142." Button **Continue** (busy "Checking your code…", about 0.5 seconds). The card is checked again here.
 
-| Field | Block | Required | Rule | Error message |
+| Field | Type | Required | Validation | Message |
 |---|---|---|---|---|
-| New PIN | `otp` (masked) | Yes | 4 digits; not all the same; not an ascending or descending run (1234, 4321); different from the current PIN | "Enter 4 digits." / "That PIN is too easy to guess. Try different digits." / "Choose a PIN that's different from your current one." |
+| Code | text, 6 digits, placeholder "6 digits", hint "{n} tries left" after a wrong code | yes | exactly 6 digits | "Enter the 6-digit code." |
 
-Button "Continue" (`validate`, navigate `confirmNew`).
+A wrong code: "That code isn’t right. Try again." After three wrong codes: "Too many wrong codes. Nothing was changed. Go back to start again."
 
-**Screen `confirmNew` — "Enter it again".** `otp` block bind `pin.again`, masked. Rule: equals `pin.new`. Error "The two PINs don't match. Try again." (`setData` clears both and returns to `new` after the second miss). Button "Continue" (`validate`, `callApi otpSend`, navigate `code`).
+**Screen 3 `pin`: New PIN.** A card shows the card name and "4 digits. Don’t use your birthday." Button **Save PIN** (busy "Saving your PIN…", about 0.7 seconds).
 
-**Screen `code`**: standard one-time code screen, button "Save PIN". Calls `otpVerify`, then `setPin` (`bank.cards.pin.set`), then `done`.
+| Field | Type | Required | Validation | Message |
+|---|---|---|---|---|
+| New PIN | hidden text, 4 digits | yes | exactly 4 digits | "Enter 4 digits." |
+| | | | with `blockWeak` on: not the same digit four times | "Don’t use the same digit four times." |
+| | | | not a run up or down, like 1234 or 4321 | "Don’t use numbers in a row, like 1234." |
+| | | | not a pattern like 1212 | "Choose a PIN that’s harder to guess." |
+| | | | not the last four digits of the card or its expiry as MMYY | "Don’t use part of your card number or expiry date." |
+| Confirm PIN | hidden text, 4 digits | yes | equal to the new PIN | "The PINs don’t match." |
 
-**Screen `done` (terminal) — "PIN saved".** `result` success, text "Your new PIN works at cash machines and in shops straight away. Don't tell it to anyone, not even us.", meta "Ref {{result.reference}}"; button "Done" (`exit`). `locked`, `failed` standard.
+**Result** (green). Title "PIN set" (first time) or "PIN changed", text "Use your new PIN from now on." Rows Card and "Ready to use" ("Now"). Button **Go to cards**. The PIN and the code are cleared from memory.
 
-All PIN values are cleared from journey data on leaving `confirmNew` and on `done` (`setData` to empty), and the journey log stores only the integration id, never `input`.
+**States**
+- Loading: "Checking your code…" and "Saving your PIN…".
+- Empty: not applicable.
+- Error: unavailable shows "This isn’t available right now. Nothing was changed. Try again in a few minutes."; timeout shows "This is taking longer than expected. Nothing was changed." Both with **Try again**; the PIN is not saved.
+- Stale: if the card changed state meanwhile, the notice of the card checks shows and the person goes back.
+
+**Home market configuration:** none.
 
 #### 4. Sandbox errors
 
-| Code | Message | Screen | Button |
+| Code | Message | Shows on | Button |
 |---|---|---|---|
-| `CARD_NOT_FOUND` | "We can't find that card." | `failed` | Back to cards |
-| `CARD_NOT_ACTIVE` | "Activate your card before you set a PIN." | `failed` | Activate card |
-| `PIN_INVALID` | "That current PIN isn't right." (change only) | `old` | Try again |
-| `PIN_WEAK` | "That PIN is too easy to guess. Try different digits." | `new` | Choose another |
-| `PIN_SAME_AS_OLD` | "Choose a PIN that's different from your current one." | `new` | Choose another |
-| `STEP_UP_REQUIRED` | "For your security, confirm it's you first." | `start` | Confirm |
-| `OTP_INVALID`, `OTP_REQUIRED` | Standard | `code` | Try again / Back to code |
-| `TIMEOUT` | "This is taking longer than expected. Your PIN was not changed." | `failed` | Try again |
-| `SERVICE_UNAVAILABLE`, `PERMISSION_DENIED`, `WRONG_CONTEXT`, `SESSION_EXPIRED` | Standard | `failed` | Try again / Back / Switch / Sign in |
+| `CARD_NOT_FOUND` | "We can’t find that card." | pick, code | Choose card |
+| `OTP_INVALID` | "That code isn’t right. Try again." | code | Try again |
+| `OTP_LOCKED` | "Too many wrong codes. Nothing was changed. Go back to start again." | code | Back to start |
+| `PIN_WEAK` | "Choose a PIN that’s harder to guess." | pin | Change PIN |
+| `TIMEOUT` | "This is taking longer than expected. Nothing was changed." | the step | Try again |
+| `SERVICE_UNAVAILABLE` | "This isn’t available right now. Nothing was changed. Try again in a few minutes." | the step | Try again |
+| `JOURNEY_DISABLED` | "This isn’t available at your bank." | whole journey | none |
+| `PERMISSION_DENIED` (planned) | Standard message | whole journey | Back |
 
 #### 5. Adapters
 
 | Integration id | Adapter | Request | Response | Errors | Status |
 |---|---|---|---|---|---|
-| `card` | `bank.cards.get` | `{cardId}` | card incl. `pinSet` | `CARD_NOT_FOUND` | (planned) |
-| `stepUp` | `bank.session.stepUp` | `{method}` | `{ok: true}` | `STEP_UP_REQUIRED` | (planned) |
-| `setPin` | `bank.cards.pin.set` | `{cardId, pin, oldPin?}` | `{pinSet: true, reference}` | section 4 | (planned) |
-| `otpSend`, `otpVerify` | existing | | | `OTP_INVALID` | Existing |
+| `cards` | `bank.cards.list` | none | map of cards | none | Existing (`packages/mock-bank-api/src/index.ts`) |
+| `setPin` | `bank.cards.setPin` | `{cardId, pin}` | `{cardId, firstSet}` | `CARD_NOT_FOUND`, `CARD_NOT_ACTIVE`, `PIN_WEAK` | (planned). The prototype only sets a flag on the card |
+| `sendOtp` / `verifyOtp` | `bank.otp.send` / `bank.otp.verify` | `{channel}` / `{code}` | `{sent}` / `{verified}` | `OTP_INVALID`, `OTP_LOCKED` | Existing |
 
-`moneyMoving: false`, `requiresOtp: true`.
+The PIN goes to the card system encrypted and is never written to a log, the activity list or a notification.
 
 #### 6. Permissions, step-up and limits
 
-`cards.pin`. Step-up level `stepup` (password or biometrics) and then `otp`. The sandbox checks the PIN rules (check 3). The PIN is never echoed in a response, a toast, a result or a log.
+`accounts.view`. Step-up: one-time code (6 digits, 3 tries) for every change. Limits: none. The PIN is 4 digits.
 
 #### 7. Result and links out
 
-Result `done`. No receipt. Notification: "PIN set/changed for card ending {{last4}}" (in-app and push; never says the PIN). Links out: card detail.
+Result as above. Notifications raised (planned): "The PIN on your card ending {last4} was changed". Every change is written to the card change log (audit) without the PIN. Links out: `cards`.
 
 #### 8. Acceptance criteria
 
-- AC-1: Setting or changing a PIN needs step-up and a verified one-time code.
-- AC-2: The PIN is shown only as dots and is entered twice.
-- AC-3: The two entries must match.
-- AC-4: Easy PINs (same digit, runs, same as the current PIN) are refused.
-- AC-5: Changing a PIN needs the current PIN, and a wrong one is refused.
-- AC-6: The PIN never appears in journey data after the journey, in a result or in a log.
-- AC-7: An inactive card cannot be given a PIN.
-- AC-8: Three wrong codes keep the old PIN.
-- AC-9: A timeout or unavailable service keeps the old PIN and says so.
+- AC-1: A code is asked before a PIN can be set, and a wrong code sets nothing.
+- AC-2: The PIN is 4 digits typed twice, and both must match.
+- AC-3: With `blockWeak` on, repeated digits, runs, patterns like 1212 and the last four digits or expiry of the card are refused with the messages above; with it off any 4 digits pass.
+- AC-4: Virtual, not-activated, blocked and replaced cards are refused with the messages above.
+- AC-5: The first PIN shows "PIN set"; a later one shows "PIN changed".
+- AC-6: Three wrong codes end the attempt with nothing changed.
+- AC-7: The PIN never appears in the result, the logs or the audit entry.
+- AC-8: When the bank is unavailable or times out the PIN is not saved.
 
 #### 9. Scenarios
 
-| # | Covers | Persona and setup | Outcome |
-|---|---|---|---|
-| T-1 | AC-1, AC-2, AC-3, AC-6 | `alex`, `card_9021` (change), old `4821`, new `7390` twice, code `482100` | `pinSet`; data model holds no PIN after done |
-| T-2 | AC-3 | `alex`; `7390` then `7391` | "The two PINs don't match. Try again." |
-| T-3 | AC-4 | `alex`; `1234`, `1111`, `4821` as the new PIN | The three messages in turn |
-| T-4 | AC-5 | `alex`; wrong current PIN | `PIN_INVALID` |
-| T-5 | AC-7 | `alex`; `card_7745` inactive | `CARD_NOT_ACTIVE`; Activate card button |
-| T-6 | AC-1 | `alex` | Skip step-up: `STEP_UP_REQUIRED`; skip code: `OTP_REQUIRED` |
-| T-7 | AC-8 | `alex` | Wrong code x3: `locked`; old PIN works |
-| T-8 | AC-9 | conditions `timeout: ["bank.cards.pin.set"]` | Timeout text; old PIN unchanged |
-| T-9 | AC-9 | conditions `unavailable: ["bank.cards.pin.set"]` | `SERVICE_UNAVAILABLE`; unchanged |
+Synthetic persona `alex`, Everyday debit ••9021 (PIN set), Spare debit ••7745 (not activated, no PIN), virtual card ••6150. The sandbox code is the fixed test code.
+
+| # | Covers | Persona / setup | Conditions | Steps and expected result |
+|---|---|---|---|---|
+| T-1 | AC-1, AC-2, AC-5 | `alex`, `cardId: "card_9021"` | none | Code, PIN 2580 twice: "PIN changed". |
+| T-2 | AC-2 | `alex`, `cardId` | none | Confirm 2581: "The PINs don’t match." 123: "Enter 4 digits." |
+| T-3 | AC-3 | `alex`, `blockWeak` on, then off | none | 1111, 1234, 4321, 1212, 9021: each refused with its message; with the option off 1111 is accepted. |
+| T-4 | AC-4 | `alex`, no `cardId` | none | Spare debit: "Activate this card first."; the virtual card is not in the list. |
+| T-5 | AC-5 | `alex`, an activated card without a PIN | none | Result "PIN set". |
+| T-6 | AC-1, AC-6 | `alex` | none | Wrong code: "That code isn’t right. Try again." with "2 tries left"; third: "Too many wrong codes. Nothing was changed. Go back to start again." |
+| T-7 | AC-7 | `alex` | none | The result, the card change log and the activity list show no PIN. |
+| T-8 | AC-8 | `alex` | `unavailable: ["bank.cards.setPin"]` (prototype: Service down on) | The connection sheet shows; the PIN is unchanged. |
+| T-9 | AC-8 | `alex` | `timeout: ["bank.cards.setPin"]`, `latencyMs: 10000` | After 10 seconds "This is taking longer than expected. Nothing was changed." |
 
 #### 10. Expected mutation-check survivors
 
-- Journey-side weak-PIN regex: survives, because `bank.cards.pin.set` returns `PIN_WEAK` too (another layer).
-- "Clear PIN from data on done": cannot be observed by a bank rule, so killed only by T-1's data-model assertion; if the runner has no data assertion, it **survives** (reason: no sandbox check for client-side data).
+The "last four or expiry" rule survives if no scenario uses it; T-3 uses 9021 to kill it. The pattern rule 1212 survives with a single example; add a second. The audit log entry is not asserted; expected. Everything else: none expected.
 
 ---
 
-### ★ Dispute a transaction — `dispute-transaction`
+### ★ Report a problem with a payment — `dispute-transaction`
+
+**Catalog:** slug `dispute-transaction` (name in the prototype "Report a problem with a payment"), workspace `personal`, category Cards (Personal: Cards), core no, can a bank switch it off: yes (a basic entry, kept in the Lean preset). Options: **Let people add a receipt or screenshot** (`allowEvidence`, default on); **Offer to block the card when a payment isn’t recognised** (`offerBlock`, default on). Research: `research/dispute-transaction.md`. Built in `design/bankworkx-r1/src/journeys/62-card-service.js`, on the shared card data `CRD` from `24-cards.js`.
+
+The report moves no money and gives no refund by itself; the bank decides after review. Only a payment that has posted, that went out, was made by card and is at most 120 days old can be reported, and only once.
 
 #### 1. Summary
 
-| Item | Value |
+| Field | Value |
 |---|---|
 | Slug | `dispute-transaction` |
-| Purpose | Tell the bank a card payment is wrong, unknown or not delivered, and open a case |
-| Release | 1 |
-| Workspace | Personal |
-| Status | New (draft). Needs the planned cards domain, `fileUpload` and `datePicker` blocks |
-| Channels | Web, mobile |
-| Starting pattern | Eligibility → reason → details and evidence → review → code → case result |
-| Who may use it | Personal context holding `cards.dispute` |
+| Purpose | Report a card payment the person doesn’t recognise or that went wrong. |
+| Release / workspace | 1 / Personal |
+| Status | Built in the prototype as a form journey (`submit: "Send report"`, `basic: true`). Test parameter `{txId: "cur-5"}`. |
+| Channels | Web and mobile |
+| Starting pattern | Which payment, what went wrong, details, evidence, declaration, result with what happens next |
+| Who may use it | Anyone signed in to Personal with `accounts.view`, for their own payments. |
 
 #### 2. Entry points
 
-| Place › label | Passed | Permission |
+| Place › label | Passes in | Permission |
 |---|---|---|
-| Cards › card › transaction › Report a problem | `{cardId, transactionId}` | `cards.dispute` |
-| Accounts › transaction detail › Dispute | `{transactionId}` (a card payment; `cardId` is looked up) | `cards.dispute` |
-| `replace-card` (stolen) result | `{cardId}` (the person picks transactions) | `cards.dispute` |
+| Transaction › Report a problem | `{txId}` | `accounts.view` |
+| Cards › a transaction › Report a problem | `{txId}` | `accounts.view` |
 
-If `transactionId` is missing, the first screen lists the card's posted transactions for the last 120 days to pick from.
+With a `txId` the payment is fixed and "Which payment?" is skipped. The payment is found in the account activity, the card activity or the home list.
 
 #### 3. Screens
 
-**Screen `pick` — "Which payment?"** (skipped when passed). `onEnter`: `callApi transactions`. List of posted, not-yet-disputed card payments (`select` rows, bind `dsp.transactionId`): merchant, date, amount. Empty "There are no payments you can report in the last 120 days." with "Back".
-Required: "Choose the payment you want to report."
+**Screen 1 `pick`: Which payment?** (skipped when `txId` is passed). A red notice shows the reason when the chosen payment cannot be reported.
 
-**Screen `reason` — "What went wrong?"** `onEnter`: `callApi reasons`, `callApi eligibility` is not a separate call: eligibility comes from `dispute.create` errors checked early by the preview below. `select` rows bind `dsp.reason`:
-
-| Reason id | Label | Help |
-|---|---|---|
-| `unrecognised` | "I don't recognise this payment" | "Nobody I know used my card." |
-| `duplicate` | "I was charged twice" | "The same payment appears more than once." |
-| `wrong_amount` | "The amount is wrong" | "I paid a different amount." |
-| `not_received` | "I didn't get what I paid for" | "The goods or service never arrived." |
-| `cancelled` | "I cancelled but was still charged" | "I cancelled a subscription or order." |
-| `other` | "Something else" | "Tell us in your own words." |
-
-A summary card on top shows the payment ({{merchant}}, {{amount}}, {{date}}). For `unrecognised`, an `alert` warning appears: "If you think someone has your card, freeze it now." with button "Freeze card" (`navigate toJourney freeze-card`, `{cardId, action: freeze}`, `returnTo` this screen). Button "Continue" (`validate`, `navigate details`).
-
-| Field | Block | Required | Rule | Error message |
+| Field | Type | Required | Validation | Message |
 |---|---|---|---|---|
-| Reason | `select` | Yes | One of six | "Choose what went wrong." |
+| Payment | select (up to 12 of the latest posted card payments from the current account, "{merchant} · {amount} · {date}") | yes | the payment can be reported (see the checks below) | the check message |
 
-**Screen `details` — "Tell us more".**
+Checks, in this order: not found "We can’t find that payment."; pending "This payment is still pending. You can report a problem once it has posted."; money in "Only payments out can be reported."; not a card payment "This payment can’t be reported here. Contact us."; already reported "You’ve already reported this payment. Case {ref}."; older than 120 days "It’s been more than 120 days since this payment. Contact us."
 
-| Field | Block | Required | Rule | Error message |
+**Screen 2 `reason`: What went wrong?** A card at the top shows the merchant, the date and the amount, with the red notice when the payment cannot be reported.
+
+| Field | Type | Required | Validation | Message |
 |---|---|---|---|---|
-| Amount you're disputing | `amountInput` bind `dsp.amount` (default the full amount) | Yes | 0.01 up to the payment amount, ≤ 2 decimals | "Enter an amount from 0.01 to {{txn.amount}}." |
-| What happened | `textInput` (`lines: 4`) bind `dsp.details` | Yes | 10 to 500 characters | "Tell us a little more (at least 10 characters)." / "Please keep it under 500 characters." |
-| Do you still have your card? | `toggle` bind `dsp.cardInPossession` | Yes | none | none |
-| When did you contact the shop? (not_received, cancelled only) | `datePicker` (planned) bind `dsp.contactedOn` | No | Not in the future; not before the payment date | "Choose a date between {{txn.date}} and today." |
-| Evidence (receipts, screenshots, emails) | `fileUpload` (planned) bind `dsp.evidence` | Optional (required note for `not_received`: "Add your order confirmation if you have it.") | Up to 3 files; JPG, PNG or PDF; 5 MB each | "Files must be JPG, PNG or PDF." / "Each file must be 5 MB or less." / "You can add up to 3 files." |
+| Reason | choice cards: "I don’t recognise it", "Charged twice", "Wrong amount", "Goods or service not received", "Cancelled but charged", "Other" | yes | one chosen | "Choose a reason." |
 
-Helper under details: "For example, when you ordered, what you were told, and what you did next." Button "Review" (`validate`, `navigate review`).
+**Screen 3 `details`: Tell us more.** The fields depend on the reason:
 
-**Screen `review` — "Review your report".** `reviewSummary`: Payment, Date, Card, Reason, Amount disputed, Files "{{count}} attached". `alert` info "We'll look into it and reply within 10 working days. You may need to wait to get any money back." `consent` bind `dsp.consent`, termsVersion `disputes-v1`, text "I confirm what I've told you is true and I agree BankWorkx may share these details with the shop's bank." validation `mustBeTrue` "Tick the box to continue." Button "Send report" (`validate`, `callApi otpSend`, navigate `code`).
+| Reason | Field | Type | Required | Validation | Message |
+|---|---|---|---|---|---|
+| I don’t recognise it | Do you still have your card? | chips "Yes" / "No" | yes | one chosen (choosing "No" turns the block switch on) | none |
+| I don’t recognise it | Block this card and order a new one | switch, "Recommended if someone else may have your details" (shown when `offerBlock` is on and the card is active) | no | none | none |
+| Charged twice | When was the other charge? | select, the last 30 days | yes | one chosen | none |
+| Wrong amount | Amount you expected | amount in dollars | yes | not equal to the amount charged | "This is the amount that was charged." |
+| Goods or service not received | What did you order? | text, up to 80 characters | yes | at least 3 characters | "Tell us what you ordered." |
+| Goods or service not received | When should it have arrived? | select, the last 60 days | yes | one chosen | none |
+| Goods or service not received | Have you contacted the merchant? | chips "Yes" / "Not yet" | yes | hint after "Not yet": "If you can, contact the merchant first. You can still send this report." | none |
+| Cancelled but charged | When did you cancel? | select, the last 90 days | yes | one chosen | none |
+| Cancelled but charged | Cancellation reference (optional) | text, up to 30 characters | no | none | none |
+| Other | What happened? | long text, up to 300 characters | yes | at least 10 characters | "Tell us a little more (at least 10 characters)." |
 
-**Screen `code`**: standard; button "Send report" calls `otpVerify`, `create`, then `done`.
+**Screen 4 `evidence`: Add evidence** (only when `allowEvidence` is on). Intro "Optional. A receipt, order email or screenshot helps." One file field "Add a file" (sample files "Receipt.pdf", "Screenshot.png"). Button **Continue**. A file is optional.
 
-**Screen `done` (terminal) — "Report sent".** `result` success, text "We've opened case {{result.reference}}. We'll reply by {{result.replyBy}}.", meta "Case {{result.disputeId}}". Buttons "View case" (Card transactions filtered Disputed), "Done". For `unrecognised` also `alert` info "We recommend replacing your card: " with "Replace card" (`replace-card`).
-`locked`, `failed` standard.
+**Screen 5 `declare`: Confirm and send.** Rows Payment, Amount, Reason and Evidence (the file name, when added). Button **Send report** (busy "Sending…", about 0.7 seconds).
+
+| Field | Type | Required | Validation | Message |
+|---|---|---|---|---|
+| I confirm what I’ve told you is true and complete. | checkbox | yes | ticked | "Please confirm to continue." |
+
+**Result** (green). Title "Report received", text "We’ll keep you updated in your messages.", status "Under review", with a case reference (for example DSP-…). Rows Payment, Amount, Reason, "Card: Blocked" when the card was blocked, then what happens next: "Within 2 working days: We review your report", "Within 10 working days: We ask the merchant", "Within 45 days: You get our decision". Button **Back to cards**. The payment is marked as reported with its case reference in the activity list.
+
+**States**
+- Loading: "Sending…".
+- Empty: when there is no reportable payment the select is empty and the notice of the checks shows.
+- Error: unavailable shows "This isn’t available right now. Nothing was sent. Try again in a few minutes."; timeout shows "This is taking longer than expected. Nothing was sent." Both with **Try again**; the report is not made.
+- Stale: if the payment was reported or aged out meanwhile, the commit fails with the message of that code.
+
+**Home market configuration:** none. Amounts are in the account currency, shown here as dollars. The 120-day window and the review times are the bank’s settings in the sandbox.
 
 #### 4. Sandbox errors
 
-| Code | Message | Screen | Button |
+| Code | Message | Shows on | Button |
 |---|---|---|---|
-| `CARD_NOT_FOUND` | "We can't find that card." | `failed` | Back to cards |
-| `TRANSACTION_NOT_FOUND` | "We can't find that payment. Choose another." | `pick` | Choose payment |
-| `NOT_DISPUTABLE` | "This kind of payment can't be reported here. Money you received, cash and fees go through a service request." | `failed` | New request (`service-request`) |
-| `TRANSACTION_PENDING` | "This payment isn't final yet. Try again when it shows as posted." | `failed` | Back |
-| `DISPUTE_WINDOW_CLOSED` | "This payment is more than 120 days old, so it can't be reported online. Contact us." | `failed` | Contact us (`new-message`) |
-| `DISPUTE_EXISTS` | "You've already reported this payment (case {{reference}})." | `failed` | View case |
-| `DISPUTE_AMOUNT_INVALID` | "Enter an amount from 0.01 to {{amount}}." | `details` | Fix it |
-| `REASON_INVALID` | "Choose what went wrong." | `reason` | Choose |
-| `OTP_INVALID`, `OTP_REQUIRED` | Standard | `code` | Try again / Back to code |
-| `TIMEOUT` | "This is taking longer than expected. Nothing was changed. Check your cases before you try again." | `failed` | Try again |
-| `SERVICE_UNAVAILABLE`, `PERMISSION_DENIED`, `WRONG_CONTEXT`, `SESSION_EXPIRED` | Standard | `failed` | Try again / Back / Switch / Sign in |
+| `TX_NOT_FOUND` | "We can’t find that payment." | pick, commit | Choose payment |
+| `TX_PENDING` | "This payment is still pending. You can report a problem once it has posted." | pick, reason, commit | Back |
+| `ALREADY_DISPUTED` | "You’ve already reported this payment." (in the notice: "You’ve already reported this payment. Case {ref}.") | pick, reason, commit | Back |
+| `TOO_OLD` | "It’s been more than 120 days since this payment. Contact us." | pick, reason, commit | Contact us |
+| `TIMEOUT` | "This is taking longer than expected. Nothing was sent." | the step | Try again |
+| `SERVICE_UNAVAILABLE` | "This isn’t available right now. Nothing was sent. Try again in a few minutes." | the step | Try again |
+| `JOURNEY_DISABLED` | "This isn’t available at your bank." | whole journey | none |
+| `PERMISSION_DENIED` (planned) | Standard message | whole journey | Back |
+
+The notices "Only payments out can be reported." and "This payment can’t be reported here. Contact us." have no code of their own in the prototype; at commit they come back as `ALREADY_DISPUTED` (see the report note). In the spec they get their own codes `NOT_A_PAYMENT_OUT` and `NOT_A_CARD_PAYMENT` (planned).
 
 #### 5. Adapters
 
 | Integration id | Adapter | Request | Response | Errors | Status |
 |---|---|---|---|---|---|
-| `transactions` | `bank.cards.transactions` | `{cardId}` | record | `CARD_NOT_FOUND` | (planned) |
-| `reasons` | `bank.cards.dispute.reasons` | none | reason list | none | (planned) |
-| `create` | `bank.cards.dispute.create` | `{cardId, transactionId, reason, amount, details, cardInPossession, evidence[]}` | `{disputeId, reference, status: "under_review", replyBy}` | section 4 | (planned) |
-| `otpSend`, `otpVerify` | existing | | | `OTP_INVALID` | Existing |
-
-`moneyMoving: false` (no credit in the sandbox), `requiresOtp: true`. The file upload is a simulated store (`fileUpload`, planned): the response of an upload is an `evidenceId` passed in `evidence[]`.
+| `transactions` | `bank.transactions.list` | `{accountId}` | transactions | none | (planned). The prototype reads its own activity data |
+| `createDispute` | `bank.disputes.create` | `{transactionId, reason, details, blockCard, evidenceId?}` | `{caseRef, cardBlocked}` | `TX_NOT_FOUND`, `TX_PENDING`, `ALREADY_DISPUTED`, `TOO_OLD`, `NOT_A_PAYMENT_OUT`, `NOT_A_CARD_PAYMENT` | (planned) |
+| `uploadEvidence` | `bank.files.upload` | file | `{fileId}` | `FILE_*` | (planned). One file; a receipt or screenshot |
 
 #### 6. Permissions, step-up and limits
 
-`cards.dispute`. Step-up `otp`. Dispute window 120 days. One open case per transaction. Evidence: 3 files, 5 MB each.
+`accounts.view`. Step-up: **none**; the report moves no money. Blocking the card from the report is immediate and needs no code (it only restricts the card). Limits: one report per payment; 120 days.
 
 #### 7. Result and links out
 
-Result `done`; receipt: the case summary (reference, payment, reason, amount, date opened). Notifications: "We've opened case {{reference}}" immediately and "Update on case {{reference}}" (planned, on status change). Links out: card transactions (Disputed filter), `replace-card`, `freeze-card`, `service-request`.
+Result as above. Notifications raised (planned): "We received your report, case {ref}" and updates at each stage; the message also arrives in `new-message`. The report and any block are written to the card change log (audit). Links out: `cards`, `card-controls`, `contact-support`.
 
 #### 8. Acceptance criteria
 
-- AC-1: Only posted card payments within 120 days and not already disputed can be reported.
-- AC-2: A reason, a description of at least 10 characters and a valid amount are required.
-- AC-3: The disputed amount cannot exceed the payment.
-- AC-4: A pending payment is refused with a clear message.
-- AC-5: A payment already reported is refused and the existing case is named.
-- AC-6: Evidence files are limited to 3 files, JPG, PNG or PDF, 5 MB each.
-- AC-7: Sending needs consent and a verified one-time code.
-- AC-8: For "I don't recognise this payment" the person is offered to freeze or replace the card.
-- AC-9: A timeout or unavailable service opens no case and says so.
+- AC-1: Only a posted card payment out, at most 120 days old and not already reported, can be reported, with the messages above.
+- AC-2: The details asked depend on the reason, with the validations above.
+- AC-3: "I don’t recognise it" offers to block the card when `offerBlock` is on and the card is active; answering "No" to "Do you still have your card?" turns the block on.
+- AC-4: The evidence step appears only when `allowEvidence` is on and is optional.
+- AC-5: The report cannot be sent until the declaration is ticked.
+- AC-6: Sending creates one case, marks the payment as reported and shows "Report received" with the case reference and the three next steps.
+- AC-7: A second report for the same payment is refused with the case reference.
+- AC-8: With the block on the card becomes Blocked and the result says so.
+- AC-9: When the bank is unavailable or times out nothing is sent.
 
 #### 9. Scenarios
 
-| # | Covers | Persona and setup | Outcome |
-|---|---|---|---|
-| T-1 | AC-1, AC-2, AC-7 | `alex`, `card_9021`, `ct_2`, `not_received`, details of 20 characters, code `482100` | Case opened, status `under_review`; transaction shows Disputed |
-| T-2 | AC-2 | `alex` | Details "too short": message; no call |
-| T-3 | AC-3 | `alex`, `ct_2` (420.00) | Amount 500: `DISPUTE_AMOUNT_INVALID` |
-| T-4 | AC-4 | `alex`, `ct_3` (pending) | `TRANSACTION_PENDING` |
-| T-5 | AC-5 | `alex`; after T-1 | Second report: `DISPUTE_EXISTS` |
-| T-6 | AC-1 | `alex`; setup `ct_9` 130 days old | `DISPUTE_WINDOW_CLOSED` |
-| T-7 | AC-6 | `alex`; four files, or a `.exe` | The file messages |
-| T-8 | AC-8 | `alex`, reason `unrecognised` | Freeze warning; Replace button in result |
-| T-9 | AC-7 | `alex` | Skip consent: message; skip code: `OTP_REQUIRED` |
-| T-10 | AC-9 | conditions `timeout: ["bank.cards.dispute.create"]` | Timeout text; no case |
-| T-11 | AC-9 | conditions `unavailable: ["bank.cards.dispute.create"]` | `SERVICE_UNAVAILABLE`; no case |
+Synthetic persona `alex`, Current ••4410 with card payments, Everyday debit ••9021. Test payment `txId: "cur-5"`.
+
+| # | Covers | Persona / setup | Conditions | Steps and expected result |
+|---|---|---|---|---|
+| T-1 | AC-1, AC-2, AC-5, AC-6 | `alex`, `txId: "cur-5"` | none | "Charged twice", date, declaration, **Send report**: "Report received", status "Under review", a case reference and the three steps. |
+| T-2 | AC-1 | `alex` | none | A pending payment: "This payment is still pending. You can report a problem once it has posted." A payment in: "Only payments out can be reported." A transfer: "This payment can’t be reported here. Contact us." A payment 130 days old: "It’s been more than 120 days since this payment. Contact us." |
+| T-3 | AC-2 | `alex` | none | Wrong amount equal to the charge: "This is the amount that was charged."; "Other" with 5 characters: "Tell us a little more (at least 10 characters)."; not received with "ab": "Tell us what you ordered." |
+| T-4 | AC-3, AC-8 | `alex`, "I don’t recognise it", an active card | none | "No" to "Do you still have your card?" turns the block switch on; after sending, "Card: Blocked" and the card is Blocked. With `offerBlock` off the switch is absent. |
+| T-5 | AC-4 | `alex`, `allowEvidence` on, then off | none | Evidence step with "Add a file", optional; with the option off the step is absent. |
+| T-6 | AC-5 | `alex` | none | Send without the tick: "Please confirm to continue." |
+| T-7 | AC-7 | `alex`, T-1 done | none | The same payment: "You’ve already reported this payment. Case {ref}." |
+| T-8 | AC-9 | `alex` | `unavailable: ["bank.disputes.create"]` (prototype: Service down on) | The connection sheet; nothing is sent. |
+| T-9 | AC-9 | `alex` | `timeout: ["bank.disputes.create"]`, `latencyMs: 10000` | After 10 seconds "This is taking longer than expected. Nothing was sent." |
 
 #### 10. Expected mutation-check survivors
 
-- 120-day window off by one day: survives (no seed transaction exactly on the boundary); add one at 120 and 121 days to kill it, else list.
-- Evidence limits: killed only if the `fileUpload` block is simulated by the runner; until then **survive** with reason "fileUpload is planned".
+The 120-day limit survives if no scenario uses a payment near 120 days; T-2 uses 130 days and a second, 119 days, kills the boundary. The "amount equal to the charge" rule survives if the sandbox does not assert it; expected. The audit entry is not asserted; expected. Everything else: none expected.
 
 ---
 
-### ★ Add card — `add-card`
+### ★ Add a card — `add-card`
 
-Existing, upgraded. This journey saves an **outside card** so `add-money` can use it. It is not a BankWorkx card.
+**Catalog:** slug `add-card`, workspace `personal`, category Cards (Personal: Cards), core no, can a bank switch it off: yes (a basic entry, kept in the Lean preset). Options: **Accept the 15-digit card type** (`acceptAmex`, default on); **Let saved cards be used for paying as well as adding money** (`allowPay`, default on). Research: `research/add-card.md`. Built in `design/bankworkx-r1/src/journeys/61-topup-card-extras.js`. It saves a card from another bank (an external card); it does not issue a BankWorkx® card.
+
+There is no default-card choice. Up to 5 cards can be saved. A card is saved only after a check that proves the person holds it.
 
 #### 1. Summary
 
-| Item | Value |
+| Field | Value |
 |---|---|
-| Slug | `add-card` (fixture `packages/journey-schema/src/fixtures/bankworkx.ts`, `addCard`) |
-| Purpose | Save a card from any bank to add money from |
-| Release | 1 |
-| Workspace | Personal |
-| Status | Existing, upgraded (adds a one-time code, per-code messages and a duplicate-card path) |
-| Channels | Mobile today (`channels: ["mobile"]`); upgrade adds web |
-| Starting pattern | Card form → review with consent → (upgrade) one-time code → result |
-| Who may use it | Personal context holding `cards.manage` |
+| Slug | `add-card` |
+| Purpose | Save a card from another bank to add money or pay. A code checks the card before it is saved. |
+| Release / workspace | 1 / Personal |
+| Status | Built in the prototype as a form journey (`submit: "Save card"`, `basic: true`). Test parameter `{smoke: 1}` prefills the security code. |
+| Channels | Web and mobile |
+| Starting pattern | Card details with a check, a verification code, nickname and uses, result |
+| Who may use it | `payments.create` |
 
 #### 2. Entry points
 
-| Place › label | Passed | Permission |
+| Place › label | Passes in | Permission |
 |---|---|---|
-| Cards › carousel › Add a card | none | `cards.manage` |
-| `add-money` card choice › "Add a new card" (planned, `returnTo` `add-money`) | none | `cards.manage` |
+| Cards › Add a card | none | `payments.create` |
+| Add money › Choose card › Add a card | none | `payments.create` |
 
 #### 3. Screens
 
-**As built today.**
+**Screen 1 `card`: Card details.** The button shows "Checking your card…" for about 0.7 seconds and runs the card checks.
 
-1. `card` — "Add your card": `stepper` (`card`, `review`), `cardForm` bound to `card` (card number, name, expiry, security code, with a live card picture and one message per field), `textInput` nickname (label "Nickname (optional)", placeholder "For example, Everyday"), `toggle` `card.makeDefault` ("Make this my default card", helper "Used first when you add money"), `button` "Continue" (`validate`, navigate `review`).
-2. `review` — "Review card": `reviewSummary` (Name on card, Expires, Nickname), `consent` `card.consent` (termsVersion `cards-v1`, "I authorise BankWorkx to save this card for adding money", must be true, "Tick the box to continue"), `button` "Save card" (`validate`, `callApi addCard`, navigate `success`; on error navigate `failed`).
-3. `success` (terminal) — "Card added": "You can now add money from this card." and "Done".
-4. `failed` (terminal) — "We couldn't add this card": one text for every error, "It may already be saved, or the details may not match. Check them and try again." Button "Try again" back to `card`.
-
-The fixture has no one-time code, no per-error wording, and no distinction between a wrong number and a card that is already saved.
-
-**Upgraded.**
-
-**Screen `card`** (as built) with these field rules, enforced twice (in `cardForm` and by `bank.cards.add`):
-
-| Field | Block | Required | Rule | Error message |
+| Field | Type | Required | Validation | Message |
 |---|---|---|---|---|
-| Card number | `cardForm` | Yes | 13 to 19 digits, passes the Luhn check (`4242 4242 4242 4242` and `5555 5555 5555 4444` pass) | "That card number is not valid" |
-| Name on card | `cardForm` | Yes | Not empty | "Enter the name on the card." |
-| Expiry | `cardForm` | Yes | `MM/YY`, month 01 to 12 | "Enter the expiry as MM/YY" |
-| Security code | `cardForm` | Yes | 3 or 4 digits | "Enter the 3 or 4 digit security code" |
-| Nickname | `textInput` | No | up to 24 characters; blank becomes "My card" | "Keep the nickname under 24 characters." |
-| Make default | `toggle` | No | The first saved card becomes the default whatever is chosen | none |
+| Card number | phone keypad, up to 23 characters, placeholder "1234 5678 9012 3456" | yes | digits only (spaces and hyphens are ignored) | "Use digits only." |
+| | | | a type we accept (see below) | "We can’t accept this type of card." |
+| | | | right length for the type and passes the card number check digit | "Check the card number." |
+| Expiry | text, half width, placeholder "MM/YY" | yes | the format MM/YY with a month 01 to 12 | "Use the format MM/YY." |
+| | | | not in the past | "This card has expired." |
+| | | | not more than 15 years ahead | "Check the expiry date." |
+| Security code | hidden text, half width, up to 4 digits | yes | 3 or 4 digits; 4 for the 15-digit type, 3 for the others | "Enter the 3 or 4 digits on the card." / "Enter the 4 digits on the front." / "Enter the 3 digits on the back." |
+| Name on card | text, up to 40 characters | yes | letters, spaces and . ’ -, at least 2 characters | "Use letters only." |
+| Billing postcode | text, up to 10 characters (not shown in Market D) | yes | the market format below | the market message below |
 
-**Screen `review`** (as built) plus: `alert` info "We'll send a code to your phone to check it's really you. We never store your security code." Button "Send code" (`validate`, `callApi otpSend`, navigate `code`). The `alert` is new copy.
+Under the card number a small line shows the card type and the last four digits when the number is valid, "We don’t recognise this card type." for an unknown start, or "We can’t accept this type of card." Card types: the number starts with 4 (16 digits), with 51 to 55 or 2221 to 2720 (16 digits), with 34 or 37 (15 digits, only while `acceptAmex` is on). Other starts (for example 6, 36, 38, 39, 50, 56 to 59) are refused. The type names shown are the networks’ names (see the report note).
 
-**Screen `code` (new)**: standard one-time code screen (see the card note above). Button "Save card" calls `otpVerify`, then `addCard`, then `success`.
+On **Continue** the card is also checked: a number ending 0002 is declined; a card already saved (same last four and expiry) is refused; a sixth card is refused.
 
-**Screen `success`**: title "Card added", text "Your {{result.network}} card ending {{result.last4}} is saved. You can now add money from it.", buttons "Add money" (`navigate toJourney add-money`) and "Done" (`exit`).
+**Screen 2 `verify`: Confirm it’s your card.** Intro "We’ll check the card before we save it." Button **Continue** (busy "Checking the code…", about 0.6 seconds).
 
-**Screens `failed` and `locked`**: `failed` shows `{{ctx.error.message}}` (the table below) and goes back to `card`.
-
-States: submit shows a spinner in the button; the Luhn error shows under the card number as the user types (after the 13th digit).
-
-#### 4. Sandbox errors (bank.cards.add)
-
-| Code | Exact adapter message | What the person sees | Screen | Button |
+| Field | Type | Required | Validation | Message |
 |---|---|---|---|---|
-| `CARD_INVALID` | "That card number is not valid" | "That card number is not valid. Check it and try again." | `failed` (focus on number) | Fix card number (to `card`) |
-| `EXPIRY_INVALID` | "Enter the expiry as MM/YY" | "Enter the expiry as MM/YY." | `failed` | Fix expiry |
-| `CARD_EXPIRED` | "This card has expired" | "This card has expired. Use a card that hasn't." (sandbox date: before 2 Nov 2026) | `failed` | Use another card |
-| `CVV_INVALID` | "Enter the 3 or 4 digit security code" | "Enter the 3 or 4 digit security code." | `failed` | Fix code |
-| `CARD_EXISTS` | "This card is already added" | "This card is already saved (ending {{last4}}). You can use it to add money." | `failed` | Add money (`add-money`) / Back |
-| `NOT_SUPPORTED` | "Not available for this customer" | Standard S-`NOT_SUPPORTED` | `failed` | Back |
-| `OTP_INVALID` | "Incorrect code" | Standard S-`OTP_INVALID` | `code` | Try again |
-| `OTP_REQUIRED` (upgrade, planned) | "OTP not verified" | Standard | `code` | Back to code |
-| `TIMEOUT` (planned) | | "This is taking longer than expected. Nothing was changed." | `failed` | Try again |
-| `SERVICE_UNAVAILABLE` (planned) | | Standard | `failed` | Try again |
-| `PERMISSION_DENIED`, `WRONG_CONTEXT`, `SESSION_EXPIRED` (planned) | | Standard | `failed` | Back / Switch / Sign in |
+| How do you want to check? | chips "Text message code" or "Small test charge" | yes | one chosen | none |
+| Code | text; label "Code" (6 digits, placeholder "6 digits") or, for the test charge, "Code from the charge" (4 digits, placeholder "4 digits") | yes | the right length | "Enter the 6-digit code." / "Enter the 4-digit code." |
 
-Order the adapter checks things in: number (Luhn), expiry format, expiry date, security code, duplicate last 4.
+Hints: text message "Sent to the phone ending 0142."; test charge "We’ve placed a small temporary charge on your card. Its description shows the code. The charge is returned." Sandbox codes: 482100 (or 000000) for text, 4821 for the charge. Changing the method clears the code and the tries. A wrong code: "That code isn’t right. Try again." After three wrong codes: "Too many wrong codes. Nothing was saved. Go back to start again."
+
+**Screen 3 `name`: Save your card.**
+
+| Field | Type | Required | Validation | Message |
+|---|---|---|---|---|
+| Nickname (optional) | text, up to 24 characters, placeholder "For example, Joint card" | no | 2 characters or more when given | "Use at least 2 characters." |
+| Use to add money | switch (default on) | no | none | none |
+| Use to pay | switch (default on; shown when `allowPay` is on) | no | none | none |
+
+**Result** (green). Title "Card saved", text "{card type} ••{last4} is ready to use." Rows Card, Nickname (when given), Expires, Used for ("Adding money", "Paying", both with "and", or "Nothing yet"). Button **Go to cards**.
+
+**States**
+- Loading: "Checking your card…" and "Checking the code…".
+- Empty: not applicable.
+- Error: unavailable shows "This isn’t available right now. Nothing was saved. Try again in a few minutes."; timeout shows "This is taking longer than expected. Nothing was saved." Both with **Try again**.
+- Stale: the duplicate and limit checks run again at the end; the person goes back with the message.
+
+**Home market configuration** (only the postcode rule changes)
+
+| Market | Billing postcode | Message | Sample |
+|---|---|---|---|
+| Market A (routing number and account) | 5 digits, optionally followed by a hyphen and 4 digits | "Enter the 5-digit ZIP code." | 62704 |
+| Market B (sort code and account) | outward and inward code, for example SW1A 1AA | "Enter a valid postcode." | SW1A 1AA |
+| Market C (IBAN) | 4 to 10 letters, digits, spaces or hyphens | "Enter a valid postcode." | 10115 |
+| Market D (IBAN, mobile alias) | not asked | none | none |
+
+#### 4. Sandbox errors
+
+| Code | Message | Shows on | Button |
+|---|---|---|---|
+| `CARD_INVALID` | "Check the card number." | card | Change number |
+| `CARD_BRAND_UNSUPPORTED` | "We can’t accept this type of card." | card | Change card |
+| `CARD_EXPIRED` | "This card has expired." | card | Change expiry |
+| `CARD_DECLINED` | "The card was declined. Try another card." | card (a number ending 0002) | Change card |
+| `CARD_DUPLICATE` | "This card is already saved." | card | Back |
+| `CARD_LIMIT` | "You can save up to 5 cards. Remove one to add another." | card, commit | Back |
+| `VERIFY_INVALID` | "That code isn’t right. Try again." | verify | Try again |
+| `VERIFY_LOCKED` | "Too many wrong codes. Nothing was saved. Go back to start again." | verify | Back to start |
+| `TIMEOUT` | "This is taking longer than expected. Nothing was saved." | the step | Try again |
+| `SERVICE_UNAVAILABLE` | "This isn’t available right now. Nothing was saved. Try again in a few minutes." | the step | Try again |
+| `JOURNEY_DISABLED` | "This isn’t available at your bank." | whole journey | none |
+| `PERMISSION_DENIED` (planned) | Standard message | whole journey | Back |
 
 #### 5. Adapters
 
 | Integration id | Adapter | Request | Response | Errors | Status |
 |---|---|---|---|---|---|
-| `addCard` | `bank.cards.add` | `{number, holder, expiry, cvv, nickname, makeDefault}` | `{cardId, last4, network}` | `CARD_INVALID`, `EXPIRY_INVALID`, `CARD_EXPIRED`, `CVV_INVALID`, `CARD_EXISTS`, `NOT_SUPPORTED` (+ `OTP_REQUIRED` in the upgrade) | Existing |
-| `otpSend` | `bank.otp.send` | `{channel: "sms"}` | `{sent, maskedPhone, channel}` | none | Existing |
-| `otpVerify` | `bank.otp.verify` | `{code}` | `{verified: true}` | `OTP_INVALID` | Existing |
+| `cards` | `bank.cards.list` | none | map of saved cards | none | Existing (`packages/mock-bank-api/src/index.ts`) |
+| `addCard` | `bank.cards.add` | `{number, expiry, cvv, holder, nickname?, makeDefault?}` | `{cardId, last4, network}` | `CARD_INVALID`, `EXPIRY_INVALID`, `CARD_EXPIRED`, `CVV_INVALID`, `CARD_EXISTS` | Existing. It does not check the postcode, the verification code, the limit of 5 or the uses; those are (planned) |
+| `verifyCard` | `bank.cards.verify` | `{cardId, method, code}` | `{verified}` | `VERIFY_INVALID`, `VERIFY_LOCKED`, `CARD_DECLINED` | (planned) |
+| `sendOtp` / `verifyOtp` | `bank.otp.send` / `bank.otp.verify` | `{channel}` / `{code}` | `{sent}` / `{verified}` | `OTP_INVALID` | Existing |
 
-`moneyMoving: false`. `requiresOtp`: no today; **true** in the upgrade (the sandbox gains an `OTP_REQUIRED` check). The sandbox keeps only `id` (`c_<last4>`), `network`, `last4`, `holder`, `expiry`, `nickname`, `isDefault`; it never stores the security code.
+The card number and security code are never stored or logged; only the last four digits and the expiry are kept (planned for the real adapter).
 
 #### 6. Permissions, step-up and limits
 
-`cards.manage`. Step-up `otp` (upgrade). Limits: none on the number of saved cards in the sandbox. Security: the number and code are `secure` values in the journey data (cleared on `success`).
+`payments.create`. Step-up: a verification code (6 digits by text or 4 digits from a small test charge), 3 tries. Limits: 5 saved cards; each saved card has two uses, adding money and paying.
 
 #### 7. Result and links out
 
-Result `success`; no receipt. Notification: "A card ending {{last4}} was added to your account" (security notice, in-app and push; the person can follow "Wasn't you?" to `change-password`). Links out: `add-money`, the carousel (saved cards row).
+Result as above. Notifications raised (planned): "A card ending {last4} was added". Every save is written to the audit log without the card number. Links out: Cards; `add-money`.
 
 #### 8. Acceptance criteria
 
-- AC-1: A card that passes the number check, has a valid unexpired expiry and a 3 or 4 digit code is saved.
-- AC-2: Each bad field gets its own message, not one general error.
-- AC-3: An expired card is refused.
-- AC-4: A card already saved (same last 4 digits) is refused and the person is pointed to add money.
-- AC-5: The first card saved becomes the default; later cards become the default only if the person chose it, and then the old default is cleared.
-- AC-6: Saving needs consent and (upgrade) a verified one-time code.
-- AC-7: The security code is never stored.
-- AC-8: A timeout or unavailable service saves nothing.
+- AC-1: The card number must be digits, of an accepted type, the right length and pass the check digit.
+- AC-2: The 15-digit type is accepted only with `acceptAmex` on, and needs a 4-digit security code; the others need 3.
+- AC-3: An expired card is refused; the expiry format is MM/YY.
+- AC-4: The postcode follows the home market, and is not asked in Market D.
+- AC-5: A card is saved only after the right code; three wrong codes end the attempt with nothing saved.
+- AC-6: The same card (last four and expiry) cannot be saved twice, and no more than 5 cards can be saved.
+- AC-7: "Use to pay" is offered only with `allowPay` on; the result lists what the card is used for.
+- AC-8: The card number and security code do not appear in the result, the logs or the activity.
+- AC-9: When the bank is unavailable or times out nothing is saved.
 
 #### 9. Scenarios
 
-| # | Covers | Persona and setup | Outcome |
-|---|---|---|---|
-| T-1 | AC-1, AC-5, AC-6 | `alex`; `4242 4242 4242 4242`, "Alex Morgan", `12/29`, `123`, make default | Saved as `c_4242` (`visa`); previous `c_5832` no longer default |
-| T-2 | AC-1, AC-5 | `sam`; `5555 5555 5555 4444` | Saved and default, though the toggle was off |
-| T-3 | AC-2 | `alex`; `4242 4242 4242 4241` | `CARD_INVALID` |
-| T-4 | AC-2 | `alex`; expiry `13/29` | `EXPIRY_INVALID` |
-| T-5 | AC-3 | `alex`; expiry `10/26` | `CARD_EXPIRED` |
-| T-6 | AC-2 | `alex`; code `12` | `CVV_INVALID` |
-| T-7 | AC-4 | `alex`; a number ending `5832` that passes Luhn | `CARD_EXISTS`; "Add money" shown |
-| T-8 | AC-6 | `alex` | No consent: "Tick the box to continue"; no code: `OTP_REQUIRED` (upgrade) |
-| T-9 | AC-8 | conditions `timeout: ["bank.cards.add"]` | Timeout text; card list unchanged |
-| T-10 | AC-8 | conditions `unavailable: ["bank.cards.add"]` | `SERVICE_UNAVAILABLE`; unchanged |
-| T-11 | AC-7 | `alex` | After save, `bank.cards.list` has no `cvv` field |
+Synthetic persona `alex`. Test card 4242 4242 4242 4242, expiry 12/29, security code 123, name "Alex Morgan", postcode 62704 (Market A).
+
+| # | Covers | Persona / setup | Conditions | Steps and expected result |
+|---|---|---|---|---|
+| T-1 | AC-1, AC-5, AC-7 | `alex` | none | Details, text message, code 482100, nickname "Spare card": "Card saved", "{card type} ••4242 is ready to use.", Used for "Adding money and Paying". |
+| T-2 | AC-1 | `alex` | none | "4242 4242 4242 4241": "Check the card number."; "abcd": "Use digits only."; a number starting 6011: "We can’t accept this type of card." |
+| T-3 | AC-2 | `alex`, `acceptAmex` off, then on | none | A 15-digit number starting 37 is refused with the option off; with it on it needs a 4-digit code ("Enter the 4 digits on the front."). A 4-digit code on a 16-digit card: "Enter the 3 digits on the back." |
+| T-4 | AC-3 | `alex` | none | "13/29": "Use the format MM/YY."; "01/24": "This card has expired." |
+| T-5 | AC-4 | `alex`, Market A, then Market D | none | "1234": "Enter the 5-digit ZIP code."; in Market D the postcode field is absent. |
+| T-6 | AC-5 | `alex` | none | Wrong code: "That code isn’t right. Try again."; third wrong code: "Too many wrong codes. Nothing was saved. Go back to start again." Method "Small test charge" accepts 4821. |
+| T-7 | AC-6 | `alex`, T-1 done | none | The same card again: "This card is already saved." A sixth card: "You can save up to 5 cards. Remove one to add another." A number ending 0002: "The card was declined. Try another card." |
+| T-8 | AC-7 | `alex`, `allowPay` off | none | Only "Use to add money" is shown. |
+| T-9 | AC-8 | `alex` | none | The result and activity show only "••4242", never the number or code. |
+| T-10 | AC-9 | `alex` | `unavailable: ["bank.cards.add"]` (prototype: Service down on) | The connection sheet shows; no card is saved. |
+| T-11 | AC-9 | `alex` | `timeout: ["bank.cards.add"]`, `latencyMs: 10000` | After 10 seconds "This is taking longer than expected. Nothing was saved." No card is saved. |
 
 #### 10. Expected mutation-check survivors
 
-- Dropping the journey's name check: survives; the sandbox falls back to the customer's name for `holder`, so it never fails (another layer).
-- Nickname length rule: survives; the sandbox accepts any length (add a bank rule or list it).
-- `isDefault` of the first card: killed by T-2.
+The expiry upper bound (15 years) survives if no scenario uses a far date; add one to kill it. The duplicate and limit checks at the end survive because they run at the first step too; expected. The audit entry is not asserted; expected. Everything else: none expected.
 
 ---
 
 ## Personal: Save & Borrow
 
-The tab holds four things: term deposits, savings goals, loans and investments. Every shell below reads a view-model in `packages/bank-client` (planned unless stated). All amounts are in the account's currency (USD for Alex). Dates read `12 Nov 2026`.
+The **Save** tab is one screen, `save-borrow`, with four short sections in a fixed order: Savings goals, Term deposits, Loans, Investments. Each card shows one key number and one or two actions that start the journeys below: `savings-goal`, `term-deposit`, `apply-loan`, `repay-loan`, `invest`, `sell-investment`. A seventh journey, `add-money`, is listed with them because it is launched from Home and Accounts (the Save tab has no button for it today). The lean rework removed the separate shells for deposits, goals, loans and investments, the detail pages, the loan schedule, the watchlist and market explorer, price charts and the nine-instrument list. Investing now uses a short shelf of four funds.
 
-### Planned sandbox domains for this tab
+All amounts are in the account's currency; the examples use `$`. Dates read `3 Nov 2026`. The sandbox day is fixed at 3 Nov 2026.
 
-| Domain (file, planned) | Holds | Adapters (planned) |
-|---|---|---|
-| `deposits.ts` | Deposit products (term, rate), customer deposits (principal, rate, start, maturity, maturity instruction, status) | `bank.deposits.products`, `bank.deposits.list`, `bank.deposits.get`, `bank.deposits.quote`, `bank.deposits.open`, `bank.deposits.renew`, `bank.deposits.close.quote`, `bank.deposits.close` |
-| `goals.ts` | Savings goals (name, target, target date, saved, linked account, auto-contribution, status) | `bank.goals.list`, `bank.goals.get`, `bank.goals.create`, `bank.goals.contribute`, `bank.goals.update`, `bank.goals.close` |
-| `loans.ts` | Loan products, applications, loans (principal, rate, term, instalment, schedule, status) | `bank.loans.products`, `bank.loans.list`, `bank.loans.get`, `bank.loans.eligibility`, `bank.loans.schedule`, `bank.loans.apply`, `bank.loans.repay`, `bank.loans.settlement.quote`, `bank.loans.settle` |
-| `invest.ts` (**existing**) | Nine instruments, holdings, watchlist | `bank.invest.instruments`, `bank.invest.holdings`, `bank.invest.buy`, `bank.invest.sell`, `bank.invest.watch` (all existing) |
-| `finance.ts` + `index.ts` (**existing**) | Deposits by card (add money) | `bank.deposit.create`, `bank.cards.list` (existing) |
+### How these journeys behave (applies to all seven)
 
-Note on names: `bank.deposit.create` (singular, existing) adds money from a saved card to an account. The planned term-deposit domain is `bank.deposits.*` (plural). They are unrelated, and the spec keeps both names exactly (see open questions).
+| Topic | What the prototype does |
+|---|---|
+| Engine | Form journeys from `design/bankworkx-r1/src/journeys/66-deposits-goals.js`, `67-loans.js`, `68-invest.js`; shared data and helpers `SBV` in `65-save-borrow.js`. Engine notes: `design/bankworkx-r1/src/ENGINE.md` |
+| Progress | When a journey has more than one visible step, a progress bar and "Step {n} of {N} · {journey name}". Steps that do not apply (for example "Choose a deposit" when one is passed in) are skipped. **Back** on every step but the first; **Cancel** on the first |
+| Field messages | Shown under the field once it is touched or the person has tried to continue. The main button stays disabled until every visible field is valid. Order of checks for an amount: required ("This is required." unless the field has its own), a number above zero ("Enter an amount above zero."), the minimum, the maximum, up to two decimals ("Use up to 2 decimals."), then the rule specific to the field |
+| Accounts offered | Only accounts in the bank's home currency, shown as "{name} ••{last} · {available}", for example "Current account ••4410 · $8,102.40" and "Savings ••7720 · $14,310.00". The euro account is never offered |
+| Account that pays | One shared check: none chosen "Choose an account."; frozen "You can’t use this account right now. Choose another account."; not enough "Not enough money in {account name}. Available: {available}." |
+| One-time code | A sheet over the screen: title "Authorise …" (given per journey), "Code sent to ••• 4410.", a 6-digit keypad and **Cancel**. The prototype accepts any 6 digits; the sandbox accepts one fixed test code. A wrong code (planned): `STEP_UP_FAILED`, the journey's own message, nothing changes. Which journeys ask: `term-deposit`, `apply-loan` (only when approved), `repay-loan`, `invest`, `sell-investment`, `add-money` (card path only). `savings-goal` never asks, because the money stays the customer's |
+| Bank unavailable | On submit (after the code) a sheet "We couldn’t reach the bank" / "Nothing was sent and you haven’t been charged. Try again in a moment." with **Try again** and **Cancel** |
+| Timeout | A red banner at the top of the step with the journey's own `TIMEOUT` message; nothing was applied. **Try again** is the normal button |
+| Result | Icon, title, one sentence, a chip ("Done", "In review" or "Declined"), a receipt card (rows then "Reference"), one or two action buttons and **Done** |
+| Loading | A button shows busy only where a call is made (`apply-loan` "Checking your application…" for 1.4 seconds); other submits finish at once |
 
-Seed for Alex (planned, synthetic):
+### Sandbox data for Alex Morgan (prototype, synthetic)
+
+Created the first time any Save journey or the Save tab is opened, so it resets with the sandbox.
 
 | Item | Value |
 |---|---|
-| Term deposit `dep_1` | "Rainy day" 5,000.00 USD, 12 months at 4.20%, opened 15 Jan 2026, matures 15 Jan 2027, interest at maturity 210.00, instruction "Renew principal and pay interest" |
-| Term deposit `dep_2` | "House fund" 8,000.00 USD, 6 months at 3.60%, opened 10 Apr 2026, matured 10 Oct 2026, status `matured` (waits for an instruction: used by renew) |
-| Savings goal `goal_1` | "Japan trip", target 4,000.00, by 30 Jun 2027, saved 1,250.00 in Savings ••7731, auto 200.00 monthly from Main ••4410 on the 1st |
-| Loan `loan_1` | "Personal loan", 8,000.00 USD, 24 months at 9.90% a year, instalment 368.75, 9 paid, 15 left, outstanding about 5,183.40, next due 5 Dec 2026, repaid from Main |
-| Loan product `lp_personal` | Personal loan: 1,000 to 50,000, 6 to 60 months, 9.90% a year, 1.00% arrangement fee (minimum 25.00) |
-| Sam Rivera | No deposits, goals or loans (empty states) |
+| Term deposit `td1` | $10,000.00 at 4.20% for 12 months, opened 12 Aug 2026, matures 12 Aug 2027, interest at maturity, no renewal chosen |
+| Savings goal `g1` | "Holiday fund", target $5,000.00, saved $3,200.00, by 30 Jun 2027, automatic $200.00 a month from Current account |
+| Loan `ln1` | "Personal loan", original $16,000.00, left $9,600.00, 9.90% a year, instalment $412.50, 48 months with 24 left, last paid 1 Nov 2026, next 1 Dec 2026, repaid from Current account |
+| Holdings | Balanced Portfolio 150 units (cost $2,300.00), Global Equity Fund 88 units (cost $2,350.00); worth $4,820.00 |
+| Saved cards (add money) | Visa ••4242 Harbor Bank 09/28; Mastercard ••5100 Crest Bank 03/29; Visa ••0019 Lakeside Bank 01/26 (expired) |
+| Accounts | Current account ••4410 ($8,102.40 available), Savings ••7720 ($14,310.00), Euro account ••3302 (not offered) |
 
-The figures for the loan are the sandbox's own (an equal-instalment loan with interest on the remaining balance each month); they are fixed in the seed so tests do not depend on rounding.
-
-### Shell: Save & Borrow home
-
-| Item | Spec |
-|---|---|
-| **Purpose** | Entry to the tab. One glance at what Alex saves, owes and invests. |
-| **Route** | Web `/personal/save`; mobile screen `SaveHome` |
-| **Data source** | View-model `saveHome` (planned) from `bank.deposits.list`, `bank.goals.list`, `bank.loans.list`, `bank.invest.holdings` |
-| **Widgets** | Four bento tiles: Deposits (total principal, next maturity), Goals (count and overall progress ring), Loans (total outstanding, next payment and date), Investments (portfolio value and day change, from `portfolioTotals`). Under them a "Things you can do" list: Open a deposit, New goal, Apply for a loan, Invest. |
-| **Empty / loading / error** | A tile with nothing shows its call to action ("Open your first deposit"). Loading: four tile skeletons. Error: tile-level "Couldn't load" with "Try again"; one failing tile does not block the others |
-| **Drill-downs** | Each tile opens its shell below |
-| **Launch points on it** | `Save & Borrow › deposits › Open`, `› goals › New goal`, `› loans › Apply`, `› investments › Buy`, `› investments › Add money` |
-
-### Shell: Deposits
-
-| Item | Spec |
-|---|---|
-| **Purpose** | List the customer's term deposits and let them open, renew or close one. |
-| **Route** | Web `/personal/save/deposits`, detail `/personal/save/deposits/:depositId`; mobile `Deposits`, `DepositDetail` |
-| **Data source** | `bank.deposits.list`, `bank.deposits.get` (planned) |
-| **Widgets** | Hero: total principal and total interest due. Deposits `dataTable` (card list on phones). Detail: ring showing time elapsed, principal, rate, interest so far, maturity date and amount, maturity instruction, status timeline (`timeline`: Opened, Interest accruing, Matures) |
-| **Table columns** | Name; Principal; Rate (% a year); Opened; Matures; Interest at maturity; Status (`statusChip`: Active, Matures soon (within 14 days), Matured, Closed) |
-| **Filters** | Status (All, Active, Matured, Closed) |
-| **Sort order** | Matured (needs a decision) first, then by maturity date, soonest first |
-| **Empty state** | "You don't have a term deposit yet. Lock money away for a set time and earn a fixed rate." with "Open a deposit" |
-| **Loading / error** | Row skeletons; error "We couldn't load your deposits." with "Try again" |
-| **Drill-downs** | Row → detail. Detail buttons: Renew (matured or within 14 days of maturity), Close (active), Open another |
-| **Launch points on it** | `Save & Borrow › deposits › Open / Renew / Close` → `term-deposit` `{mode, depositId}` (`savings.manage`) |
-
-### Shell: Savings goals
-
-| Item | Spec |
-|---|---|
-| **Purpose** | Show each goal's progress and how to reach it. |
-| **Route** | Web `/personal/save/goals`; mobile `Goals`, `GoalDetail` |
-| **Data source** | `bank.goals.list`, `bank.goals.get` (planned) |
-| **Widgets** | Goal cards: name, picture/emoji icon, progress ring, "1,250.00 of 4,000.00", "On track" or "Behind by 300.00" (`statusChip`), target date. Detail: `chart` of saved over time, forecast line, contribution list, auto-saving summary |
-| **Filters / sort** | None; sorted by target date, soonest first; completed goals last |
-| **Empty state** | "Save for something that matters to you." with "New goal" |
-| **Loading / error** | Card skeletons; "We couldn't load your goals." with "Try again" |
-| **Drill-downs** | Card → detail; detail buttons Add money, Change goal, Close goal |
-| **Launch points on it** | `Save & Borrow › goals › New goal / Add money to goal` → `savings-goal` `{goalId}` (`savings.manage`) |
-
-### Shell: Loans
-
-| Item | Spec |
-|---|---|
-| **Purpose** | Show loans, what is left to pay, the next instalment and the full schedule. |
-| **Route** | Web `/personal/save/loans`, `/personal/save/loans/:loanId`, schedule `/personal/save/loans/:loanId/schedule`; mobile `Loans`, `LoanDetail`, `LoanSchedule` |
-| **Data source** | `bank.loans.list`, `bank.loans.get`, `bank.loans.schedule` (planned) |
-| **Widgets** | List: loan cards with outstanding, next instalment and due date, a progress bar (paid / total). Detail: key facts (original amount, rate, term, instalment, repaid from), next-payment banner (with "Due in 32 days", or a red "Overdue" `statusChip` when late), history of payments, buttons. Schedule: `dataTable` |
-| **Schedule columns** | No.; Due date; Instalment; Principal; Interest; Balance after; Status (Paid, Due, Upcoming, Overdue) |
-| **Filters** | Schedule: All, Paid, Upcoming |
-| **Sort order** | Loans: overdue first, then by next due date. Schedule: by number |
-| **Empty state** | "You don't have a loan. See what you could borrow." with "Apply for a loan" |
-| **Loading / error** | Skeletons; "We couldn't load your loans." with "Try again" |
-| **Drill-downs** | Card → detail → schedule. A paid row opens its receipt |
-| **Launch points on it** | `Save & Borrow › loans › Apply` → `apply-loan` `{productId}` (`loans.apply`); `Save & Borrow › loan › Repay / Settle early` → `repay-loan` `{loanId, mode}` (`loans.repay`); Home › Offer › Apply |
-
-### Shell: Investments
-
-Existing screens in the BankWorkx app (see `docs/BANKWORKX.md`, section Invest), described as built, with the launch points added.
-
-| Item | Spec |
-|---|---|
-| **Purpose** | Portfolio, watchlist and market explorer. |
-| **Route** | Web `/personal/save/invest`, stock `/personal/save/invest/:symbol`; mobile `Invest`, `Instrument` |
-| **Data source** | Existing: `bank.invest.instruments`, `bank.invest.holdings`, `bank.invest.watch`; the app also reads `finance.invest` and `portfolioSeries`/`portfolioTotals` from `packages/mock-bank-api/src/invest.ts` |
-| **Widgets** | Portfolio value with a 1D / 1W / 1M / 1Y chart (drag to read a point). Three tabs: **Portfolio** (holdings), **Watchlist**, **Explore** (search, Stocks or Funds filter, biggest movers). Stock page: price and day change, chart with the same ranges, your position (value, shares, average cost, return), key numbers, a short description, a star to watch, and *Buy* (and *Sell* when held) |
-| **Table columns** | Holdings: Name (symbol); Shares; Value; Average cost; Return. Explore rows: Name; Kind; Price; Day change |
-| **Sort order** | Holdings by value, largest first. Explore: biggest movers first, or alphabetical when searching |
-| **Filters** | Explore: Stocks, Funds, search text |
-| **Seed** | Alex: LMRB 6.5 shares at average 165, GLBX 40 at 38.50, ORCH 20 at 41, TBND 5 at 99; watchlist APXC, SMTH, GRNF. Sam: no holdings, shows "Start investing" |
-| **Empty state** | "Start investing. Buy part of a share from $1." with "Explore" |
-| **Loading / error** | Chart and row skeletons; "We couldn't load the market." with "Try again" |
-| **Drill-downs** | Holding or explore row → stock page. Star → `bank.invest.watch` |
-| **Launch points on it** | `Save & Borrow › investments › Buy` → `invest` `{symbol}` (`invest.trade`); `› Sell` → `sell-investment` `{symbol}` (`invest.trade`, only when held); `› Add money` → `add-money` `{accountId}` (`payments.create`) |
-| **Not built yet** | Price alerts, gains tax, real market data (per `docs/BANKWORKX.md`) |
+Rates, limits and fees in these journeys are sandbox policy, not market data (see `docs/journeys/research/*.md`).
 
 ---
 
-### ★ Term deposit — `term-deposit`
+### ★ Save — `save-borrow`
 
-One journey with three modes: `open`, `renew`, `close`.
+**Catalog:** slug `save-borrow` (name in the prototype "Save"), workspace `personal`, category Save & Borrow (Personal: Save & Borrow), **view** on the bottom tab **Save** (`tab: 'sav'`), core no, can a bank switch it off: yes (basic, kept in the Lean preset). Options (all default on): **Show savings goals** (`showGoals`), **Show term deposits** (`showDeposits`), **Show loans** (`showLoans`), **Show investments** (`showInvest`). Research: `research/save-borrow.md`. Built in `design/bankworkx-r1/src/journeys/65-save-borrow.js`.
+
+A section is drawn only when its option is on **and** its journey is allowed (not switched off by the bank, and the person has the permission): goals need `savings-goal`, deposits `term-deposit`, loans `apply-loan`, investments `invest`. So in the Lean preset, which switches off `term-deposit`, `apply-loan`, `invest` and `sell-investment`, only the goals section remains. A button to a switched-off journey is not drawn.
 
 #### 1. Summary
 
-| Item | Value |
+| Field | Value |
 |---|---|
-| Slug | `term-deposit` |
-| Purpose | Open a new term deposit, renew a matured one, or close one |
-| Release | 1 |
-| Workspace | Personal |
-| Status | New (draft). Needs the planned deposits domain |
-| Channels | Web, mobile |
-| Starting pattern | Mode-driven: choose terms → quote → review and consent → code → result |
-| Who may use it | Personal context holding `savings.manage` |
+| Slug | `save-borrow` |
+| Purpose | One glance at what the customer saves, owes and invests, with the next action on each card. |
+| Release / workspace | 1 / Personal |
+| Status | Built in the prototype as a view (no steps, no result). Reads the sandbox data live, so every journey that changes it is reflected the next time the tab is drawn |
+| Channels | Web and mobile (cards sit in two columns on web, one on phones) |
+| Starting pattern | View with section cards |
+| Who may use it | Anyone signed in to Personal with `accounts.view`. Each button needs the permission of the journey it starts |
 
 #### 2. Entry points
 
-| Place › label | Passed | Permission |
+| Place › label | Passes in | Permission |
 |---|---|---|
-| Save & Borrow › deposits › Open | `{mode: "open"}` | `savings.manage` |
-| Save & Borrow › deposits › detail › Renew | `{mode: "renew", depositId}` | `savings.manage` |
-| Save & Borrow › deposits › detail › Close | `{mode: "close", depositId}` | `savings.manage` |
-| Products › deposit detail (public) → sign in → Open | `{mode: "open", productId}` | `savings.manage` |
-| Notification "Your deposit matures on {{date}}" | `{mode: "renew", depositId}` | `savings.manage` |
+| Bottom tab or left rail › Save | none | `accounts.view` |
+| After a Save journey › View goals / View deposits / View loan / View investments / View Save | returns to this tab | `accounts.view` |
 
-#### 3. Screens
+#### 3. Screen
 
-**Screen `terms` — "Open a term deposit"** (mode `open`) or **"Renew your deposit"** (mode `renew`). `onEnter`: `callApi products` and (renew) `callApi deposit`.
+**Section 1: Savings goals** (heading with button **New goal** → `savings-goal` `{mode: "create"}`). One card per goal, in the order created:
 
-| Field | Block | Required | Rule | Error message |
-|---|---|---|---|---|
-| Pay from (open) / Pay out to (renew) | `accountPicker` bind `td.accountId` (`showBalance`) | Yes | An active account in USD | "Choose an account." |
-| Amount | `amountInput` bind `td.amount` (quick 1,000; 2,500; 5,000; 10,000); renew: defaults to the matured principal (+ interest if chosen) | Yes | 500.00 to 250,000.00, at most 2 decimals; not above the account balance (open) | "The smallest deposit is $500." / "The most you can deposit is $250,000." / "There isn't enough money in {{account}}. Available: {{balance}}." |
-| Term | `select` chips bind `td.termMonths`: 3, 6, 12, 24 months with the rate on each chip ("12 months · 4.20%") | Yes | One of the four | "Choose how long to lock your money." |
-| When it ends | `select` rows bind `td.instruction`: "Pay the money to my account"; "Renew the money and pay the interest to my account"; "Renew the money and the interest" | Yes | One of three | "Choose what should happen at the end." |
+| Part | Content |
+|---|---|
+| Title | Goal name, for example "Holiday fund" |
+| Key number | "$3,200.00" with "of $5,000.00" |
+| Bar | Saved ÷ target, capped at 100% |
+| Small line | "By 30 Jun 2027", or "Goal reached" when saved is at least the target; then " · $200.00 a month" when the automatic top-up is on |
+| Buttons | **Add money** → `savings-goal` `{mode: "add", goalId}`; **Edit** → `savings-goal` `{mode: "edit", goalId}` |
 
-Helper under amount: "From $500 to $250,000." Alert info: "Your money is locked until {{maturityDate}}. If you close early, you earn much less interest." Button "See the offer" (`validate`, `callApi quote`, navigate `review`).
-Renew mode shows the matured deposit in a summary card and lets the person change the term and the instruction. If the deposit is not yet matured or within 14 days of maturity, `alert` warning "This deposit hasn't matured yet. You can renew from {{date}}." and the button is disabled.
-States: skeleton for the rate chips while `products` loads; error "We couldn't load our deposit rates." with "Try again".
+Empty: icon, "No savings goals", "Set a target and watch it grow." and **Create a goal** → `savings-goal` `{mode: "create"}`.
 
-**Screen `closeQuote` — "Close this deposit?"** (mode `close`). `onEnter`: `callApi closeQuote`. `reviewSummary`: Deposit "{{name}}", Principal, Interest earned so far, Early closing adjustment (negative, when closing before maturity: "Interest recalculated at 0.50% a year"), **You'll receive**, Paid to account. `alert` (before maturity) warning "You'd earn {{interestLoss}} less than if you waited until {{maturityDate}}." Buttons "Continue" (`navigate review`), "Keep my deposit" (`exit`).
+**Section 2: Term deposits** (heading with **Open** → `term-deposit` `{mode: "open"}`). One card per deposit:
 
-**Screen `review` — "Review"**. Open: `reviewSummary` rows Deposit amount; Term; Rate "4.20% a year, fixed"; Interest at the end (e.g. "210.00" for 5,000.00 over 12 months: principal × rate × months ÷ 12); You'll get at the end "5,210.00"; Ends "15 Nov 2027"; Pay from; At the end (instruction in words). Renew: same with the matured amount. Close: the `closeQuote` rows. `consent` bind `td.consent`, termsVersion `deposits-v1`, text open/renew "I understand my money is locked until {{maturityDate}} and I agree to the deposit terms." / close "I understand I'll earn less interest by closing early." (the early-close text shows only before maturity). validation `mustBeTrue`: "Tick the box to continue." Button "Open deposit" / "Renew deposit" / "Close deposit" (`validate`, `callApi otpSend`, navigate `code`).
+| Part | Content |
+|---|---|
+| Title | "Term deposit" |
+| Key number | "$10,000.00" |
+| Small line | "4.20% · matures 12 Aug 2027"; below it "Renews for 12 months" once a renewal was chosen |
+| Buttons | **Renew** → `term-deposit` `{mode: "renew", depositId}`; **Close** → `term-deposit` `{mode: "close", depositId}` |
 
-**Screen `code`**: standard one-time code (title "Confirm with your code"). Button text per mode; it calls `otpVerify` then `open`, `renew` or `close`, then `done`.
+Empty: "No term deposits", "Lock money away for a fixed rate." and **Open a term deposit**.
 
-**Screen `done` (terminal)**: `result` success with title and text by mode:
+**Section 3: Loans** (heading with **Apply** → `apply-loan`). One card per loan:
 
-| Mode | Title | Text |
-|---|---|---|
-| open | "Deposit opened" | "{{amount}} is locked for {{term}} months at {{rate}}%. It ends on {{maturityDate}}." |
-| renew | "Deposit renewed" | "{{amount}} is locked until {{maturityDate}} at {{rate}}%." |
-| close | "Deposit closed" | "{{received}} is in {{account}}." |
+| Part | Content |
+|---|---|
+| Title | Loan name, for example "Personal loan" |
+| Bar | Share already repaid (40% for the seed loan) |
+| Key number | "$9,600.00 left" |
+| Small line | "Next payment $412.50 on 1 Dec 2026" (the smaller of the instalment and the balance) |
+| Button | **Repay** → `repay-loan` `{loanId}` |
 
-meta "Ref {{result.reference}}". Buttons "View deposit" and "Done". `locked`, `failed` standard (with "Nothing was changed and no money has moved." as the closing line).
+Empty: "No loans", "Borrow when you need to, with a clear monthly payment." and **Apply for a loan**.
+
+**Section 4: Investments** (heading with **Invest** → `invest`). One card, "Portfolio":
+
+| Part | Content |
+|---|---|
+| Key number | Total value of all holdings at today's prices: "$4,820.00" |
+| Small line | "▲ $170.00 (3.7%) since you invested" (green); "▼" with no green when below cost |
+| Buttons | **Invest** → `invest`; **Sell** → `sell-investment` |
+
+Empty: "No investments yet", "Start with as little as $50." and **Start investing**.
+
+If all four sections are off or hidden, the screen shows "Nothing to show" with "Savings and borrowing aren’t available right now." and no button.
+
+**States**
+- Loading (planned): four card skeletons. Today the prototype reads its data at once.
+- Error (planned): per-section "We couldn’t load this." with **Try again**; one failing section does not block the others.
+- Sort: goals and deposits in the order created; loans in the order taken; no filters.
+- Drill-downs: none. The old detail pages and the loan schedule are removed.
 
 #### 4. Sandbox errors
 
-| Code | Message | Screen | Button |
-|---|---|---|---|
-| `ACCOUNT_NOT_FOUND` | "We can't find that account. Choose another." | `terms` | Choose account |
-| `INVALID_AMOUNT` | "Enter an amount from $500 to $250,000." | `terms` | Change amount |
-| `INSUFFICIENT_FUNDS` | "There isn't enough money in {{account}}. Available: {{balance}}. No money has left your account." | `terms` | Change amount |
-| `TERM_INVALID` | "Choose a term of 3, 6, 12 or 24 months." | `terms` | Choose term |
-| `INSTRUCTION_INVALID` | "Choose what should happen at the end." | `terms` | Choose |
-| `DEPOSIT_NOT_FOUND` | "We can't find that deposit." | `failed` | Back to deposits |
-| `DEPOSIT_NOT_MATURED` | "This deposit hasn't matured yet. You can renew from {{date}}." | `terms` | Back |
-| `DEPOSIT_ALREADY_CLOSED` | "This deposit is already closed." | `failed` | Back to deposits |
-| `LIMIT_EXCEEDED` | "This is above your daily limit of {{limit}}. You have {{remaining}} left today." | `terms` | Change amount |
-| `OTP_INVALID`, `OTP_REQUIRED` | Standard | `code` | Try again / Back to code |
-| `CORE_UNAVAILABLE` | "We couldn't complete this right now. No money has left your account." | `failed` | Try again |
-| `TIMEOUT` | "We didn't get an answer in time. Check Activity before you try again, so you don't pay twice." | `failed` | Check Activity |
-| `SERVICE_UNAVAILABLE` | Standard | `failed` | Try again |
-| `PERMISSION_DENIED`, `WRONG_CONTEXT`, `SESSION_EXPIRED` | Standard | `failed` | Back / Switch / Sign in |
+None on this screen. A switched-off or forbidden journey simply has no button (`JOURNEY_DISABLED`, `PERMISSION_DENIED` (planned)).
 
 #### 5. Adapters
 
 | Integration id | Adapter | Request | Response | Errors | Status |
 |---|---|---|---|---|---|
-| `accounts` | `bank.accounts.list` | none | accounts | none | Existing |
-| `products` | `bank.deposits.products` | none | `{terms: [{months, rate}], min, max}` | none | (planned) |
-| `deposit` | `bank.deposits.get` | `{depositId}` | deposit | `DEPOSIT_NOT_FOUND` | (planned) |
-| `quote` | `bank.deposits.quote` | `{amount, termMonths}` | `{rate, interest, maturityAmount, maturityDate}` | `INVALID_AMOUNT`, `TERM_INVALID` | (planned) |
-| `open` | `bank.deposits.open` | `{fromAccountId, amount, termMonths, instruction}` | `{depositId, reference, maturityDate, newBalance}` | section 4 | (planned) |
-| `renew` | `bank.deposits.renew` | `{depositId, termMonths, instruction, addAmount?}` | `{depositId, reference, maturityDate}` | `DEPOSIT_NOT_FOUND`, `DEPOSIT_NOT_MATURED`, `TERM_INVALID`, `INSTRUCTION_INVALID`, `INSUFFICIENT_FUNDS` (when topping up) | (planned) |
-| `closeQuote` | `bank.deposits.close.quote` | `{depositId}` | `{principal, interestEarned, adjustment, receive, early}` | `DEPOSIT_NOT_FOUND`, `DEPOSIT_ALREADY_CLOSED` | (planned) |
-| `close` | `bank.deposits.close` | `{depositId, toAccountId}` | `{reference, received, newBalance}` | `DEPOSIT_NOT_FOUND`, `DEPOSIT_ALREADY_CLOSED`, `ACCOUNT_NOT_FOUND` | (planned) |
-| `otpSend`, `otpVerify` | existing | | | `OTP_INVALID` | Existing |
-
-`open`, `renew` (with top-up) and `close` are `moneyMoving: true`, `requiresOtp: true`. Opening is a transfer out of the account: it counts against the daily limit (`bank.limits.get`) like `bank.transfers.create`, and sets `otpVerified` back to false.
+| `goals` | `bank.goals.list` | none | goals | none | (planned). The prototype reads `D.goals` |
+| `deposits` | `bank.deposits.list` | none | term deposits | none | (planned). `D.td` |
+| `loans` | `bank.loans.list` | none | loans | none | (planned). `D.loans` |
+| `holdings` | `bank.funds.holdings` | none | `{id, units, cost, value}` per holding | none | (planned). The existing `bank.invest.holdings` (`packages/mock-bank-api/src/invest.ts`) holds shares in nine instruments, not the fund shelf |
 
 #### 6. Permissions, step-up and limits
 
-`savings.manage`. Step-up `otp`. Limits: deposit 500.00 to 250,000.00 per deposit; the daily limit (Alex 50,000 USD) applies to `open`. Early close interest rule: interest recalculated at 0.50% a year for the days held; the principal is never reduced.
+`accounts.view`. No step-up. No limits.
 
 #### 7. Result and links out
 
-Result `done`; receipt: deposit name, amount, term, rate, dates, account, reference. Notifications: "Deposit opened", "Your deposit matures in 7 days" (planned scheduled), "Deposit closed". Links out: deposit detail, Accounts (balance changed), Payments › tracker (the transfer).
+No result. Links out: `savings-goal`, `term-deposit`, `apply-loan`, `repay-loan`, `invest`, `sell-investment`, and the Accounts tab through the "View accounts" buttons on results.
 
 #### 8. Acceptance criteria
 
-- AC-1: A deposit can be opened from an account with enough money, for 500.00 to 250,000.00, for a term of 3, 6, 12 or 24 months.
-- AC-2: The interest and the amount at the end are shown before the person confirms, and agree with the amount credited later.
-- AC-3: Opening needs consent and a verified one-time code, and takes the money from the account.
-- AC-4: Opening cannot exceed the account balance or the daily limit.
-- AC-5: A matured deposit can be renewed with a new term and instruction; a deposit not yet matured (more than 14 days away) cannot.
-- AC-6: Closing before maturity shows how much less interest the person earns and needs the consent line.
-- AC-7: Closing pays principal plus interest earned to the chosen account and marks the deposit closed.
-- AC-8: A closed deposit cannot be closed or renewed again.
-- AC-9: Three wrong codes leave everything as it was.
-- AC-10: A timeout leaves things unchanged and says to check Activity; an unavailable service moves no money.
+- AC-1: Each section shows its heading, its cards and its button only when its option is on and its journey is allowed.
+- AC-2: A goal card shows the saved and target amounts, a bar, the target date (or "Goal reached") and, when on, the monthly amount.
+- AC-3: A deposit card shows the amount, the rate, the maturity date and, after Renew, the renewal term.
+- AC-4: A loan card shows the amount left, the share repaid and the next payment with its date.
+- AC-5: The portfolio card shows total value and the gain or loss against cost with its percentage.
+- AC-6: A section with nothing in it shows its empty text and one button to start.
+- AC-7: When all sections are hidden the screen says "Nothing to show".
+- AC-8: After any Save journey succeeds the tab shows the changed figures.
 
 #### 9. Scenarios
 
-| # | Covers | Persona and setup | Outcome |
-|---|---|---|---|
-| T-1 | AC-1, AC-2, AC-3 | `alex`; open 5,000.00, 12 months, from Main, code `482100` | Quote interest 210.00, maturity amount 5,210.00; Main 8,720.76 → 3,720.76; deposit `active` |
-| T-2 | AC-1 | `alex` | 400.00: "The smallest deposit is $500." Then 300,000: "The most you can deposit is $250,000." |
-| T-3 | AC-4 | `alex`; open 9,000.00 from Main | `INSUFFICIENT_FUNDS`; balance unchanged |
-| T-4 | AC-4 | `alex`; setup `limits.usedToday` 46,000; open 8,000 from Savings 15,254.37 | `LIMIT_EXCEEDED` |
-| T-5 | AC-5 | `alex`; renew `dep_2` for 12 months | Deposit renewed; new maturity |
-| T-6 | AC-5 | `alex`; renew `dep_1` (matures in 2+ months) | `DEPOSIT_NOT_MATURED` |
-| T-7 | AC-6, AC-7 | `alex`; close `dep_1` early | Quote shows adjustment; consent line; account credited with principal plus reduced interest; status `closed` |
-| T-8 | AC-8 | `alex`; after T-7 | Close again: `DEPOSIT_ALREADY_CLOSED` |
-| T-9 | AC-3 | `alex` | Skip consent: "Tick the box to continue."; skip code: `OTP_REQUIRED` |
-| T-10 | AC-9 | `alex`; wrong code x3 | `locked`; balance unchanged |
-| T-11 | AC-10 | conditions `timeout: ["bank.deposits.open"]` | Check Activity text; no deposit; balance unchanged |
-| T-12 | AC-10 | conditions `unavailable: ["bank.deposits.open"]` | `SERVICE_UNAVAILABLE`; unchanged |
-| T-13 | AC-3 | `alex` with `transferFails` behaviour | `CORE_UNAVAILABLE`; no money moved |
+Synthetic persona `alex` with the seed above.
+
+| # | Covers | Persona / setup | Conditions | Steps and expected result |
+|---|---|---|---|---|
+| T-1 | AC-1, AC-2, AC-3, AC-4, AC-5 | `alex` | none | Four sections: "Holiday fund $3,200.00 of $5,000.00 · By 30 Jun 2027 · $200.00 a month"; "Term deposit $10,000.00 · 4.20% · matures 12 Aug 2027"; "Personal loan $9,600.00 left · Next payment $412.50 on 1 Dec 2026"; "Portfolio $4,820.00 ▲ $170.00 (3.7%)". |
+| T-2 | AC-1, AC-7 | `alex` | all four options off | "Nothing to show". |
+| T-3 | AC-1 | `alex`, Lean preset | catalog | Only Savings goals is drawn. |
+| T-4 | AC-6 | `alex`, remove all data | `empty` (planned) | Each section shows its empty text and button. |
+| T-5 | AC-8 | `alex` | none | Add $100.00 to "Holiday fund": the card shows $3,300.00. |
+| T-6 | AC-1 | `alex` without `payments.create` | permission | Goals, Deposits and Investments are not drawn (their journeys need `payments.create`); Loans is still drawn (`apply-loan` needs `loans.apply`) but its Repay button is not (`repay-loan` needs `payments.create`). |
 
 #### 10. Expected mutation-check survivors
 
-- Journey `min`/`max` on the amount: survive because `bank.deposits.open` returns `INVALID_AMOUNT` (another layer).
-- Interest formula (months ÷ 12): killed by T-1 (exact 210.00).
-- Early-close rate 0.50%: killed by T-7 only if the scenario asserts the credited amount; it must.
-- Renew top-up with `addAmount`: **survives** (no scenario tops up; listed as not covered in Release 1).
+The "capped at 100%" bar and the "since you invested" colour are display rules the sandbox scenarios do not assert; expected. Everything else: none expected.
+
+---
+### ★ Term deposit — `term-deposit`
+
+**Catalog:** slug `term-deposit` (name "Term deposit"), workspace `personal`, category Save & Borrow (Personal: Save & Borrow), core no, can a bank switch it off: yes (not in the Lean preset). Options (both default on): **Offer interest paid monthly** (`allowMonthly`), **Allow early closure (with a charge)** (`allowEarlyClose`). Research: `research/term-deposit.md`. Built in `design/bankworkx-r1/src/journeys/66-deposits-goals.js`. One journey, three modes: `open`, `renew`, `close`.
+
+The lean rework removed the deposit list and detail pages, the status timeline, the "matures soon" chip and the choice of maturity instruction at opening. A new deposit pays out at maturity unless the person later uses Renew.
+
+#### 1. Summary
+
+| Field | Value |
+|---|---|
+| Slug | `term-deposit` |
+| Purpose | Lock money away at a fixed rate for 3, 6, 12 or 24 months; change what happens at maturity; or close a deposit early with the closure charge shown first. |
+| Release / workspace | 1 / Personal |
+| Status | Built in the prototype as a form journey (`submit: "Confirm"`, one-time code). Moves money in `open` and `close` |
+| Channels | Web and mobile |
+| Starting pattern | Amount, term, review, code, result |
+| Who may use it | Anyone signed in to Personal with `payments.create`, for their own accounts |
+
+Configuration (sandbox policy): rate by term 3 months 3.40%, 6 months 3.80%, 12 months 4.20%, 24 months 4.50% a year; smallest deposit $1,000.00, largest $250,000.00; early closure keeps back 50% of the interest earned so far and never touches the money paid in. No market difference.
+
+#### 2. Entry points
+
+| Place › label | Passes in | Permission |
+|---|---|---|
+| Save › Term deposits › Open (and "Open a term deposit" when empty) | `{mode: "open"}` | `payments.create` |
+| Save › Term deposits › card › Renew | `{mode: "renew", depositId}` | `payments.create` |
+| Save › Term deposits › card › Close | `{mode: "close", depositId}` | `payments.create` |
+| Deep link `/personal/j/term-deposit?mode=renew&depositId=td1` | `mode`, optional `depositId` | `payments.create` |
+
+When the customer has exactly one deposit, `depositId` is filled in and "Choose a deposit" is skipped.
+
+#### 3. Screens
+
+**Screen `pick`: Choose a deposit** (modes renew and close, when no `depositId`). Choice cards, one per deposit: "{amount}" and "{rate}% · matures {date}". Required, "Choose a deposit." If the customer has none: "You have no term deposits."
+
+**Open: screen `amount`: Open a term deposit**
+
+| Field | Type | Required | Validation | Message |
+|---|---|---|---|---|
+| Amount | amount, `$`, placeholder "0.00", sample 5000 | yes | at least 1,000 | "The smallest deposit is $1,000.00." |
+| | | | at most 250,000 | "The largest deposit is $250,000.00." |
+| | | | the account that pays can cover it | the shared account messages |
+| From | select of accounts | yes | chosen, not frozen | "Choose an account." |
+
+**Open: screen `term`: Choose a term.** Four choice cards, default 12 months: "3 months" with "Matures 3 Feb 2027" and "3.40%"; "6 months", "Matures 3 May 2027", "3.80%"; "12 months", "Matures 3 Nov 2027", "4.20%"; "24 months", "Matures 3 Nov 2028", "4.50%". Chips **Interest paid**: "At maturity" (default) and, when `allowMonthly` is on, "Every month".
+
+**Open: screen `review`: Review.** Rows: Amount; From ("Current account ••4410"); Term ("12 months"); Rate ("4.20% a year"); Interest paid ("At maturity" or "Every month"); Total interest (amount × rate × term ÷ 12, for example $5,000.00 gives $210.00); Matures; You receive at maturity (amount plus interest, or the amount alone when interest is paid every month). Button **Confirm**, then the code sheet "Authorise a deposit of $5,000.00".
+
+**Renew: screen `renew`: Renew or change.** A card with the deposit ("Deposit", amount, "4.20% · matures 12 Aug 2027"). Choice cards **New term** (the four terms, each with "Rate 3.40% a year" and so on, required). Select **At maturity**: "Renew with interest" (default), "Renew, pay interest out", "Pay out at maturity". Then **Review**: Deposit; New term; Rate; At maturity; Takes effect (the maturity date). **Confirm**, then the sheet "Authorise the change to your deposit". No money moves.
+
+**Close: screen `close`: Close this deposit.** Select **Pay into** (required, default Current account). Rows: Deposit "$10,000.00"; Interest earned (rate × days since opening ÷ 365, for example $95.51 after 83 days); Early closure charge ("-$47.76", half the interest earned); You receive ("$10,047.75"). With `allowEarlyClose` off the screen shows "This deposit can’t be closed early." and the button stays disabled. **Confirm**, then the sheet "Authorise closing your deposit". There is no separate review.
+
+**Result**
+
+| Mode | Title and text | Receipt rows | Buttons |
+|---|---|---|---|
+| open | "Deposit opened" / "$5,000.00 is earning 4.20% for 12 months." | Amount; From; Term; Rate; Interest paid; Total interest; Matures | **View deposits** (Save tab), **Done** |
+| renew | "Deposit updated" / "It renews for 12 months on 12 Aug 2027." | Deposit; New term; Rate; At maturity; Takes effect | **View deposits**, **Done** |
+| close | "Deposit closed" / "$10,047.75 was paid into Current account." | Deposit; Interest earned; Early closure charge; Paid into; You received | **View accounts**, **Done** |
+
+Each also shows a "Reference". An opened deposit appears on the Save tab; a closed one disappears. A debit "Term deposit" (category Savings) or a credit "Term deposit closed" appears in Activity for the current account.
+
+**States**
+- Loading: none beyond the sheet; the result appears at once after the code.
+- Empty: no deposits in renew or close: "You have no term deposits."
+- Error: unavailable shows the connection sheet; a timeout shows the message in the table below. In both nothing was applied.
+- Stale: if the deposit no longer exists at submit, "We can’t find that deposit."
+
+#### 4. Sandbox errors
+
+| Code | Message | Shows on | Button |
+|---|---|---|---|
+| `INSUFFICIENT_FUNDS` | "There isn’t enough money in that account." | submit | Back |
+| `BELOW_MINIMUM` | "The smallest deposit is $1,000.00." | amount | Change amount |
+| `DEPOSIT_NOT_FOUND` | "We can’t find that deposit." | submit | Back |
+| `EARLY_CLOSE_OFF` | "This deposit can’t be closed early." | close, submit | Back |
+| `STEP_UP_FAILED` (planned) | "We couldn’t confirm this. Nothing was changed. Start again." | code | Start again |
+| `TIMEOUT` | "We didn’t get an answer in time. Check Activity before you try again, so you don’t pay twice." | submit | Try again |
+| `SERVICE_UNAVAILABLE` | Connection sheet (above) | submit | Try again |
+| `JOURNEY_DISABLED` | "This isn’t available at your bank." | whole journey | none |
+| `PERMISSION_DENIED` (planned) | Standard message | whole journey | Back |
+
+#### 5. Adapters
+
+| Integration id | Adapter | Request | Response | Errors | Status |
+|---|---|---|---|---|---|
+| `accounts` | `bank.accounts.list` | none | accounts | none | Existing (`packages/mock-bank-api/src/index.ts`) |
+| `deposits` | `bank.deposits.list` | none | deposits | none | (planned). The prototype reads `D.td` |
+| `quote` | `bank.deposits.quote` | `{amount, term}` | `{rate, interest, matures}` | `BELOW_MINIMUM` | (planned) |
+| `open` | `bank.deposits.open` | `{amount, term, payout, fromAccountId}` | `{depositId, reference}` | `BELOW_MINIMUM`, `INSUFFICIENT_FUNDS` | (planned) |
+| `renew` | `bank.deposits.renew` | `{depositId, term, instruction}` | `{depositId, reference}` | `DEPOSIT_NOT_FOUND` | (planned) |
+| `closeQuote` / `close` | `bank.deposits.close.quote` / `bank.deposits.close` | `{depositId}` / `{depositId, toAccountId}` | `{earned, charge, net}` / `{reference}` | `DEPOSIT_NOT_FOUND`, `EARLY_CLOSE_OFF` | (planned) |
+| `sendOtp` / `verifyOtp` | `bank.otp.send` / `bank.otp.verify` | `{channel}` / `{code}` | `{sent}` / `{verified}` | `OTP_INVALID`, `OTP_LOCKED` | Existing |
+
+Not to be confused with `bank.deposit.create` (singular), which adds money from a card (see `add-money`).
+
+#### 6. Permissions, step-up and limits
+
+`payments.create`. Step-up: one-time code on every mode. Limits: $1,000.00 to $250,000.00 per deposit; the paying account must hold the amount.
+
+#### 7. Result and links out
+
+As above. Notifications (planned): "Your deposit of {amount} is open until {date}"; "Your deposit was closed and {amount} was paid into {account}". Links out: Save tab, Accounts tab.
+
+#### 8. Acceptance criteria
+
+- AC-1: Opening needs an amount from $1,000.00 to $250,000.00 and an account that can cover it, with the messages above.
+- AC-2: The four terms show their rate and maturity date; interest and the amount received at maturity are shown before the code.
+- AC-3: "Every month" is offered only when `allowMonthly` is on; with it the amount received at maturity is the principal alone.
+- AC-4: A code is asked before opening, renewing or closing; a wrong code changes nothing.
+- AC-5: Opening takes the amount from the chosen account, adds a deposit to the Save tab and shows "Deposit opened".
+- AC-6: Renew changes the term and the maturity instruction only; no money moves; the Save tab shows "Renews for {n} months".
+- AC-7: Close shows interest earned, a closure charge of half that interest and the amount received before the code; the principal is never reduced.
+- AC-8: With `allowEarlyClose` off, Close is blocked with "This deposit can’t be closed early."
+- AC-9: With one deposit the choice of deposit is skipped; with none, the journey says "You have no term deposits."
+- AC-10: When the bank is unavailable or times out nothing is changed.
+
+#### 9. Scenarios
+
+Synthetic persona `alex`: Current account ••4410, $8,102.40 available; deposit `td1` as seeded. The sandbox code is the fixed test code.
+
+| # | Covers | Persona / setup | Conditions | Steps and expected result |
+|---|---|---|---|---|
+| T-1 | AC-1, AC-2, AC-5 | `alex`, `mode: "open"` | none | $5,000.00 from Current account, 12 months, At maturity. Review: rate 4.20% a year, total interest $210.00, matures 3 Nov 2027, receive $5,210.00. Code. "Deposit opened"; Current account $3,102.40 available. |
+| T-2 | AC-1 | `alex` | none | $500: "The smallest deposit is $1,000.00." $300,000: "The largest deposit is $250,000.00." $9,000 from an account with less: "Not enough money in Current account. Available: $8,102.40." |
+| T-3 | AC-3 | `alex` | `allowMonthly` on / off | On: chips "At maturity" and "Every month"; choose monthly: receive at maturity $5,000.00. Off: one chip. |
+| T-4 | AC-6, AC-9 | `alex`, `renew`, `depositId: "td1"` | none | Choose 24 months, "Renew, pay interest out". Review shows Rate 4.50% a year, Takes effect 12 Aug 2027. Code. "Deposit updated"; the Save tab shows "Renews for 24 months"; balances unchanged. |
+| T-5 | AC-7 | `alex`, `close`, `td1` | none | Rows: Deposit $10,000.00, Interest earned $95.51, Early closure charge -$47.76, You receive $10,047.75. Code. "Deposit closed"; Current account up by $10,047.75; the deposit is gone. |
+| T-6 | AC-8 | `alex`, `close` | `allowEarlyClose` off | "This deposit can’t be closed early." and the button is disabled. |
+| T-7 | AC-4 | `alex`, `open` | wrong code (planned) | `STEP_UP_FAILED`; no deposit, balance unchanged. |
+| T-8 | AC-9 | `alex`, remove deposits, `renew` | `empty` (planned) | "You have no term deposits." |
+| T-9 | AC-10 | `alex`, `open` | `unavailable: ["bank.deposits.open"]` (prototype: Service down on) | Connection sheet; nothing opened, balance unchanged. |
+| T-10 | AC-10 | `alex`, `open` | `timeout: ["bank.deposits.open"]`, `latencyMs: 10000` | After 10 seconds the timeout message; nothing opened. |
+
+#### 10. Expected mutation-check survivors
+
+`BELOW_MINIMUM` on submit survives (the amount step already stops it); `INSUFFICIENT_FUNDS` on submit survives for the same reason; expected. The early closure fraction survives if scenarios use a single date; expected. Everything else: none expected.
 
 ---
 
 ### ★ Savings goal — `savings-goal`
 
+**Catalog:** slug `savings-goal` (name "Savings goal"), workspace `personal`, category Save & Borrow (Personal: Save & Borrow), core no, can a bank switch it off: yes (basic, kept in the Lean preset). Options (both default on): **Offer automatic monthly top-ups** (`allowAuto`), **Allow taking money out of a goal** (`allowWithdraw`). Research: `research/savings-goal.md`. Built in `design/bankworkx-r1/src/journeys/66-deposits-goals.js`. Four modes: `create`, `edit`, `add`, `withdraw`.
+
+The lean rework removed the goal detail page, forecast chart, contribution list, pictures and the "on track" chip. A goal is a name, a target, a month and an optional monthly top-up.
+
 #### 1. Summary
 
-| Item | Value |
+| Field | Value |
 |---|---|
 | Slug | `savings-goal` |
-| Purpose | Set a goal with a target and a date, add money to it, and optionally save a fixed amount every month |
-| Release | 1 |
-| Workspace | Personal |
-| Status | New (draft). Needs the planned goals domain |
-| Channels | Web, mobile |
-| Starting pattern | Mode-driven: `create`, `add` (add money), `edit`, `close` |
-| Who may use it | Personal context holding `savings.manage` |
+| Purpose | Create or edit a goal with a target amount, a target month and an automatic monthly top-up; add money to a goal or take it out. |
+| Release / workspace | 1 / Personal |
+| Status | Built in the prototype as a form journey (`submit: "Confirm"`). No code is asked: the money stays the customer's |
+| Channels | Web and mobile |
+| Starting pattern | Details, plan, result (create, edit); one amount step (add, withdraw) |
+| Who may use it | Anyone signed in to Personal with `payments.create`, for their own accounts |
 
-A goal is a named pot inside a savings account. Money in a goal is still in the account, but is marked as set aside so it isn't spent by mistake.
+Configuration: at most 10 goals; name 2 to 30 characters; target $50.00 to $1,000,000.00; monthly top-up at least $5.00 on the 1st of each month. No market difference.
 
 #### 2. Entry points
 
-| Place › label | Passed | Permission |
+| Place › label | Passes in | Permission |
 |---|---|---|
-| Save & Borrow › goals › New goal | none (mode `create`) | `savings.manage` |
-| Save & Borrow › goals › Add money to goal | `{goalId}` (mode `add`) | `savings.manage` |
-| Goal detail › Change goal / Close goal | `{goalId}` (mode `edit` / `close`) | `savings.manage` |
+| Save › Savings goals › New goal / Create a goal | `{mode: "create"}` | `payments.create` |
+| Save › Savings goals › card › Add money | `{mode: "add", goalId}` | `payments.create` |
+| Save › Savings goals › card › Edit | `{mode: "edit", goalId}` | `payments.create` |
+| Result of a new goal › Add money | `{mode: "add", goalId}` | `payments.create` |
+| Deep link `/personal/j/savings-goal?mode=withdraw&goalId=g1` (no button on the Save tab today) | `mode`, optional `goalId` | `payments.create` |
 
 #### 3. Screens
 
-**Screen `goal` — "New goal"** (create) / **"Change goal"** (edit).
+**Screen `pick`: Choose a goal** (modes add, withdraw, edit, when no `goalId`). Choice cards: goal name and "{saved} of {target}". Required, "Choose a goal." If there are none: "You have no goals yet."
 
-| Field | Block | Required | Rule | Error message |
+**Create and edit: screen `goal`: Your goal** (edit starts with the current values)
+
+| Field | Type | Required | Validation | Message |
 |---|---|---|---|---|
-| Goal name | `textInput` bind `sg.name` (pattern `^.{2,30}$`) | Yes | 2 to 30 characters | "Give your goal a name of 2 to 30 characters." |
-| Icon | `select` tiles (Trip, Home, Car, Study, Rainy day, Other) | Yes | One | "Choose an icon." |
-| Target amount | `amountInput` bind `sg.target` | Yes | 100.00 to 1,000,000.00 | "A goal must be at least $100." / "A goal can be at most $1,000,000." |
-| Target date | `datePicker` (planned) bind `sg.targetDate` | Yes | Between 1 month and 10 years from today | "Choose a date at least one month from now." / "Choose a date within 10 years." |
-| Keep it in | `accountPicker` bind `sg.accountId` (savings accounts only) | Yes (create) | A savings account | "Choose an account." |
-| First deposit | `amountInput` bind `sg.initial` (optional, default 0) | No | 0 to the source balance | "There isn't enough money in {{account}}. Available: {{balance}}." |
-| Save automatically | `toggle` bind `sg.auto` | No | none | none |
-| How much each month | `amountInput` bind `sg.autoAmount` (`visibleWhen sg.auto`) | Yes when on | 10.00 up to the target | "Enter an amount from $10." |
-| Take it from | `accountPicker` bind `sg.fromAccountId` (`visibleWhen sg.auto`) | Yes when on | A different account that can debit | "Choose an account to save from." |
-| Day of the month | `select` chips (1, 5, 10, 15, 25) | Yes when on | One | "Choose a day." |
+| Name | text, placeholder "For example, New laptop", sample "New laptop", up to 30 characters | yes | 2 to 30 characters | "Use 2 to 30 characters." |
+| Target amount | amount, `$`, placeholder "0.00", sample 2000 | yes | at least 50 | "The smallest target is $50.00." |
+| | | | at most 1,000,000 | "The largest target is $1,000,000.00." |
+| Target date | date, a list of the next 36 month ends ("December 2026" and so on), placeholder "Choose a month" | yes | chosen | "This is required." |
 
-A live "You'd reach your goal by {{forecastDate}}" line (computed from deposit, monthly amount and target) shows under the auto-save fields; if no monthly amount is set it reads "Add a monthly amount to see when you'd get there." Button "Continue" (`validate`, `navigate review`).
+On **Continue** in create mode, if the customer already has 10 goals: "You can have up to 10 goals. Close one to add another."
 
-**Screen `addMoney` — "Add to {{goal.name}}"** (mode `add`). Fields: `accountPicker` "From" (bind `sg.fromAccountId`), `amountInput` "Amount" (quick 50, 100, 250, 500; rule 1.00 up to the balance and up to what remains to the target; message "Enter an amount from $1." / "You only need {{remaining}} more to reach your goal."). Button "Continue".
+**Create and edit: screen `fund`: Saving plan** (button **Save goal**). Live line "To get there by {date}" / "{n} a month" (remaining amount ÷ months left, rounded up; for edit the amount already saved is taken off).
 
-**Screen `review`.** `reviewSummary` by mode: Goal, Target, By, Keeps in, First deposit / Amount, Saves "{{autoAmount}} on the {{day}} of each month" (or "No automatic saving"), Forecast. `alert` info (auto only): "We'll move this money on the day. If you don't have enough, we'll try again the next day." Close mode: `alert` warning "Closing this goal releases {{saved}} back to {{account}}. Your money stays in your account." `consent` (create, edit with auto-save on): bind `sg.consent`, text "I agree that BankWorkx may move {{autoAmount}} every month from {{fromAccount}} until I stop it." validation `mustBeTrue` "Tick the box to continue." Button "Create goal" / "Save" / "Add {{amount}}" / "Close goal" (`validate`, `callApi otpSend`, navigate `code`).
+| Field | Type | Required | Validation | Message |
+|---|---|---|---|---|
+| Add automatically every month | toggle with "On the 1st of each month" (only when `allowAuto` is on) | no | none | none |
+| Monthly amount | amount, `$`, sample 200 (shown when the toggle is on; filled with the monthly figure when it is switched on) | yes then | at least 5 | "The smallest amount is $5.00." |
+| | | | not empty | "Enter a monthly amount." |
+| Take it from | select of accounts (same condition) | no | none | none |
 
-**Screen `code`**: standard; calls `otpVerify`, then `create`, `contribute`, `update` or `close`; then `done`.
+Result (create): "Goal created" / "{name} is ready. Add money any time." Receipt: Goal; Target; By; Monthly top-up ("$250.00 from Current account" or "Off"). Buttons **Add money**, **View goals**, **Done**. Result (edit): "Goal updated" / "{name} is up to date.", **View goals**. A top-up also appears in the customer's scheduled payments as "Goal: {name}", "Monthly · 1 Dec", amount; editing replaces it, switching it off removes it. Nothing moves until the 1st.
 
-**Screen `done` (terminal):** create "Goal created" ("{{name}}: {{target}} by {{date}}."); add "Money added" ("{{amount}} is set aside for {{name}}. You've saved {{saved}} of {{target}}."); edit "Goal updated"; close "Goal closed" ("{{saved}} is free to use again."); a goal reached shows "Goal reached! Well done." with a `result` success. meta "Ref {{result.reference}}" for money-moving modes. `locked`, `failed` standard.
+**Add: screen `move`: Add money** (button **Add money**). A card with the goal name, saved amount and "of {target}".
+
+| Field | Type | Required | Validation | Message |
+|---|---|---|---|---|
+| Amount | amount, `$`, sample 100 | yes | at least 1 | "The smallest amount is $1.00." |
+| | | | the account can cover it | the shared account messages |
+| From | select of accounts, default Current account | yes | chosen | "Choose an account." |
+
+Result: "Money added" / "$100.00 is now in Holiday fund.", or "{name} has reached its target." once saved is at least the target. Receipt: Goal; From; Amount; Saved so far ("$3,300.00 of $5,000.00"). The debit "To goal: {name}" shows in Activity. The sandbox lets a goal go above its target.
+
+**Withdraw: screen `out`: Take money out** (button **Take money out**). A card with the goal and "saved". Amount (at least $1.00; "You only have $3,200.00 in this goal." above the saved amount) and **Into** (select, required). Result: "Money taken out" / "$50.00 was paid into Current account." Receipt: Goal; Into; Amount; Saved so far.
+
+**States**
+- Loading: none; results appear at once.
+- Empty: no goals in edit, add or withdraw: "You have no goals yet."
+- Error: unavailable shows the connection sheet; a timeout shows the message below. Nothing was applied.
+- Stale: if the goal is gone at submit, "We can’t find that goal."
 
 #### 4. Sandbox errors
 
-| Code | Message | Screen | Button |
+| Code | Message | Shows on | Button |
 |---|---|---|---|
-| `ACCOUNT_NOT_FOUND` | "We can't find that account. Choose another." | `goal` / `addMoney` | Choose account |
-| `INVALID_AMOUNT` | "Enter a valid amount for this goal." | the screen with the amount | Change amount |
-| `INSUFFICIENT_FUNDS` | "There isn't enough money in {{account}}. Available: {{balance}}. No money has left your account." | the amount screen | Change amount |
-| `GOAL_NOT_FOUND` | "We can't find that goal." | `failed` | Back to goals |
-| `GOAL_TARGET_INVALID` | "A goal must be between $100 and $1,000,000." | `goal` | Fix it |
-| `GOAL_DATE_INVALID` | "Choose a date between 1 month and 10 years from now." | `goal` | Fix it |
-| `GOAL_ALREADY_REACHED` | "This goal is already reached. Close it or raise the target." | `failed` | Change goal |
-| `GOAL_LIMIT_REACHED` | "You can have up to 10 goals. Close one to add another." | `failed` | Back to goals |
-| `AUTO_ACCOUNT_INVALID` | "Choose a different account to save from than the goal's account." | `goal` | Fix it |
-| `LIMIT_EXCEEDED` | Standard | amount screen | Change amount |
-| `OTP_INVALID`, `OTP_REQUIRED` | Standard | `code` | Try again / Back to code |
-| `CORE_UNAVAILABLE` | Standard | `failed` | Try again |
-| `TIMEOUT` | Money steps: "Check Activity before you try again, so you don't save twice." | `failed` | Check Activity |
-| `SERVICE_UNAVAILABLE`, `PERMISSION_DENIED`, `WRONG_CONTEXT`, `SESSION_EXPIRED` | Standard | `failed` | Try again / Back / Switch / Sign in |
+| `INSUFFICIENT_FUNDS` | "There isn’t enough money in that account." | submit (add) | Back |
+| `GOAL_NOT_FOUND` | "We can’t find that goal." | submit | Back |
+| `GOAL_LIMIT` | "You can have up to 10 goals. Close one to add another." | goal, submit | Back |
+| `WITHDRAW_OFF` | "Taking money out isn’t available." | submit (withdraw) | Back |
+| `TIMEOUT` | "We didn’t get an answer in time. Check your goal before you try again." | submit | Try again |
+| `SERVICE_UNAVAILABLE` | Connection sheet | submit | Try again |
+| `JOURNEY_DISABLED` | "This isn’t available at your bank." | whole journey | none |
+| `PERMISSION_DENIED` (planned) | Standard message | whole journey | Back |
 
 #### 5. Adapters
 
 | Integration id | Adapter | Request | Response | Errors | Status |
 |---|---|---|---|---|---|
 | `accounts` | `bank.accounts.list` | none | accounts | none | Existing |
-| `goal` | `bank.goals.get` | `{goalId}` | goal | `GOAL_NOT_FOUND` | (planned) |
-| `create` | `bank.goals.create` | `{name, icon, target, targetDate, accountId, initial?, auto?: {amount, fromAccountId, day}}` | `{goalId, reference, forecastDate}` | `GOAL_TARGET_INVALID`, `GOAL_DATE_INVALID`, `GOAL_LIMIT_REACHED`, `ACCOUNT_NOT_FOUND`, `INSUFFICIENT_FUNDS`, `AUTO_ACCOUNT_INVALID`, `INVALID_AMOUNT`, `OTP_REQUIRED` | (planned) |
-| `contribute` | `bank.goals.contribute` | `{goalId, fromAccountId, amount}` | `{reference, saved, remaining, newBalance}` | `GOAL_NOT_FOUND`, `GOAL_ALREADY_REACHED`, `INVALID_AMOUNT`, `ACCOUNT_NOT_FOUND`, `INSUFFICIENT_FUNDS`, `LIMIT_EXCEEDED`, `OTP_REQUIRED` | (planned) |
-| `update` | `bank.goals.update` | `{goalId, name?, target?, targetDate?, auto?}` | goal | `GOAL_NOT_FOUND`, `GOAL_TARGET_INVALID`, `GOAL_DATE_INVALID`, `AUTO_ACCOUNT_INVALID`, `OTP_REQUIRED` | (planned) |
-| `close` | `bank.goals.close` | `{goalId}` | `{reference, released}` | `GOAL_NOT_FOUND`, `OTP_REQUIRED` | (planned) |
-
-`create` with a first deposit and `contribute` are `moneyMoving: true` (they move money between the person's own accounts and set money aside); all four `requiresOtp: true`.
+| `goals` | `bank.goals.list` | none | goals | none | (planned). The prototype reads `D.goals` |
+| `create` / `update` | `bank.goals.create` / `bank.goals.update` | `{name, target, date, auto: {on, fromAccountId, amount}}` (+ `goalId`) | `{goalId}` | `GOAL_LIMIT`, `GOAL_NOT_FOUND` | (planned) |
+| `contribute` | `bank.goals.contribute` | `{goalId, amount, fromAccountId}` (negative `amount` or a separate withdraw call for take-out) | `{saved, reference}` | `GOAL_NOT_FOUND`, `INSUFFICIENT_FUNDS`, `WITHDRAW_OFF` | (planned) |
+| `schedule` | `bank.schedule.list` | none | scheduled payments | none | (planned). The prototype writes the top-up to `D.sched` |
 
 #### 6. Permissions, step-up and limits
 
-`savings.manage`. Step-up `otp`. Limits: target 100 to 1,000,000; 10 goals; monthly auto-save from 10.00; a contribution counts against the daily limit only when the money leaves the account it sits in.
+`payments.create`. Step-up: **none**. Limits: 10 goals; target $50.00 to $1,000,000.00; top-up at least $5.00; the paying account must hold the amount; a withdrawal cannot exceed the saved amount.
 
 #### 7. Result and links out
 
-Result `done`; receipt for money-moving modes. Notifications: "Goal created", "You've reached 50% of {{name}}" (planned), "Auto-save failed: not enough money in {{account}}" (planned). Links out: goal detail, goals list.
+As above. Notifications (planned): "Your goal {name} reached its target"; "Your monthly top-up of {amount} to {name} was made". Links out: Save tab; scheduled payments.
 
 #### 8. Acceptance criteria
 
-- AC-1: A goal is created with a name, target, date, savings account, and optional first deposit and monthly saving.
-- AC-2: Target and date rules are enforced with their own messages.
-- AC-3: Setting up monthly saving needs consent, a different source account and a verified code.
-- AC-4: Adding money to a goal moves it from the chosen account and updates saved and remaining.
-- AC-5: The person cannot add more than the account holds or more than the goal needs.
-- AC-6: Closing a goal frees the money and keeps it in the account.
-- AC-7: The forecast date shown agrees with deposit, monthly amount and target.
-- AC-8: At most 10 goals.
-- AC-9: A timeout or unavailable service changes nothing; the timeout text names Activity.
-- AC-10: Three wrong codes change nothing.
+- AC-1: A goal needs a name of 2 to 30 characters, a target of $50.00 to $1,000,000.00 and a month, with the messages above.
+- AC-2: The saving plan shows the monthly amount needed to reach the target by the chosen month.
+- AC-3: Switching the top-up on fills the monthly amount with that figure (at least $5.00); it needs an amount of at least $5.00 and an account.
+- AC-4: With `allowAuto` off, the toggle, amount and account are absent and no top-up is saved.
+- AC-5: A top-up appears in scheduled payments as "Goal: {name}" and is replaced on edit and removed when switched off.
+- AC-6: An eleventh goal is refused with "You can have up to 10 goals. Close one to add another."
+- AC-7: Adding money takes it from the chosen account, raises the goal and shows "Money added"; reaching the target says so.
+- AC-8: Taking money out cannot exceed the saved amount and pays the chosen account; with `allowWithdraw` off it is refused.
+- AC-9: No code is asked in any mode.
+- AC-10: When the bank is unavailable or times out nothing is changed.
 
 #### 9. Scenarios
 
-| # | Covers | Persona and setup | Outcome |
-|---|---|---|---|
-| T-1 | AC-1, AC-3, AC-7 | `alex`; "New car", 6,000, date 12 months out, Savings, first deposit 500 from Main, auto 250 from Main, day 5, code `482100` | Goal created; Main 8,720.76 → 8,220.76; forecast date shown |
-| T-2 | AC-2 | `alex` | Target 50: message; date 3 days out: message |
-| T-3 | AC-3 | `alex` | Auto on with source = goal account: `AUTO_ACCOUNT_INVALID`; skip consent: message; skip code: `OTP_REQUIRED` |
-| T-4 | AC-4 | `alex`; add 200 to `goal_1` | Saved 1,450.00 of 4,000.00 |
-| T-5 | AC-5 | `alex`; add 99,999 / add 3,000 to `goal_1` | `INSUFFICIENT_FUNDS` / "You only need 2,750.00 more to reach your goal." |
-| T-6 | AC-6 | `alex`; close `goal_1` | `released` 1,250.00; account balance unchanged; goal closed |
-| T-7 | AC-8 | `alex`; setup 10 goals | `GOAL_LIMIT_REACHED` |
-| T-8 | AC-10 | `alex` | Wrong code x3: `locked`; no goal |
-| T-9 | AC-9 | conditions `timeout: ["bank.goals.contribute"]` | Check Activity text; saved unchanged |
-| T-10 | AC-9 | conditions `unavailable: ["bank.goals.create"]` | `SERVICE_UNAVAILABLE`; no goal |
+Synthetic persona `alex`, goal `g1` "Holiday fund" ($3,200.00 of $5,000.00), Current account $8,102.40 available.
+
+| # | Covers | Persona / setup | Conditions | Steps and expected result |
+|---|---|---|---|---|
+| T-1 | AC-1, AC-2, AC-3, AC-5, AC-9 | `alex`, `create` | none | "New laptop", $2,000.00, June 2027. Plan: "To get there by 30 Jun 2027 / $250.00 a month". Switch the top-up on: amount $250.00, from Current account. "Goal created"; scheduled payments list "Goal: New laptop". No code. |
+| T-2 | AC-1 | `alex`, `create` | none | Name "A": "Use 2 to 30 characters." Target $20: "The smallest target is $50.00." |
+| T-3 | AC-3 | `alex`, `create` | none | Top-up on, monthly $3: "The smallest amount is $5.00." |
+| T-4 | AC-4 | `alex`, `create` | `allowAuto` off | No toggle on the plan screen. |
+| T-5 | AC-5 | `alex`, `edit`, `g1` | none | Turn the top-up off, save: "Goal updated"; the schedule line is gone. |
+| T-6 | AC-6 | `alex` with 10 goals, `create` | none | Continue on "Your goal": "You can have up to 10 goals. Close one to add another." |
+| T-7 | AC-7 | `alex`, `add`, `g1` | none | $100.00 from Current account: "Money added"; "Saved so far $3,300.00 of $5,000.00"; Current account $8,002.40 available. |
+| T-8 | AC-7 | `alex`, `add`, `g1` | none | $1,800.00: "Holiday fund has reached its target." |
+| T-9 | AC-8 | `alex`, `withdraw`, `g1` | none | $5,000.00: "You only have $3,200.00 in this goal." $50.00 into Current account: "Money taken out". |
+| T-10 | AC-8 | `alex`, `withdraw`, `g1` | `allowWithdraw` off | Submit: "Taking money out isn’t available." Balance unchanged. |
+| T-11 | AC-7 | `alex`, `add` | none | Account with too little: "Not enough money in Current account. Available: $8,102.40." |
+| T-12 | AC-10 | `alex`, `add`, `g1` | `unavailable: ["bank.goals.contribute"]` (prototype: Service down on) | Connection sheet; goal unchanged. |
+| T-13 | AC-10 | `alex`, `add`, `g1` | `timeout: ["bank.goals.contribute"]`, `latencyMs: 10000` | After 10 seconds the timeout message; goal unchanged. |
 
 #### 10. Expected mutation-check survivors
 
-- Forecast date calculation is journey-side display: **survives** unless a scenario asserts the text (T-1 does, so killed).
-- 10-goal limit exact value: killed by T-7 only with exactly 10 set up; off-by-one survives otherwise.
-- Day-of-month chips: **survive** (the sandbox never runs the monthly schedule).
+`INSUFFICIENT_FUNDS` on submit survives because the amount step already stops it; expected. `WITHDRAW_OFF` is only reachable by a deep link into mode `withdraw`; if no scenario does that it survives (T-10 kills it). The rounding up of the monthly figure survives when scenarios use round numbers; expected. Everything else: none expected.
 
 ---
-
 ### ★ Apply for a loan — `apply-loan`
+
+**Catalog:** slug `apply-loan` (name "Apply for a loan"), workspace `personal`, category Save & Borrow (Personal: Save & Borrow), core no, can a bank switch it off: yes (not in the Lean preset). Options (both default on): **Send borderline applications to manual review** (`allowReferral`), **Charge a 1% arrangement fee** (`arrFee`). Research: `research/apply-loan.md`. Built in `design/bankworkx-r1/src/journeys/67-loans.js`.
+
+The lean rework removed the product list, the eligibility pre-check page, the repayment schedule and the document upload. The customer picks an amount and a term, states work and income, gets a decision in seconds and accepts or closes.
 
 #### 1. Summary
 
-| Item | Value |
+| Field | Value |
 |---|---|
 | Slug | `apply-loan` |
-| Purpose | Check what you can borrow, see the repayment schedule, sign the agreement and receive the money |
-| Release | 1 |
-| Workspace | Personal |
-| Status | New (draft). Needs the planned loans domain and the planned `documentViewer`, `signature` and `dataTable` blocks |
-| Channels | Web, mobile |
-| Starting pattern | Terms → eligibility → schedule preview → documents → consent → signature → code → decision |
-| Who may use it | Personal context holding `loans.apply` |
+| Purpose | Choose an amount and term, tell the bank about income, get an instant decision (approved, in review, or not approved) and accept the offer. |
+| Release / workspace | 1 / Personal |
+| Status | Built in the prototype as a form journey (`submit: "Accept offer"`). The decision is a simulated call (1.4 seconds). Pays money into an account only when approved and accepted |
+| Channels | Web and mobile |
+| Starting pattern | Amount and term, income, decision, offer, code, result |
+| Who may use it | Anyone signed in to Personal with `loans.apply` |
+
+Configuration (sandbox credit policy): rates by term 12 months 8.9%, 24 months 9.4%, 36 months 9.9%, 48 months 10.4%, 60 months 10.9% a year, plus 1.0 point when payments are over 35% of income; amount $1,000 to $50,000 in steps of $500; at most 3 loans; monthly payment is the equal-instalment figure. No market difference.
 
 #### 2. Entry points
 
-| Place › label | Passed | Permission |
+| Place › label | Passes in | Permission |
 |---|---|---|
-| Save & Borrow › loans › Apply | `{productId}` | `loans.apply` |
-| Home › Offer › Apply | `{offerId}` (resolved to `{productId, amount}`) | `loans.apply` |
-| Products › loan detail (public) → sign in | `{productId}` | `loans.apply` |
+| Save › Loans › Apply (and "Apply for a loan" when empty) | none | `loans.apply` |
+| Home › Offers › Apply | optional `amount` | `loans.apply` |
+| Decline result › Try a different amount | none | `loans.apply` |
+| Deep link `/personal/j/apply-loan?amount=8000` | optional `amount` | `loans.apply` |
 
 #### 3. Screens
 
-**Screen `terms` — "How much do you want to borrow?"** `onEnter`: `callApi product`, `callApi accounts`.
+**Screen 1 `loan`: How much do you need?** (button **Continue**). Live card: "Monthly payment" ($161.10 for $5,000.00 over 36 months), "Rate (APR)" ("9.9% a year"), and "Your rate can differ after we check your details."
 
-| Field | Block | Required | Rule | Error message |
+| Field | Type | Required | Validation | Message |
 |---|---|---|---|---|
-| Amount | `amountInput` bind `loan.amount` (quick 2,500; 5,000; 10,000; 20,000) | Yes | 1,000.00 to 50,000.00, whole currency units | "The smallest loan is $1,000." / "The most you can borrow is $50,000." |
-| Length | `select` chips bind `loan.termMonths`: 6, 12, 24, 36, 48, 60 months | Yes | One of the six | "Choose how many months." |
-| What it's for | `select` rows bind `loan.purpose`: Home improvement, Car, Education, Travel, Debt consolidation, Other | Yes | One | "Choose what the loan is for." |
-| Pay the money into | `accountPicker` bind `loan.toAccountId` | Yes | An active account | "Choose where to receive the money." |
-| Take instalments from | `accountPicker` bind `loan.fromAccountId` | Yes | An account that can debit | "Choose where to pay from." |
-| Pay on day | `select` chips (1, 5, 10, 15, 25) bind `loan.dueDay` | Yes | One | "Choose a payment day." |
+| Amount | slider $1,000 to $50,000, step $500, default $5,000 | yes | in range | none |
+| Term | chips "12 months", "24 months", "36 months" (default), "48 months", "60 months" | yes | one chosen | none |
+| Purpose | select, placeholder "Choose a purpose": Home improvement, Car, Education, Medical, Travel, Debt consolidation, Other | yes | chosen | "Choose what the loan is for." |
 
-Below the fields a live card shows "About {{instalment}} a month for {{term}} months. Interest {{rate}}% a year." (from `bank.loans.schedule` preview with `preview: true`; falls back to the product's example if the call fails). Button "Check my offer" (`validate`, `callApi eligibility`, navigate `offer`).
+On **Continue**, if the customer already has 3 loans: "You already have the maximum number of loans."
 
-**Screen `offer` — "Your offer".** Three outcomes, chosen by `ctx.elig.decision`:
+**Screen 2 `work`: Work and income** (button **Check my application**, then "Checking your application…" for about 1.4 seconds)
 
-- `approved`: `result`-style `hero` card "You can borrow {{amount}}". `reviewSummary` rows: Loan amount; Interest rate "{{rate}}% a year, fixed"; Length; Monthly payment; Arrangement fee "{{fee}} (1.00%, minimum 25.00), taken from the loan"; **You'll receive** (amount minus fee); Total you'll pay back; Total interest; Yearly cost (APR) "{{apr}}%"; First payment date. Link "See full schedule" opens the `schedule` screen. Buttons "Continue" (to `documents`), "Change the loan" (to `terms`).
-- `referred` (amount above 30,000.00): `alert` info "We need a person to look at this one. We'll reply within 2 working days." Button "Send for review" (continues the same path but the final step creates a pending application with no money), "Change the loan".
-- `declined`: `alert` warning with the reason text from the adapter (section 4). Button "Try a smaller amount" (to `terms`), "Back to loans" (`exit`).
-
-**Screen `schedule` — "Repayment schedule".** `dataTable` (planned) with columns No., Due date, Instalment, Principal, Interest, Balance after (rows from `bank.loans.schedule`; first 12 rows, "Show all" for the rest). Button "Back to offer".
-
-**Screen `documents` — "Read your agreement".** `documentViewer` (planned) showing two documents: "Key facts" (one page) and "Loan agreement"; the button below stays disabled until the person scrolls both to the end. Helper "Please read both documents. You'll sign them next."
-
-**Screen `consent` — "Your permissions".** Two `consent` blocks:
-
-| Field | Block | Required | Rule | Error message |
+| Field | Type | Required | Validation | Message |
 |---|---|---|---|---|
-| Terms | `consent` bind `loan.consentTerms`, termsVersion `loans-v1` | Yes | `mustBeTrue` | "Tick the box to continue." |
-| Credit check | `consent` bind `loan.consentCredit`, termsVersion `credit-v1` | Yes | `mustBeTrue` | "We need your permission to check your credit to go on." |
+| Employment | select, placeholder "Choose one": Employed, Self-employed, Retired, Student, Not working | yes | chosen | "Choose your employment status." |
+| Monthly income after tax | amount, `$`, sample 5000 | yes | above 0 | "Enter your monthly income." |
+| | | | at most 1,000,000 | "Check this amount." |
+| Monthly loan and card payments | amount, `$`, sample 300, hint "Enter 0 if you have none." | yes | 0 or more, up to 1,000,000 | "Enter 0 or more." / "Check this amount." |
 
-Texts: "I have read the key facts and the agreement, and I agree to repay {{amount}} in {{term}} instalments of {{instalment}}." and "I allow BankWorkx to check my credit record and my income for this application." Button "Continue" (`validate`, navigate `sign`).
+**Decision rules**, in this order, with payment = the monthly payment at the table rate and ratio = (payment + other payments) ÷ income:
+1. Employment "Student" or "Not working": declined (income reason).
+2. Income below $1,000: declined (income reason).
+3. Ratio above 50%: declined (affordability reason).
+4. Referred when the amount is more than 12 times monthly income, or self-employed above $15,000, or retired above $20,000, or ratio above 40%. With `allowReferral` off a referral becomes a decline (affordability reason).
+5. Otherwise approved at the table rate, plus 1.0 point when the ratio is above 35%.
 
-**Screen `sign` — "Sign your agreement".** `signature` (planned) bind `loan.signature`: draw with a finger or mouse, or type your full name "{{profile.name}}". Rule: the typed name must equal the name on the account (case-insensitive); a drawn signature must have at least 20 points. Error: "Sign with your full name, {{profile.name}}." / "Please draw your signature in the box." Button "Sign and continue" (`validate`, `callApi otpSend`, navigate `code`).
+Only an approved decision asks for a code; the other two outcomes need none.
 
-**Screen `code`**: standard one-time code. Button "Confirm and get my loan" calls `otpVerify`, then `apply`, then `decision`.
+**Screen 3 `offer`: Your offer** (only when approved; button **Accept offer**). Rows: Loan; Term; Rate (APR); Monthly payment; Total interest; Arrangement fee (1% of the loan, only when `arrFee` is on); Total to repay; First payment (one month from today).
 
-**Screen `decision` (terminal).**
+| Field | Type | Required | Validation | Message |
+|---|---|---|---|---|
+| Pay into and repay from | select of accounts, default Current account | yes | chosen | "This is required." |
+| I agree to the loan terms | checkbox | yes | ticked | "Agree to the terms to continue." |
 
-| Outcome | Title | Text | Buttons |
-|---|---|---|---|
-| Approved and paid | "Loan paid out" | "{{received}} is in {{account}}. Your first payment of {{instalment}} is due on {{firstDue}}." meta "Ref {{result.reference}}" | "View loan", "Done" |
-| Pending review | "We're reviewing your application" | "We'll tell you the result by {{replyBy}}. Nothing has been taken from you." meta "Application {{result.applicationId}}" | "Track application" (`track-application`), "Done" |
-| Not approved at the last step (the checks changed) | "We couldn't approve this loan" | `{{ctx.error.message}}` | "Back to loans" |
+Then the code sheet "Authorise a loan of $5,000.00".
 
-`locked`, `failed` standard ("Nothing was borrowed.").
+**Screen 3 `outcome`: Our decision** (when not approved; button **Close**)
+- Referred: card "We need to look at this" / "A member of our team will review your application and reply within 2 working days."
+- Declined for income: "We can’t offer this loan" / "We can’t lend based on the income you gave."
+- Declined for affordability: "We can’t offer this loan" / "The payments would be too high against your income. Try a smaller amount or a longer term."
 
-States: skeletons on `terms` while the product loads; `offer` shows a progress "Checking your offer" while eligibility runs (10 s limit then the timeout state "This is taking longer than expected. Nothing was changed.").
+**Result**
+
+| Outcome | Title and text | Chip | Receipt rows | Buttons |
+|---|---|---|---|---|
+| Approved | "Loan approved" / "$5,000.00 is in Current account." | Done | Loan; Paid into; Rate (APR); Monthly payment; Arrangement fee (if charged); First payment | **View loan** (Save tab), **Done** |
+| Referred | "Application in review" / "We’ll reply within 2 working days." | In review | Amount; Term; Purpose | **View Save**, **Done** |
+| Declined | "Application not approved" / "No loan was created." | Declined | Amount; Term | **Try a different amount**, **Done** |
+
+An approved loan appears on the Save tab with the purpose as its name ("Car loan"). The account is credited with the loan less the arrangement fee; Activity shows "Loan paid out".
+
+**States**
+- Loading: "Checking your application…" with a spinner on the income step.
+- Empty: not applicable.
+- Error: unavailable at the check shows the connection sheet; a timeout shows the message below; no application is recorded.
+- Stale: if the customer reaches the limit of 3 loans between offer and acceptance, "You already have the maximum number of loans."
 
 #### 4. Sandbox errors
 
-| Code | Message | Screen | Button |
+| Code | Message | Shows on | Button |
 |---|---|---|---|
-| `PRODUCT_NOT_FOUND` | "We can't find that loan. Choose another." | `failed` | Back to loans |
-| `AMOUNT_OUT_OF_RANGE` | "You can borrow from $1,000 to $50,000." | `terms` | Change amount |
-| `TERM_OUT_OF_RANGE` | "Choose a length from 6 to 60 months." | `terms` | Change length |
-| `ACCOUNT_NOT_FOUND` | "We can't find that account. Choose another." | `terms` | Choose account |
-| `LOAN_NOT_ELIGIBLE` | "We can't offer you a loan right now. {{reason}}" | `offer` | Back to loans |
-| `NO_INCOME_HISTORY` | "We need to see your salary paid in for at least 3 months before we can lend." | `offer` | Back to loans |
-| `AFFORDABILITY` | "This payment is too high for your income. Try {{maxAmount}} or a longer term." | `offer` | Try a smaller amount |
-| `ACTIVE_APPLICATION` | "You already have a loan application in progress." | `failed` | Track application |
-| `SIGNATURE_INVALID` | "Sign with your full name, {{name}}." | `sign` | Sign again |
-| `OTP_INVALID`, `OTP_REQUIRED` | Standard | `code` | Try again / Back to code |
-| `CORE_UNAVAILABLE` | "We couldn't complete this right now. Nothing was borrowed." | `failed` | Try again |
-| `TIMEOUT` | "We didn't get an answer in time. Check your loans and Activity before you try again, so you don't borrow twice." | `failed` | Check Activity |
-| `SERVICE_UNAVAILABLE` | Standard | `failed` | Try again |
-| `PERMISSION_DENIED`, `WRONG_CONTEXT`, `SESSION_EXPIRED` | Standard | `failed` | Back / Switch / Sign in |
+| `LOAN_LIMIT` | "You already have the maximum number of loans." | amount step, submit | Back |
+| `BUREAU_UNAVAILABLE` | "We can’t check your application right now. Try again in a few minutes." | income step | Try again |
+| `ACCOUNT_CANNOT_CREDIT` | "This account can’t receive money right now. Choose another account." | submit | Choose account |
+| `STEP_UP_FAILED` (planned) | "We couldn’t confirm this. No loan was created. Start again." | code | Start again |
+| `TIMEOUT` | "We didn’t get an answer in time. Check your loans before you try again." | income step, submit | Try again |
+| `SERVICE_UNAVAILABLE` | Connection sheet | income step, submit | Try again |
+| `JOURNEY_DISABLED` | "This isn’t available at your bank." | whole journey | none |
+| `PERMISSION_DENIED` (planned) | Standard message | whole journey | Back |
 
 #### 5. Adapters
 
 | Integration id | Adapter | Request | Response | Errors | Status |
 |---|---|---|---|---|---|
 | `accounts` | `bank.accounts.list` | none | accounts | none | Existing |
-| `product` | `bank.loans.products` | none | products with min, max, terms, rate, fee | none | (planned) |
-| `eligibility` | `bank.loans.eligibility` | `{productId, amount, termMonths}` | `{decision, maxAmount, rate, instalment, fee, receive, totalRepay, totalInterest, apr, reason?}` | `PRODUCT_NOT_FOUND`, `AMOUNT_OUT_OF_RANGE`, `TERM_OUT_OF_RANGE`, `LOAN_NOT_ELIGIBLE`, `NO_INCOME_HISTORY`, `AFFORDABILITY` | (planned) |
-| `schedule` | `bank.loans.schedule` | `{productId?, amount, termMonths, dueDay}` or `{loanId}` | `{rows: [{n, dueDate, instalment, principal, interest, balance}]}` | `AMOUNT_OUT_OF_RANGE`, `TERM_OUT_OF_RANGE` | (planned) |
-| `apply` | `bank.loans.apply` | `{productId, amount, termMonths, purpose, toAccountId, fromAccountId, dueDay, consents, signature}` | `{decision, loanId?, applicationId?, reference, received, firstDue, replyBy?}` | all of the above + `SIGNATURE_INVALID`, `ACTIVE_APPLICATION`, `ACCOUNT_NOT_FOUND`, `CORE_UNAVAILABLE`, `OTP_REQUIRED` | (planned) |
-| `otpSend`, `otpVerify` | existing | | | `OTP_INVALID` | Existing |
-
-`apply` is `moneyMoving: true` (it credits the loan to the account) and `requiresOtp: true`. The sandbox rules (planned): eligibility needs a salary credit in each of the last 3 months (Alex has; Sam has none, so `NO_INCOME_HISTORY`); maximum loan 6 times monthly income (Alex's salary 3,200.00 → 19,200.00 without review, so up to 30,000.00 referrals are possible only via the sandbox override); the instalment may not exceed 40% of monthly income minus existing instalments (Alex: 1,280.00 − 368.75 = 911.25); above 30,000.00 the decision is `referred`. Instalment formula: equal payments, interest on the remaining balance each month. Example: 10,000.00 over 24 months at 9.90% gives 460.94 a month, arrangement fee 100.00, receives 9,900.00, total repaid 11,062.56, total interest 1,062.56.
+| `loans` | `bank.loans.list` | none | loans | none | (planned). The prototype reads `D.loans` |
+| `decide` | `bank.loans.eligibility` | `{amount, term, purpose, employment, income, commitments}` | `{decision: approved \| referred \| declined, rate, payment, reason}` | `BUREAU_UNAVAILABLE`, `LOAN_LIMIT` | (planned) |
+| `apply` | `bank.loans.apply` | `{amount, term, rate, accountId}` | `{loanId, reference}` | `LOAN_LIMIT`, `ACCOUNT_CANNOT_CREDIT` | (planned) |
+| `sendOtp` / `verifyOtp` | `bank.otp.send` / `bank.otp.verify` | `{channel}` / `{code}` | `{sent}` / `{verified}` | `OTP_INVALID`, `OTP_LOCKED` | Existing |
 
 #### 6. Permissions, step-up and limits
 
-`loans.apply`. Step-up `otp`, plus signature. Product limits: 1,000 to 50,000; 6 to 60 months; one application at a time. The loan credit is not a transfer, so the daily transfer limit does not apply.
+`loans.apply`. Step-up: one-time code only for an approved offer. Limits: $1,000.00 to $50,000.00; 12 to 60 months; at most 3 loans.
 
 #### 7. Result and links out
 
-Result `decision`. Receipt: loan summary (amount, fee, rate, term, instalment, first due, reference). Notifications: "Loan paid out", "Your application is under review", "Your first payment is due on {{date}}" (planned). Links out: loan detail, `track-application` (pending), Accounts (new balance).
+As above. Notifications (planned): "Your loan of {amount} was paid into {account}"; "Your loan application is in review"; "We couldn’t offer your loan". Links out: Save tab, `repay-loan`.
 
 #### 8. Acceptance criteria
 
-- AC-1: A loan of 1,000 to 50,000 for 6 to 60 months can be applied for when the person qualifies.
-- AC-2: The monthly payment, fee, amount received, total repaid and rate are shown before anything is signed, and agree with the schedule and the credited amount.
-- AC-3: A person without 3 months of salary is told why they are not offered a loan.
-- AC-4: A payment above the affordable amount is refused with a suggested maximum.
-- AC-5: The agreement must be opened to the end, both consents ticked, and the signature given before the code is sent.
-- AC-6: The loan is paid out only after a verified one-time code, and the received amount is the loan minus the fee.
-- AC-7: Loans above 30,000 go to review, with no money paid.
-- AC-8: Only one application is in progress at a time.
-- AC-9: Three wrong codes pay out nothing.
-- AC-10: A timeout tells the person to check before applying again; an unavailable service pays out nothing.
+- AC-1: The first screen shows the monthly payment and rate for the chosen amount and term, and a purpose is required.
+- AC-2: A student, someone not working, or income below $1,000.00 is declined with the income message.
+- AC-3: Payments above 50% of income are declined with the affordability message.
+- AC-4: A request of more than 12 times monthly income, self-employed above $15,000.00, retired above $20,000.00, or payments above 40% of income is sent to review; with `allowReferral` off it is declined.
+- AC-5: Payments above 35% of income raise the rate by one point.
+- AC-6: An approved offer shows loan, term, rate, payment, total interest, the fee (when on), total to repay and first payment; the customer must tick the terms.
+- AC-7: A code is asked only for an approved offer; accepting adds the loan to the Save tab and pays the account.
+- AC-8: A review or a decline creates no loan and moves no money.
+- AC-9: A fourth loan is refused with "You already have the maximum number of loans."
+- AC-10: With `arrFee` off no fee is shown or deducted.
+- AC-11: When the bank is unavailable or times out nothing is changed.
 
 #### 9. Scenarios
 
-| # | Covers | Persona and setup | Outcome |
-|---|---|---|---|
-| T-1 | AC-1, AC-2, AC-5, AC-6 | `alex`; 10,000, 24 months, Main both ways, signature typed "Alex Morgan", code `482100` | Offer 460.94 a month, receive 9,900.00; Main 8,720.76 → 18,620.76; `loan` created |
-| T-2 | AC-2 | `alex`; same | Schedule row 24 balance 0.00; sum of interest 1,062.56 |
-| T-3 | AC-3 | `sam` (setup an account) | `NO_INCOME_HISTORY` |
-| T-4 | AC-4 | `alex`; 20,000 over 6 months | `AFFORDABILITY` with a suggested maximum |
-| T-5 | AC-5 | `alex` | Skip consent: both messages; sign "A Morgan": `SIGNATURE_INVALID` |
-| T-6 | AC-7 | `alex`; 35,000 | `referred`; no money; application created |
-| T-7 | AC-8 | `alex`; after T-6 | Another application: `ACTIVE_APPLICATION` |
-| T-8 | AC-9 | `alex` | Wrong code x3: `locked`; balance unchanged |
-| T-9 | AC-10 | conditions `timeout: ["bank.loans.apply"]` | Check Activity text; no loan; balance unchanged |
-| T-10 | AC-10 | conditions `unavailable: ["bank.loans.apply"]` | `SERVICE_UNAVAILABLE`; no loan |
-| T-11 | AC-6 | `alex` with `transferFails` | `CORE_UNAVAILABLE`; "Nothing was borrowed." |
+Synthetic persona `alex` (one loan, Current account $8,102.40). The sandbox code is the fixed test code.
+
+| # | Covers | Persona / setup | Conditions | Steps and expected result |
+|---|---|---|---|---|
+| T-1 | AC-1, AC-5, AC-6, AC-7, AC-10 | `alex` | none | $5,000.00, 36 months, Car; Employed, income $5,000.00, other payments $300.00. Approved at 9.9%: payment $161.10, total interest $799.60, fee $50.00, total to repay $5,849.60, first payment 3 Dec 2026. Tick terms, code. "Loan approved"; the Save tab shows "Car loan"; Current account credited $4,950.00. |
+| T-2 | AC-2 | `alex` | none | Student, or income $800.00: "We can’t lend based on the income you gave." No code. |
+| T-3 | AC-3 | `alex` | none | $50,000.00, 12 months, income $5,000.00: ratio over 50%, "The payments would be too high against your income. Try a smaller amount or a longer term." |
+| T-4 | AC-4 | `alex` | `allowReferral` on / off | Self-employed, $20,000.00, 60 months, income $8,000.00, other payments $0: on gives "We need to look at this" and "Application in review"; off gives "Application not approved". |
+| T-5 | AC-5 | `alex` | none | $10,000.00, 12 months, income $2,500.00, other payments $100.00: ratio 39% is between 35% and 40%, so approved at 9.9% a year (8.9% plus one point), payment $878.69. |
+| T-6 | AC-6 | `alex` | none | Accept without the tick: "Agree to the terms to continue." |
+| T-7 | AC-9 | `alex` with 3 loans | none | Continue on screen 1: "You already have the maximum number of loans." |
+| T-8 | AC-10 | `alex` | `arrFee` off | T-1: no fee row; Current account credited $5,000.00. |
+| T-9 | AC-7 | `alex` | wrong code (planned) | `STEP_UP_FAILED`; no loan, no money. |
+| T-10 | AC-11 | `alex` | `unavailable: ["bank.loans.eligibility"]` (prototype: Service down on) | Connection sheet on "Check my application"; no application. |
+| T-11 | AC-11 | `alex` | `timeout: ["bank.loans.eligibility"]`, `latencyMs: 10000` | After 10 seconds the timeout message; no application. |
 
 #### 10. Expected mutation-check survivors
 
-- 40% affordability factor: killed by T-4 only at the boundary; a tiny change **survives** (listed: "boundary not exercised").
-- Fee minimum of 25.00: **survives** (no small loan scenario; add a 1,000 loan to kill it).
-- `documentViewer` must-scroll rule: **survives** (UI rule the sandbox cannot see).
+`BUREAU_UNAVAILABLE` is never raised by the prototype (planned); it survives until the adapter exists. `ACCOUNT_CANNOT_CREDIT` survives because only a frozen account triggers it and the seed has none; expected. The second `LOAN_LIMIT` check at submit survives (the first screen already stops it). The "over 12 times income" referral rule survives when scenarios use ordinary amounts; expected. Everything else: none expected.
 
 ---
 
 ### ★ Repay a loan — `repay-loan`
 
+**Catalog:** slug `repay-loan` (name "Repay a loan"), workspace `personal`, category Save & Borrow (Personal: Save & Borrow), core no, can a bank switch it off: yes (basic, kept in the Lean preset). Options (all default on): **Allow paying any amount** (`allowCustom`), **Allow settling in full** (`allowSettle`), **Charge a 1% early settlement fee** (`settleFee`). Research: `research/repay-loan.md`. Built in `design/bankworkx-r1/src/journeys/67-loans.js`.
+
+The lean rework removed the schedule view, the payment history and the choice of the next payment date.
+
 #### 1. Summary
 
-| Item | Value |
+| Field | Value |
 |---|---|
 | Slug | `repay-loan` |
-| Purpose | Pay the next instalment, pay extra, or settle the whole loan early |
-| Release | 1 |
-| Workspace | Personal |
-| Status | New (draft). Needs the planned loans domain |
-| Channels | Web, mobile |
-| Starting pattern | Choose what to pay → quote (for settlement) → review → code → result |
-| Who may use it | Personal context holding `loans.repay` |
+| Purpose | Pay the next instalment, pay another amount, or settle the loan in full, with the settlement figure shown before the customer chooses. |
+| Release / workspace | 1 / Personal |
+| Status | Built in the prototype as a form journey (`submit: "Pay"`, one-time code). Moves money |
+| Channels | Web and mobile |
+| Starting pattern | Choose a loan, how much, pay from, review, code, result |
+| Who may use it | Anyone signed in to Personal with `payments.create`, for their own loans |
 
-Three modes: `instalment` (the amount due now), `extra` (any amount, which shortens the loan; the instalment stays the same), `settle` (everything owed today, from a settlement quote).
+Configuration: the instalment splits into interest (balance × rate ÷ 12) and principal. Settling in full costs the balance, interest since the last payment (balance × rate × days ÷ 365) and a 1% fee of the balance when more than 12 payments remain. No market difference.
 
 #### 2. Entry points
 
-| Place › label | Passed | Permission |
+| Place › label | Passes in | Permission |
 |---|---|---|
-| Save & Borrow › loan › Repay | `{loanId, mode: "instalment"}` | `loans.repay` |
-| Save & Borrow › loan › Settle early | `{loanId, mode: "settle"}` | `loans.repay` |
-| Notification "Your loan payment is due" | `{loanId, mode: "instalment"}` | `loans.repay` |
+| Save › Loans › card › Repay | `{loanId}` | `payments.create` |
+| Deep link `/personal/j/repay-loan?loanId=ln1&option=settle` | `loanId`, optional `option` (`next`, `custom`, `settle`) | `payments.create` |
+
+With one loan the choice of loan is skipped.
 
 #### 3. Screens
 
-**Screen `choose` — "Repay {{loan.name}}"** (shown when no mode is passed). `onEnter`: `callApi loan`, `callApi accounts`. `select` tiles bind `rp.mode`: "Pay this month's instalment ({{instalment}} due {{dueDate}})"; "Pay extra" (help "Pay off the loan sooner and save interest"); "Pay it all off" (help "Close the loan today"). Summary card: outstanding balance, next due date, paid and left counts.
+**Screen `pick`: Choose a loan** (no `loanId`). Choice cards: loan name and "{balance} left · next payment {date}". Required, "Choose a loan." No loans: "You have no loans."
 
-**Screen `pay` — "Pay".**
+**Screen `opt`: How much?** Choice cards (default "Pay next instalment"):
 
-| Field | Block | Required | Rule | Error message |
+| Card | Sub line | Right side | Shown as unavailable when |
+|---|---|---|---|
+| Pay next instalment | "Due 1 Dec 2026" | the instalment, "$412.50" (smaller of instalment plus interest and the balance) | never |
+| Pay another amount | "Reduces what you owe" | none | `allowCustom` is off |
+| Settle in full | "Includes a $96.00 early settlement fee" or "No early settlement fee" | the settlement figure, "$9,701.21" | `allowSettle` is off |
+
+| Field | Type | Required | Validation | Message |
 |---|---|---|---|---|
-| Pay from | `accountPicker` bind `rp.fromAccountId` (`showBalance`) | Yes | An active account in the loan's currency | "Choose an account." |
-| Amount | `amountInput` bind `rp.amount` | Yes (instalment: fixed and read-only at the amount due; extra: editable) | extra: 1.00 up to the outstanding balance, at most 2 decimals | "Enter an amount from $1." / "You only owe {{outstanding}}. To pay it all off, choose Pay it all off." |
+| Amount (only for "Pay another amount") | amount, `$`, sample 200 | yes then | not empty | "Enter an amount." |
+| | | | at least 10 | "The smallest payment is $10.00." |
+| | | | below the balance | "To pay everything off, choose Settle in full." |
 
-For `extra`, the live line reads "This will take about {{monthsSaved}} months off your loan and save you about {{interestSaved}} in interest." Overdue loans show `alert` warning "This payment is {{days}} days late. A late fee of {{lateFee}} is included." (late fee rule below). Button "Continue" (`validate`, `navigate review`).
+**Screen `from`: Pay from** (button **Review**). Select **From** (required, default Current account) with the shared account check applied to the amount to pay.
 
-**Screen `settleQuote` — "Pay it all off"** (mode `settle`). `onEnter`: `callApi quote`. `reviewSummary`: Outstanding balance; Interest to today; Early payoff fee (1.00% of the outstanding balance); **Total to pay today**; Quote valid until (a countdown from 120 seconds). `accountPicker` "Pay from". `alert` info "After this, you won't owe anything on this loan and the monthly payments stop." When the quote expires: `alert` warning "This price has expired. Get a new one." and button "Get a new price" (calls `quote` again); the pay button is disabled. Button "Continue" (`navigate review`).
+**Screen `review`: Review.** Rows: Loan; From; Balance (settle only); Interest to date (settle, when above 0); Early settlement fee (settle, when charged); You pay; Balance after. Button **Pay**, then the code sheet "Authorise {amount} to {loan name}".
 
-**Screen `review` — "Review payment".** `reviewSummary` by mode: Loan; Paying (Instalment / Extra payment / Full payoff); Amount; From; Late fee (when any); Balance after (for settle "0.00"). `consent` (settle only): `rp.consent`, text "I understand this closes my loan and the early payoff fee isn't refundable." `mustBeTrue` "Tick the box to continue." Button "Pay {{amount}}" (`validate`, `callApi otpSend`, navigate `code`).
+**Result**
 
-**Screen `code`**: standard. Button "Confirm and pay {{amount}}" calls `otpVerify`, then `repay` or `settle`, then `done`.
-
-**Screen `done` (terminal).**
-
-| Mode | Title | Text |
+| Option | Title and text | Receipt rows |
 |---|---|---|
-| instalment | "Payment made" | "{{amount}} paid. {{left}} payments left. Next one is due {{nextDue}}." |
-| extra | "Extra payment made" | "{{amount}} paid. Your loan will now end on {{newEnd}}, {{monthsSaved}} months sooner." |
-| settle | "Loan paid off" | "You paid {{amount}} and you don't owe anything on this loan." |
+| Next instalment or another amount | "Payment made" / "Your next payment is 1 Jan 2027." or "$9,400.00 left to pay." | Loan; From; Paid; Balance now; Next payment (if any balance remains) |
+| Settle in full | "Loan settled" / "The loan is paid off." | Loan; From; Paid; Balance now ($0.00) |
 
-meta "Ref {{result.reference}}". Buttons "View loan", "Done". `locked`, `failed` standard ("No money has left your account.").
+Buttons **View Save** (Save tab) and **Done**. The payment shows in Activity as "Loan payment: {loan name}". A paid-off loan disappears from the Save tab. The next instalment reduces the balance by its principal part and moves the due date one month; another amount reduces the balance by the whole amount and, when it is at least one instalment, moves the due date one month.
+
+**States**
+- Loading: none beyond the sheet.
+- Empty: "You have no loans."
+- Error: unavailable shows the connection sheet; a timeout shows the message below. Nothing was paid.
+- Stale: "We can’t find that loan."
 
 #### 4. Sandbox errors
 
-| Code | Message | Screen | Button |
+| Code | Message | Shows on | Button |
 |---|---|---|---|
-| `LOAN_NOT_FOUND` | "We can't find that loan." | `failed` | Back to loans |
-| `LOAN_CLOSED` | "This loan is already paid off." | `failed` | Back to loans |
-| `NOTHING_DUE` | "There's no payment due yet. You can pay extra instead." | `choose` | Pay extra |
-| `ACCOUNT_NOT_FOUND` | "We can't find that account. Choose another." | `pay` | Choose account |
-| `INVALID_AMOUNT` | "Enter an amount from $1 up to {{outstanding}}." | `pay` | Change amount |
-| `INSUFFICIENT_FUNDS` | "There isn't enough money in {{account}}. Available: {{balance}}. No money has left your account." | `pay` | Change amount |
-| `LIMIT_EXCEEDED` | "This is above your daily limit of {{limit}}. You have {{remaining}} left today." | `pay` | Change amount |
-| `QUOTE_NOT_FOUND` | "We can't find that price. Get a new one." | `settleQuote` | Get a new price |
-| `QUOTE_USED` | "This price has already been used." | `settleQuote` | Get a new price |
-| `QUOTE_EXPIRED` | "This price has expired. Get a new one." | `settleQuote` | Get a new price |
-| `OTP_INVALID`, `OTP_REQUIRED` | Standard | `code` | Try again / Back to code |
-| `CORE_UNAVAILABLE` | "We couldn't complete this right now. No money has left your account." | `failed` | Try again |
-| `TIMEOUT` | "We didn't get an answer in time. Check Activity before you try again, so you don't pay twice." | `failed` | Check Activity |
-| `SERVICE_UNAVAILABLE`, `PERMISSION_DENIED`, `WRONG_CONTEXT`, `SESSION_EXPIRED` | Standard | `failed` | Try again / Back / Switch / Sign in |
+| `LOAN_NOT_FOUND` | "We can’t find that loan." | submit | Back |
+| `INSUFFICIENT_FUNDS` | "There isn’t enough money in that account." | submit | Back |
+| `STEP_UP_FAILED` (planned) | "We couldn’t confirm this payment. Nothing was paid. Start again." | code | Start again |
+| `TIMEOUT` | "We didn’t get an answer in time. Check Activity before you try again, so you don’t pay twice." | submit | Try again |
+| `SERVICE_UNAVAILABLE` | Connection sheet | submit | Try again |
+| `JOURNEY_DISABLED` | "This isn’t available at your bank." | whole journey | none |
+| `PERMISSION_DENIED` (planned) | Standard message | whole journey | Back |
 
 #### 5. Adapters
 
 | Integration id | Adapter | Request | Response | Errors | Status |
 |---|---|---|---|---|---|
 | `accounts` | `bank.accounts.list` | none | accounts | none | Existing |
-| `loan` | `bank.loans.get` | `{loanId}` | loan, outstanding, next instalment | `LOAN_NOT_FOUND` | (planned) |
-| `quote` | `bank.loans.settlement.quote` | `{loanId, fromAccountId}` | `{quoteId, outstanding, interestToDate, fee, total, expiresAt, ttlSeconds: 120}` | `LOAN_NOT_FOUND`, `LOAN_CLOSED`, `ACCOUNT_NOT_FOUND`, `INSUFFICIENT_FUNDS` | (planned) |
-| `repay` | `bank.loans.repay` | `{loanId, fromAccountId, amount, kind: "instalment" or "extra"}` | `{reference, paid, outstanding, left, nextDue, newEnd?, monthsSaved?}` | `LOAN_NOT_FOUND`, `LOAN_CLOSED`, `NOTHING_DUE`, `ACCOUNT_NOT_FOUND`, `INVALID_AMOUNT`, `INSUFFICIENT_FUNDS`, `LIMIT_EXCEEDED`, `CORE_UNAVAILABLE`, `OTP_REQUIRED` | (planned) |
-| `settle` | `bank.loans.settle` | `{quoteId}` | `{reference, paid, newBalance}` | `QUOTE_NOT_FOUND`, `QUOTE_USED`, `QUOTE_EXPIRED`, `INSUFFICIENT_FUNDS`, `CORE_UNAVAILABLE`, `OTP_REQUIRED` | (planned) |
-| `otpSend`, `otpVerify` | existing | | | `OTP_INVALID` | Existing |
-
-`repay` and `settle` are `moneyMoving: true`, `requiresOtp: true`. The settlement quote follows the existing FX quote pattern in `packages/mock-bank-api/src/index.ts` (`bank.fx.quote` / `bank.fx.convert`: a quote id, one use, a `QUOTE_*` error, a clock the tests replace) with its own 120-second life. Rules (planned): interest to date = daily accrual (rate ÷ 365 on the outstanding balance); early payoff fee 1.00% of the outstanding balance; late fee 10.00 once the instalment is more than 3 days overdue. Example from the seed: outstanding 5,183.40 → fee 51.83; interest to date depends on the day, so the test pins the sandbox clock.
+| `loans` | `bank.loans.list` | none | loans | none | (planned). `D.loans` |
+| `settleQuote` | `bank.loans.settlement.quote` | `{loanId}` | `{balance, interest, fee, total}` | `LOAN_NOT_FOUND` | (planned) |
+| `repay` | `bank.loans.repay` | `{loanId, amount, fromAccountId}` | `{balance, next, reference}` | `LOAN_NOT_FOUND`, `INSUFFICIENT_FUNDS` | (planned) |
+| `settle` | `bank.loans.settle` | `{loanId, fromAccountId}` | `{reference}` | `LOAN_NOT_FOUND`, `INSUFFICIENT_FUNDS` | (planned) |
+| `sendOtp` / `verifyOtp` | `bank.otp.send` / `bank.otp.verify` | `{channel}` / `{code}` | `{sent}` / `{verified}` | `OTP_INVALID`, `OTP_LOCKED` | Existing |
 
 #### 6. Permissions, step-up and limits
 
-`loans.repay`. Step-up `otp`. The daily transfer limit applies to `repay` and `settle` (money leaves the account). Extra payment: at least 1.00, at most the outstanding balance.
+`payments.create`. Step-up: one-time code on every payment. Limits: another amount from $10.00 to just below the balance; the paying account must hold the amount.
 
 #### 7. Result and links out
 
-Result `done`; receipt shows loan, kind, amount, balance after, reference, date. Notifications: "Loan payment received", "Loan paid off" (planned). Links out: loan detail, schedule (refreshed), Payments › tracker.
+As above. Notifications (planned): "We took {amount} for your loan {name}"; "Your loan {name} is paid off". Links out: Save tab.
 
 #### 8. Acceptance criteria
 
-- AC-1: The instalment due can be paid; the loan's paid and left counts update and the next due date moves on.
-- AC-2: An extra payment reduces the outstanding balance and shortens the loan, and the person sees how much sooner.
-- AC-3: A payoff is priced by a quote that lists balance, interest to date, fee and total, and that lasts 120 seconds and can be used once.
-- AC-4: An expired or used quote cannot be paid and a new price is offered.
-- AC-5: Paying off closes the loan, stops the schedule and needs the consent line.
-- AC-6: A payment needs enough money in the account and respects the daily limit; nothing is taken otherwise.
-- AC-7: Every payment needs a verified one-time code.
-- AC-8: An overdue instalment shows and includes the late fee.
-- AC-9: Three wrong codes take no money.
-- AC-10: A timeout tells the person to check Activity; an unavailable service takes no money.
+- AC-1: The next instalment shows its due date and amount; another amount shows only when `allowCustom` is on; settle only when `allowSettle` is on.
+- AC-2: The settlement figure (balance, interest since the last payment, fee) is shown on its card before it is chosen.
+- AC-3: The fee applies only with `settleFee` on and more than 12 payments left.
+- AC-4: Another amount is at least $10.00 and below the balance, with the messages above.
+- AC-5: The account that pays must hold the amount to pay.
+- AC-6: Review shows the amount to pay and the balance after; a code is asked before anything is paid.
+- AC-7: Paying the next instalment lowers the balance by its principal part and moves the next date one month.
+- AC-8: Settling pays off the loan and removes it from the Save tab.
+- AC-9: With one loan, the choice of loan is skipped; with none, the journey says so.
+- AC-10: When the bank is unavailable or times out nothing is paid.
 
 #### 9. Scenarios
 
-| # | Covers | Persona and setup | Outcome |
-|---|---|---|---|
-| T-1 | AC-1, AC-7 | `alex`, `loan_1`, instalment from Main, code `482100` | 368.75 taken (8,720.76 → 8,352.01); 14 left; next due moves a month |
-| T-2 | AC-2 | `alex`; extra 1,000 | Outstanding 5,183.40 → 4,183.40; months saved shown |
-| T-3 | AC-3, AC-5 | `alex`; settle with the clock pinned | Quote total = outstanding + interest + 1.00% fee; loan `closed` |
-| T-4 | AC-4 | `alex`; advance the clock 121 s | `QUOTE_EXPIRED`; "Get a new price" works |
-| T-5 | AC-4 | `alex`; pay twice with one quote | `QUOTE_USED` |
-| T-6 | AC-6 | `alex`; setup Main balance 100.00 | `INSUFFICIENT_FUNDS`; balance 100.00 |
-| T-7 | AC-6 | `alex`; setup `usedToday` 49,900 | `LIMIT_EXCEEDED` |
-| T-8 | AC-8 | `alex`; setup instalment 5 days overdue | Late fee 10.00 included: 378.75 |
-| T-9 | AC-7 | `alex` | Call `repay` without a code: `OTP_REQUIRED` |
-| T-10 | AC-9 | `alex` | Wrong code x3: `locked`; balance unchanged |
-| T-11 | AC-10 | conditions `timeout: ["bank.loans.repay"]` | Check Activity text; balance unchanged |
-| T-12 | AC-10 | conditions `unavailable: ["bank.loans.settle"]` | `SERVICE_UNAVAILABLE`; loan still open |
+Synthetic persona `alex`, loan `ln1` ($9,600.00 left, 9.90%, instalment $412.50, 24 left, last paid 1 Nov 2026, next 1 Dec 2026), Current account $8,102.40 available.
+
+| # | Covers | Persona / setup | Conditions | Steps and expected result |
+|---|---|---|---|---|
+| T-1 | AC-1, AC-6, AC-7 | `alex`, `loanId: "ln1"` | none | Pay next instalment: $412.50 (interest $79.20, principal $333.30). Review: You pay $412.50, Balance after $9,266.70. Code. "Payment made", next payment 1 Jan 2027. |
+| T-2 | AC-4 | `alex`, `ln1` | none | Another amount $5: "The smallest payment is $10.00." $9,600: "To pay everything off, choose Settle in full." $200: balance now $9,400.00 and the due date stays 1 Dec 2026. A payment of $450 moves the date to 1 Jan 2027. |
+| T-3 | AC-2, AC-3, AC-8 | `alex`, `ln1` | none | Settle in full: card shows "Includes a $96.00 early settlement fee" and $9,701.21. Review: Balance $9,600.00, Interest to date $5.21, Early settlement fee $96.00, You pay $9,701.21, Balance after $0.00. "Loan settled"; the loan is gone. |
+| T-4 | AC-3 | `alex`, loan with 12 payments left | none | Card says "No early settlement fee". |
+| T-5 | AC-1 | `alex` | `allowCustom` off, `allowSettle` off | Those cards are unavailable. |
+| T-6 | AC-5 | `alex`, `ln1`, Settle in full | none | From Current account: "Not enough money in Current account. Available: $8,102.40." and Review is disabled; choosing Savings works. |
+| T-7 | AC-9 | `alex`, no loans | `empty` (planned) | "You have no loans." |
+| T-8 | AC-6 | `alex` | wrong code (planned) | `STEP_UP_FAILED`; nothing paid. |
+| T-9 | AC-10 | `alex` | `unavailable: ["bank.loans.repay"]` (prototype: Service down on) | Connection sheet; balance unchanged. |
+| T-10 | AC-10 | `alex` | `timeout: ["bank.loans.repay"]`, `latencyMs: 10000` | After 10 seconds the timeout message; balance unchanged. |
 
 #### 10. Expected mutation-check survivors
 
-- Fee percentage 1.00%: killed by T-3 (exact total).
-- Late fee threshold of 3 days: **survives** (T-8 uses 5 days; boundary not covered).
-- Months-saved calculation: **survives** unless a scenario asserts the text; T-2 asserts it, so killed.
+`INSUFFICIENT_FUNDS` and `LOAN_NOT_FOUND` on submit survive because earlier checks already stop them; expected. Interest to date survives when scenarios settle on the day of the last payment; expected. Everything else: none expected.
 
 ---
-
 ### ★ Invest — `invest`
 
-Existing, upgraded. Buy part of a share or fund.
+**Catalog:** slug `invest` (name "Invest"), workspace `personal`, category Save & Borrow (Personal: Save & Borrow), core no, can a bank switch it off: yes (not in the Lean preset). Options (both default on): **Ask for risk acknowledgement on high-risk funds** (`riskAck`), **Offer high-risk funds** (`allowHigh`). Research: `research/invest.md`. Built in `design/bankworkx-r1/src/journeys/68-invest.js`.
+
+The lean rework replaced the nine-instrument market (stocks, watchlist, explorer, charts) with a shelf of four generic funds, each with a risk level, an ongoing charge, a smallest amount and a price per unit.
 
 #### 1. Summary
 
-| Item | Value |
+| Field | Value |
 |---|---|
-| Slug | `invest` (fixture `bankworkx.ts`, `invest`) |
-| Purpose | Buy a stock or fund with an amount of money |
-| Release | 1 |
-| Workspace | Personal |
-| Status | Existing, upgraded (adds a risk check, consent, one-time code and a step-up for large orders) |
-| Channels | Mobile today (`channels: ["mobile"]`); upgrade adds web |
-| Starting pattern | Choose → review with risk notice → (upgrade) consent, code → result |
-| Who may use it | Personal context holding `invest.trade` |
+| Slug | `invest` |
+| Purpose | Choose a fund, see its risk and charge, and invest an amount from an account. |
+| Release / workspace | 1 / Personal |
+| Status | Built in the prototype as a form journey (`submit: "Invest"`, one-time code). Moves money |
+| Channels | Web and mobile |
+| Starting pattern | Choose a fund, amount, review, code, result |
+| Who may use it | Anyone signed in to Personal with `payments.create` |
+
+The fund shelf (sandbox, synthetic):
+
+| Fund | Risk | Ongoing charge | Smallest amount | Price per unit | About |
+|---|---|---|---|---|---|
+| Government Bond Fund | Low | 0.30% a year | $50.00 | $10.50 | Short-dated government bonds |
+| Balanced Portfolio | Medium | 0.65% | $100.00 | $16.00 | A mix of shares and bonds |
+| Global Equity Fund | High | 0.85% | $100.00 | $27.50 | Shares in large companies worldwide |
+| Technology Growth Fund | High | 1.10% | $250.00 | $42.00 | Shares in technology companies |
+
+No market difference. (Investor-protection checks differ by market; the prototype uses one risk box. Open: suitability questions before a first investment, see research.)
 
 #### 2. Entry points
 
-| Place › label | Passed | Permission |
+| Place › label | Passes in | Permission |
 |---|---|---|
-| Save & Borrow › investments › Buy (stock page) | `{symbol}` | `invest.trade` |
-| Investments › Explore › row | `{symbol}` | `invest.trade` |
-| Home › quick action (planned) | none | `invest.trade` |
-
-When `{symbol}` is passed, `invest.symbol` is pre-set (the BankWorkx app does this today).
+| Save › Investments › Invest (heading button, card button) | none | `payments.create` |
+| Result of an investment › Invest more | none | `payments.create` |
+| Deep link `/personal/j/invest?fundId=bal` | optional `fundId` | `payments.create` |
 
 #### 3. Screens
 
-**As built today.**
+**Screen 1 `fund`: Choose an investment**
 
-1. `buy` — "Invest". `onEnter`: `accounts` (`bank.accounts.list` into `ctx.accounts`) and `instruments` (`bank.invest.instruments` into `ctx.instruments`). Blocks: `stepper` (`buy`, `review`); `select` bind `invest.symbol`, label "What do you want to buy?", source `ctx.instruments` (names like "Lumen Robotics (LMRB) · $184.20"); `accountPicker` bind `invest.fromAccountId` (balances shown); `amountInput` bind `invest.amount`, label "Amount to invest", helper "From $1 to $50,000. You buy part of a share if the amount is smaller than its price.", quick amounts 25, 50, 100, 250, min 1 ("The smallest amount is $1"), max 50,000 ("The most you can invest at once is $50,000"); `button` "Continue" (`validate`, `navigate review`).
-2. `review` — "Review order": `reviewSummary` (Buying, Amount, Order type "Market order at today's price", Fee "$0"); `alert` info "Investments can go down as well as up. This is a sandbox: no real money moves."; `button` "Buy ${{invest.amount | money}}" (`callApi buy`, navigate `success`; error navigates `failed`).
-3. `success` (terminal) — "Order placed": "You bought {{result.shares}} of {{result.symbol}} at ${{result.price | money2}}." with "Ref {{result.reference}}" and "Done".
-4. `failed` (terminal) — "Order not placed": "Nothing was bought and no money left your account. Check the amount and your balance, then try again." with "Try again" (back to `buy`).
-
-There is no consent, no one-time code and one failure text for all errors.
-
-**Upgraded.**
-
-**Screen `buy`** (as built) with these fields:
-
-| Field | Block | Required | Rule | Error message |
+| Field | Type | Required | Validation | Message |
 |---|---|---|---|---|
-| What to buy | `select` | Yes | A symbol from the nine instruments | "Choose a stock or fund to buy" |
-| Pay from | `accountPicker` | Yes | An account that can debit | "Choose an account." |
-| Amount | `amountInput` | Yes | 1.00 to 50,000.00, at most 2 decimals | "The smallest amount is $1" / "The most you can invest at once is $50,000" |
+| Risk | chips "All" (default), "Low", "Medium", "High" ("High" only when `allowHigh` is on); changing it clears the choice | no | none | none |
+| Investment | choice cards: name; "{about} · from {smallest}"; "{charge}% a year"; a chip "Low risk" (green), "Medium risk" (amber) or "High risk" (red). High-risk funds are left out when `allowHigh` is off | yes | one chosen | "Choose an investment." |
 
-A live line under the amount reads "About {{shares}} shares at ${{price}}" (amount ÷ price, 4 decimals as the sandbox rounds). Selecting a fund adds `alert` info with its risk word from the instrument's stats ("Risk: Medium", "Risk: High", "Risk: Low").
+**Screen 2 `amount`: How much?** Live card: "Estimated units" (amount ÷ price, three decimals) and "Ongoing charge" ("0.85% a year (about $1.70)").
 
-**Screen `review`** (as built) plus, new:
+| Field | Type | Required | Validation | Message |
+|---|---|---|---|---|
+| Amount | amount, `$`, sample 250, hint "Smallest amount: $100.00" | yes | at least the fund's smallest amount | "The smallest amount for this fund is $100.00." |
+| | | | the account can cover it | the shared account messages |
+| From | select of accounts, default Current account | yes | chosen | "Choose an account." |
+| I understand I could lose some or all of the money I invest. | checkbox, shown for a High-risk fund when `riskAck` is on | yes then | ticked | "Please confirm to continue." |
 
-- `reviewSummary` rows: add "Pay from {{account}} ••{{n}}" and "Estimated shares {{shares}}".
-- `alert` warning (the **risk notice**, required, replacing the sandbox-only line for the live flow): "Investments can go down as well as up, and you can lose some or all of the money you invest. Past results don't predict the future. This is a sandbox: no real money moves."
-- For a fund with risk High or a stock in Technology: second `alert` "This investment can change in value quickly."
-- `consent` bind `invest.consent`, termsVersion `invest-v1`, text "I understand the risks and I'm placing a market order at today's price. This isn't personal advice." validation `mustBeTrue`: "Tick the box to continue."
-- Button "Continue to confirm" (`validate`). Orders of **5,000.00 or more** first run a step-up (`bank.session.stepUp`, planned); all orders then send a code (`otpSend`) and navigate `code`.
+**Screen 3 `review`: Review.** Rows: Investment; Risk; From; Amount; Estimated units; Ongoing charge ("0.85% a year"); Price ("$27.50 per unit"). Button **Invest**, then the code sheet "Authorise $200.00 into Global Equity Fund".
 
-**Screen `code` (new):** standard one-time code. Button "Buy ${{invest.amount | money}}" calls `otpVerify` then `buy` then `success`.
+**Result:** "Investment made" / "$200.00 is invested in Global Equity Fund." Receipt: Investment; From; Amount; Units; Ongoing charge. Buttons **View investments** (Save tab), **Invest more**, **Done**. Activity shows "Invested: {fund}" (category Investing). Buying a fund already held adds to the holding; the portfolio card on the Save tab changes.
 
-**Screen `success`**: unchanged text, plus "Ref" and buttons "View my investments" and "Done".
-
-**Screen `failed`**: `result` error with `{{ctx.error.message}}` and the line "Nothing was bought and no money left your account." Button "Try again" returns to `buy` (or `code` for OTP errors).
-
-States: instrument list skeleton on `buy`; error loading instruments "We couldn't load the market. Try again."; timeouts as in the table.
+**States**
+- Loading: none beyond the sheet.
+- Empty: not applicable (the shelf is fixed).
+- Error: unavailable shows the connection sheet; a timeout shows the message below. Nothing was invested.
+- Stale: a fund that closes in between: "This fund is closed to new money."
 
 #### 4. Sandbox errors
 
-| Code | Exact adapter message | What the person sees | Screen | Button |
-|---|---|---|---|---|
-| `NOT_SUPPORTED` | "Not available for this customer" | Standard S-`NOT_SUPPORTED` | `failed` | Back |
-| `INSTRUMENT_NOT_FOUND` | "Choose a stock or fund to buy" | "Choose a stock or fund to buy." | `buy` | Choose |
-| `INVALID_AMOUNT` | "Enter an amount from $1 to $50,000" | "Enter an amount from $1 to $50,000." | `buy` | Change amount |
-| `ACCOUNT_NOT_FOUND` | "Account not found" | Standard | `buy` | Choose account |
-| `INSUFFICIENT_FUNDS` | "Insufficient funds" | "There isn't enough money in {{account}}. Available: {{balance}}. Nothing was bought." | `buy` | Change amount |
-| `STEP_UP_REQUIRED` (planned) | | Standard | `review` | Confirm |
-| `OTP_INVALID` | "Incorrect code" | Standard | `code` | Try again |
-| `OTP_REQUIRED` (upgrade) | "OTP not verified" | Standard | `code` | Back to code |
-| `TIMEOUT` (planned) | | "We didn't get an answer in time. Check your investments before you try again, so you don't buy twice." | `failed` | Check investments |
-| `SERVICE_UNAVAILABLE` (planned) | | Standard | `failed` | Try again |
-| `PERMISSION_DENIED`, `WRONG_CONTEXT`, `SESSION_EXPIRED` (planned) | | Standard | `failed` | Back / Switch / Sign in |
+| Code | Message | Shows on | Button |
+|---|---|---|---|
+| `BELOW_MINIMUM` | "This is below the smallest amount for this fund." | submit | Change amount |
+| `INSUFFICIENT_FUNDS` | "There isn’t enough money in that account." | submit | Back |
+| `FUND_CLOSED` | "This fund is closed to new money." | submit | Choose fund |
+| `STEP_UP_FAILED` (planned) | "We couldn’t confirm this. Nothing was invested. Start again." | code | Start again |
+| `TIMEOUT` | "We didn’t get an answer in time. Check your investments before you try again, so you don’t invest twice." | submit | Try again |
+| `SERVICE_UNAVAILABLE` | Connection sheet | submit | Try again |
+| `JOURNEY_DISABLED` | "This isn’t available at your bank." | whole journey | none |
+| `PERMISSION_DENIED` (planned) | Standard message | whole journey | Back |
 
 #### 5. Adapters
 
 | Integration id | Adapter | Request | Response | Errors | Status |
 |---|---|---|---|---|---|
 | `accounts` | `bank.accounts.list` | none | accounts | none | Existing |
-| `instruments` | `bank.invest.instruments` | none | record of instruments with `price`, `changePct`, `name` | none | Existing |
-| `buy` | `bank.invest.buy` | `{symbol, fromAccountId, amount}` | `{reference, symbol, name, shares, price, newBalance}` | `NOT_SUPPORTED`, `INSTRUMENT_NOT_FOUND`, `INVALID_AMOUNT`, `ACCOUNT_NOT_FOUND`, `INSUFFICIENT_FUNDS` (+ `OTP_REQUIRED` in the upgrade) | Existing |
-| `otpSend`, `otpVerify` | `bank.otp.send`, `bank.otp.verify` | | | `OTP_INVALID` | Existing |
-| `stepUp` | `bank.session.stepUp` | `{method}` | `{ok}` | `STEP_UP_REQUIRED` | (planned) |
-
-Behaviour of `bank.invest.buy` today: shares = amount ÷ price rounded to 4 decimals; adds to the holding and recalculates the average cost (or opens a holding); takes the amount from the account (rounded to cents); adds a "Bought SYM" transaction; reference `INV-20261102-…`. `moneyMoving: true`. `requiresOtp`: no today; **yes** in the upgrade. It does not use the daily transfer limit today (an investment is not a payment out); keep that.
+| `funds` | `bank.funds.list` | none | fund shelf | none | (planned). The prototype uses the constant `IVX_FUNDS`. The existing `bank.invest.instruments` serves nine made-up stocks and funds (`packages/mock-bank-api/src/invest.ts`) |
+| `buy` | `bank.funds.buy` | `{fundId, amount, fromAccountId}` | `{units, price, reference}` | `BELOW_MINIMUM`, `INSUFFICIENT_FUNDS`, `FUND_CLOSED` | (planned). The existing `bank.invest.buy` buys by symbol, $1 to $50,000 |
+| `sendOtp` / `verifyOtp` | `bank.otp.send` / `bank.otp.verify` | `{channel}` / `{code}` | `{sent}` / `{verified}` | `OTP_INVALID`, `OTP_LOCKED` | Existing |
 
 #### 6. Permissions, step-up and limits
 
-`invest.trade`. Step-up: `otp` for every order; `stepup` for orders of 5,000.00 or more (planned threshold). Amount 1.00 to 50,000.00 per order. Risk notice and consent are required for the live flow.
+`payments.create`. Step-up: one-time code on every purchase. Limits: the fund's smallest amount; the paying account must hold the amount.
 
 #### 7. Result and links out
 
-Result `success`; receipt: symbol, shares, price, amount, account, reference, date. Notifications: "You bought {{shares}} of {{symbol}}" (in-app). Links out: Investments (portfolio refreshed), stock page, Accounts (balance), Payments › tracker (no, investments do not appear there).
+As above. Notifications (planned): "You invested {amount} in {fund}". Links out: Save tab; `sell-investment`.
 
 #### 8. Acceptance criteria
 
-- AC-1: A stock or fund can be bought with $1 to $50,000 from an account with enough money.
-- AC-2: The shares bought equal the amount divided by today's price, to 4 decimals, and the holding and its average cost update.
-- AC-3: The risk notice is shown on the review screen and consent must be ticked.
-- AC-4: The order is placed only after a verified one-time code.
-- AC-5: An order of 5,000.00 or more asks for step-up first.
-- AC-6: Too little money, an unknown instrument or an invalid amount places no order and keeps the balance.
-- AC-7: Each error shows its own message.
-- AC-8: Three wrong codes place no order.
-- AC-9: A timeout tells the person to check investments; an unavailable service places no order.
+- AC-1: The shelf lists funds with risk chip, charge and smallest amount; the risk chips filter it; High is hidden with `allowHigh` off.
+- AC-2: The amount must reach the fund's smallest amount and be covered by the paying account.
+- AC-3: The estimated units and charge update as the amount changes.
+- AC-4: A High-risk fund needs the ticked risk box when `riskAck` is on, and not otherwise.
+- AC-5: Review shows investment, risk, account, amount, units, charge and price; a code is asked before anything is bought.
+- AC-6: A purchase takes the amount from the account and adds units to the holding (a new holding or an increase).
+- AC-7: A wrong code buys nothing.
+- AC-8: When the bank is unavailable or times out nothing is invested.
 
 #### 9. Scenarios
 
-| # | Covers | Persona and setup | Outcome |
-|---|---|---|---|
-| T-1 | AC-1, AC-2 | `alex`; buy $100 of LMRB (184.20) from Main | 0.5429 shares; LMRB 6.5 → 7.0429; Main 8,720.76 → 8,620.76; "Bought LMRB" transaction |
-| T-2 | AC-2 | `alex`; buy $1 of TBND | Shares 0.0102 (1 ÷ 98.30, 4 decimals) |
-| T-3 | AC-3 | `alex` | Skip consent: "Tick the box to continue." |
-| T-4 | AC-4 | `alex` | `buy` without a code: `OTP_REQUIRED`; with `482100` succeeds |
-| T-5 | AC-5 | `alex`; $6,000 of GLBX | Step-up asked; without it `STEP_UP_REQUIRED` |
-| T-6 | AC-6, AC-7 | `alex` | $9,000 from Main: `INSUFFICIENT_FUNDS`; $0 / $60,000: `INVALID_AMOUNT`; symbol `XXXX`: `INSTRUMENT_NOT_FOUND` |
-| T-7 | AC-8 | `alex` | Wrong code x3: `locked`; no order |
-| T-8 | AC-9 | conditions `timeout: ["bank.invest.buy"]` | Check investments text; holdings unchanged |
-| T-9 | AC-9 | conditions `unavailable: ["bank.invest.buy"]` | `SERVICE_UNAVAILABLE`; no order |
-| T-10 | AC-1 | `sam` | `NOT_SUPPORTED` is not expected (Sam has finance data); buying with no account: `ACCOUNT_NOT_FOUND` |
+Synthetic persona `alex`, Current account $8,102.40 available, holdings as seeded. The sandbox code is the fixed test code.
+
+| # | Covers | Persona / setup | Conditions | Steps and expected result |
+|---|---|---|---|---|
+| T-1 | AC-1, AC-3, AC-4, AC-5, AC-6 | `alex` | none | Choose Global Equity Fund. $200.00 from Current account; units 7.273, charge about $1.70. Tick the risk box. Review, code. "Investment made"; Units 7.273; Current account $7,902.40; the portfolio card now reads $5,020.01. |
+| T-2 | AC-2 | `alex` | none | Global Equity Fund, $50: "The smallest amount for this fund is $100.00." Government Bond Fund, $50: accepted. |
+| T-3 | AC-4 | `alex` | `riskAck` off / Low-risk fund | No risk box. |
+| T-4 | AC-1 | `alex` | `allowHigh` off | Only the Government Bond Fund and Balanced Portfolio show; no "High" chip. |
+| T-5 | AC-2 | `alex` | none | $9,000: "Not enough money in Current account. Available: $8,102.40." |
+| T-6 | AC-1 | `alex` | none | Risk "Low" lists only the Government Bond Fund. |
+| T-7 | AC-7 | `alex` | wrong code (planned) | `STEP_UP_FAILED`; nothing bought. |
+| T-8 | AC-8 | `alex` | `unavailable: ["bank.funds.buy"]` (prototype: Service down on) | Connection sheet; nothing invested. |
+| T-9 | AC-8 | `alex` | `timeout: ["bank.funds.buy"]`, `latencyMs: 10000` | After 10 seconds the timeout message; nothing invested. |
 
 #### 10. Expected mutation-check survivors
 
-- The 4-decimal rounding of shares: killed by T-1 and T-2.
-- Journey-side min/max on the amount: survive; the sandbox returns `INVALID_AMOUNT` (another layer).
-- The 5,000 threshold: killed by T-5 at 6,000; a threshold of 5,001 **survives** (boundary not covered).
+`BELOW_MINIMUM`, `INSUFFICIENT_FUNDS` on submit survive because the amount step already stops them; `FUND_CLOSED` is never raised by the seed; expected. The estimated-units rounding survives when scenarios use round figures; expected. Everything else: none expected.
 
 ---
 
-### ★ Sell investment — `sell-investment`
+### ★ Sell an investment — `sell-investment`
 
-Existing, upgraded. Sell part or all of a holding.
+**Catalog:** slug `sell-investment` (name "Sell an investment"), workspace `personal`, category Save & Borrow (Personal: Save & Borrow), core no, can a bank switch it off: yes (not in the Lean preset). Option (default on): **Charge a 0.25% selling fee** (`sellFee`). Research: `research/sell-investment.md`. Built in `design/bankworkx-r1/src/journeys/68-invest.js`.
 
 #### 1. Summary
 
-| Item | Value |
+| Field | Value |
 |---|---|
-| Slug | `sell-investment` (fixture `bankworkx.ts`, `sellInvestment`) |
-| Purpose | Sell an amount of something the person owns and receive the money |
-| Release | 1 |
-| Workspace | Personal |
-| Status | Existing, upgraded (adds consent, one-time code, a sale estimate and per-error messages) |
-| Channels | Mobile today; upgrade adds web |
-| Starting pattern | Choose holding → review → (upgrade) consent, code → result |
-| Who may use it | Personal context holding `invest.trade` |
+| Slug | `sell-investment` |
+| Purpose | Sell part or all of a holding, see the estimated proceeds and when the money arrives. |
+| Release / workspace | 1 / Personal |
+| Status | Built in the prototype as a form journey (`submit: "Sell"`, one-time code). Moves money (the sandbox credits the account at once, though the screens say when it arrives) |
+| Channels | Web and mobile |
+| Starting pattern | Choose a holding, amount, code, result |
+| Who may use it | Anyone signed in to Personal with `payments.create`, for holdings they own |
+
+Configuration: selling fee 0.25% of the amount sold; settlement two business days after the sale (from 3 Nov 2026: 5 Nov 2026); smallest sale $10.00. No market difference.
 
 #### 2. Entry points
 
-| Place › label | Passed | Permission |
+| Place › label | Passes in | Permission |
 |---|---|---|
-| Save & Borrow › investments › Sell (stock page of a holding) | `{symbol}` | `invest.trade` |
-| Investments › Portfolio › holding › Sell | `{symbol}` | `invest.trade` |
+| Save › Investments › Sell | none | `payments.create` |
+| Deep link `/personal/j/sell-investment?holdId=bal` | optional `holdId` (a fund id) | `payments.create` |
+
+With one holding the choice is skipped.
 
 #### 3. Screens
 
-**As built today.**
+**Screen `pick`: What do you want to sell?** (no `holdId`). Choice cards: fund name; "{units} units"; value on the right. Required, "Choose an investment." No holdings: "You have no investments to sell."
 
-1. `sell` — "Sell". `onEnter`: `accounts` and `holdings` (`bank.invest.holdings` into `ctx.holdings`). Blocks: `stepper` (`sell`, `review`); `select` bind `sell.symbol` ("What do you want to sell?", source `ctx.holdings`, names like "Lumen Robotics (LMRB) · $1,197.30"); `amountInput` bind `sell.amount` ("Amount to sell", helper "You can sell up to the value of what you own. Selling all of it closes the holding.", quick 25, 50, 100, 250, min 1 "The smallest amount is $1"); `accountPicker` bind `sell.toAccountId` (balances shown); `button` "Continue".
-2. `review` — "Review sale": `reviewSummary` (Selling, Amount, Order type "Market order at today's price", Fee "$0"); `alert` info "The money reaches your account straight away. This is a sandbox: no real money moves."; `button` "Sell ${{sell.amount | money}}".
-3. `success` — "Sale complete": "You sold {{result.shares}} of {{result.symbol}} and ${{result.proceeds | money2}} is in your account." meta "Ref {{result.reference}}".
-4. `failed` — "Sale not completed": "Nothing was sold and your account is unchanged. You can only sell up to the value of what you own." Button "Try again".
+**Screen `amount`: How much?** A card with the fund, its value and units. Live card: "Selling"; "Selling fee" (negative, only when charged); "Estimated proceeds"; "Money arrives" (settlement date). Button **Sell**, then the code sheet "Authorise selling $2,400.00".
 
-**Upgraded.**
-
-**Screen `sell`** (as built) with:
-
-| Field | Block | Required | Rule | Error message |
+| Field | Type | Required | Validation | Message |
 |---|---|---|---|---|
-| What to sell | `select` | Yes | A symbol the person holds | "Choose something you own to sell" |
-| Amount | `amountInput` | Yes | At least 1.00 and no more than the holding's value (the sandbox allows 0.005 over) | "The smallest amount is $1" / "You only hold ${{value}} of {{symbol}}." |
-| Pay into | `accountPicker` | Yes | An active account | "Choose an account." |
-| Sell everything | `toggle` bind `sell.all` (new) | No | When on, the amount is set to the full value | none |
+| (how) | chips "An amount" (default), "Everything" | no | none | none |
+| Amount (only for "An amount") | amount, `$`, sample 100 | yes then | not empty | "Enter an amount." |
+| | | | at least 10 | "The smallest sale is $10.00." |
+| | | | not above the holding's value | "You can’t sell more than $2,400.00." |
+| Pay into | select of accounts, default Current account | yes | chosen | "Choose an account." |
 
-Helper "Selling all of it closes the holding" remains. A live line: "About {{shares}} shares at ${{price}}".
+**Result:** "Sale placed" / "$2,394.00 arrives on 5 Nov 2026." Receipt: Investment; Sold; Selling fee; Estimated proceeds; Pay into; Settlement date. Buttons **View investments** and **Done**. Selling everything removes the holding; a part sale lowers units and cost in proportion. Activity shows "Sold: {fund}".
 
-**Screen `review`** adds: rows Pay into, Estimated shares; `alert` warning "Prices can change before your order is filled. You may sell for more or less than your average cost of ${{avgCost}} a share." For a full sale: `alert` info "This sells all {{shares}} shares and removes {{symbol}} from your portfolio." `consent` bind `sell.consent`, termsVersion `invest-v1`, text "I confirm this sale at today's price." mustBeTrue "Tick the box to continue." Button "Continue to confirm" (`validate`, `otpSend`, navigate `code`). Sales of 5,000.00 or more run step-up first.
-
-**Screen `code` (new):** standard. Button "Sell ${{sell.amount | money}}" calls `otpVerify`, then `sell`, then `success`.
-
-**Screen `success`**: as built plus buttons "View my investments", "Done". A full sale adds: "{{symbol}} is no longer in your portfolio."
-
-**Screen `failed`**: `{{ctx.error.message}}` and "Nothing was sold and your account is unchanged."
+**States**
+- Loading: none beyond the sheet.
+- Empty: "You have no investments to sell."
+- Error: unavailable shows the connection sheet; a timeout shows the message below. Nothing was sold.
+- Stale: "You don’t hold any of this investment."
 
 #### 4. Sandbox errors
 
-| Code | Exact adapter message | What the person sees | Screen | Button |
-|---|---|---|---|---|
-| `NOT_SUPPORTED` | "Not available for this customer" | Standard | `failed` | Back |
-| `NOT_HELD` | "Choose something you own to sell" | "You don't own that. Choose something from your portfolio." | `sell` | Choose |
-| `INVALID_AMOUNT` | "Enter an amount of at least $1" | "Enter an amount of at least $1." | `sell` | Change amount |
-| `ACCOUNT_NOT_FOUND` | "Account not found" | Standard | `sell` | Choose account |
-| `INSUFFICIENT_HOLDING` | "You only hold ${value} of {SYM}" | "You only hold ${value} of {SYM}. Choose a smaller amount." (value truncated down to the cent) | `sell` | Change amount |
-| `OTP_INVALID` | "Incorrect code" | Standard | `code` | Try again |
-| `OTP_REQUIRED` (upgrade) | "OTP not verified" | Standard | `code` | Back to code |
-| `STEP_UP_REQUIRED` (planned) | | Standard | `review` | Confirm |
-| `TIMEOUT` (planned) | | "We didn't get an answer in time. Check your investments and account before you try again, so you don't sell twice." | `failed` | Check investments |
-| `SERVICE_UNAVAILABLE` (planned) | | Standard | `failed` | Try again |
-| `PERMISSION_DENIED`, `WRONG_CONTEXT`, `SESSION_EXPIRED` (planned) | | Standard | `failed` | Back / Switch / Sign in |
+| Code | Message | Shows on | Button |
+|---|---|---|---|
+| `NOTHING_TO_SELL` | "You don’t hold any of this investment." | submit | Back |
+| `ABOVE_HOLDING` | "You can’t sell more than you hold." | submit | Change amount |
+| `MARKET_CLOSED` | "Selling is paused for this fund. Try again later." | submit | Try again later |
+| `STEP_UP_FAILED` (planned) | "We couldn’t confirm this. Nothing was sold. Start again." | code | Start again |
+| `TIMEOUT` | "We didn’t get an answer in time. Check your investments before you try again, so you don’t sell twice." | submit | Try again |
+| `SERVICE_UNAVAILABLE` | Connection sheet | submit | Try again |
+| `JOURNEY_DISABLED` | "This isn’t available at your bank." | whole journey | none |
+| `PERMISSION_DENIED` (planned) | Standard message | whole journey | Back |
 
 #### 5. Adapters
 
 | Integration id | Adapter | Request | Response | Errors | Status |
 |---|---|---|---|---|---|
 | `accounts` | `bank.accounts.list` | none | accounts | none | Existing |
-| `holdings` | `bank.invest.holdings` | none | record of holdings with `shares`, `value`, `name` | `NOT_SUPPORTED` | Existing |
-| `sell` | `bank.invest.sell` | `{symbol, toAccountId, amount}` | `{reference, symbol, name, shares, price, proceeds, newBalance}` | `NOT_SUPPORTED`, `NOT_HELD`, `INVALID_AMOUNT`, `ACCOUNT_NOT_FOUND`, `INSUFFICIENT_HOLDING` (+ `OTP_REQUIRED`) | Existing |
-| `otpSend`, `otpVerify` | existing | | | `OTP_INVALID` | Existing |
-| `stepUp` | `bank.session.stepUp` | `{method}` | `{ok}` | `STEP_UP_REQUIRED` | (planned) |
-
-Behaviour today: value = shares × price; amount over value + 0.005 is `INSUFFICIENT_HOLDING`; if the value left after the sale is under 1 cent, every share is sold and the proceeds are the whole value (no rounding crumbs) and the holding is removed; otherwise shares sold = amount ÷ price to 4 decimals. Adds a "Sold SYM" transaction. Reference `SEL-20261102-…`. `moneyMoving: true`, `requiresOtp`: no today, yes in the upgrade.
+| `holdings` | `bank.funds.holdings` | none | holdings | none | (planned). The prototype reads `D.hold`. Existing `bank.invest.holdings` is for the nine-instrument market |
+| `sell` | `bank.funds.sell` | `{fundId, amount \| all, toAccountId}` | `{proceeds, fee, settlesOn, reference}` | `NOTHING_TO_SELL`, `ABOVE_HOLDING`, `MARKET_CLOSED` | (planned). Existing `bank.invest.sell` sells by symbol with `NOT_HELD`, `INSUFFICIENT_HOLDING` |
+| `sendOtp` / `verifyOtp` | `bank.otp.send` / `bank.otp.verify` | `{channel}` / `{code}` | `{sent}` / `{verified}` | `OTP_INVALID`, `OTP_LOCKED` | Existing |
 
 #### 6. Permissions, step-up and limits
 
-`invest.trade`. Step-up `otp`; `stepup` from 5,000.00 (planned). Minimum 1.00; maximum the holding's value. No daily limit applies to money coming in.
+`payments.create`. Step-up: one-time code on every sale. Limits: $10.00 up to the holding's value.
 
 #### 7. Result and links out
 
-Result `success`; receipt: symbol, shares, price, proceeds, account, reference. Notification: "You sold {{shares}} of {{symbol}}". Links out: Investments, stock page, Accounts.
+As above. Notifications (planned): "Your sale of {amount} settles on {date}". Links out: Save tab.
 
 #### 8. Acceptance criteria
 
-- AC-1: A holding can be sold for any amount from $1 up to its value, and the money arrives in the chosen account.
-- AC-2: Shares sold equal the amount divided by the price (4 decimals); the holding shrinks.
-- AC-3: Selling the whole value removes the holding and leaves no part share.
-- AC-4: Selling more than the holding is worth is refused and says what the person holds.
-- AC-5: Something not owned cannot be sold.
-- AC-6: The sale needs consent and a verified one-time code.
-- AC-7: Three wrong codes sell nothing.
-- AC-8: A timeout tells the person to check; an unavailable service sells nothing.
+- AC-1: Only funds the customer holds are offered; with one holding the choice is skipped; with none the journey says so.
+- AC-2: A part sale needs an amount from $10.00 to the holding's value, with the messages above; "Everything" needs none.
+- AC-3: The live card shows the amount, the fee (when `sellFee` is on), the estimated proceeds and the settlement date.
+- AC-4: A code is asked before anything is sold.
+- AC-5: Selling everything removes the holding; a part sale reduces it.
+- AC-6: The proceeds go to the chosen account.
+- AC-7: With `sellFee` off no fee is shown or taken.
+- AC-8: When the bank is unavailable or times out nothing is sold.
 
 #### 9. Scenarios
 
-| # | Covers | Persona and setup | Outcome |
-|---|---|---|---|
-| T-1 | AC-1, AC-2 | `alex`; sell $200 of LMRB (6.5 × 184.20 = 1,197.30) to Main | 1.0858 shares sold; LMRB 5.4142; Main +200.00 |
-| T-2 | AC-3 | `alex`; sell 1,197.30 of LMRB | All 6.5 shares sold; holding removed; proceeds 1,197.30 |
-| T-3 | AC-3 | `alex`; sell 1,197.29 | Treated as a full sale (under 1 cent left) |
-| T-4 | AC-4 | `alex`; sell 1,300 of LMRB | `INSUFFICIENT_HOLDING` "You only hold $1197.30 of LMRB" |
-| T-5 | AC-5 | `alex`; symbol `APXC` (watched, not held) | `NOT_HELD` |
-| T-6 | AC-6 | `alex` | No consent: message; no code: `OTP_REQUIRED` |
-| T-7 | AC-7 | `alex` | Wrong code x3: `locked`; holdings unchanged |
-| T-8 | AC-8 | conditions `timeout: ["bank.invest.sell"]` | Check text; holdings unchanged |
-| T-9 | AC-8 | conditions `unavailable: ["bank.invest.sell"]` | `SERVICE_UNAVAILABLE`; unchanged |
+Synthetic persona `alex`: Balanced Portfolio worth $2,400.00 (150 units), Global Equity Fund worth $2,420.00 (88 units).
+
+| # | Covers | Persona / setup | Conditions | Steps and expected result |
+|---|---|---|---|---|
+| T-1 | AC-1, AC-3, AC-4, AC-5, AC-6 | `alex`, `holdId: "bal"` | none | "Everything": Selling $2,400.00, fee -$6.00, estimated proceeds $2,394.00, money arrives 5 Nov 2026. Code. "Sale placed"; the holding is gone; Current account up by $2,394.00. |
+| T-2 | AC-2, AC-5 | `alex`, `holdId: "geq"` | none | $5: "The smallest sale is $10.00." $3,000: "You can’t sell more than $2,420.00." $100: fee -$0.25, proceeds $99.75; the holding drops to about 84.364 units. |
+| T-3 | AC-7 | `alex` | `sellFee` off | T-1: no fee row; proceeds $2,400.00. |
+| T-4 | AC-1 | `alex`, no holdings | `empty` (planned) | "You have no investments to sell." |
+| T-5 | AC-1 | `alex`, no `holdId` | none | Both funds are offered with units and value. |
+| T-6 | AC-4 | `alex` | wrong code (planned) | `STEP_UP_FAILED`; nothing sold. |
+| T-7 | AC-8 | `alex` | `unavailable: ["bank.funds.sell"]` (prototype: Service down on) | Connection sheet; holding unchanged. |
+| T-8 | AC-8 | `alex` | `timeout: ["bank.funds.sell"]`, `latencyMs: 10000` | After 10 seconds the timeout message; holding unchanged. |
 
 #### 10. Expected mutation-check survivors
 
-- The 0.005 tolerance on over-selling: **survives** unless a scenario sells exactly value + 0.005 (listed).
-- The "all sold" rule (under 1 cent): killed by T-2 and T-3.
-- Journey `min` of 1: survives (the sandbox also checks `INVALID_AMOUNT`).
+`NOTHING_TO_SELL`, `ABOVE_HOLDING` on submit survive because the earlier steps already stop them; `MARKET_CLOSED` is never raised by the seed; expected. The proportional cost reduction survives because the Save tab shows value, not cost per holding, after a part sale; expected. Everything else: none expected.
 
 ---
 
 ### ★ Add money — `add-money`
 
-Existing, upgraded. Add money to an account from a saved card.
+**Catalog:** slug `add-money` (name "Add money"), workspace `personal`, category Save & Borrow (Personal: Save & Borrow), core no, can a bank switch it off: yes (basic, kept in the Lean preset). Options (all default on): **Offer top-up from a card** (`allowCard`), **Charge the 1.5% card fee** (`cardFee`), **Offer bank transfer details** (`allowTransfer`). Research: `research/add-money.md`. Built in `design/bankworkx-r1/src/journeys/66-deposits-goals.js`.
 
 #### 1. Summary
 
-| Item | Value |
+| Field | Value |
 |---|---|
-| Slug | `add-money` (fixture `bankworkx.ts`, `addMoney`) |
-| Purpose | Move money from a saved card into one of the person's accounts |
-| Release | 1 |
-| Workspace | Personal |
-| Status | Existing, upgraded (adds consent, one-time code, card checks and per-error messages) |
-| Channels | Mobile today; upgrade adds web |
-| Starting pattern | Amount → review → (upgrade) consent, code → result |
-| Who may use it | Personal context holding `payments.create` |
+| Slug | `add-money` |
+| Purpose | Top up an account from a saved card, or show the account details so the customer can send money from another bank. |
+| Release / workspace | 1 / Personal |
+| Status | Built in the prototype as a form journey (`submit: "Add money"`). The card path asks for a one-time code and moves money; the bank transfer path shows details only, with no code |
+| Channels | Web and mobile |
+| Starting pattern | Method, then card details or account details, code (card only), result |
+| Who may use it | Anyone signed in to Personal with `payments.create` |
+
+Configuration: card top-up $10.00 to $5,000.00 at once; fee 1.5% of the amount when `cardFee` is on.
+
+**Home market configuration** (the identifiers on "By bank transfer"; the screens never name a country or a scheme):
+
+| Market | Identifiers shown with Copy |
+|---|---|
+| Market A (routing number and account) | Routing number; Account number |
+| Market B (sort code and account) | Sort code; Account number (8 digits) |
+| Market C (IBAN) | IBAN; BIC |
+| Market D (IBAN, mobile alias) | IBAN; BIC (the mobile alias is not shown here) |
+
+Every market also shows "Account name" ("Alex Morgan").
 
 #### 2. Entry points
 
-| Place › label | Passed | Permission |
+| Place › label | Passes in | Permission |
 |---|---|---|
-| Home › + Add money | none | `payments.create` |
-| Save & Borrow › investments › Add money | `{accountId}` | `payments.create` |
-| Accounts › detail › Add money (planned) | `{accountId}` | `payments.create` |
-| `add-card` result › Add money | none | `payments.create` |
+| Home › Add | none | `payments.create` |
+| Accounts › account details › Add money | `{accountId}` | `payments.create` |
+| Save › Add money (listed in the prototype, but the Save tab has no such button today) | none | `payments.create` |
+| Result › Add more | none | `payments.create` |
+| Deep link `/personal/j/add-money?accountId=sav&amount=200` | optional `accountId`, `amount` | `payments.create` |
 
 #### 3. Screens
 
-**As built today.**
+**Screen 1 `method`: Add money.** Choice cards (default "From a card"): **From a card** ("Usually instant"), **By bank transfer** ("From an account at another bank"). A card is shown unavailable when its option is off. Required, "This is required."
 
-1. `amount` — "Add money". `onEnter`: `accounts` (`bank.accounts.list` into `ctx.accounts`) and `cards` (`bank.cards.list` into `ctx.cards`; each card named "Nickname ••last4"). Blocks: `stepper` (`amount`, `review`); `accountPicker` bind `add.toAccountId` (balances shown); `amountInput` bind `add.amount` (label "Amount", helper "Enter an amount from $1 to $50,000 per transaction", quick 50, 100, 150, 200, min 1 "The smallest amount is $1", max 50,000 "The most you can add at once is $50,000"); `select` bind `add.fromCardId` ("From card", source `ctx.cards`); `button` "Continue".
-2. `review` — "Review": `reviewSummary` (Amount, Fee "$0", You'll add); `button` "Add ${{add.amount | money}}" (`callApi addMoney`, navigate `success`, errors to `failed`).
-3. `success` — "Money added": "${{add.amount | money}} is now in your account." meta "Ref {{result.reference}}".
-4. `failed` — "Couldn't add money": "Nothing was charged to your card. Check the amount and try again." Button "Try again".
+**Screen 2 `card`: From a card** (when From a card; button **Add money**). Live card: "Amount"; "Card fee" (only when charged); "Charged to your card".
 
-**Upgraded.**
-
-**Screen `amount`** (as built) with these fields:
-
-| Field | Block | Required | Rule | Error message |
+| Field | Type | Required | Validation | Message |
 |---|---|---|---|---|
-| Add to | `accountPicker` | Yes | An active account | "Choose an account." |
-| Amount | `amountInput` | Yes | 1.00 to 50,000.00, at most 2 decimals | "The smallest amount is $1" / "The most you can add at once is $50,000" |
-| From card | `select` | Yes | A saved card (not expired, not frozen at the issuer in future) | "Choose a card to add money from" |
+| Add to | select of accounts (default Current account, or `accountId`) | yes | chosen | "This is required." |
+| Amount | amount, `$`, sample 200 | yes | at least 10 | "The smallest amount is $10.00." |
+| | | | at most 5,000 | "The most you can add at once is $5,000.00." |
+| Card | choice cards: "Visa ••4242", "Harbor Bank · expires 09/28"; an expired card is greyed out with the chip "Expired" and cannot be chosen | yes | chosen | "Choose a card." |
+| Security code | text, 3 digits, placeholder "3 digits", sample 123, half width | yes | exactly 3 digits | "Enter the 3 digits on the back of the card." |
 
-If the customer has no saved card the screen shows the empty state "You haven't saved a card yet." with the button "Add a card" (`navigate toJourney add-card`, `returnTo` this journey). The default card is pre-selected.
+Then the code sheet "Authorise $203.00 from Visa ••4242".
 
-**Screen `review`** (as built) plus: rows "From {{card.name}}" and "To {{account.name}} ••{{n}}"; `alert` info "The money usually arrives straight away. Your card's bank may charge its own fee for this, we don't."; `consent` bind `add.consent`, termsVersion `deposits-card-v1`, text "I authorise BankWorkx to take {{amount}} from my card ending {{last4}}." mustBeTrue "Tick the box to continue."; button "Continue to confirm" (`validate`, `otpSend`, navigate `code`). Amounts of 5,000.00 or more require step-up first (planned threshold).
+**Screen 2 `bank`: By bank transfer** (button **Done**). Select **Add to**; then for the chosen account the identifiers for the home market, each with **Copy**, and "Account name: Alex Morgan"; note "Money usually arrives the same day. Use your name as the reference." No code.
 
-**Screen `code` (new):** standard. Button "Add ${{add.amount | money}}" calls `otpVerify`, then `addMoney`, then `success`.
+**Result**
 
-**Screen `success`**: text now "${{add.amount | money}} is in {{account.name}}. New balance ${{result.newBalance | money2}}.", meta "Ref {{result.reference}}", buttons "View account" and "Done".
+| Path | Title and text | Receipt rows | Buttons |
+|---|---|---|---|
+| Card | "Money added" / "$200.00 is in Current account." | Added to; Card; Amount; Card fee (if charged); Charged to your card | **View accounts** (Accounts tab), **Add more**, **Done** |
+| Bank transfer | "Details ready" / "Send money to this account from your other bank." | Account; the market's identifiers | **Done** |
 
-**Screen `failed`**: `{{ctx.error.message}}` and "Nothing was charged to your card."
+The credit shows in Activity as "Card top-up" (category Transfer).
 
-#### 4. Sandbox errors (bank.deposit.create)
+**States**
+- Loading: none beyond the sheet.
+- Empty: not applicable. If both options are off both choices are unavailable.
+- Error: unavailable shows the connection sheet; a timeout shows the message below; the card is not charged.
+- Stale: a card that expired or an account that was frozen in between: the matching error below.
 
-| Code | Exact adapter message | What the person sees | Screen | Button |
-|---|---|---|---|---|
-| `NOT_SUPPORTED` | "Not available for this customer" | Standard | `failed` | Back |
-| `ACCOUNT_NOT_FOUND` | "Account not found" | "We can't find that account. Choose another." | `amount` | Choose account |
-| `INVALID_AMOUNT` | "Enter an amount from $1 to $50,000" | "Enter an amount from $1 to $50,000." | `amount` | Change amount |
-| `CARD_NOT_FOUND` | "Choose a card to add money from" | "Choose a card to add money from." | `amount` | Choose card |
-| `CARD_EXPIRED` (planned for saved cards) | | "This card has expired. Use another card." | `amount` | Choose card |
-| `OTP_INVALID` | "Incorrect code" | Standard | `code` | Try again |
-| `OTP_REQUIRED` (upgrade) | "OTP not verified" | Standard | `code` | Back to code |
-| `STEP_UP_REQUIRED` (planned) | | Standard | `review` | Confirm |
-| `TIMEOUT` (planned) | | "We didn't get an answer in time. Check Activity before you try again, so your card isn't charged twice." | `failed` | Check Activity |
-| `SERVICE_UNAVAILABLE` (planned) | | Standard | `failed` | Try again |
-| `PERMISSION_DENIED`, `WRONG_CONTEXT`, `SESSION_EXPIRED` (planned) | | Standard | `failed` | Back / Switch / Sign in |
+#### 4. Sandbox errors
+
+| Code | Message | Shows on | Button |
+|---|---|---|---|
+| `CARD_EXPIRED` | "This card has expired. Choose another card." | submit | Choose card |
+| `CARD_DECLINED` | "Your card was declined. Try another card." | submit | Choose card |
+| `LIMIT_EXCEEDED` | "The most you can add at once is $5,000.00." | amount | Change amount |
+| `ACCOUNT_CANNOT_CREDIT` | "This account can’t receive money right now. Choose another account." | submit | Choose account |
+| `STEP_UP_FAILED` (planned) | "We couldn’t confirm this. Nothing was charged. Start again." | code | Start again |
+| `TIMEOUT` | "We didn’t get an answer in time. Check Activity before you try again, so you don’t pay twice." | submit | Try again |
+| `SERVICE_UNAVAILABLE` | Connection sheet | submit | Try again |
+| `JOURNEY_DISABLED` | "This isn’t available at your bank." | whole journey | none |
+| `PERMISSION_DENIED` (planned) | Standard message | whole journey | Back |
+
+`CARD_DECLINED` is raised for a card whose number ends in 0000; the seed has none, so a test must add one.
 
 #### 5. Adapters
 
 | Integration id | Adapter | Request | Response | Errors | Status |
 |---|---|---|---|---|---|
 | `accounts` | `bank.accounts.list` | none | accounts | none | Existing |
-| `cards` | `bank.cards.list` | none | record of saved cards with `name` | none | Existing |
-| `addMoney` | `bank.deposit.create` | `{toAccountId, fromCardId, amount}` | `{reference, newBalance}` | `NOT_SUPPORTED`, `ACCOUNT_NOT_FOUND`, `INVALID_AMOUNT`, `CARD_NOT_FOUND` (+ `OTP_REQUIRED`) | Existing |
-| `otpSend`, `otpVerify` | existing | | | `OTP_INVALID` | Existing |
-
-Behaviour today: balance rounded to cents; adds an "Added money" income transaction; reference `ADD-20261102-…`. It does not check the OTP or the daily limit. `moneyMoving: true`, `requiresOtp`: no today, yes in the upgrade. Money comes **in**, so the daily outgoing limit is unaffected; the planned rule is a separate card-funding cap of 50,000.00 per transaction (already enforced).
+| `cards` | `bank.cards.list` | none | map of cards | none | Existing (`packages/mock-bank-api/src/index.ts`). The prototype keeps its own three cards |
+| `addMoney` | `bank.deposit.create` | `{toAccountId, fromCardId, amount}` | `{reference, newBalance}` | `INVALID_AMOUNT`, `ACCOUNT_NOT_FOUND`, `CARD_NOT_FOUND` | Existing. Today $1 to $50,000, no fee; the journey's $10 to $5,000 limit, fee and `CARD_EXPIRED`, `CARD_DECLINED`, `ACCOUNT_CANNOT_CREDIT`, `LIMIT_EXCEEDED` are (planned) |
+| `details` | `bank.accounts.details` | `{accountId}` | identifiers for the home market | `ACCOUNT_NOT_FOUND` | (planned). The prototype builds them in `ACC.ids` |
+| `sendOtp` / `verifyOtp` | `bank.otp.send` / `bank.otp.verify` | `{channel}` / `{code}` | `{sent}` / `{verified}` | `OTP_INVALID`, `OTP_LOCKED` | Existing |
 
 #### 6. Permissions, step-up and limits
 
-`payments.create`. Step-up `otp`; `stepup` from 5,000.00 (planned). Limit: 1.00 to 50,000.00 per transaction.
+`payments.create`. Step-up: one-time code for the card path; **none** for bank transfer details. Limits: $10.00 to $5,000.00 per top-up.
 
 #### 7. Result and links out
 
-Result `success`; receipt: amount, card, account, new balance, reference, date. Notification: "$X was added to your {{account}}". Links out: Accounts › detail, Payments › tracker.
+As above. Notifications (planned): "{amount} was added to {account} from your card ending {last4}". Links out: Accounts tab; this journey again.
 
 #### 8. Acceptance criteria
 
-- AC-1: Money from $1 to $50,000 is added to the chosen account from a saved card, and the balance and the transaction list update.
-- AC-2: The amount shown at review equals the amount credited; the fee is $0.
-- AC-3: A card is required; with no saved card the person is offered to add one.
-- AC-4: Adding money needs consent and a verified one-time code.
-- AC-5: Amounts outside $1 to $50,000 are refused with a clear message and no change.
-- AC-6: Three wrong codes add nothing.
-- AC-7: A timeout tells the person to check Activity before trying again; an unavailable service adds nothing.
-- AC-8: Each error shows its own message, not one general failure.
+- AC-1: The customer chooses card or bank transfer; an option switched off is shown unavailable.
+- AC-2: A card top-up needs an amount from $10.00 to $5,000.00, an account, a non-expired card and a 3-digit security code, with the messages above.
+- AC-3: An expired card cannot be chosen.
+- AC-4: With `cardFee` on, the fee (1.5%) and the total charged are shown before the code and on the receipt; with it off no fee line appears.
+- AC-5: A code is asked before a card is charged, never for bank transfer details.
+- AC-6: A successful top-up raises the chosen account by the amount (not the fee) and shows "Money added".
+- AC-7: Bank transfer shows the account's identifiers for the home market with Copy, the account name and the reference note.
+- AC-8: When the bank is unavailable or times out the card is not charged.
 
 #### 9. Scenarios
 
-| # | Covers | Persona and setup | Outcome |
-|---|---|---|---|
-| T-1 | AC-1, AC-2, AC-4 | `alex`; $100 into Main from `c_5832`, code `482100` | Main 8,720.76 → 8,820.76; "Added money" +100 transaction; reference `ADD-…` |
-| T-2 | AC-5 | `alex` | $0.50 and $60,000: `INVALID_AMOUNT`; balance unchanged |
-| T-3 | AC-3 | `sam` | No saved card: empty state with "Add a card" |
-| T-4 | AC-3 | `alex`; card id `c_0000` | `CARD_NOT_FOUND` |
-| T-5 | AC-4 | `alex` | No consent: message; no code: `OTP_REQUIRED` |
-| T-6 | AC-6 | `alex` | Wrong code x3: `locked`; balance unchanged |
-| T-7 | AC-7 | conditions `timeout: ["bank.deposit.create"]` | Check Activity text; balance unchanged |
-| T-8 | AC-7 | conditions `unavailable: ["bank.deposit.create"]` | `SERVICE_UNAVAILABLE`; unchanged |
-| T-9 | AC-8 | `alex`; account id `acc_none` | `ACCOUNT_NOT_FOUND` message |
+Synthetic persona `alex`, Current account $8,102.40 available; cards as seeded. The sandbox code is the fixed test code.
+
+| # | Covers | Persona / setup | Conditions | Steps and expected result |
+|---|---|---|---|---|
+| T-1 | AC-1, AC-2, AC-4, AC-5, AC-6 | `alex` | none | Card, Current account, $200.00, Visa ••4242, security code 123. Live card: Amount $200.00, Card fee $3.00, Charged to your card $203.00. Code sheet "Authorise $203.00 from Visa ••4242". "Money added"; Current account $8,302.40 available. |
+| T-2 | AC-2 | `alex` | none | $5: "The smallest amount is $10.00." $6,000: "The most you can add at once is $5,000.00." Security code "12": "Enter the 3 digits on the back of the card." No card: "Choose a card." |
+| T-3 | AC-3 | `alex` | none | Visa ••0019 shows "Expired" and cannot be chosen. |
+| T-4 | AC-4 | `alex` | `cardFee` off | No fee line; charged $200.00. |
+| T-5 | AC-1 | `alex` | `allowCard` off / `allowTransfer` off | The matching choice is unavailable. |
+| T-6 | AC-5, AC-7 | `alex`, market A / B / C | none | By bank transfer: routing number and account number / sort code and account number / IBAN and BIC; Copy buttons; "Alex Morgan"; "Details ready" with no code. |
+| T-7 | AC-6 | `alex`, `accountId: "sav"` | none | The top-up goes to Savings ••7720. |
+| T-8 | AC-5 | `alex` | wrong code (planned) | `STEP_UP_FAILED`; card not charged. |
+| T-9 | AC-8 | `alex` | `unavailable: ["bank.deposit.create"]` (prototype: Service down on) | Connection sheet; no credit. |
+| T-10 | AC-8 | `alex` | `timeout: ["bank.deposit.create"]`, `latencyMs: 10000` | After 10 seconds the timeout message; no credit. |
 
 #### 10. Expected mutation-check survivors
 
-- Journey `min`/`max` on the amount: survive; `bank.deposit.create` returns `INVALID_AMOUNT` (another layer).
-- The two-decimal rounding of the new balance: **survives** (all scenario amounts are whole dollars; add a $10.005 case to kill it).
-- The step-up threshold of 5,000: killed only with a scenario at or above it; list as a survivor until added.
+`CARD_EXPIRED` on submit survives because an expired card cannot be chosen; `LIMIT_EXCEEDED` on submit survives because the amount step stops it; `CARD_DECLINED` and `ACCOUNT_CANNOT_CREDIT` survive because the seed has no card ending 0000 and no frozen account; expected. Everything else: none expected.
+
+---
 
 ## Personal: More
 
@@ -7471,526 +7625,795 @@ Launch points on it: Settings › Security rows and Settings › Linked banks �
 
 ### ★ Update profile — `update-profile`
 
+**Catalog:** slug `update-profile` (name in the prototype "Contact details"), workspace `personal`, category More (Personal: More), core no, can a bank switch it off: yes (basic entry, kept in the Lean preset). Options (key, label, default): `verifyNewMobile` "Send a code to the new mobile number too" (on); `verifyEmail` "Confirm a new email by link before it applies" (on); `verifyAddress` "Check an address change before it applies" (on); `requireProof` "Ask for proof of address" (**off**). Research: `research/update-profile.md`. Built in `design/bankworkx-r1/src/journeys/56-profile-messages.js` (objects `UP`, `UP_MK`), using the code step `SEC.codeStep` from `55-security.js`.
+
+The lean rework removed name changes, the tax and nationality fields, the marketing preferences and the list of previous addresses. What remains: change the mobile number, the email or the address, each with a one-time code, and some with a check before they apply. Name and ID document changes are done at a branch.
+
+**Home market configuration.** The formats of the mobile number and the postal code follow the bank's home market. No screen names a country. Sample values are the prototype's test fill.
+
+| Market | Mobile number: hint, rule, message | Postal code: rule, message | State field | Sample address |
+|---|---|---|---|---|
+| Market A (routing number and account) | "10 digits"; exactly 10 digits; "Enter 10 digits." | 5 digits, optionally a dash and 4 digits; "Enter a 5-digit postal code." | Yes, required, label "State" | 12 Example Street, Springfield, IL, 62704 |
+| Market B (sort code and account) | "11 digits"; 10 or 11 digits starting 7 or 07; "Enter 10 or 11 digits starting 7 or 07." | Letters and digits in the local pattern; "Check the postal code." | No | 12 Example Road, London, SW1A 1AA |
+| Market C (IBAN) | "With country code"; 8 to 14 digits, optional leading +; "Enter 8 to 14 digits, with the country code." | 4 or 5 digits; "Enter 4 or 5 digits." | No | Beispielstrasse 5, Berlin, 10115 |
+| Market D (IBAN, mobile alias) | "05XXXXXXXX"; a mobile number such as 0501234567; "Enter a mobile number, like 0501234567." | No postal code field | No | Example Tower, Flat 1204, Dubai |
+
+Spaces and dashes are ignored when the mobile number is checked.
+
 #### 1. Summary
 
-| Item | Detail |
+| Field | Value |
 |---|---|
 | Slug | `update-profile` |
-| Purpose | Change phone, email or home address, safely: re-confirm identity, then prove the new contact is the person's. |
-| Release | 1 |
-| Workspace | Personal (`workspace: "personal"`, planned field) |
-| Status | New |
+| Purpose | Change the mobile number, the email or the address held by the bank. Each change needs a code; some are checked before they apply. |
+| Release / workspace | 1 / Personal |
+| Status | Built in the prototype as a form journey with a branch per item (`submit: "Save"`, permission `accounts.view`). A change that waits is kept as "pending" in the profile; the prototype has no way to complete or cancel it (planned). |
 | Channels | Web and mobile |
-| Starting pattern | Step-up, choose, enter, verify new contact, review, consent, result |
-| Who may use it | Signed-in customer holding `profile.update` (Alex, Sam) |
+| Starting pattern | None in the fixtures; the one-time code reuses `bank.otp.send` and `bank.otp.verify` |
+| Who may use it | Anyone signed in to Personal (`accounts.view`), for their own profile. |
 
 #### 2. Entry points
 
-| Place › label | Passes | Permission |
+| Place › label | Passes in | Permission |
 |---|---|---|
-| More › profile › Change (mobile number) | `{field: "phone"}` | `profile.update` |
-| More › profile › Change (email) | `{field: "email"}` | `profile.update` |
-| More › profile › Change (home address) | `{field: "address"}` | `profile.update` |
-| Notification N-71 "Please confirm your email" | `{field: "email"}` | `profile.update` |
-| Deep link `/personal/j/update-profile?field=phone` | `{field}` (`phone`, `email`, `address`) | `profile.update` |
-
-An unknown `field` value is ignored and the choose screen opens.
+| More › Profile | none | `accounts.view` |
+| Deep link `/personal/j/update-profile?what=email` | `{what}` (`mobile`, `email`, `address`) | `accounts.view` |
 
 #### 3. Screens
 
-**3.1 `confirmIdentity` — "Confirm it's you"** (blocks: `stepper` ["Confirm", "Change", "Verify", "Review"], `alert`, `textInput`, `button`)
+Steps in order: `what`, then `mobile`, `email` or `address`, then `code`, then `code2` (mobile with `verifyNewMobile`), then the result.
 
-Copy: alert (info) "For your security, confirm it's you before you change your details." Biometrics: on mobile with quick sign-in set up, the screen first offers "Use Face ID" / "Use fingerprint"; success skips the password and goes to `confirmCode`.
+**Screen `what`** ("Contact details"). Text "To change your name or ID document, visit a branch." Button **Continue**.
 
-| Field | Block | Required | Validation | Error message |
+| Field | Block | Required | Validation | Message |
 |---|---|---|---|---|
-| Password | `textInput` secure | Yes | At least 1 character | "Enter your password" |
+| (no label) | `cards`: "Mobile number" (masked, for example "•••• 0142"), "Email" (masked, for example "a•••@example.com"), "Address" (the whole address). A card with a change waiting has an amber chip "Pending" (for email "Pending {masked new email}") | Yes | One of the cards; not one with a change already waiting | "This is required." and "A change to this is already waiting to be confirmed." |
 
-Buttons: "Continue" → validate, `callApi stepUp` (`bank.session.stepUp`, planned), then `confirmCode`. "Cancel" → exit. States: submit button spinner; error `STEP_UP_FAILED` stays on the screen.
+**Screen `mobile`** ("New mobile number").
 
-**3.2 `confirmCode` — "Enter your code"** (`otp`, 6 digits, keypad)
-
-Copy: body "We sent a 6-digit code to the number ending 0142." Helper "Resend code in 30 s". Buttons: "Confirm" → `callApi otpVerify` (`bank.otp.verify`) then `whatToChange` (or the field-specific screen when `{field}` was passed). "Resend code" (after 30 s) → `bank.otp.send`. Wrong code: see errors table. Third wrong code: result "Too many wrong codes" with "Start again" → `confirmIdentity`.
-
-**3.3 `details` — "Change your details"** (`select` chips, `textInput`, `alert`)
-
-| Field | Block | Required | Validation | Error message |
+| Field | Block | Required | Validation | Message |
 |---|---|---|---|---|
-| What do you want to change? (`profile.field`) | `select` tiles: Mobile number, Email, Home address | Yes | One of `phone`, `email`, `address`; prefilled from `{field}` | "Choose what you want to change" |
-| New mobile number (`profile.phone`) shown when field = phone | `textInput` | Yes | `^\+[1-9][0-9]{7,14}$` after removing spaces and dashes; must differ from the current number | "Enter the number with its country code, like +1 415 555 0142" / "That's already your number" |
-| New email (`profile.email`) when field = email | `textInput` | Yes | Contains one `@`, a dot in the domain, max 254 characters; differs from current | "Enter a valid email address" / "That's already your email" |
-| Street (`profile.street`) when field = address | `textInput` | Yes | 3 to 80 characters | "Enter your street and number" |
-| City (`profile.city`) | `textInput` | Yes | 2 to 50 letters | "Enter your city" |
-| Postal code (`profile.postal`) | `textInput` | Yes | `^[A-Za-z0-9 -]{3,10}$` | "Enter a valid postal code" |
-| Country (`profile.country`) | `select` rows | Yes | From list | "Choose your country" |
+| Mobile number | `tel`, placeholder from the market table, max 16 | Yes | The market rule; not the current number (last 9 digits compared) | The market message, and "That is already your number." |
 
-Copy: for phone, helper "We'll text a code to the new number." For email, "We'll email a code to the new address." For address, alert (info) "We don't verify addresses with a code. We may ask for proof of address later." Buttons: "Continue" → validate, then `verifyNew` (phone, email) or `review` (address). "Back" → `confirmCode`.
+**Screen `email`** ("New email").
 
-**3.4 `verifyNew` — "Verify your new {phone number/email}"** (`otp`)
+| Field | Block | Required | Validation | Message |
+|---|---|---|---|---|
+| Email | `email`, placeholder "name@example.com", max 80 | Yes | `name@host.tld` shape; not the current email (ignoring capitals) | "Enter an email like name@example.com." and "That is already your email." |
 
-Copy: body "We sent a 6-digit code to {masked new contact}." Helper "Resend code in 30 s". Buttons: "Verify" → `callApi otpVerify` (`bank.profile.verifyContact`, planned), then `review`. "Resend code" → `bank.profile.sendContactCode`. "Use a different {number/email}" → `details`. The code is valid for 10 minutes; expiry gives `CODE_EXPIRED`. Sandbox: code `482100` or `000000`.
+**Screen `address`** ("New address").
 
-**3.5 `review` — "Review your change"** (`reviewSummary`, `consent`, `button`)
+| Field | Block | Required | Validation | Message |
+|---|---|---|---|---|
+| Address line 1 | `text`, max 60 | Yes | Not empty | "This is required." |
+| Address line 2 (optional) | `text`, max 60 | No | none | none |
+| City | `text`, max 40 (half width) | Yes | Not empty | "This is required." |
+| State | `text`, max 30 (half width). Market A only | Yes | Not empty | "This is required." |
+| Postal code | `text`, max 10. Not shown in Market D | Yes | The market rule | The market message |
+| Proof of address | `file`, "Add a recent bill or statement". Only with `requireProof` | Yes | One file, PDF, JPG or PNG | "Use a PDF, JPG or PNG." |
 
-Rows: "Changing" (Mobile number / Email / Home address); "From" (current value, masked: +1 415 ••• 0142, a•••@example.com, or full old address); "To" (new value; for phone/email, with chip "Verified"). Consent: text "I confirm this is my own contact detail and I understand BankWorkx® will use it to contact me" (`termsVersion: "profile-v1"`, `mustBeTrue`, message "Tick the box to continue"). Alert (warning) for phone: "Security codes will go to your new number from now on." Buttons: "Save change" → validate, `callApi updateProfile`, then `success`. "Edit" → `details`.
+The step is blocked when nothing differs from the address on file: "That is already your address."
 
-**3.6 `success`** (terminal, `result` success) title "Details updated", text "Your {field} has been changed. We also told you at your old {contact}.", meta "Ref {{result.reference}}". Buttons "Back to profile" (exit to Profile), "Done".
+**Screen `code`** ("Enter your code"). Text "Sent to the phone ending 0142." (the code goes to the number on file, not the new one). Button **Confirm**, busy "Checking your code…" (about 0.6 seconds).
 
-**3.7 `failed`** (terminal, `result` error) title and text come from the errors table; button "Try again" → `details` (or `confirmIdentity` for step-up errors).
+| Field | Block | Required | Validation | Message |
+|---|---|---|---|---|
+| Code | `text`, placeholder "6 digits", max 6, hint "{n} tries left" | Yes | Exactly 6 digits | "Enter the 6 digits." |
+
+A wrong code: "That code isn’t right. Try again." An expired code: "That code has expired. Go back to get a new one." Three wrong codes: "Too many wrong codes. Nothing was changed. Go back to start again."
+
+**Screen `code2`** ("Confirm your new number"). Only for a mobile change with `verifyNewMobile`. Text "Sent to the new number." Button **Save**, busy "Checking your code…" (about 0.6 seconds). Field Code as above, with its own 3 tries and the same messages.
+
+**Result.** What the bank does depends on the item and the options:
+
+| Item | Applies at once when | Waits when | Title when waiting | Text when waiting |
+|---|---|---|---|---|
+| Mobile number | always | never | none | none |
+| Email | `verifyEmail` is off | `verifyEmail` is on | "Change received" | "Check your inbox and confirm the new address." |
+| Address | `verifyAddress` is off | `verifyAddress` is on | "Change received" | "We’ll check it and tell you." |
+
+When it applies: title "{Mobile number, Email or Address} updated" (green), rows "{item}" (masked value, or the whole address) and "Status" "Updated"; a mobile change adds "Old number" "Told by message". When it waits: chip "Pending" (amber), rows "{item}" and "Status" "Pending". Buttons **Back to more**, **Done**. A note "{item} updated" or "{item} change received" is added to the notification list. A change to an item that already has one waiting is refused: "A change to this is already waiting to be confirmed."
+
+**States**
+- Loading: busy text on the code buttons as above.
+- Empty: not applicable.
+- Error: the Service down switch shows the standard connection sheet ("We couldn’t reach the bank", "Nothing was sent and you haven’t been charged. Try again in a moment."); otherwise "This isn’t available right now. Nothing was changed. Try again in a few minutes." with **Try again**.
+- Timeout: "This is taking longer than expected. Nothing was changed."
 
 #### 4. Sandbox errors
 
-| Code | Message the person sees | Screen | Button |
+| Code | Message | Shows on | Button |
 |---|---|---|---|
-| `STEP_UP_FAILED` (planned) | "That password isn't right. Try again." | `confirmIdentity` (inline) | "Try again" |
-| `STEP_UP_REQUIRED` (planned) | "For your security, confirm it's you first." | `failed` | "Confirm" → `confirmIdentity` |
-| `OTP_INVALID` | "That code isn't right. {n} tries left." After the third: "Too many wrong codes. Start again." | `confirmCode` / `verifyNew` | "Try again" / "Start again" |
-| `OTP_REQUIRED` | "Confirm with your one-time code first." | `failed` | "Back to code" → `confirmCode` |
-| `CODE_EXPIRED` (planned) | "That code has run out. We sent you a new one." | `verifyNew` (inline) | "Verify" |
-| `CONTACT_INVALID` (planned) | "That {number/email} doesn't look right. Check it and try again." | `details` | "Edit" |
-| `CONTACT_IN_USE` (planned) | "That {number/email} is already used by another customer. Use a different one, or contact us." | `details` | "Edit"; link "Send a secure message" → `new-message` `{topic: "profile"}` |
-| `CONTACT_UNCHANGED` (planned) | "That's already your {number/email}." | `details` | "Edit" |
-| `ADDRESS_INVALID` (planned) | "We couldn't read that address. Check the street, city and postal code." | `details` | "Edit" |
-| `CHANGE_LOCKED` (planned) | "Your contact details can't be changed for 24 hours after a password reset. Nothing was changed." | `failed` | "Back to profile" |
-| `PERMISSION_DENIED` | "Your role doesn't allow this." (personal: "Your profile doesn't allow this change.") | `failed` | "Back to profile" |
-| `SESSION_EXPIRED` | Standard message S-`SESSION_EXPIRED` (README 1.6) | `failed` | "Sign in" |
-| `TIMEOUT` | "This is taking longer than expected. Nothing was changed." | `failed` | "Try again" |
-| `SERVICE_UNAVAILABLE` | Standard message S-`SERVICE_UNAVAILABLE` (README 1.6) | `failed` | "Try again" / "Back" |
-
-No money moves, so the `TIMEOUT` copy is the non-money version.
+| `ALREADY_PENDING` | "A change to this is already waiting to be confirmed." | `what`, result | Back |
+| `OTP_INVALID` | "That code isn’t right. Try again." | `code`, `code2` | Try again |
+| `OTP_EXPIRED` | "That code has expired. Go back to get a new one." | `code` | Back |
+| `OTP_LOCKED` | "Too many wrong codes. Nothing was changed. Go back to start again." | `code`, `code2` | Back to start |
+| `FILE_TYPE` (planned) | "Use a PDF, JPG or PNG." | `address` | Remove the file |
+| `CONTACT_IN_USE` (planned) | "We can’t use that number or email. Try another." | `mobile`, `email` | Back |
+| `TIMEOUT` | "This is taking longer than expected. Nothing was changed." | `code`, `code2` | Try again |
+| `SERVICE_UNAVAILABLE` | "This isn’t available right now. Nothing was changed. Try again in a few minutes." | `code`, `code2` | Try again |
+| `JOURNEY_DISABLED` | "This isn’t available at your bank." | whole journey | none |
+| `PERMISSION_DENIED` (planned) | Standard message | whole journey | Back |
 
 #### 5. Adapters
 
-| Integration id | Adapter | Request | Response | Error codes | Status | moneyMoving | requiresOtp |
-|---|---|---|---|---|---|---|---|
-| `stepUp` | `bank.session.stepUp` | `{ method: "password" \| "biometric", secret }` | `{ steppedUp: true, expiresInSec: 300 }` | `STEP_UP_FAILED`, `TIMEOUT`, `SERVICE_UNAVAILABLE` | planned | No | – |
-| `otpSend` | `bank.otp.send` | `{}` | `{ sent: true }` | `SERVICE_UNAVAILABLE` | Existing | No | – |
-| `otpVerify` | `bank.otp.verify` | `{ code }` | `{ verified: true }` | `OTP_INVALID` (carries `attempt`) | Existing | No | – |
-| `sendContactCode` | `bank.profile.sendContactCode` | `{ channel: "sms" \| "email", value }` | `{ sent: true, masked }` | `CONTACT_INVALID`, `CONTACT_IN_USE`, `CONTACT_UNCHANGED`, `TIMEOUT`, `SERVICE_UNAVAILABLE` | planned | No | No |
-| `otpVerify` (second use) | `bank.profile.verifyContact` | `{ channel, value, code }` | `{ verified: true }` | `OTP_INVALID`, `CODE_EXPIRED` | planned | No | No |
-| `updateProfile` | `bank.profile.update` | `{ field, value \| address{street, city, postal, country} }` | `{ reference, field, updatedAt }` | `STEP_UP_REQUIRED`, `OTP_REQUIRED`, `CONTACT_IN_USE`, `ADDRESS_INVALID`, `CHANGE_LOCKED`, `PERMISSION_DENIED`, `SESSION_EXPIRED`, `TIMEOUT`, `SERVICE_UNAVAILABLE` | planned | No | Yes (needs verified step-up code and, for phone/email, the verified new contact) |
-| `profile` | `bank.profile.get` | `{}` | profile view-model | `SERVICE_UNAVAILABLE` | planned | No | – |
-
-The engine counts OTP failures only for an integration named exactly `otpVerify`; both code screens therefore name their verify integration `otpVerify`.
+| Integration id | Adapter | Request | Response | Errors | Status |
+|---|---|---|---|---|---|
+| `profile` | `bank.profile.get` | none | mobile, email, address, pending changes | `SERVICE_UNAVAILABLE` | (planned). The prototype reads `UP.prof()` |
+| `sendOtp` / `verifyOtp` | `bank.otp.send` / `bank.otp.verify` | `{channel}` / `{code}` | `{sent}` / `{verified}` | `OTP_INVALID`, `OTP_EXPIRED`, `OTP_LOCKED` | Existing (`packages/mock-bank-api/src/index.ts`) |
+| `verifyNewMobile` | `bank.profile.verifyContact` | `{channel, value, code}` | `{verified}` | `OTP_INVALID`, `OTP_LOCKED` | (planned) |
+| `updateProfile` | `bank.profile.update` | `{field, value}` or `{field: "address", address, proof?}` | `{reference, status: "updated" or "pending"}` | `ALREADY_PENDING`, `CONTACT_IN_USE`, `OTP_REQUIRED`, `SERVICE_UNAVAILABLE`, `TIMEOUT` | (planned) |
 
 #### 6. Permissions, step-up and limits
 
-Permission `profile.update`. Step-up level `stepup` (README 4.3): password or biometrics, then a one-time code. A step-up stays valid for 5 minutes. Limits: 3 contact changes in 24 hours per customer (`CHANGE_LOCKED`, copy "You've changed your details too many times today. Try again tomorrow. Nothing was changed."); one pending change at a time. The `authorisation` check repeats `profile.update`; the sandbox enforces both.
+`accounts.view`. Step-up: a one-time code (6 digits, 3 tries) for every change, plus a code to the new number for a mobile change with `verifyNewMobile`. Limits: one waiting change per item; address lines 60 characters.
 
 #### 7. Result and links out
 
-Result "Details updated" with reference `PRF-20261102-0001`. Receipt (planned engine feature): field changed, old (masked) and new (masked) value, date and time, reference. Notifications raised: N-70 (details changed, sent to the **old** contact as well as the new), N-71 (only if the email stays unverified). Buttons: "Back to profile" → Profile shell; "Done" → where the person started.
+Result as above. Notifications raised (planned): a text to the old mobile number ("Your mobile number was changed"), an email to the old email address, and a message to the new contact; a pending change raises a reminder after 3 days. Every change is written to the profile log (audit). Links out: More (profile), `new-message` (to ask about a pending change).
 
 #### 8. Acceptance criteria
 
-- AC-1 A person must confirm their password (or biometrics) and a one-time code before any contact detail can be changed.
-- AC-2 A new phone number or email is saved only after the code sent to it is entered correctly.
-- AC-3 Three wrong codes (either code) stop the journey and nothing is changed.
-- AC-4 A phone number without a country code, a malformed email, and an incomplete address are refused with the exact messages.
-- AC-5 A contact already used by another customer is refused.
-- AC-6 The person must tick consent before saving.
-- AC-7 After a change the person is told at the old contact (notification N-70) and the profile shows the new value.
-- AC-8 A timeout or unavailable bank leaves the details unchanged and shows the matching message.
-- AC-9 No more than 3 changes in 24 hours.
+- AC-1: The first screen offers Mobile number, Email and Address with the current values masked and a "Pending" chip where a change waits; a pending item cannot be chosen.
+- AC-2: The mobile number follows the market rule and cannot be the current number; the email follows the shape and cannot be the current one; the address must differ and follow the market rules.
+- AC-3: Every change asks for a one-time code sent to the number on file; three wrong codes end the attempt with nothing changed.
+- AC-4: With `verifyNewMobile` on, a second code goes to the new number and the change saves only after it.
+- AC-5: A mobile change applies at once; an email waits with `verifyEmail` on; an address waits with `verifyAddress` on; waiting changes show "Change received" and a Pending chip.
+- AC-6: With `requireProof` on, an address change needs a PDF, JPG or PNG; otherwise the field is absent.
+- AC-7: The result shows what changed (masked) and its status.
+- AC-8: When the bank is unavailable or times out nothing is changed.
 
 #### 9. Scenarios
 
-| # | Persona | Setup and conditions | Covers | Expected |
+Synthetic persona `alex` (Market A unless stated, code is the fixed test code).
+
+| # | Covers | Persona / setup | Conditions | Steps and expected result |
 |---|---|---|---|---|
-| T-1 | Alex | Passed `field=phone`. Password `Bwx!Demo2026`, code `482100`, new number `+1 415 555 0177`, new-number code `482100`, consent ticked | AC-1, AC-2, AC-6, AC-7 | Result "Details updated"; profile phone is `+1 415 555 0177`; N-70 raised for old and new |
-| T-2 | Alex | Skip step-up: call `bank.profile.update` straight away | AC-1 | `STEP_UP_REQUIRED` |
-| T-3 | Alex | Correct password, then three wrong codes `111111` | AC-3 | Third failure: "Too many wrong codes. Start again."; profile unchanged |
-| T-4 | Alex | New number `4155550177` (no `+`); email `alex@`; address missing city | AC-4 | Each shows its exact message; no call to the bank |
-| T-5 | Alex | New email equals another seed customer's (`sam.rivera@example.com`) | AC-5 | `CONTACT_IN_USE` message; no code sent |
-| T-6 | Alex | At `review`, consent not ticked | AC-6 | "Tick the box to continue"; no `bank.profile.update` call |
-| T-7 | Alex | New-number code wrong then right (`482100`) | AC-2 | First: "That code isn't right. 2 tries left."; second succeeds |
-| T-8 | Alex | `conditions.timeout: ["bank.profile.update"]` | AC-8 | "This is taking longer than expected. Nothing was changed."; profile unchanged |
-| T-9 | Alex | `conditions.unavailable: ["bank.profile.update"]` | AC-8 | S-`SERVICE_UNAVAILABLE`; profile unchanged |
-| T-10 | Alex | Four changes in one session | AC-9 | Fourth refused with `CHANGE_LOCKED` copy |
-| T-11 | Sam | Open `?field=email` | AC-1, AC-7 | Works for a new customer with no prior email ("Not set" → set) |
+| T-1 | AC-1, AC-2 | `alex` | none | The cards show "•••• 0142", "a•••@example.com" and "12 Example Street, Springfield, IL, 62704". |
+| T-2 | AC-2 | `alex` | none | Mobile "123": "Enter 10 digits." The current number: "That is already your number." Email "alex": "Enter an email like name@example.com." The current email: "That is already your email." Postal code "12": "Enter a 5-digit postal code." Unchanged address: "That is already your address." |
+| T-3 | AC-3 | `alex` | none | Code 000000: "That code isn’t right. Try again." and "2 tries left"; three times: "Too many wrong codes. Nothing was changed. Go back to start again." Code 999999: "That code has expired. Go back to get a new one." |
+| T-4 | AC-4, AC-5 | `alex`, `verifyNewMobile` on | none | New mobile 5550100177, code, then "Sent to the new number." code: title "Mobile number updated", rows Mobile number "•••• 0177", Status "Updated", Old number "Told by message". |
+| T-5 | AC-5 | `alex`, `verifyEmail` on | none | New email: "Change received", "Check your inbox and confirm the new address.", chip Pending. Back at the first screen the Email card shows "Pending a•••@example.com" and cannot be chosen: "A change to this is already waiting to be confirmed." |
+| T-6 | AC-5 | `alex`, `verifyAddress` off | none | New address saves at once: "Address updated", Status "Updated". |
+| T-7 | AC-6 | `alex`, `requireProof` on | none | The Proof of address field shows; "photo.heic" gives "Use a PDF, JPG or PNG."; "utility-bill.pdf" is accepted. With the option off the field is absent. |
+| T-8 | AC-2 | `alex`, Market B and Market D | none | Market B mobile "5550100177": "Enter 10 or 11 digits starting 7 or 07." Market D has no Postal code field and no State field. |
+| T-9 | AC-8 | `alex` | `unavailable: ["bank.profile.update"]` (prototype: Service down on) | Connection sheet; nothing is changed. |
+| T-10 | AC-8 | `alex` | `timeout: ["bank.profile.update"]`, `latencyMs: 10000` | After 10 seconds: "This is taking longer than expected. Nothing was changed." |
 
 #### 10. Expected mutation-check survivors
 
-- Removing the `maxLength` of 254 on email: survives, because the sandbox does not enforce length and no scenario sends 255 characters.
-- Weakening the "Resend after 30 s" timer: survives, because scenarios do not advance time on the screen.
-- Removing the old-contact copy of N-70: killed by T-1 only if `expectBank` checks the notification list; otherwise survives (listed until the check is added).
+The postal-code patterns for Markets B and C survive when only Market A is asserted; expected. The text notification to the old number is not asserted; expected. The pending state never completes in the prototype, so the "confirmed" outcome is untested; expected until the confirmation link is built. Everything else: none expected.
 
 ---
 
 ### ★ New message — `new-message`
 
+**Catalog:** slug `new-message`, workspace `personal`, category More (Personal: More), core no, can a bank switch it off: yes (basic entry, kept in the Lean preset). Options (key, label, default): `allowFile` "Allow one attachment" (on). Research: `research/new-message.md`. Built in `design/bankworkx-r1/src/journeys/56-profile-messages.js` (object `MSG`, shared with the view `messages`).
+
+The lean rework removed message categories with different response times, urgent flags and several attachments. What remains: a topic, a subject, a message and one optional file, sent to the bank. The reply arrives in `messages`.
+
 #### 1. Summary
 
-| Item | Detail |
+| Field | Value |
 |---|---|
 | Slug | `new-message` |
-| Purpose | Write a private message to the bank about a topic or an account, with an attachment if needed. |
-| Release | 1 |
-| Workspace | Personal |
-| Status | New |
+| Purpose | Send a secure message to the bank with a topic, a subject and an optional file. |
+| Release / workspace | 1 / Personal |
+| Status | Built in the prototype as a one-screen form journey (`submit: "Send"`, permission `accounts.view`). A new conversation is added to the top of the inbox. No money moves. |
 | Channels | Web and mobile |
-| Starting pattern | Form, review, result |
-| Who may use it | Signed-in customer with `messages.send` |
+| Starting pattern | None in the fixtures |
+| Who may use it | Anyone signed in to Personal (`accounts.view`). |
 
 #### 2. Entry points
 
-| Place › label | Passes | Permission |
+| Place › label | Passes in | Permission |
 |---|---|---|
-| More › messages › New message | `{topic, accountId}` (both optional) | `messages.send` |
-| Messages thread (closed) › Start a new message | `{topic, accountId}` | `messages.send` |
-| Help › Send a secure message | – | `messages.send` |
-| Update-profile error `CONTACT_IN_USE` link | `{topic: "profile"}` | `messages.send` |
-| Accounts › account detail › Ask about this account (planned) | `{topic: "account", accountId}` | `messages.send` |
-| Deep link `/personal/j/new-message?topic=cards&accountId=acc_main` | as passed | `messages.send` |
+| `messages` › **New message** (header and empty state) | none | `accounts.view` |
+| Login history › This wasn’t me | `{topic: "Fraud or security"}` | `accounts.view` |
+| `contact-support` › Message › **Send us a message** (option `secureMessages`, signed in) | none | `accounts.view` |
+| Deep link `/personal/j/new-message?topic=Cards&subject=Lost%20card` | `{topic, subject}` | `accounts.view` |
 
 #### 3. Screens
 
-**3.1 `compose` — "New message"** (`stepper` ["Write", "Review"], `select`, `accountPicker`, `textInput`, `fileUpload` (planned), `alert`, `button`)
+One screen, then a result.
 
-Copy: alert (info) "Don't put your password, PIN or full card number in a message. We will never ask for them."
+**Screen `write`** ("New message"). Button **Send**, busy "Sending…" (about 0.7 seconds).
 
-| Field | Block | Required | Validation | Error message |
+| Field | Block | Required | Validation | Message |
 |---|---|---|---|---|
-| Topic (`msg.topic`) | `select` rows: Accounts, Cards, Payments, Loans and deposits, Profile and security, Something else | Yes | One choice; prefilled from `{topic}` | "Choose a topic" |
-| About an account (`msg.accountId`) | `accountPicker` (`source: ctx.accounts`, `showBalance: false`) with option "Not about an account" | No (Yes if topic = Accounts) | Must be one of the person's accounts | "Choose the account this is about" |
-| Subject (`msg.subject`) | `textInput` | Yes | 3 to 80 characters | "Add a short subject (3 to 80 characters)" |
-| Message (`msg.body`) | `textInput` lines: 6 | Yes | 10 to 1,000 characters; counter "{n} / 1,000" | "Write at least 10 characters" / "Messages can be up to 1,000 characters" |
-| Attachment (`msg.files`) | `fileUpload` (planned): PDF, JPG, PNG; up to 3 files; 5 MB each | No | Type and size | "This file type isn't allowed. Use PDF, JPG or PNG." / "That file is too big. The limit is 5 MB." / "You can attach up to 3 files." / "We found a problem with this file. Choose another." |
+| Topic | `select`, placeholder "Choose a topic": Account, Cards, Payments, Fraud or security, Feedback, Something else | Yes | One of the list | "This is required." |
+| (warning, inline) | `note`, shown when the topic is "Fraud or security": "If someone has used your account, call us now. Messages are read within one business day." | n/a | none | none |
+| Subject | `text`, placeholder "What is it about?", max 80 | Yes | At least 3 characters | "Use at least 3 characters." |
+| Message | `textarea`, placeholder "Write your message", max 1000, hint "Don’t include passwords, codes or full card numbers." | Yes | At least 10 characters | "Write at least 10 characters." |
+| Attachment (optional) | `file`, "Add a PDF, JPG or PNG". Only with `allowFile`. One file | No | PDF, JPG or PNG; at most 5 MB | "That file is over 5 MB." and the step is blocked with "Remove the file that can’t be sent." |
 
-Helper under Attachment: "For example a letter or a photo of a receipt." Content scan: a file named `virus-test.pdf` fails with `FILE_REJECTED` in the sandbox.
-Buttons: "Continue" → validate, then `review`. "Cancel" → exit (asks "Discard this message?" if any field is filled: buttons "Discard", "Keep writing").
-States: file rows show a progress bar while uploading, then a tick; upload failure shows the row in red with "Try again" / "Remove".
+**Result** ("Message sent", green, text "We usually reply within 1 business day."). Rows "Topic" and "Subject". Buttons **Go to messages** (opens `messages`) and **Done**. The new conversation is at the top of the inbox, marked read, with the message and, if one was added, a chip with the file name.
 
-**3.2 `review` — "Check your message"** (`reviewSummary`, `consent`, `button`)
-
-Rows: Topic; About ("Main ••4410" or "No account"); Subject; Message (first 3 lines, "Show all"); Attachments (names and sizes). Consent: "I confirm this message has no passwords, PINs or full card numbers" (`termsVersion: "messages-v1"`, `mustBeTrue`, "Tick the box to continue"). Buttons: "Send message" → validate, `callApi sendMessage`, then `success`. "Edit" → `compose`.
-
-**3.3 `success`** (terminal) title "Message sent", text "We'll reply within 1 working day. You'll get a notification.", meta "Ref {{result.reference}}". Buttons "View conversation" → Thread shell; "Done".
-
-**3.4 `failed`** (terminal) title "We couldn't send your message", text per errors table, button "Try again" → `review`. The draft is kept in the journey data.
+**States**
+- Loading: busy text on the button.
+- Empty: not applicable.
+- Error: "We couldn’t send it. Nothing was sent. Try again in a few minutes." with **Try again**. The Service down switch shows the standard connection sheet ("We couldn’t reach the bank", "Nothing was sent and you haven’t been charged. Try again in a moment."). The text stays in the form.
+- Timeout: "This is taking longer than expected. Nothing was sent."
 
 #### 4. Sandbox errors
 
-| Code | Message the person sees | Screen | Button |
+| Code | Message | Shows on | Button |
 |---|---|---|---|
-| `ACCOUNT_NOT_FOUND` | "We can't find that account. Choose another." | `compose` | "Choose account" |
-| `TOPIC_INVALID` (planned) | "Choose a topic." | `compose` | "Edit" |
-| `MESSAGE_TOO_LONG` (planned) | "Messages can be up to 1,000 characters." | `compose` | "Edit" |
-| `FILE_TYPE` (planned) | "This file type isn't allowed. Use PDF, JPG or PNG." | `compose` | "Remove file" |
-| `FILE_TOO_LARGE` (planned) | "That file is too big. The limit is 5 MB." | `compose` | "Remove file" |
-| `FILE_REJECTED` (planned) | "We found a problem with this file. Choose another." | `compose` | "Remove file" |
-| `TOO_MANY_MESSAGES` (planned) | "You've sent a lot of messages today. Please wait until tomorrow, or call us on +1 800 555 0100. Nothing was lost." | `failed` | "Back" |
-| `PERMISSION_DENIED` | "Your profile doesn't allow this." | `failed` | "Back" |
-| `SESSION_EXPIRED` | S-`SESSION_EXPIRED` | `failed` | "Sign in" |
-| `TIMEOUT` | "This is taking longer than expected. Nothing was changed. Check Messages before you send again, so we don't get it twice." | `failed` | "Check messages" / "Try again" |
-| `SERVICE_UNAVAILABLE` | S-`SERVICE_UNAVAILABLE` | `failed` | "Try again" / "Back" |
+| `FILE_TOO_LARGE` | "That file is over 5 MB." | `write` | Remove the file |
+| `FILE_TYPE` (planned) | "Use a PDF, JPG or PNG." | `write` | Remove the file |
+| `TIMEOUT` | "This is taking longer than expected. Nothing was sent." | `write` | Try again |
+| `SERVICE_UNAVAILABLE` | "We couldn’t send it. Nothing was sent. Try again in a few minutes." | `write` | Try again |
+| `RATE_LIMITED` (planned) | "You’ve sent a lot of messages. Try again later." | `write` | Back |
+| `JOURNEY_DISABLED` | "This isn’t available at your bank." | whole journey | none |
+| `PERMISSION_DENIED` (planned) | Standard message | whole journey | Back |
 
 #### 5. Adapters
 
-| Integration id | Adapter | Request | Response | Error codes | Status | moneyMoving | requiresOtp |
-|---|---|---|---|---|---|---|---|
-| `accounts` | `bank.accounts.list` | `{}` | accounts | – | Existing | No | No |
-| `upload` | `bank.files.upload` | `{ name, type, size, content }` (content is base64) | `{ fileId, name, size }` | `FILE_TYPE`, `FILE_TOO_LARGE`, `FILE_REJECTED`, `TIMEOUT`, `SERVICE_UNAVAILABLE` | planned (called by `fileUpload`) | No | No |
-| `sendMessage` | `bank.messages.send` | `{ topic, accountId?, subject, body, fileIds[] }` | `{ threadId, reference, createdAt }` | `ACCOUNT_NOT_FOUND`, `TOPIC_INVALID`, `MESSAGE_TOO_LONG`, `TOO_MANY_MESSAGES`, `PERMISSION_DENIED`, `SESSION_EXPIRED`, `TIMEOUT`, `SERVICE_UNAVAILABLE` | planned | No | No |
+| Integration id | Adapter | Request | Response | Errors | Status |
+|---|---|---|---|---|---|
+| `sendMessage` | `bank.messages.send` | `{topic, subject, text, file?}` | `{threadId, reference}` | `FILE_TOO_LARGE`, `FILE_TYPE`, `RATE_LIMITED`, `SERVICE_UNAVAILABLE`, `TIMEOUT` | (planned). The prototype adds the conversation to `MSG.threads` |
+| `uploadFile` | `bank.files.upload` | file | `{fileId}` | `FILE_TOO_LARGE`, `FILE_TYPE` | (planned) |
 
 #### 6. Permissions, step-up and limits
 
-`messages.send`; step-up `none`. Limits: 10 messages per day, 3 files per message, 5 MB per file, 1,000 characters. Files are removed from the draft if the person cancels.
+`accounts.view`. No step-up: the person is signed in and no money moves. Limits: subject 80 characters; message 1000 characters; one file up to 5 MB; an abuse limit on messages per day (planned).
 
 #### 7. Result and links out
 
-Result "Message sent", reference `MSG-20261102-0007`. Receipt: none (a message is not a transaction); the thread is the record. Notifications: N-30 (message sent, in-app only) and N-31 (the bank's reply, 2 seconds later in the sandbox). Buttons: "View conversation" → thread; "Done" → origin.
+Result as above. Notifications raised (planned): to the person, "You have a new message from BankWorkx®" when the bank replies. The message is visible to the bank's support team with the person's name and profile. Links out: `messages`.
 
 #### 8. Acceptance criteria
 
-- AC-1 A message needs a topic, a subject of 3 to 80 characters and a body of 10 to 1,000 characters.
-- AC-2 A message about accounts must name one of the person's accounts.
-- AC-3 Only PDF, JPG and PNG files up to 5 MB, three per message, can be attached.
-- AC-4 The person must tick that the message holds no passwords, PINs or card numbers.
-- AC-5 A sent message appears as a thread with a reference and the bank's reply notification.
-- AC-6 A timeout or an unavailable bank sends nothing and keeps the draft.
-- AC-7 More than 10 messages in a day is refused.
+- AC-1: Topic, subject (3 or more characters) and message (10 or more characters) are required before **Send** works.
+- AC-2: Choosing "Fraud or security" shows the warning to call now.
+- AC-3: With `allowFile` on one PDF, JPG or PNG up to 5 MB can be added; a larger file blocks sending with the message; with the option off the field is absent.
+- AC-4: After sending, the result shows the topic and the subject and the conversation is at the top of the inbox.
+- AC-5: A launch value `topic` or `subject` is prefilled.
+- AC-6: When the bank is unavailable or times out nothing is sent and the text is kept.
 
 #### 9. Scenarios
 
-| # | Persona | Setup | Covers | Expected |
+Synthetic persona `alex`.
+
+| # | Covers | Persona / setup | Conditions | Steps and expected result |
 |---|---|---|---|---|
-| T-1 | Alex | Topic Cards, account Main, subject "Card on holiday", body 40 characters, no file | AC-1, AC-4, AC-5 | Result with reference; thread exists; N-31 after reply |
-| T-2 | Alex | Subject "Hi"; body "short" | AC-1 | Both messages shown; no send |
-| T-3 | Alex | Topic Accounts, no account | AC-2 | "Choose the account this is about" |
-| T-4 | Alex | Attach `notes.docx`; attach 6 MB PDF; attach 4 files | AC-3 | Each shows its message |
-| T-5 | Alex | Attach `receipt.pdf` (200 KB) | AC-3, AC-5 | Message sent with the attachment listed |
-| T-6 | Alex | Consent not ticked | AC-4 | "Tick the box to continue" |
-| T-7 | Alex | `conditions.timeout: ["bank.messages.send"]` | AC-6 | Timeout copy; Messages still shows no new thread; draft kept |
-| T-8 | Alex | `conditions.unavailable: ["bank.messages.send"]` | AC-6 | S-`SERVICE_UNAVAILABLE`; draft kept |
-| T-9 | Alex | Send 11 messages | AC-7 | Eleventh gives `TOO_MANY_MESSAGES` copy |
-| T-10 | Alex | Attach `virus-test.pdf` | AC-3 | `FILE_REJECTED` copy; not sent |
-| T-11 | Sam | Topic Something else, no account | AC-1, AC-5 | Works for a new customer with no accounts |
+| T-1 | AC-1, AC-4 | `alex` | none | Subject "Question about my account", message "Please can you check a payment on my account.": result "Message sent", rows Topic and Subject; **Go to messages** shows the new conversation first. |
+| T-2 | AC-1 | `alex` | none | Subject "ab": "Use at least 3 characters." Message "short": "Write at least 10 characters." |
+| T-3 | AC-2 | `alex`, `topic: "Fraud or security"` | none | The warning shows and the topic is already chosen. |
+| T-4 | AC-3 | `alex` | none | "receipt.pdf" is accepted and appears as a chip in the conversation; "scan.pdf" (8 MB): "That file is over 5 MB." and "Remove the file that can’t be sent." |
+| T-5 | AC-3 | `alex`, `allowFile` off | none | No attachment field. |
+| T-6 | AC-6 | `alex` | `unavailable: ["bank.messages.send"]` (prototype: Service down on) | Connection sheet; nothing sent; the form keeps the text. |
+| T-7 | AC-6 | `alex` | `timeout: ["bank.messages.send"]`, `latencyMs: 10000` | After 10 seconds: "This is taking longer than expected. Nothing was sent." |
 
 #### 10. Expected mutation-check survivors
 
-- Removing the 1,000-character upper bound on the body: killed by a scenario that sends 1,001 characters (add it to T-2).
-- Changing the sandbox's 2-second reply delay: survives, because scenarios do not wait on real time.
-- Weakening the file-content scan beyond the `virus-test` name: survives; the sandbox only knows that one name.
+The "usually reply within 1 business day" text is fixed copy; expected. The abuse limit cannot be produced by the sandbox yet; expected. Everything else: none expected.
+
+---
+
+### ★ Messages — `messages`
+
+**Catalog:** slug `messages`, workspace `personal`, category More (Personal: More), core no, can a bank switch it off: yes (basic entry, kept in the Lean preset; switching it off also hides **New message** and the Messages row in More). This is a **VIEW** (a screen in the More tab, `view: true`, `tab: 'more'`), not a form journey. Options: none. Research: `research/new-message.md`. Built in `design/bankworkx-r1/src/journeys/56-profile-messages.js` (object `MSG`). It replaces the older description "Shell: Secure messages inbox and thread" in the More section.
+
+The lean rework removed folders, search, archive, delete and attachments in replies. What remains: an inbox with unread dots, a thread, a reply box, and a button to start a new conversation.
+
+#### 1. Summary
+
+| Field | Value |
+|---|---|
+| Slug | `messages` |
+| Purpose | Read and answer the secure messages between the customer and the bank. |
+| Release / workspace | 1 / Personal |
+| Status | Built in the prototype as a view in the More tab with an inbox and a thread. Sending a reply is simulated in the screen. No money moves. |
+| Channels | Web and mobile |
+| Starting pattern | None in the fixtures |
+| Who may use it | Anyone signed in to Personal (`accounts.view`), for their own conversations. |
+
+#### 2. Entry points
+
+| Place › label | Passes in | Permission |
+|---|---|---|
+| More › Messages | none | `accounts.view` |
+| Home › Notifications › a message notification | `{threadId}` (planned) | `accounts.view` |
+| `new-message` result › **Go to messages** | none | `accounts.view` |
+| Deep link `/personal/more/messages` | none | `accounts.view` |
+
+#### 3. Screens
+
+Route: web `/personal/more/messages`; mobile More tab, row Messages. Data source: the conversations of the signed-in profile (`MSG.threads` in the prototype; `bank.messages.list`, planned).
+
+**Inbox.** Header: title "Messages" and the button **New message** (opens `new-message`). Then one card with a row per conversation, in the order they are stored (a new conversation goes to the top; the product sorts by the latest message, newest first, planned). Each row:
+
+- A dot on the left: accent colour when the conversation has an unread bank message, empty otherwise (spoken as "Unread").
+- The subject in bold, and the first 70 characters of the latest message (with "…" if longer).
+- On the right, the date of the latest message, for example "2 Nov".
+
+Tapping a row opens the thread and marks it read.
+
+| Conversation (sandbox) | Topic | Last message | State |
+|---|---|---|---|
+| Your new card is on its way | Cards | BankWorkx®, Mon 2 Nov, 10:12: "Your replacement debit card has been sent. It should arrive in 3 to 5 working days. Activate it in the app when it arrives." | Unread |
+| Question about a monthly fee | Account | Sara, BankWorkx®, Fri 30 Oct, 09:48 (after the person's question on Thu 29 Oct, 14:30) | Read |
+
+**Empty.** Icon, "No messages", "Send us a message and we’ll reply here." and the button **New message**.
+
+**Thread.** A back button **‹ Messages**; the subject as the title; the topic in small type; then the messages oldest first. Each message is a card with "{who} · {time}" (the person is "You"; the bank is "BankWorkx®" or a first name and "BankWorkx®"), the text (line breaks kept), and a chip with the file name if one was attached. Bank messages sit at the start side, the person's at the other side. Below, a field "Reply" (`textarea`, 3 rows, max 1000) and the button **Send**.
+
+| Field | Block | Required | Validation | Message |
+|---|---|---|---|---|
+| Reply | `textarea`, max 1000 | Yes | At least 2 characters after trimming | "Write a message first." |
+
+A sent reply is added to the thread, the field is cleared, and a toast "Message sent" shows. If the bank is unavailable: "We couldn’t send it. Try again in a few minutes." and the text stays in the field. A reply cannot carry a file (planned).
+
+**States**
+- Loading: skeleton of four rows (planned; the prototype draws at once).
+- Empty: as above.
+- Error (list cannot load): "We couldn’t load your messages. Nothing was changed." with **Try again** (planned).
+- Timeout: after 10 seconds on a reply, "This is taking longer than expected. Nothing was sent." (planned for the view).
+
+#### 4. Sandbox errors
+
+| Code | Message | Shows on | Button |
+|---|---|---|---|
+| `SERVICE_UNAVAILABLE` | "We couldn’t send it. Try again in a few minutes." | thread | Send |
+| `TIMEOUT` (planned) | "This is taking longer than expected. Nothing was sent." | thread | Try again |
+| `THREAD_CLOSED` (planned) | "This conversation is closed. Start a new message." | thread | New message |
+| `JOURNEY_DISABLED` | "This isn’t available at your bank." | whole view | none |
+| `PERMISSION_DENIED` (planned) | Standard message | whole view | Back |
+
+#### 5. Adapters
+
+| Integration id | Adapter | Request | Response | Errors | Status |
+|---|---|---|---|---|---|
+| `threads` | `bank.messages.list` | none | list of conversations with messages | `SERVICE_UNAVAILABLE` | (planned). The prototype reads `MSG.threads` |
+| `markRead` | `bank.messages.markRead` | `{threadId}` | `{ok}` | `SERVICE_UNAVAILABLE` | (planned) |
+| `reply` | `bank.messages.reply` | `{threadId, text}` | `{messageId}` | `THREAD_CLOSED`, `SERVICE_UNAVAILABLE`, `TIMEOUT` | (planned) |
+
+#### 6. Permissions, step-up and limits
+
+`accounts.view`. No step-up. Limits: reply 1000 characters. An unread count (the number of conversations with an unread bank message) feeds the badge on the Messages row in More and the More tab (planned; the prototype computes `MSG.unread()` but does not show it).
+
+#### 7. Result and links out
+
+No receipt. A sent reply raises a toast. Notifications (planned): "You have a new message from BankWorkx®" when the bank writes. Links out: `new-message`; the thread has no other links. Reached from `new-message`, `contact-support` (signed in) and the login history "This wasn’t me" action via `new-message`.
+
+#### 8. Acceptance criteria
+
+- AC-1: The inbox lists each conversation with its subject, a preview of the latest message, its date and an unread dot where a bank message is unread.
+- AC-2: Opening a conversation shows every message in order and clears its unread dot.
+- AC-3: A reply of at least 2 characters is added to the thread and the field is cleared; shorter text shows "Write a message first."
+- AC-4: With no conversations the empty state offers **New message**.
+- AC-5: **New message** opens `new-message`; a message sent there appears at the top of the inbox.
+- AC-6: When the bank is unavailable a reply is not added and the text stays.
+
+#### 9. Scenarios
+
+Synthetic persona `alex`, the two sandbox conversations.
+
+| # | Covers | Persona / setup | Conditions | Steps and expected result |
+|---|---|---|---|---|
+| T-1 | AC-1 | `alex` | none | Two rows; the first has the dot and the preview "Your replacement debit card has been sent. It should arrive in 3 to 5 …". |
+| T-2 | AC-2 | `alex` | none | Open the first: one message from "BankWorkx®"; back at the inbox the dot is gone. Open the second: two messages in order, the bank reply from "Sara, BankWorkx®". |
+| T-3 | AC-3 | `alex` | none | Reply "Thanks": added as "You", toast "Message sent". Reply "a": "Write a message first." |
+| T-4 | AC-4 | `alex`, no conversations | `empty: ["bank.messages.list"]` | "No messages", "Send us a message and we’ll reply here." and **New message**. |
+| T-5 | AC-5 | `alex` | none | **New message**, send; **Go to messages**: the new conversation is first. |
+| T-6 | AC-6 | `alex` | `unavailable: ["bank.messages.reply"]` (prototype: Service down on) | "We couldn’t send it. Try again in a few minutes."; the thread is unchanged. |
+| T-7 | AC-6 | `alex` | `timeout: ["bank.messages.reply"]`, `latencyMs: 10000` | After 10 seconds: "This is taking longer than expected. Nothing was sent." (planned for the view). |
+
+#### 10. Expected mutation-check survivors
+
+The preview length (70 characters) survives a small change; expected. The unread count is not shown in the prototype, so it is not asserted; expected. The sort order survives while only one new conversation exists; expected. Everything else: none expected.
 
 ---
 
 ### ★ Service request — `service-request`
 
+**Catalog:** slug `service-request`, workspace `personal`, category More (Personal: More), core no, can a bank switch it off: yes (basic entry, kept in the Lean preset). Options (key, label, default): `cheque` "Offer cheque book orders" (on); `letter` "Offer letters" (on); `acctype` "Offer account type changes" (on). Research: `research/service-request.md`. Built in `design/bankworkx-r1/src/journeys/57-requests-connect.js` (object `SREQ`, shared with the view `my-requests`).
+
+The lean rework removed the fee preview, the appointment booking and the long list of request types. What remains: five kinds of request (cheque book, letter, lost card, account type, other), each with a few fields, and a reference. Status tracking is in `my-requests`.
+
 #### 1. Summary
 
-| Item | Detail |
+| Field | Value |
 |---|---|
 | Slug | `service-request` |
-| Purpose | Ask the bank to do something (a request) or tell it something went wrong (a complaint), and see when it will be answered. |
-| Release | 1 |
-| Workspace | Personal |
-| Status | New |
+| Purpose | Order a cheque book, ask for a letter, change an account type, or send another request, and get a reference. A lost or stolen card is sent to the card controls instead. |
+| Release / workspace | 1 / Personal |
+| Status | Built in the prototype as a form journey with a branch per kind (`submit: "Submit request"`, permission `accounts.view`). The new request is added to `my-requests` with the status Received. No money moves. |
 | Channels | Web and mobile |
-| Starting pattern | Choose type, details, attachment, review, result with tracking |
-| Who may use it | Signed-in customer with `messages.send` |
+| Starting pattern | None in the fixtures |
+| Who may use it | Anyone signed in to Personal (`accounts.view`), for their own accounts. |
 
 #### 2. Entry points
 
-| Place › label | Passes | Permission |
+| Place › label | Passes in | Permission |
 |---|---|---|
-| More › requests › New request | `{type: "request"}` | `messages.send` |
-| More › requests › Complaint | `{type: "complaint"}` | `messages.send` |
-| Profile › Request a change (name) | `{type: "name-change"}` | `messages.send` |
-| Cards › card › "Report a problem" fallback | `{type: "complaint", cardId}` (planned) | `messages.send` |
-| Deep link `/personal/j/service-request?type=complaint` | `{type}` | `messages.send` |
+| More › Service requests › **New request** (in `my-requests`) | none | `accounts.view` |
+| Accounts › account › More | `{type}` (for example `letter`) | `accounts.view` |
+| Deep link `/personal/j/service-request?type=cheque` | `{type}` (`cheque`, `letter`, `lost`, `acctype`, `other`) | `accounts.view` |
+
+With `type` passed the kind is preselected on the first screen.
 
 #### 3. Screens
 
-**3.1 `type` — "What do you need?"** (`stepper` ["Type", "Details", "Review"], `select` tiles, `text`, `button`)
+Steps in order: `type`, then one of `lost`, `cheque`, `letter`, `acctype` or `other`, then the result.
 
-| Field | Block | Required | Validation | Error message |
+**Screen `type`** ("New request"). Button **Continue**.
+
+| Field | Block | Required | Validation | Message |
 |---|---|---|---|---|
-| Kind (`req.kind`) | `select` tiles: "Make a request" (icon `wrench`, text "Ask us to change or send something"), "Make a complaint" (icon `alert`, text "Tell us what went wrong") | Yes | One of `request`, `complaint`; prefilled from `{type}` | "Choose request or complaint" |
+| (no label) | `cards`: Order cheque book, Request a letter, Report a lost card, Change account type, Other (the first, second and fourth only with their options on) | Yes | One of the cards | "This is required." |
 
-Copy under tiles: "Requests: answered within 3 working days. Complaints: first answer within 5 working days." Button "Continue" → validate, `details`.
+**Screen `lost`** ("Lost or stolen card"). No form. If the bank has a card journey that can freeze a card (`report-lost-card`, `block-card`, or `card-controls`, the first one that is on), the screen says "Freeze your card now, then order a new one." with the button **Go to my cards** (opens `card-controls` with `{mode: "freeze"}`). If none is on it says "Call us now so we can stop your card." The step cannot be continued ("Use your card options"): no request is created.
 
-**3.2 `details` — "Tell us more"** (`select`, `accountPicker`, `textInput`, `fileUpload` (planned), `button`)
+**Screen `cheque`** ("Order cheque book").
 
-| Field | Block | Required | Validation | Error message |
+| Field | Block | Required | Validation | Message |
 |---|---|---|---|---|
-| Category (`req.category`) | `select` rows. Request: Order a statement copy, Change my name, Close an account, Increase a card limit permanently, Other request. Complaint: Fees or charges, A payment or transfer, A card, Service or staff, App or website | Yes | One from the list matching the kind | "Choose a category" |
-| About an account (`req.accountId`) | `accountPicker` + "Not about an account" | Required for complaints about a payment, card or fees | One of the person's accounts | "Choose the account this is about" |
-| What happened? (`req.details`) | `textInput` lines: 6 | Yes | 20 to 2,000 characters, counter | "Please give us at least 20 characters" / "Details can be up to 2,000 characters" |
-| When did it happen? (`req.when`) | `datePicker` (planned; today a `textInput` with pattern `^\d{2}/\d{2}/\d{4}$`) | Complaint only | Not in the future; not more than 13 months ago | "The date can't be in the future" / "We can only look into things from the last 13 months" |
-| How should we contact you? (`req.contact`) | `select` chips: Secure message, Phone, Email | Yes | One value; default Secure message | "Choose how we should reach you" |
-| Attachment (`req.files`) | `fileUpload` (planned): PDF, JPG, PNG; up to 5 files; 5 MB each | No (helper: "Add anything that helps, like a receipt or screenshot") | Type and size | Same file messages as `new-message`, with "You can attach up to 5 files." |
+| Account | `select`: each account as "{name} ••{last4}" | Yes | One of the list | "This is required." |
+| Leaves | `chips`: 25, 50. Default 25 | No | One of two | none |
+| Delivery | `chips`: "Post to my address", "Collect at a branch". Default post | No | One of two | none |
+| Branch | `select`: Main Street, Riverside, Station Road. Only when collecting | Yes | One of the list | "This is required." |
 
-Buttons: "Continue" → validate, `review`. "Back" → `type`.
+**Screen `letter`** ("Request a letter").
 
-**3.3 `review` — "Check your {request/complaint}"** (`reviewSummary`, `alert`, `consent`)
+| Field | Block | Required | Validation | Message |
+|---|---|---|---|---|
+| Which letter? | `select`: Account confirmation, Proof of address, Balance confirmation, Interest certificate | Yes | One of the list | "This is required." |
+| Account | `select` as above | Yes | One of the list | "This is required." |
+| Delivery | `chips`: Email, Post, "Collect at a branch". Default Post | No | One of three | none |
+| Branch | `select` as above. Only when collecting | Yes | One of the list | "This is required." |
+| Addressed to (optional) | `text`, max 60 | No | none | none |
 
-Rows: Type; Category; About; What happened (first 3 lines); When (complaint); Contact by; Attachments; "We'll answer by" (computed `dueAt`, e.g. "05 Nov 2026" for a request raised Mon 02 Nov 2026, 3 working days). Alert (info): "You'll get a reference number and can follow progress under More › Requests and complaints." Consent: "I confirm the information is true as far as I know" (`termsVersion: "requests-v1"`, `mustBeTrue`, "Tick the box to continue"). Buttons: "Send {request/complaint}" → validate, `callApi createRequest`, `success`. "Edit" → `details`.
+**Screen `acctype`** ("Change account type").
 
-**3.4 `success`** (terminal) title "We have your {request/complaint}", text "Your reference is {{result.reference}}. We'll answer by {{result.dueAt | date}}.", meta "Ref {{result.reference}}". Buttons "Track it" → Request detail; "Done".
+| Field | Block | Required | Validation | Message |
+|---|---|---|---|---|
+| Account | `select` as above | Yes | One of the list | "This is required." |
+| Change to | `select`: Everyday, Savings, Premium, without the type the account already has | Yes | One of the list | "This is required." |
+| Reason (optional) | `textarea`, max 300 | No | none | none |
 
-**3.5 `failed`** (terminal) title "We couldn't send this", text from errors table, button "Try again" → `review`.
+Text under the fields: "Fees and limits can change. We’ll confirm before we switch it."
+
+**Screen `other`** ("Other request").
+
+| Field | Block | Required | Validation | Message |
+|---|---|---|---|---|
+| Subject | `text`, max 80 | Yes | At least 3 characters | "Use at least 3 characters." |
+| Details | `textarea`, max 500 | Yes | At least 10 characters | "Write at least 10 characters." |
+
+The last screen shows the button **Submit request**, busy "Sending your request…" (about 0.7 seconds).
+
+**Result** ("Request sent", green, text "We’ll update the status under My requests."). Chip Received, a reference starting SR-. Rows: "Request" (the kind) and then:
+
+| Kind | Rows |
+|---|---|
+| Cheque book | Account, Leaves, Delivery ("Post to your address" or "Collect at {branch}") |
+| Letter | Letter, Account, Delivery ("Email", "Post" or "Collect at {branch}"), Addressed to (if given) |
+| Account type | Account, Change to |
+| Other | Subject |
+
+Buttons **My requests** (opens `my-requests`) and **Done**. The request is added to `my-requests` dated "3 Nov 2026" with the status Received.
+
+A second cheque book for an account that already has an open one (status not Done or Cancelled) is refused: "You already have this request open."
+
+**States**
+- Loading: busy text on the button.
+- Empty: not applicable.
+- Error: "We couldn’t send it. Nothing was sent. Try again in a few minutes." with **Try again**. The Service down switch shows the standard connection sheet ("We couldn’t reach the bank", "Nothing was sent and you haven’t been charged. Try again in a moment.").
+- Timeout: "This is taking longer than expected. Nothing was sent."
 
 #### 4. Sandbox errors
 
-| Code | Message the person sees | Screen | Button |
+| Code | Message | Shows on | Button |
 |---|---|---|---|
-| `ACCOUNT_NOT_FOUND` | "We can't find that account. Choose another." | `details` | "Choose account" |
-| `CATEGORY_INVALID` (planned) | "Choose a category that matches your {request/complaint}." | `details` | "Edit" |
-| `DATE_INVALID` (planned) | "We can only look into things from the last 13 months, and not in the future." | `details` | "Edit" |
-| `FILE_TYPE` / `FILE_TOO_LARGE` / `FILE_REJECTED` (planned) | As `new-message` | `details` | "Remove file" |
-| `DUPLICATE_REQUEST` (planned) | "You already have an open {category} request ({reference}). We'll answer it by {dueAt}." | `failed` | "Track it" |
-| `TOO_MANY_REQUESTS` (planned) | "You've raised 5 requests today. Please try again tomorrow, or call us on +1 800 555 0100." | `failed` | "Back" |
-| `PERMISSION_DENIED` | "Your profile doesn't allow this." | `failed` | "Back" |
-| `SESSION_EXPIRED` | S-`SESSION_EXPIRED` | `failed` | "Sign in" |
-| `TIMEOUT` | "This is taking longer than expected. Nothing was changed. Check Requests before you send again." | `failed` | "Check requests" / "Try again" |
-| `SERVICE_UNAVAILABLE` | S-`SERVICE_UNAVAILABLE` | `failed` | "Try again" / "Back" |
+| `DUPLICATE` | "You already have this request open." | `cheque` | My requests |
+| `TIMEOUT` | "This is taking longer than expected. Nothing was sent." | last screen | Try again |
+| `SERVICE_UNAVAILABLE` | "We couldn’t send it. Nothing was sent. Try again in a few minutes." | last screen | Try again |
+| `ACCOUNT_NOT_FOUND` (planned) | "We can’t find that account. Choose another." | form | Choose account |
+| `JOURNEY_DISABLED` | "This isn’t available at your bank." | whole journey | none |
+| `PERMISSION_DENIED` (planned) | Standard message | whole journey | Back |
 
 #### 5. Adapters
 
-| Integration id | Adapter | Request | Response | Error codes | Status | moneyMoving | requiresOtp |
-|---|---|---|---|---|---|---|---|
-| `accounts` | `bank.accounts.list` | `{}` | accounts | – | Existing | No | No |
-| `upload` | `bank.files.upload` | as `new-message` | `{ fileId, name, size }` | `FILE_TYPE`, `FILE_TOO_LARGE`, `FILE_REJECTED`, `TIMEOUT`, `SERVICE_UNAVAILABLE` | planned | No | No |
-| `createRequest` | `bank.requests.create` | `{ kind, category, accountId?, details, when?, contact, fileIds[] }` | `{ requestId, reference, status: "received", dueAt, slaDays }` | `ACCOUNT_NOT_FOUND`, `CATEGORY_INVALID`, `DATE_INVALID`, `DUPLICATE_REQUEST`, `TOO_MANY_REQUESTS`, `PERMISSION_DENIED`, `SESSION_EXPIRED`, `TIMEOUT`, `SERVICE_UNAVAILABLE` | planned | No | No |
-| `requests` | `bank.requests.list` / `bank.requests.get` | `{ status? }` / `{ requestId }` | request / detail with timeline | `REQUEST_NOT_FOUND` | planned | No | No |
-
-SLA rule in the sandbox: request 3 working days, complaint 5 working days, counted over weekdays; 9 Nov 2026 is closed (README 1.7). The sandbox advances status Received → In progress after 5 seconds, and Resolved on demand from the dev panel.
+| Integration id | Adapter | Request | Response | Errors | Status |
+|---|---|---|---|---|---|
+| `accounts` | `bank.accounts.list` | none | map of accounts | none | Existing (`packages/mock-bank-api/src/index.ts`) |
+| `createRequest` | `bank.requests.create` | `{type, accountId?, details}` | `{reference, status: "Received"}` | `DUPLICATE`, `ACCOUNT_NOT_FOUND`, `SERVICE_UNAVAILABLE`, `TIMEOUT` | (planned). The prototype adds to `SREQ.list` |
 
 #### 6. Permissions, step-up and limits
 
-`messages.send`; step-up `none`. Limits: 5 requests per day, 5 files per request, 2,000 characters.
+`accounts.view`. No step-up: the request moves no money and changes nothing until the bank confirms. Limits: one open cheque book request per account; reason 300 characters; details 500 characters.
 
 #### 7. Result and links out
 
-Result "We have your request" / "We have your complaint", reference `SR-20261102-0003`, due date. Receipt (planned engine feature): reference, type, category, date raised, due date. Notifications: N-32 (received), N-33 (status changed), N-34 (waiting for you), N-35 (resolved). Buttons: "Track it" → Request detail; "Done" → origin.
+Result as above. Notifications raised (planned): when the status changes, "Your request {reference} is {status}". Links out: `my-requests`, `card-controls` (lost card).
 
 #### 8. Acceptance criteria
 
-- AC-1 The person chooses request or complaint, and a category that matches it.
-- AC-2 Details need 20 to 2,000 characters.
-- AC-3 A complaint needs a date within the last 13 months, not in the future.
-- AC-4 Files must be PDF, JPG or PNG, up to 5 MB, five per request.
-- AC-5 A sent request gets a reference and a due date of 3 working days (request) or 5 (complaint).
-- AC-6 The same open category cannot be raised twice.
-- AC-7 A timeout or an unavailable bank creates nothing and keeps the draft.
-- AC-8 The request appears in the tracker with its timeline.
+- AC-1: The first screen offers only the kinds that are on; a launch value `type` preselects one.
+- AC-2: A lost card creates no request and leads to the card controls (or tells the person to call).
+- AC-3: Each kind asks for its fields with the validation above; the branch field appears only when collecting.
+- AC-4: "Change to" never offers the account's current type.
+- AC-5: A sent request returns a reference, the chip Received and rows that repeat what was asked, and appears in `my-requests`.
+- AC-6: A second open cheque book request for the same account is refused with "You already have this request open."
+- AC-7: When the bank is unavailable or times out nothing is sent and nothing is added to `my-requests`.
 
 #### 9. Scenarios
 
-| # | Persona | Setup | Covers | Expected |
+Synthetic persona `alex`, accounts Current ••4410 and Savings ••7720 as in the other Personal journeys, and the two sandbox requests of `my-requests`.
+
+| # | Covers | Persona / setup | Conditions | Steps and expected result |
 |---|---|---|---|---|
-| T-1 | Alex | Request, "Order a statement copy", 30-character details, contact Secure message, consent | AC-1, AC-2, AC-5, AC-8 | Reference `SR-…`; due date 3 working days later; tracker shows it as Received |
-| T-2 | Alex | Complaint, "Fees or charges", Main account, date 5 Nov 2026 (future) | AC-3 | "The date can't be in the future" |
-| T-3 | Alex | Complaint date 02 Jan 2025 | AC-3 | "We can only look into things from the last 13 months" |
-| T-4 | Alex | Details "too short" | AC-2 | "Please give us at least 20 characters" |
-| T-5 | Alex | Complaint, "A card", attach `statement.pdf` | AC-4, AC-5 | Sent with attachment; due 5 working days |
-| T-6 | Alex | Attach `x.exe`; attach 6 files | AC-4 | File messages shown |
-| T-7 | Alex | Raise "Close an account" twice | AC-6 | Second gives `DUPLICATE_REQUEST` copy with the first reference |
-| T-8 | Alex | `conditions.timeout: ["bank.requests.create"]` | AC-7 | Timeout copy; tracker unchanged |
-| T-9 | Alex | `conditions.unavailable: ["bank.requests.create"]` | AC-7 | S-`SERVICE_UNAVAILABLE`; draft kept |
-| T-10 | Alex | Raise request on Thu 5 Nov 2026 | AC-5 | Due Wed 11 Nov 2026: working days are Fri 6, Tue 10, Wed 11 (Mon 9 Nov is closed) |
-| T-11 | Sam | Complaint, "App or website", no account | AC-1, AC-5 | Works with no accounts |
+| T-1 | AC-1 | `alex`, `cheque` off | none | The cards are Request a letter, Report a lost card, Change account type, Other. |
+| T-2 | AC-2 | `alex` | none | "Report a lost card": "Freeze your card now, then order a new one." **Go to my cards** opens `card-controls` in freeze mode; **Continue** is blocked. |
+| T-3 | AC-3, AC-5 | `alex`, Savings ••7720 | none | Cheque book, 50 leaves, "Collect at a branch" with "Riverside": result "Request sent", chip Received, rows Request "Order cheque book", Account "Savings ••7720", Leaves "50", Delivery "Collect at Riverside". |
+| T-4 | AC-3 | `alex` | none | Letter "Proof of address", Current ••4410, Email, addressed to "Landlord": rows Letter, Account, Delivery "Email", Addressed to "Landlord". |
+| T-5 | AC-4 | `alex`, account on the Everyday product | none | "Change to" offers Savings and Premium only. |
+| T-6 | AC-3 | `alex` | none | Other: subject "ab" gives "Use at least 3 characters."; details "short" gives "Write at least 10 characters." |
+| T-7 | AC-6 | `alex`, the open cheque book request on Current ••4410 | none | Ordering another for Current ••4410: "You already have this request open." |
+| T-8 | AC-7 | `alex` | `unavailable: ["bank.requests.create"]` (prototype: Service down on) | Connection sheet; nothing added to `my-requests`. |
+| T-9 | AC-7 | `alex` | `timeout: ["bank.requests.create"]`, `latencyMs: 10000` | After 10 seconds: "This is taking longer than expected. Nothing was sent." |
 
 #### 10. Expected mutation-check survivors
 
-- Changing the 5-file limit to 6: killed only if T-6 sends exactly 6 (it does).
-- Skipping the weekend rule in the due-date calculation: killed by T-10.
-- The 5-second status change: survives (no scenario waits).
+The list of branches and letter kinds is fixed sample data; a mutation that removes one entry survives; expected. The duplicate rule survives when only the account name is compared; expected. Everything else: none expected.
+
+---
+
+### ★ My requests — `my-requests`
+
+**Catalog:** slug `my-requests`, workspace `personal`, category More (Personal: More), core no, can a bank switch it off: yes (basic entry, kept in the Lean preset; switching it off also hides the Service requests row in More). This is a **VIEW** (a screen in the More tab, `view: true`, `tab: 'more'`), not a form journey. Options: none. Research: `research/service-request.md`. Built in `design/bankworkx-r1/src/journeys/57-requests-connect.js` (object `SREQ`). It replaces the older description "Shell: Service request tracker" in the More section.
+
+The lean rework removed filters, search and the request timeline. What remains: a list of the requests the person has sent, a detail page, and a cancel while the request has only been received.
+
+#### 1. Summary
+
+| Field | Value |
+|---|---|
+| Slug | `my-requests` |
+| Purpose | Show the service requests the customer has sent, with their status, and let them cancel a request that has not been started. |
+| Release / workspace | 1 / Personal |
+| Status | Built in the prototype as a view in the More tab with a list and a detail page. Status changes made by the bank are not simulated (the two sandbox requests have fixed statuses). No money moves. |
+| Channels | Web and mobile |
+| Starting pattern | None in the fixtures |
+| Who may use it | Anyone signed in to Personal (`accounts.view`), for their own requests. |
+
+#### 2. Entry points
+
+| Place › label | Passes in | Permission |
+|---|---|---|
+| More › Service requests | none | `accounts.view` |
+| `service-request` result › **My requests** | none | `accounts.view` |
+| Notification › Request update (planned) | `{requestId}` | `accounts.view` |
+| Deep link `/personal/more/requests` | none | `accounts.view` |
+
+#### 3. Screens
+
+Route: web `/personal/more/requests`; mobile More tab, row Service requests. Data source: the person's requests (`SREQ.list` in the prototype; `bank.requests.list`, planned).
+
+**List.** Header: title "My requests" and the button **New request** (opens `service-request`). Then one card with a row per request, newest first (the prototype puts a new request on top): an icon, the title in bold (the kind, for example "Order cheque book"), "{date} · {reference}", and a status chip on the right.
+
+| Status | Chip colour | Meaning |
+|---|---|---|
+| Received | blue (information) | Sent, not started. The only status that can be cancelled |
+| In progress | amber | The bank is working on it |
+| Done | green | Finished |
+| Cancelled | grey | Cancelled by the person |
+
+| Request (sandbox) | Date | Status | Rows |
+|---|---|---|---|
+| SR-204118, Order cheque book | 28 Oct 2026 | In progress | Account "Current ••4410", Leaves "25", Delivery "Post to your address" |
+| SR-203077, Request a letter | 12 Oct 2026 | Done | Letter "Proof of address", Account "Current ••4410", Delivery "Email" |
+
+**Empty.** Icon, "No requests", "Requests you send will show here." and the button **New request**.
+
+**Detail.** A back button **‹ My requests**; the title; the status chip; a card with the request's rows (as at sending) and two more rows, "Sent" (the date) and "Reference". For a request with the status Received a button **Cancel request** shows. It opens a confirmation card "Cancel this request?" with the buttons **Yes, cancel** and **Keep it**. After **Yes, cancel** the status becomes Cancelled, the button goes, and a toast "Request cancelled" shows. For any other status there is no cancel button.
+
+**States**
+- Loading: skeleton of three rows (planned; the prototype draws at once).
+- Empty: as above.
+- Error (list cannot load): "We couldn’t load your requests. Nothing was changed." with **Try again** (planned).
+- Timeout: after 10 seconds, "This is taking longer than expected. Nothing was changed." with **Try again** (planned).
+- Cancel when the bank has already started it (planned): "This request has already started, so it can’t be cancelled." and the status refreshes.
+
+#### 4. Sandbox errors
+
+| Code | Message | Shows on | Button |
+|---|---|---|---|
+| `SERVICE_UNAVAILABLE` (planned) | "We couldn’t load your requests. Nothing was changed. Try again in a few minutes." | list | Try again |
+| `ALREADY_STARTED` (planned) | "This request has already started, so it can’t be cancelled." | detail | Back |
+| `TIMEOUT` (planned) | "This is taking longer than expected. Nothing was changed." | list, detail | Try again |
+| `JOURNEY_DISABLED` | "This isn’t available at your bank." | whole view | none |
+| `PERMISSION_DENIED` (planned) | Standard message | whole view | Back |
+
+#### 5. Adapters
+
+| Integration id | Adapter | Request | Response | Errors | Status |
+|---|---|---|---|---|---|
+| `requests` | `bank.requests.list` | none | list of `{id, reference, type, title, date, status, rows}` | `SERVICE_UNAVAILABLE` | (planned). The prototype reads `SREQ.list` |
+| `cancelRequest` | `bank.requests.cancel` | `{requestId}` | `{status: "Cancelled"}` | `ALREADY_STARTED`, `SERVICE_UNAVAILABLE`, `TIMEOUT` | (planned) |
+
+#### 6. Permissions, step-up and limits
+
+`accounts.view`. No step-up. Only the owner sees a request. Only the status Received can be cancelled.
+
+#### 7. Result and links out
+
+The result of a cancel is the updated detail with a toast. Notifications (planned): "Your request {reference} is {status}" when the bank changes the status. Links out: `service-request`.
+
+#### 8. Acceptance criteria
+
+- AC-1: The list shows each request with its title, date, reference and a status chip, newest first.
+- AC-2: A request opens a detail with its rows, the sent date and the reference.
+- AC-3: Only a request with the status Received shows **Cancel request**; it asks to confirm and then becomes Cancelled.
+- AC-4: **Keep it** leaves the request unchanged.
+- AC-5: With no requests the empty state offers **New request**.
+- AC-6: A request sent in `service-request` appears at the top with the status Received.
+
+#### 9. Scenarios
+
+Synthetic persona `alex`, the two sandbox requests.
+
+| # | Covers | Persona / setup | Conditions | Steps and expected result |
+|---|---|---|---|---|
+| T-1 | AC-1 | `alex` | none | Two rows: "Order cheque book" with "28 Oct 2026 · SR-204118" and the amber chip In progress; "Request a letter" with the green chip Done. |
+| T-2 | AC-2 | `alex` | none | Open the first: rows Account, Leaves, Delivery, Sent "28 Oct 2026", Reference "SR-204118"; no cancel button. |
+| T-3 | AC-3, AC-6 | `alex` | none | Send an "Other" request in `service-request`, open it from the list: status Received, **Cancel request** shows; **Yes, cancel**: chip Cancelled, toast "Request cancelled", no cancel button. |
+| T-4 | AC-4 | `alex` | none | **Cancel request** then **Keep it**: status stays Received. |
+| T-5 | AC-5 | `alex`, no requests | `empty: ["bank.requests.list"]` | "No requests", "Requests you send will show here." and **New request**. |
+| T-6 | AC-1 | `alex` | `unavailable: ["bank.requests.list"]` | "We couldn’t load your requests. Nothing was changed. Try again in a few minutes." (planned). |
+| T-7 | AC-1 | `alex` | `timeout: ["bank.requests.list"]`, `latencyMs: 10000` | After 10 seconds: "This is taking longer than expected. Nothing was changed." (planned). |
+
+#### 10. Expected mutation-check survivors
+
+The chip colours are presentation and are not asserted; expected. The "already started" outcome cannot be produced by the sandbox yet; expected. Everything else: none expected.
 
 ---
 
 ### ★ Connect account — `connect-account`
 
+**Catalog:** slug `connect-account` (name in the prototype "Connect a bank"), workspace `personal`, category More in this spec (the prototype file tags it "Accounts"), core no, can a bank switch it off: yes (**not** a basic entry: it is off in the Lean preset). Options (key, label, default): `allowCards` "Allow credit card accounts" (on). Research: `research/connect-account.md`. Built in `design/bankworkx-r1/src/journeys/57-requests-connect.js` (object `CNX`). Connected accounts are added to the accounts list as read only (`ro: true`), so the Accounts screen lists them and no payment journey can use them.
+
+The lean rework removed the old design where the person typed their other bank's username and password into BankWorkx®, and removed refresh schedules and per-account nicknames. What remains: choose the bank, agree to share, allow access on the other bank's own secure sign-in, choose accounts. Access is read only and expires.
+
+**Home market configuration.** How long the sharing lasts, and the currency symbol, follow the bank's home market.
+
+| Market | Sharing lasts | Symbol before an amount |
+|---|---|---|
+| Market A (routing number and account) | 365 days | `$` |
+| Market B (sort code and account) | 90 days | `£` |
+| Market C (IBAN) | 180 days | `€` |
+| Market D (IBAN, mobile alias) | 365 days | `AED ` |
+
 #### 1. Summary
 
-| Item | Detail |
+| Field | Value |
 |---|---|
 | Slug | `connect-account` |
-| Purpose | Link an outside bank account or credit card so BankWorkx® can show its balance and transactions (read only). |
-| Release | 1 |
-| Workspace | Personal |
-| Status | Existing, upgraded. Fixture `packages/journey-schema/src/fixtures/bankworkx.ts` (`connectAccount`, id `jrn_connect_account`). |
-| Channels | Mobile today (`channels: ["mobile"]`); the upgrade adds web |
-| Starting pattern | Choose type, choose bank, sign in to the bank, consent, result |
-| Who may use it | Signed-in customer with `accounts.manage` (Alex; Sam has no `finance`, so `NOT_SUPPORTED`) |
+| Purpose | See an account held at another bank in this app: choose the bank, agree to share, allow at the bank, choose the accounts. Read only. |
+| Release / workspace | 1 / Personal |
+| Status | Built in the prototype as a four-screen form journey (`submit: "Connect"`, permission `accounts.view`). The other bank's sign-in is simulated by a wait. No money moves; nothing can be paid from a connected account. |
+| Channels | Web and mobile |
+| Starting pattern | `bank.accounts.connect` and `bank.banks.list` in `packages/mock-bank-api/src/index.ts` (the older form that took a username and password) |
+| Who may use it | Anyone signed in to Personal (`accounts.view`). |
 
-**What exists today.** Screens `type`, `bank`, `login`, `success`, `failed`. Data model `conn.accountType`, `conn.bankId`, `conn.username`, `conn.password`, `conn.consent`. Integrations `banks` (`bank.banks.list`) and `connectBank` (`bank.accounts.connect`). The failed screen is a single message for every error. The sandbox bank list is Northwind Bank, Harbor Trust, Apex Credit Union, Summit Federal.
-**The upgrade.** Per-code error messages (today there is one message for all errors); a review screen with a stronger consent that names what is read and for how long; the Summit Federal already-connected check shown before the login screen; web channel; a re-confirm of the password screen; refresh and remove from the Linked banks shell; timeout and unavailable states; a result with a receipt and notification. Money does not move, so no one-time code is added, but the journey asks the person to confirm their BankWorkx® password when a *new* bank is being connected on a device that is not trusted (step-up `stepup` only on untrusted devices).
+**Banks (invented, sandbox).** Harbor Bank, Maple Credit Union, Northern Savings, Summit Bank, Lakeside Bank (always unavailable in the sandbox), Oakridge Building Society, Crown Trust, Bayview Bank. A bank that is already connected is left out of the list.
+
+**Accounts per bank (sandbox).** The first bank in the list (Harbor Bank) has one account: Current. Every other bank has three: Current, Savings and Credit card (the card only with `allowCards`). Example: Harbor Bank Current ••1137 balance 2,410.45; Maple Credit Union Current ••1274 2,510.45, Savings ••5422 9,620.80, Credit card ••8186 −440.15 (shown with the market symbol).
 
 #### 2. Entry points
 
-| Place › label | Passes | Permission |
+| Place › label | Passes in | Permission |
 |---|---|---|
-| More › settings › linked banks › Connect an account | – | `accounts.manage` |
-| Linked banks (empty state) › Connect an account | – | `accounts.manage` |
-| Home dashboard › "See all your money" card (planned) | – | `accounts.manage` |
-| Deep link `/personal/j/connect-account` | – | `accounts.manage` |
+| Accounts › **Connect a bank** | none | `accounts.view` |
+| Home › **Connect a bank** (also the card "Add a bank you already use" for a customer with no account) | none | `accounts.view` |
+| Deep link `/personal/j/connect-account?bank=maple` | `{bank}` (prefills the choice) | `accounts.view` |
 
 #### 3. Screens
 
-**3.1 `type` — "Account type"** (`stepper` ["type", "bank", "login", "review"], `select` tiles, `button`)
+Steps in order: `bank`, `consent`, `signin`, `accounts`, then the result.
 
-| Field | Block | Required | Validation | Error message |
+**Screen `bank`** ("Connect a bank"). Text "See your accounts from another bank here." Button **Continue**.
+
+When a bank is already connected, a card "Connected" lists each one: the bank name, "{n} account(s) · until {date}" and a button **Disconnect**. **Disconnect** turns the row into "Disconnect {bank}?" with "Its accounts leave your list." and the buttons **Disconnect** and **Keep**. Confirming removes the bank, its accounts and their transactions from the app, and shows a toast "Bank disconnected".
+
+| Field | Block | Required | Validation | Message |
 |---|---|---|---|---|
-| What do you want to connect? (`conn.accountType`) | `select` tiles: "Bank account" (icon `bank`, "Savings or current"), "Credit card" (icon `card`, "Cards and credit lines") | Yes | One of `bank`, `credit` | "Choose what you want to connect" (upgrade; today the generic required message) |
+| Your bank | `select`, placeholder "Choose your bank" | Yes | One of the banks not yet connected | "This is required." |
 
-Button "Continue" → validate, `bank`.
+**Screen `consent`** ("Share your accounts"). Button **Continue**.
 
-**3.2 `bank` — "Choose your bank"** (`select` tiles, `source: ctx.banks`)
+- Card "{bank} will share with BankWorkx®" with three ticked rows: "Account names and last 4 digits", "Balances", "Transactions from the last 12 months".
+- Card "Until {date}" with "You can stop sharing at any time from Accounts. We can only read. We can’t move money." The date is today plus the sharing period of the market.
 
-On enter: `callApi banks` → `ctx.banks`. Tiles show each bank's name and colour dot.
-
-| Field | Block | Required | Validation | Error message |
+| Field | Block | Required | Validation | Message |
 |---|---|---|---|---|
-| Your bank (`conn.bankId`) | `select` tiles | Yes | Must be an id returned by `bank.banks.list` | "Choose your bank" |
+| I agree to share this information | `check` | Yes | Ticked | "Agree to continue." |
 
-Upgrade: banks already connected show a tile badge "Connected" and are disabled with the hint "Already connected. Manage it under Linked banks." Buttons: "Continue" → validate, `login`. "Back" → `type`. States: loading skeleton tiles; empty "No banks are available right now. Try again later." with "Try again"; error from `bank.banks.list`: "We couldn't load the list of banks. Nothing was changed." with "Try again".
+**Screen `signin`** ("Sign in at your bank"). A card with a lock icon, the bank name, "Secure sign-in", "BankWorkx® wants to read your accounts." and "You’re signed in at {bank}." Buttons **Allow** (busy "Connecting…", about 1.1 seconds) and **Deny**. The person never types the other bank's password in BankWorkx®.
 
-**3.3 `login` — "Sign in to your bank"** (`alert`, `textInput` x2, `consent`, `button`)
+- **Deny**: "Access was not allowed. Nothing was connected."
+- Lakeside Bank: "That bank isn’t answering right now. Nothing was connected. Try again later."
 
-Copy: alert (info) "Your details are encrypted and sent securely. BankWorkx only gets read-only access." (existing text, kept).
+**Screen `accounts`** ("Choose accounts"). Button **Connect**. One switch per account of that bank, all on: the label is "{name} ••{last4}" and the sub-line is the balance with the market symbol. The Credit card switch shows only with `allowCards`.
 
-| Field | Block | Required | Validation | Error message |
+| Field | Block | Required | Validation | Message |
 |---|---|---|---|---|
-| Username (`conn.username`) | `textInput`, placeholder "Your online banking username" | Yes | At least 1 non-space character | "Enter your username" |
-| Password (`conn.password`) | `textInput` secure, placeholder "At least 6 characters" | Yes | At least 6 characters | "Your password needs at least 6 characters" |
-| Consent (`conn.consent`) | `consent`, `termsVersion: "connect-v1"`, text "I allow BankWorkx to read my balance and transactions" | Yes | `mustBeTrue` | "Tick the box to continue" |
+| (one per account) | `toggle` | At least one on | At least one account chosen | "Choose at least one account." |
 
-Upgrade copy under consent (helper): "You can remove this link any time under More › Settings › Linked banks. We never move money from {bank}." Buttons: "Connect account" → validate, `callApi connectBank` (input `bankId`, `username`, `password`, `accountType`), then `success`; on error `navigate: "failed"` (today). The upgrade stays on `login` for `BANK_AUTH_FAILED` and shows the message under the password field; the password field is cleared. "Back" → `bank`.
+**Result** ("Bank connected", green, text "Its accounts are on your Accounts tab, read only."). Rows "Bank", "Accounts" (the number) and "Shared until" (the date). Buttons **See accounts** (opens the Accounts tab) and **Done**. A note "{bank} connected" is added to the notification list. On the Accounts tab each connected account shows as "{bank} {name}" with the label "At {bank} (read only)", its balance and a short list of sample transactions (a credit card shows spending only).
 
-**3.4 `success`** (terminal, today) result success title "Account connected", text "{{ctx.connected.bank}} {{ctx.connected.maskedNumber}} is now linked to BankWorkx.", meta "Balance ${{ctx.connected.balance | money}}". Button "Done" (exit). Upgrade: second button "See linked banks" → Linked banks shell; the Home dashboard refreshes to include the new balance.
-
-**3.5 `failed`** (terminal, today) result error "We couldn't connect your bank", text "Check your username and password, then try again. If it keeps failing, your bank may be unavailable." Button "Try again" → `login`. Upgrade: the title and text come from the errors table below, by code.
+**States**
+- Loading: busy text on **Allow**.
+- Empty: not applicable.
+- Error: "We couldn’t reach the bank. Nothing was connected." The Service down switch shows the standard connection sheet ("We couldn’t reach the bank", "Nothing was sent and you haven’t been charged. Try again in a moment.", **Try again**).
+- Timeout: "This is taking longer than expected. Nothing was connected."
+- Expired sharing (planned): the account shows "Sharing ended" with **Reconnect**; a reminder is sent 7 days before.
 
 #### 4. Sandbox errors
 
-| Code | Sandbox message (existing) | Message the person sees | Screen | Button |
-|---|---|---|---|---|
-| `BANK_NOT_FOUND` | "Choose a bank to connect" | "Choose a bank to connect. We couldn't find the one you picked." | `bank` (inline) | "Choose bank" |
-| `BANK_AUTH_FAILED` (username empty, or password under 6 characters) | "Check your username and password" | "Check your username and password." | `login` (under password) | "Try again" |
-| `BANK_AUTH_FAILED` (password exactly `invalid123`) | "{bank} did not accept these details" | "{bank name} did not accept these details. Check them and try again. We never saved them." | `login` | "Try again" |
-| `ALREADY_CONNECTED` | "{bank} is already connected" | "{bank name} is already connected. You can manage it under Linked banks." | `failed` | "See linked banks" |
-| `NOT_SUPPORTED` | "Not available for this customer" | "This isn't available for your profile." | `failed` | "Back" |
-| `TIMEOUT` (planned) | – | "We didn't hear back from {bank}. Nothing was connected. Try again in a moment." | `failed` | "Try again" |
-| `SERVICE_UNAVAILABLE` (planned) | – | "{bank} is not available right now. Nothing was changed. Please try again in a few minutes." | `failed` | "Try again" / "Back" |
-| `PERMISSION_DENIED` (planned) | – | "Your profile doesn't allow this." | `failed` | "Back" |
-| `SESSION_EXPIRED` (planned) | – | S-`SESSION_EXPIRED` | `failed` | "Sign in" |
-| `STEP_UP_REQUIRED` (planned, untrusted device only) | – | "For your security, confirm it's you first." | `failed` | "Confirm" → password re-entry |
-
-Existing behaviour to keep: `bank.accounts.connect` returns `{ connectedId, bank, kind, maskedNumber, balance }`; the linked id is `l_<bankId>`; a Savings link shows balance $4,210.25 and a Credit link $1,240.50; the masked number is `••` plus four digits worked out from the username length. The sandbox accepts any username and any password of 6 or more characters except `invalid123`.
+| Code | Message | Shows on | Button |
+|---|---|---|---|
+| `ACCESS_DENIED` | "Access was not allowed. Nothing was connected." | `signin` | Back to start |
+| `BANK_UNAVAILABLE` | "That bank isn’t answering right now. Nothing was connected. Try again later." | `signin` | Choose another bank |
+| `TIMEOUT` | "This is taking longer than expected. Nothing was connected." | `signin` | Try again |
+| `SERVICE_UNAVAILABLE` | "We couldn’t reach the bank. Nothing was connected." | `signin` | Try again |
+| `ALREADY_CONNECTED` (existing in `bank.accounts.connect`) | "This bank is already connected." | `bank` | OK |
+| `JOURNEY_DISABLED` | "This isn’t available at your bank." | whole journey | none |
+| `PERMISSION_DENIED` (planned) | Standard message | whole journey | Back |
 
 #### 5. Adapters
 
-| Integration id | Adapter | Request | Response | Error codes | Status | moneyMoving | requiresOtp |
-|---|---|---|---|---|---|---|---|
-| `banks` | `bank.banks.list` | `{}` | map of `{ id, name, color }` | `TIMEOUT`, `SERVICE_UNAVAILABLE` (planned) | Existing | No | No |
-| `connectBank` | `bank.accounts.connect` | `{ bankId, username, password, accountType: "bank" \| "credit" }` | `{ connectedId, bank, kind, maskedNumber, balance }` | `NOT_SUPPORTED`, `BANK_NOT_FOUND`, `BANK_AUTH_FAILED`, `ALREADY_CONNECTED`; planned `PERMISSION_DENIED`, `STEP_UP_REQUIRED`, `SESSION_EXPIRED`, `TIMEOUT`, `SERVICE_UNAVAILABLE` | Existing | No (read only) | No |
-| `linked` | `bank.accounts.linked` | `{}` | list of linked banks | `SERVICE_UNAVAILABLE` | planned | No | No |
-| `disconnect` | `bank.accounts.disconnect` | `{ connectedId }` | `{ removed: true }` | `LINK_NOT_FOUND`, `TIMEOUT`, `SERVICE_UNAVAILABLE` | planned | No | No |
-
-The password is sent once and not stored; the journey data model clears `conn.password` after the call (upgrade).
+| Integration id | Adapter | Request | Response | Errors | Status |
+|---|---|---|---|---|---|
+| `banks` | `bank.banks.list` | none | map of banks | none | Existing (`packages/mock-bank-api/src/index.ts`) |
+| `startConnection` | `bank.connections.start` | `{bankId}` | `{redirectUrl, state}` | `BANK_UNAVAILABLE`, `SERVICE_UNAVAILABLE`, `TIMEOUT` | (planned). Replaces the credential form below |
+| `finishConnection` | `bank.connections.finish` | `{state, accountIds}` | `{bank, accounts, until}` | `ACCESS_DENIED`, `ALREADY_CONNECTED`, `TIMEOUT` | (planned) |
+| `disconnect` | `bank.connections.remove` | `{bankId}` | `{removed}` | `SERVICE_UNAVAILABLE` | (planned) |
+| `connect` | `bank.accounts.connect` | `{bankId, username, password, accountType}` | `{connectedId, bank, kind, maskedNumber, balance}` | `BANK_NOT_FOUND`, `BANK_AUTH_FAILED`, `ALREADY_CONNECTED` | Existing, but it takes the other bank's username and password, which the current design no longer collects; it must be replaced by the three adapters above |
 
 #### 6. Permissions, step-up and limits
 
-`accounts.manage`; step-up `none` on a trusted device, `stepup` on an untrusted one. Limit: 5 linked accounts per customer (`LINK_LIMIT`, copy "You can connect up to 5 accounts. Remove one first. Nothing was changed.", planned).
+`accounts.view`. Step-up: the other bank's own secure sign-in; no BankWorkx® code. Limits: read only; sharing ends after the market period (365, 90 or 180 days); connected accounts are never offered as the source or target of a payment.
 
 #### 7. Result and links out
 
-Result "Account connected", with bank, masked number and balance. Receipt: bank, kind, masked number, connection date, "Read-only access". Notifications: N-50 (linked), N-51 (link needs attention, raised later by the bank when a refresh fails). Buttons: "Done" → where the person started; "See linked banks" → Linked banks shell.
+Result as above. Notifications raised (planned): a reminder 7 days before sharing ends, and a message if the other bank ends the sharing. Every connection and disconnection is written to the security log (audit). Links out: the Accounts tab (see accounts, disconnect).
 
 #### 8. Acceptance criteria
 
-- AC-1 The person must choose a type and a bank before signing in.
-- AC-2 A username and a password of at least 6 characters are needed.
-- AC-3 The password `invalid123` is rejected with the bank's refusal message and nothing is connected.
-- AC-4 The consent box must be ticked.
-- AC-5 A bank that is already connected cannot be connected twice.
-- AC-6 A successful connection shows bank, masked number and balance, and adds the account to Linked banks.
-- AC-7 A timeout or an unavailable bank connects nothing and says so.
-- AC-8 The password is not kept after the call.
+- AC-1: The bank list leaves out banks already connected; a connected bank shows with its account count and end date and can be disconnected after a confirmation.
+- AC-2: The person must agree before continuing; the screen says what is shared, until when, and that BankWorkx® can only read.
+- AC-3: The other bank's sign-in is a separate step; **Deny** connects nothing and says so.
+- AC-4: An unavailable bank connects nothing and says so.
+- AC-5: At least one account must be chosen; the credit card appears only with `allowCards`.
+- AC-6: After connecting, the chosen accounts show in Accounts as read only with their balances; none can be used in a payment journey.
+- AC-7: The sharing period follows the market (365, 90, 180, 365 days) and amounts use the market symbol.
+- AC-8: Disconnecting removes the bank's accounts from the list.
+- AC-9: When the bank is unavailable or times out nothing is connected.
 
 #### 9. Scenarios
 
-| # | Persona | Setup | Covers | Expected |
+Synthetic persona `alex` (Market A unless stated).
+
+| # | Covers | Persona / setup | Conditions | Steps and expected result |
 |---|---|---|---|---|
-| T-1 | Alex | Bank account, Northwind Bank, username `alex.m`, password `Pass1234`, consent | AC-1, AC-2, AC-4, AC-6 | Success "Northwind Bank ••… is now linked"; balance $4,210.25; linked count 2 |
-| T-2 | Alex | Credit card, Harbor Trust, valid details | AC-6 | Balance $1,240.50 |
-| T-3 | Alex | Northwind, password `invalid123` | AC-3 | "Northwind Bank did not accept these details…"; linked count unchanged |
-| T-4 | Alex | Password `abc` (3 characters) | AC-2 | "Your password needs at least 6 characters"; no call |
-| T-5 | Alex | Summit Federal | AC-5 | Tile disabled; if forced through the API, `ALREADY_CONNECTED` copy |
-| T-6 | Alex | Consent not ticked | AC-4 | "Tick the box to continue"; no call |
-| T-7 | Alex | Unknown bank id `nobank` sent to the API | AC-1 | `BANK_NOT_FOUND` copy |
-| T-8 | Alex | `conditions.timeout: ["bank.accounts.connect"]` | AC-7 | Timeout copy; linked count unchanged |
-| T-9 | Alex | `conditions.unavailable: ["bank.accounts.connect"]` | AC-7 | S-`SERVICE_UNAVAILABLE` copy |
-| T-10 | Alex | After T-1, read journey data | AC-8 | `conn.password` is empty |
-| T-11 | Sam | Any valid details | AC-1 | `NOT_SUPPORTED` "This isn't available for your profile." |
+| T-1 | AC-2, AC-5, AC-6 | `alex` | none | Maple Credit Union, agree, **Allow**, leave all three on, **Connect**: "Bank connected", rows Bank "Maple Credit Union", Accounts "3", Shared until (today + 365 days). Accounts shows "Maple Credit Union Current" with "At Maple Credit Union (read only)". |
+| T-2 | AC-5 | `alex` | none | All switches off: "Choose at least one account." |
+| T-3 | AC-5 | `alex`, `allowCards` off | none | Only Current and Savings are listed; result "Accounts" "2". |
+| T-4 | AC-2 | `alex` | none | **Continue** without ticking: "Agree to continue." |
+| T-5 | AC-3 | `alex` | none | **Deny**: "Access was not allowed. Nothing was connected." and the bank is not in Connected. |
+| T-6 | AC-4 | `alex` | none | Lakeside Bank, **Allow**: "That bank isn’t answering right now. Nothing was connected. Try again later." |
+| T-7 | AC-1, AC-8 | `alex`, Maple connected | none | The bank list no longer offers Maple; Connected shows "Maple Credit Union", "3 accounts · until …"; **Disconnect**, **Disconnect**: toast "Bank disconnected", its accounts are gone from Accounts. |
+| T-8 | AC-6 | `alex`, Maple connected | none | In `personal-transfer`, `own-transfer` and `pay-bill` the account lists do not include the Maple accounts. |
+| T-9 | AC-7 | `alex`, Markets B, C, D | none | Shared until today + 90, 180, 365 days; balances with `£`, `€`, `AED `. |
+| T-10 | AC-9 | `alex` | `unavailable: ["bank.connections.finish"]` (prototype: Service down on) | Connection sheet; nothing connected. |
+| T-11 | AC-9 | `alex` | `timeout: ["bank.connections.finish"]`, `latencyMs: 10000` | After 10 seconds: "This is taking longer than expected. Nothing was connected." |
 
 #### 10. Expected mutation-check survivors
 
-- Changing the Luhn or balance constants ($4,210.25, $1,240.50): killed by T-1 and T-2 only if `expectBank` asserts the balance; otherwise survives (assert it).
-- Changing the 5-account limit (planned): survives until a scenario connects a fifth account; the seed has four banks, so the sandbox cannot produce it. Listed as an expected survivor.
-- Removing the password clearing: killed by T-10.
+The sample balances and transactions are generated from the bank's position in the list and are not asserted; expected. The 7-day reminder and the log entry are not asserted; expected. The sharing period survives when only Market A is asserted; expected. Everything else: none expected.
 
 ---
 

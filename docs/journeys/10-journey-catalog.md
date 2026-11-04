@@ -20,7 +20,7 @@ A bank sets, besides the on/off switches and options:
 - **Home market.** One setting that decides local identifiers and formats (account number labels, national ID format, proof of address). Journeys never name the country; they read the market.
 - **Speed mapping.** Which real payment rail serves each speed class (Standard, Same day, Instant) in the bank's market, with its fee, limit and cut-off.
 
-## Retail (Release 1, 52 entries)
+## Retail (Release 1, 57 entries)
 
 | Slug | Journey | Category | Status | Can a bank switch it off? | Options a bank can set |
 |---|---|---|---|---|---|
@@ -36,6 +36,7 @@ A bank sets, besides the on/off switches and options:
 | `forgot-username` | Forgot username | Signing in and security | Built | Yes | Let people identify with an email address |
 | `reset-password` | Reset password | Signing in and security | Built | Yes | Offer unlock without a new password |
 | `unlock-account` | Unlock account | Signing in and security | Built (alias of `reset-password`) | Yes |  |
+| `forgot-password` | Forgot password | Signing in and security | Built (alias of `reset-password`) | Yes |  |
 | `change-password` | Change password | Signing in and security | Built | Yes | Sign out other devices after a change |
 | `trusted-devices` | Trusted devices | Signing in and security | Built | Yes | Limit trusted devices to 5; Offer "Sign out other devices" |
 | `change-quick-pin` | Change quick PIN | Signing in and security | Built | Yes |  |
@@ -45,6 +46,7 @@ A bank sets, besides the on/off switches and options:
 | `account-nickname` | Rename an account | Personal: Accounts | Spec | Yes |  |
 | `open-another-account` | Open another account | Personal: Accounts | Built | Yes | Offer the savings account; Offer currency accounts |
 | `create-budget` | Create a budget | Personal: Accounts | Built | Yes | Offer the 80% alert; Offer the 100% alert |
+| `budgets` | Budgets | Personal: Accounts | Built | Yes |  |
 | `transfer-types` | Ways to send money | Personal: Payments | Built | Yes |  |
 | `own-transfer` | Between my accounts | Personal: Payments | Built | Yes | Allow conversion between currencies; Charge the 0.20% conversion fee |
 | `internal-transfer` | To a BankWorkx customer | Personal: Payments | Built (alias of `personal-transfer`) | Yes |  |
@@ -61,23 +63,26 @@ A bank sets, besides the on/off switches and options:
 | `card-controls` | Card limits and controls | Personal: Cards | Built | Yes | Offer trip dates when International is on |
 | `freeze-card` | Freeze card | Personal: Cards | Built (alias of `card-controls`) | Yes |  |
 | `virtual-card` | Virtual card | Personal: Cards | Built | Yes | Offer a 3 year card as well as single use |
-| `replace-card` | Replace card | Personal: Cards | Built | Yes | Charge a fee for express delivery |
+| `replace-card` | Replace a card | Personal: Cards | Built | Yes | Charge a fee for express delivery |
 | `card-pin` | Card PIN | Personal: Cards | Built | Yes | Refuse easy PINs (repeats and sequences) |
-| `dispute-transaction` | Dispute a transaction | Personal: Cards | Built | Yes | Let people add a receipt or screenshot; Offer to block the card when a payment isn’t recognised |
-| `add-card` | Add card | Personal: Cards | Built | Yes | Accept American Express; Let saved cards be used for paying as well as adding money |
+| `dispute-transaction` | Report a problem with a payment | Personal: Cards | Built | Yes | Let people add a receipt or screenshot; Offer to block the card when a payment isn’t recognised |
+| `add-card` | Add a card | Personal: Cards | Built | Yes | Accept American Express; Let saved cards be used for paying as well as adding money |
+| `save-borrow` | Save | Personal: Save & Borrow | Built | Yes | Show savings goals; Show term deposits; Show loans; Show investments |
 | `term-deposit` | Term deposit | Personal: Save & Borrow | Built | Yes | Offer interest paid monthly; Allow early closure (with a charge) |
 | `savings-goal` | Savings goal | Personal: Save & Borrow | Built | Yes | Offer automatic monthly top-ups; Allow taking money out of a goal |
 | `apply-loan` | Apply for a loan | Personal: Save & Borrow | Built | Yes | Send borderline applications to manual review; Charge a 1% arrangement fee |
 | `repay-loan` | Repay a loan | Personal: Save & Borrow | Built | Yes | Allow paying any amount; Allow settling in full; Charge a 1% early settlement fee |
 | `invest` | Invest | Personal: Save & Borrow | Built | Yes | Ask for risk acknowledgement on high-risk funds; Offer high-risk funds |
-| `sell-investment` | Sell investment | Personal: Save & Borrow | Built | Yes | Charge a 0.25% selling fee |
+| `sell-investment` | Sell an investment | Personal: Save & Borrow | Built | Yes | Charge a 0.25% selling fee |
 | `add-money` | Add money | Personal: Save & Borrow | Built | Yes | Offer top-up from a card; Charge the 1.5% card fee; Offer bank transfer details |
 | `update-profile` | Update profile | Personal: More | Built | Yes | Send a code to the new mobile number too; Confirm a new email by link before it applies; Check an address change before it applies; Ask for proof of address |
 | `new-message` | New message | Personal: More | Built | Yes | Allow one attachment |
+| `messages` | Messages | Personal: More | Built | Yes |  |
 | `service-request` | Service request | Personal: More | Built | Yes | Offer cheque book orders; Offer letters; Offer account type changes |
+| `my-requests` | My requests | Personal: More | Built | Yes |  |
 | `connect-account` | Connect account | Personal: More | Built | Yes | Allow credit card accounts |
 
-## SME (Release 1, 17 entries)
+## SME (Release 1, 22 entries)
 
 | Slug | Journey | Category | Status | Can a bank switch it off? | Options a bank can set |
 |---|---|---|---|---|---|
@@ -85,19 +90,24 @@ A bank sets, besides the on/off switches and options:
 | `business-statement` | Business statement | Business: Accounts | Built | Yes | Offer bank statement files (BAI2, MT940, camt.053); Allow intraday statements; Allow scheduled statements; Allow email to addresses outside the company |
 | `supplier-payment` | Pay a supplier | Business: Payments | Built | Yes |  |
 | `add-supplier` | Add a supplier | Business: Payments | Built | Yes | Allow suppliers with a bank in another country; Run the name check where the market has one; Cap payments to a supplier in its first 24 hours; Allow a supplier who is a person |
-| `payment-template` | Payment template | Business: Payments | Built | Yes | Allow a template without an amount |
-| `schedule-business-payment` | Schedule a business payment | Business: Payments | Built | Yes | Offer “Every 3 months”; Tell the Maker the day before each payment; Close changes at 09:00 the business day before (default 18:00) |
+| `payment-template` | Payment templates | Business: Payments | Built | Yes | Allow a template without an amount |
+| `templates` | Templates list | Business: Payments | Built | Yes |  |
+| `schedule-business-payment` | Schedule a supplier payment | Business: Payments | Built | Yes | Offer “Every 3 months”; Tell the Maker the day before each payment; Close changes at 09:00 the business day before (default 18:00) |
+| `business-schedules` | Scheduled supplier payments | Business: Payments | Built | Yes |  |
 | `withdraw-payment` | Withdraw a payment | Business: Payments | Built | Yes | Ask why the payment is withdrawn |
+| `payment-tracker` | Payment tracker | Business: Payments | Built | Yes |  |
 | `bulk-payment` | Bulk payment | Business: Bulk and payroll | Built | Yes | Allow entering payments by hand; Also accept bank file formats; Offer the Same day speed; Offer the Instant speed |
 | `repair-bulk-lines` | Repair rejected lines | Business: Bulk and payroll | Spec | Yes |  |
 | `bulk-status` | Batch status | Business: Bulk and payroll | Built | Yes |  |
 | `payroll-run` | Payroll run | Business: Bulk and payroll | Built | Yes | Allow bonus lines; Allow deduction lines; Ask for a reason when the total changes by more than 20%; Offer to send payslips |
 | `approve-payments` | Approve payments | Business: Approvals | Built | Yes | Allow approving several at once; Ask for a code from 25,000.00; Allow passing a payment to another approver |
+| `admin` | Admin | Business: Admin | Built | Yes | Show the activity log |
 | `manage-user` | Invite, edit or disable a user | Business: Admin | Built | Yes | Second administrator approves new administrators; Ask for a reason when disabling |
 | `change-limits` | Change limits | Business: Admin | Built | Yes | Second administrator approves increases |
-| `edit-signatory-group` | Edit a signatory group | Business: Admin | Built | Yes | Second administrator approves group changes; Allow approvers in order |
+| `edit-signatory-group` | Edit an approval group | Business: Admin | Built | Yes | Second administrator approves group changes; Allow approvers in order |
 | `business-service-request` | Business service request | Business: More | Built | Yes | Offer cheque books |
-| `kyb-onboarding` | KYB business onboarding (stretch) | Business: More | Built | Yes | Ask for an ownership chart; Email each owner and director an ID check |
+| `business-requests` | Service requests | Business: More | Built | Yes |  |
+| `kyb-onboarding` | Open a business account | Business: More | Built | Yes | Ask for an ownership chart; Email each owner and director an ID check |
 
 ## Wealth (Release 2, 10 entries)
 
@@ -198,20 +208,9 @@ A bank sets, besides the on/off switches and options:
 
 ## Prototype entries without their own block in a module file
 
-These are screens or splits added while building the prototype. Each is its own catalog entry so a bank can switch it separately. Their blocks in the module files are still to be written.
+None: every prototype entry has a block.
 
-- `admin`: Admin (business, screen).
-- `budgets`: Budgets (personal, screen).
-- `business-requests`: Service requests (business, screen).
-- `business-schedules`: Scheduled supplier payments (business, screen).
-- `forgot-password`: Forgot password (public).
-- `messages`: Messages (personal, screen).
-- `my-requests`: My requests (personal, screen).
-- `payment-tracker`: Payment tracker (business, screen).
-- `save-borrow`: Save (personal, screen).
-- `templates`: Templates list (business, screen).
-
-Catalog entries in the module files: 136. Built in the prototype: 77 (67 with a block in a module file, 10 without). Aliases count as entries so a bank can switch each route separately. The module-file blocks for journeys built in the second round (security, profile, messages, save and borrow, card extras, public tools, business payments extras, admin) were written before the design rules and must be synced.
+Catalog entries in the module files: 146. Built in the prototype: 77 (77 with a block in a module file). Aliases count as entries so a bank can switch each route separately. All Release 1 blocks (Retail and SME) were synced to the design rules; Releases 2 to 4 are structure only.
 
 ## Open questions
 
