@@ -38,6 +38,17 @@ describe("one login, several places to bank", () => {
     const got = await Promise.all(["pay_alpha_1", "pay_alpha_2", "pay_alpha_3"].map((paymentId) => b.call("corp.payments.get", { paymentId })));
     expect(got.map((p: any) => [p.amount, p.status])).toEqual([[4800, "released"], [7250, "pending_approval"], [1600, "rejected"]]);
   });
+  it("shows a released bulk run and last month's payroll at Alpha, and leaves this month's payroll open", async () => {
+    const b = new MockBank("alex");
+    await enter(b, "alpha");
+    const [bulk, payroll] = await Promise.all(["pay_alpha_4", "pay_alpha_5"].map((paymentId) => b.call("corp.payments.get", { paymentId })));
+    expect([bulk.amount, bulk.status, bulk.lines.length]).toEqual([6930, "released", 3]);
+    expect([payroll.amount, payroll.status, payroll.approvals.length]).toEqual([25_100, "released", 2]);
+    const now = new Date(), period = `${now.getUTCFullYear()}-${String(now.getUTCMonth() + 1).padStart(2, "0")}`;
+    await verified(b);
+    const check = await b.call("corp.payroll.check", { fromAccountId: "alpha_pay", period, file: "emp_ines,4200,Salary" });
+    expect(Object.values(check.lines).map((l: any) => l.ok)).toEqual([true]);
+  });
   it("lets Alex start a payment at Alpha as Maker, pending approval, and refuses him approving it", async () => {
     const b = new MockBank("alex");
     await enter(b, "alpha");

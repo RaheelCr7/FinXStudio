@@ -21,7 +21,7 @@ export const ALPHA: CorpCompany = {
     { id: "alpha_eur", name: "Reserve", maskedNumber: "••2203", currency: "EUR", balance: 64_000 },
   ],
   users: [
-    { id: "alex", name: "Alex Morgan", roles: ["initiator"], dailyLimit: 25_000, usedToday: 0 },
+    { id: "alex", name: "Alex Morgan", roles: ["initiator"], dailyLimit: 250_000, usedToday: 0 },
     { id: "maria", name: "Maria Costa", roles: ["approver"], dailyLimit: 0, usedToday: 0 },
     { id: "jon", name: "Jon Park", roles: ["approver"], dailyLimit: 0, usedToday: 0 },
   ],
@@ -30,6 +30,14 @@ export const ALPHA: CorpCompany = {
     { id: "harbor", name: "Harbor Tools", bank: "Chase", maskedNumber: "••8802" },
     { id: "lumen", name: "Lumen Packaging", bank: "ING", maskedNumber: "••3340" },
     { id: "cedar", name: "Cedar Freight", bank: "Citi", maskedNumber: "••9051" },
+  ],
+  employees: [
+    { id: "emp_ines", name: "Ines Alvarez", bank: "BBVA", maskedNumber: "••1101", salary: 4_200 },
+    { id: "emp_kofi", name: "Kofi Mensah", bank: "Chase", maskedNumber: "••1102", salary: 3_800 },
+    { id: "emp_lena", name: "Lena Novak", bank: "Citi", maskedNumber: "••1103", salary: 5_100 },
+    { id: "emp_raj", name: "Raj Malhotra", bank: "HSBC", maskedNumber: "••1104", salary: 4_700 },
+    { id: "emp_tess", name: "Tess Holloway", bank: "Wells Fargo", maskedNumber: "••1105", salary: 3_300 },
+    { id: "emp_yuki", name: "Yuki Tanaka", bank: "Chase", maskedNumber: "••1106", salary: 4_000 },
   ],
   companyDailyLimit: 500_000, companyUsedToday: 0, dualApprovalAbove: 100_000, cutoff: "16:00", holidays: [],
 };
@@ -70,6 +78,17 @@ export function seedAlpha(p: CorporateProvider) {
   p.initiatePayment({ userId: "alex", fromAccountId: "alpha_ops", beneficiaryId: "harbor", amount: 7_250, reference: "INV-2044" });
   const no = p.initiatePayment({ userId: "alex", fromAccountId: "alpha_ops", beneficiaryId: "cedar", amount: 1_600, reference: "INV-2050" });
   p.rejectPayment({ userId: "maria", paymentId: no.id, reason: "Wrong invoice number" });
+  // a bulk payment to three suppliers, released
+  const bulk = p.initiateBulk({ userId: "alex", fromAccountId: "alpha_ops", reference: "Supplier run", lines: [
+    { beneficiaryId: "nordic", amount: 3_100, reference: "INV-2002" }, { beneficiaryId: "harbor", amount: 1_450, reference: "INV-2003" }, { beneficiaryId: "lumen", amount: 2_380, reference: "INV-2004" },
+  ] });
+  p.approvePayment({ userId: "maria", paymentId: bulk.id });
+  // last month's payroll, released by two approvers (so this month's can still be run)
+  const d = new Date(); d.setUTCDate(1); d.setUTCMonth(d.getUTCMonth() - 1);
+  const period = `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, "0")}`;
+  const pay = p.initiatePayroll({ userId: "alex", fromAccountId: "alpha_pay", period, lines: ALPHA.employees!.map((e) => ({ beneficiaryId: e.id, amount: e.salary, reference: `Salary ${period}` })) });
+  p.approvePayment({ userId: "maria", paymentId: pay.id });
+  p.approvePayment({ userId: "jon", paymentId: pay.id });
 }
 
 /** A company that is nearly out of room today: the daily limits and the balance push back on the next payment. */
