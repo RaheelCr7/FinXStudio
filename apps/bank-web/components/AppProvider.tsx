@@ -1,6 +1,7 @@
 "use client";
 import { createContext, useContext, useEffect, useState, useSyncExternalStore } from "react";
 import { BankApp, createLive, isRtl, type AppState } from "@finx/bank-client";
+import { parseTrustedKeys } from "@finx/journey-schema";
 import type { BrandLook, Preset } from "@finx/ui-kit";
 
 export type ProjectInfo = { id: string; preset: Preset; name: string; shell: "meezan" | "bankworkx"; currency: string; /** How this bank's screens differ from the standard look. */ look?: BrandLook; /** Which bank API the project runs against (unset: the reference sandbox). */ bankApi?: string };
@@ -17,7 +18,7 @@ const write = (v: Saved) => { try { sessionStorage.setItem(KEY, JSON.stringify(v
  * only who is signed in and the language are remembered for the tab.
  */
 export function AppProvider({ project, children }: { project: ProjectInfo; children: React.ReactNode }) {
-  const [app] = useState(() => new BankApp({ preset: project.preset, projectId: project.id, bankApi: project.bankApi, live: createLive({ brand: project.id }), studioUrl: "/api/studio" }));
+  const [app] = useState(() => new BankApp({ preset: project.preset, projectId: project.id, bankApi: project.bankApi, live: createLive({ brand: project.id, trustedKeys: parseTrustedKeys(process.env.NEXT_PUBLIC_FINX_TRUSTED_KEYS) }), studioUrl: "/api/studio" }));
   const [ready, setReady] = useState(false);
 
   useEffect(() => {

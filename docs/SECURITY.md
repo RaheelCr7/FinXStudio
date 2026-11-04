@@ -21,7 +21,7 @@ Do not open a public issue for a vulnerability. Email the maintainer (see the re
 |---|---|---|---|
 | S | Someone acts as another Studio user | "Working as" switcher in demo | Done in production: password sign-in, signed 8-hour sessions, lockout |
 | S | A fake server serves journeys to the app | Plain http in demo | TLS only, certificate pinning (planned) |
-| T | A journey is altered in transit or at rest | Schema validation and lint on load | Signed journeys; unsigned accepted in demo only (planned) |
+| T | A journey is altered in transit or at rest | Schema validation and lint on load | Done: Ed25519 signature made when a person publishes; apps with the bank's public key refuse anything else (demo accepts unsigned) |
 | T | A bad request body corrupts Studio data | Per-route checks, schema validation | Done in production: 2 MB body limit, rate limit, origin-checked writes |
 | R | A change cannot be traced to a person | Activity log exists | Done in production: hash-chained audit log; four-eyes publish by default |
 | I | Personal data or secrets reach logs, repo or AI | CODING.md rules, `.gitignore` | Secret scan in CI (report-only now), log review |
@@ -45,7 +45,7 @@ Current findings (3 Nov 2026): the production dependency audit flagged zod 3.23.
 ## Controls roadmap (in order)
 1. **Done (production profile): Studio sign-in, sessions, CSRF defence, rate and size limits, security headers (CSP report-only), hash-chained audit log, four-eyes publish by default.** See "Studio in production" below. Still to add: a People-page form for passwords, TOTP second factor, SSO, a shared rate-limit store when Studio runs on more than one server.
 2. Mobile: secure storage, certificate pinning, root/jailbreak detection, screenshot blocking, TLS only.
-3. Signed journeys: a tampered screen is refused; demo accepts unsigned; bundled fallback stays.
+3. **Done: signed journeys.** See "Signed journeys" below.
 4. `mock-bank-api` excluded from production bundles.
 5. Done: `.gitignore` covers `.env*`, `*.pem`, `.data/`.
 
@@ -64,3 +64,18 @@ Set `FINX_PROFILE=production` and the following. Demo behaviour is untouched whe
 What it does: pages redirect to `/login`; the API answers 401 without a session or service token, except sign-in and what the apps need (published journeys, the project list); the demo identity cookie is ignored; browser writes must carry an allowed `Origin` and the session cookie is `HttpOnly; Secure; SameSite=Strict`; five failed sign-ins lock that person and address for 15 minutes; every response carries security headers; the activity log is also written to `audit.log`, a hash chain whose integrity `GET /api/audit` verifies (admins only); a project nobody has configured requires someone else to publish a change.
 
 Limits worth knowing: the rate limit and lockout live in one server's memory; the audit log proves tampering after the fact but a person with write access to the data directory can still delete the whole file, so ship it to write-once storage; CSP stays report-only until its reports are clean.
+
+## Signed journeys
+A journey is signed with Ed25519 at the moment a person publishes it, and the signature is stored with the published copy. Studio serves it as a `signature` field (`alg`, `keyId`, `value`, `signedAt`). The signed bytes are `finx-journey-v1\n` plus the journey as canonical JSON (keys sorted, no `signature`), so changing a screen, a rule, an integration mode or the version breaks it, and a signature cannot be moved to another journey.
+
+| Where | Setting | Notes |
+|---|---|---|
+| Studio | `FINX_SIGNING_KEY` | 64 hex characters, secret, server only. In the production profile Studio refuses to publish without it. |
+| Web app | `NEXT_PUBLIC_FINX_TRUSTED_KEYS` | Public key(s), comma separated. Set at build time. |
+| Phone apps | `EXPO_PUBLIC_FINX_TRUSTED_KEYS` | Same, set when building. |
+
+Make a key pair with `node apps/studio/scripts/gen-signing-key.mjs`. The public key is not secret, but it must reach the apps by a path that does not go through Studio (the build), otherwise whoever controls Studio could also swap the key. `GET /api/signing` (admins) shows which key Studio is using, to compare with what the apps trust.
+
+An app with at least one trusted key shows a journey from Studio only if its signature checks out; anything else (unsigned, wrong key, changed) is refused and the copy bundled in the app is used, so the app keeps working with older content. An app with no trusted keys (the demo) accepts unsigned journeys as before.
+
+Rotating a key: add the new public key to the apps while the old one is still trusted, ship the apps, then switch `FINX_SIGNING_KEY` and republish, then drop the old key in a later app release. Limits: journeys published before signing was switched on stay unsigned until republished; a signature proves who published and that nothing changed since, not that the content is wise, so review and lint still matter; the bank's apps need updating if the key is ever compromised.
