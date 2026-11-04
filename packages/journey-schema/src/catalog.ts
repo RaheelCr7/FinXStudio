@@ -3,6 +3,8 @@ import { localTransfer } from "./fixtures/local-transfer";
 import { payBill } from "./fixtures/pay-bill";
 import { payBillBankworkx } from "./fixtures/pay-bill-bankworkx";
 import { mobileTopup } from "./fixtures/mobile-topup";
+import { schedulePayment } from "./fixtures/schedule-payment";
+import { cancelStandingOrder } from "./fixtures/cancel-standing-order";
 import { corporatePayment, corporateApproval } from "./fixtures/corporate-payments";
 import { bulkPayment } from "./fixtures/bulk-payment";
 import { payrollRun } from "./fixtures/payroll-run";
@@ -105,6 +107,16 @@ export const catalog: CatalogEntry[] = [
     id: mobileTopup.slug, category: "Payments", madeFor: "bankworkx", journey: mobileTopup,
     summary: "Add credit to a mobile number: choose the operator, the number (a saved one or another), one of the operator's fixed amounts and the account to pay from, confirm with a one-time code, and get a receipt.",
     highlights: ["Operators with fixed amounts", "Number rule of the home market", "Saved numbers, saved from the review", "Up to 300.00 a day to one number", "Timeout and unavailable screens"],
+  },
+  {
+    id: schedulePayment.slug, category: "Payments", madeFor: "bankworkx", journey: schedulePayment,
+    summary: "Pay a payee, one of your own accounts or a saved bill on a future date or on a repeat (once, weekly, every 2 weeks, monthly, every 3 months), with an end and a reminder; change a schedule later. Nothing is taken until each date.",
+    highlights: ["Payee, own account or saved bill", "Weekdays, month ends and closed days handled", "Ends never, on a date or after a number of payments", "Changes close the business day before", "20 schedules at most", "Timeout and unavailable screens"],
+  },
+  {
+    id: cancelStandingOrder.slug, category: "Payments", madeFor: "bankworkx", journey: cancelStandingOrder,
+    summary: "End a scheduled or recurring payment for good, or skip only the next one, from the list of what is scheduled. No code is asked, because it can only reduce what leaves the account. The cancel mode of Schedule a payment, as a journey of its own.",
+    highlights: ["All future payments or only the next one", "Refused while running or after changes close", "No code needed", "Timeout and unavailable screens"],
   },
   {
     id: internalTransfer.slug, category: "Payments", madeFor: "bankworkx", journey: internalTransfer,
