@@ -69,8 +69,35 @@ export const ADAPTER_CATALOG: AdapterInfo[] = [
     errors: ["OTP_REQUIRED", "CORE_UNAVAILABLE", "QUOTE_EXPIRED", "INSUFFICIENT_FUNDS", "DAILY_LIMIT_EXCEEDED", "BENEFICIARY_COOLING_OFF", "INVALID_DATE", "BENEFICIARY_EXISTS"],
   },
   {
-    adapter: "bank.schedules.list", suggestedId: "schedules", description: "Payments set up to go later or repeat.",
-    input: {}, returns: "Object map keyed by schedule id: { id, beneficiaryId, name, text }.",
+    adapter: "bank.schedules.list", suggestedId: "schedules", description: "Payments set up to go later or repeat. BankWorkx: with status (live, active, paused, history) the schedules of schedule-payment, soonest first.",
+    input: { status: "optional" }, returns: "Map by id: { id, beneficiaryId, name, text }; with status also sub, nextText, amountText, remainingRuns, running.",
+  },
+  {
+    adapter: "bank.schedules.get", suggestedId: "scheduleGet", description: "BankWorkx: one schedule. With for: change or cancel it fails if that cannot be done now.",
+    input: { scheduleId: "id", for: "optional: change | cancel" }, returns: "The list entry plus canSkip, afterText, endType, endOn, endLeft.",
+    errors: ["SCHEDULE_NOT_FOUND", "SCHEDULE_NOT_ACTIVE", "SCHEDULE_RUNNING", "SCHEDULE_CUTOFF_PASSED"],
+  },
+  {
+    adapter: "bank.schedules.check", suggestedId: "scheduleCheck", description: "BankWorkx: checks a new schedule, or a change (scheduleId), before the code. Changes nothing.",
+    input: { kind: "payee | own | bill", target: "payee, account or saved biller id", from: "account id", amount: "number", amountMode: "bill: fixed | full | minimum", frequency: "once | weekly | biweekly | monthly | quarterly", first: "YYYY-MM-DD", endType: "never | date | count", endOn: "date", endCount: "number" },
+    returns: "{ targetName, amountText, frequencyName, startText, endsText, nextDates, dates, maxCount }",
+    errors: ["BENEFICIARY_NOT_FOUND", "SAME_ACCOUNT", "INVALID_AMOUNT", "DAILY_LIMIT_EXCEEDED", "DATE_TOO_SOON", "DATE_TOO_FAR", "DATE_NOT_WEEKDAY", "END_BEFORE_START", "INVALID_COUNT", "BENEFICIARY_COOLING_OFF", "SCHEDULE_LIMIT"],
+  },
+  {
+    adapter: "bank.schedules.create", suggestedId: "scheduleCreate", description: "BankWorkx: makes the schedule; nothing is taken until each date. Input of check.",
+    input: {}, returns: "{ scheduleId, ...check }", moneyMoving: true, requiresOtp: true, errors: ["OTP_REQUIRED", "CORE_UNAVAILABLE"],
+  },
+  {
+    adapter: "bank.schedules.update", suggestedId: "scheduleUpdate", description: "BankWorkx: changes amount, next date or end, never the payee. Input of check and scheduleId.",
+    input: {}, returns: "{ scheduleId, ...check }", moneyMoving: true, requiresOtp: true, errors: ["OTP_REQUIRED", "CORE_UNAVAILABLE", "SCHEDULE_NOT_ACTIVE", "SCHEDULE_RUNNING", "SCHEDULE_CUTOFF_PASSED"],
+  },
+  {
+    adapter: "bank.schedules.cancel", suggestedId: "scheduleCancel", description: "BankWorkx: ends a schedule, or skips only the next payment. No code.",
+    input: { scheduleId: "id", scope: "all | next" }, returns: "{ status: cancelled | skipped, name, amountText, next }", errors: ["SCHEDULE_NOT_FOUND", "SCHEDULE_NOT_ACTIVE", "SCHEDULE_RUNNING", "SCHEDULE_CUTOFF_PASSED"],
+  },
+  {
+    adapter: "bank.schedules.runDue", suggestedId: "scheduleRun", description: "Scenarios only: moves the clock to the date and makes what is due.",
+    input: { date: "YYYY-MM-DD" }, returns: "Map of { status: paid | skipped | retry, reason }",
   },
   {
     adapter: "bank.limits.get", suggestedId: "limits", description: "Daily transfer limit and how much is used today.",
@@ -346,8 +373,9 @@ function describe(p: (typeof personas)[string]) {
     brand: p.brand,
     name: p.name,
     otpCode: p.behaviour.otpCode,
-    // a customer with the most payees the bank allows is described, not listed
-    beneficiaries: p.beneficiaries.length > 10 ? [`${p.beneficiaries.length} saved payees (${p.beneficiaries[0]!.id} to ${p.beneficiaries.at(-1)!.id})`] : p.beneficiaries.map((b) => `${b.id}: ${b.displayName}`),
+    // a customer with many payees is described, not listed
+    beneficiaries: p.beneficiaries.length > 6 ? [`${p.beneficiaries.length} saved payees (${p.beneficiaries[0]!.id} to ${p.beneficiaries.at(-1)!.id})`] : p.beneficiaries.map((b) => `${b.id}: ${b.displayName}`),
+    ...((p.schedules?.length ?? 0) > 2 ? { scheduled: `${p.schedules!.length} scheduled payments (${p.schedules![0]!.id} to ${p.schedules!.at(-1)!.id})` } : {}),
     limits: p.limits,
     behaviour: p.behaviour.transferFails ? "Money-moving calls fail with CORE_UNAVAILABLE after a correct OTP." : p.behaviour.kyc === "rejected" ? "KYC rejected: no accounts, so money-moving journeys cannot start." : "Everything works.",
   };
