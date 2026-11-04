@@ -2,7 +2,9 @@
  * Mobile hardening for the production profile (docs/SECURITY.md). Nothing here changes the demo: it is all off unless the build sets
  * EXPO_PUBLIC_FINX_ENV=production, and the native modules it uses are only loaded then.
  *
- *   EXPO_PUBLIC_FINX_INTEGRITY  "block" (default in production), "warn" or "off": what to do on a rooted or jailbroken device
+ *   EXPO_PUBLIC_FINX_INTEGRITY      "block" (default in production), "warn" or "off": what to do on a rooted or jailbroken device
+ *   EXPO_PUBLIC_FINX_ALLOW_SANDBOX  "1" lets a production build run on the sandbox bank (a labelled demo or pilot). Without it a
+ *                                   production build refuses to start until it is connected to a real bank (see @finx/mock-bank-api policy).
  */
 export type Hardening = {
   enabled: boolean;
@@ -11,12 +13,14 @@ export type Hardening = {
   integrity: "off" | "warn" | "block";
   /** refuse a Studio address that is not https */
   httpsOnly: boolean;
+  /** whether the sandbox bank may run: always in demo and UAT builds, in production only when allowed explicitly */
+  sandboxAllowed: boolean;
 };
 
 export function hardeningFor(env: Record<string, string | undefined>): Hardening {
-  if (env.EXPO_PUBLIC_FINX_ENV !== "production") return { enabled: false, blockCapture: false, integrity: "off", httpsOnly: false };
+  if (env.EXPO_PUBLIC_FINX_ENV !== "production") return { enabled: false, blockCapture: false, integrity: "off", httpsOnly: false, sandboxAllowed: true };
   const i = env.EXPO_PUBLIC_FINX_INTEGRITY;
-  return { enabled: true, blockCapture: true, integrity: i === "warn" || i === "off" ? i : "block", httpsOnly: true };
+  return { enabled: true, blockCapture: true, integrity: i === "warn" || i === "off" ? i : "block", httpsOnly: true, sandboxAllowed: env.EXPO_PUBLIC_FINX_ALLOW_SANDBOX === "1" };
 }
 
 export const isHttps = (url: string) => /^https:\/\/[^/\s]+/i.test(url);
@@ -34,7 +38,8 @@ export function integrityVerdict(h: Hardening, result: Integrity): Verdict {
 }
 
 /** Why the app should not start, or null. The address check covers a build that was given a plain-http server. */
-export function startBlock(h: Hardening, studioUrl: string, integrity: Integrity): { kind: "insecure_server" | "compromised_device"; message: string } | null {
+export function startBlock(h: Hardening, studioUrl: string, integrity: Integrity): { kind: "insecure_server" | "compromised_device" | "no_bank"; message: string } | null {
+  if (h.enabled && !h.sandboxAllowed) return { kind: "no_bank", message: "This app is not connected to a bank yet, so it cannot start. Please contact your bank." };
   if (h.enabled && h.httpsOnly && !isHttps(studioUrl)) return { kind: "insecure_server", message: "This app is set up to use an unsecured server address, so it will not start. Please contact your bank." };
   if (integrityVerdict(h, integrity) === "block") return { kind: "compromised_device", message: "For your protection this app cannot run on a device that has been rooted or jailbroken." };
   return null;

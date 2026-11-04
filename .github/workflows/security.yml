@@ -59,3 +59,20 @@ jobs:
         with:
           languages: javascript-typescript
       - uses: github/codeql-action/analyze@v3
+
+  sandbox-in-bundle:
+    name: Sandbox bank in a production web bundle
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    # Expected to fail until the apps can run on a real bank (the bank-sdk extraction): the sandbox is still part of every bundle.
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: NEXT_PUBLIC_FINX_ENV=production pnpm --filter @finx/bank-web build
+      - run: node scripts/audit-bundle.mjs apps/bank-web/.next/static --strict

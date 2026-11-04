@@ -7,6 +7,8 @@ import { ACME, type CorpCompany, type CorpPayment, type Flaws } from "./corporat
 import { createCorporateProvider, type CorporateProvider, type ProviderId } from "./corporate-provider";
 import { CabSandbox, CAB_PROFILES, type CabProfile } from "./cab";
 export * from "./finance";
+export { SANDBOX_MARKER, SandboxNotAllowedError, assertSandboxAllowed, sandboxAllowed, sandboxAllowedFor, setSandboxPolicy } from "./policy";
+import { assertSandboxAllowed } from "./policy";
 export { CAB_PROFILES, CAB_CURRENCY, PASSWORD_RULES, passwordProblems, type CabProfile } from "./cab";
 export { BankError } from "./errors";
 export * from "./invest";
@@ -168,6 +170,7 @@ export class MockBank {
   private corp?: CorporateProvider;
   /** `corpProvider` picks which corporate bank API stands behind the corp.* adapters; journeys do not change. */
   constructor(personaId = "ayesha", options: { corpProvider?: ProviderId; /** rules switched off, for mutation checks only */ corpFlaws?: Flaws } = {}) {
+    assertSandboxAllowed(); // a production build must not run customers on the sandbox (policy.ts)
     const base = personas[personaId];
     if (!base) throw new Error(`Unknown persona ${personaId}`);
     this.p = structuredClone(base);

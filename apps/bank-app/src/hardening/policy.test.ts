@@ -1,17 +1,18 @@
 import { describe, it, expect } from "vitest";
 import { hardeningFor, integrityVerdict, isHttps, startBlock } from "./policy";
 
-const prod = hardeningFor({ EXPO_PUBLIC_FINX_ENV: "production" });
+const prod = { ...hardeningFor({ EXPO_PUBLIC_FINX_ENV: "production" }), sandboxAllowed: true }; // the other tests are about the device and the address
+const noBank = hardeningFor({ EXPO_PUBLIC_FINX_ENV: "production" });
 const demo = hardeningFor({});
 
 describe("hardening policy", () => {
   it("is entirely off outside production", () => {
-    expect(demo).toEqual({ enabled: false, blockCapture: false, integrity: "off", httpsOnly: false });
+    expect(demo).toEqual({ enabled: false, blockCapture: false, integrity: "off", httpsOnly: false, sandboxAllowed: true });
     expect(hardeningFor({ EXPO_PUBLIC_FINX_ENV: "uat" }).enabled).toBe(false);
     expect(startBlock(demo, "http://10.0.2.2:3100", "compromised")).toBeNull();
   });
   it("turns capture blocking, https only and device checks on in production", () => {
-    expect(prod).toEqual({ enabled: true, blockCapture: true, integrity: "block", httpsOnly: true });
+    expect(noBank).toEqual({ enabled: true, blockCapture: true, integrity: "block", httpsOnly: true, sandboxAllowed: false });
   });
   it("lets a bank choose to warn or switch the device check off, but nothing else weakens production", () => {
     expect(hardeningFor({ EXPO_PUBLIC_FINX_ENV: "production", EXPO_PUBLIC_FINX_INTEGRITY: "warn" }).integrity).toBe("warn");
@@ -36,5 +37,11 @@ describe("hardening policy", () => {
     expect(startBlock(prod, "https://studio.bank.example", "compromised")).toMatchObject({ kind: "compromised_device" });
     expect(startBlock(prod, "https://studio.bank.example", "ok")).toBeNull();
     expect(startBlock(prod, "https://studio.bank.example", "unknown")).toBeNull();
+  });
+  it("will not start a production build that has no bank but the sandbox, unless the build says so", () => {
+    expect(startBlock(noBank, "https://studio.bank.example", "ok")).toMatchObject({ kind: "no_bank" });
+    expect(hardeningFor({ EXPO_PUBLIC_FINX_ENV: "production", EXPO_PUBLIC_FINX_ALLOW_SANDBOX: "1" }).sandboxAllowed).toBe(true);
+    expect(hardeningFor({ EXPO_PUBLIC_FINX_ENV: "production", EXPO_PUBLIC_FINX_ALLOW_SANDBOX: "yes" }).sandboxAllowed).toBe(false);
+    expect(startBlock(demo, "http://10.0.2.2:3100", "ok")).toBeNull();
   });
 });

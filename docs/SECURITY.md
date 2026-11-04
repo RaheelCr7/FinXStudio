@@ -25,7 +25,7 @@ Do not open a public issue for a vulnerability. Email the maintainer (see the re
 | T | A bad request body corrupts Studio data | Per-route checks, schema validation | Done in production: 2 MB body limit, rate limit, origin-checked writes |
 | R | A change cannot be traced to a person | Activity log exists | Done in production: hash-chained audit log; four-eyes publish by default |
 | I | Personal data or secrets reach logs, repo or AI | CODING.md rules, `.gitignore` | Secret scan in CI (report-only now), log review |
-| I | Sandbox bank code ships to production | Separate package | Excluded from production bundles, checked in build (planned) |
+| I | Sandbox bank code ships to production | Separate package | Production builds refuse to run on it unless a labelled demo says so (done); bundle audit reports it (done); removing the code from bundles needs `bank-sdk` (planned) |
 | D | Oversized input exhausts memory (parse, zod) | zod bumped to a patched 4.x | Request size limits, rate limits (planned) |
 | E | A role does more than allowed | Roles and authorisation in schema and engine; bank re-checks | Server-side role checks on Studio routes; agents' service token can never publish; four-eyes at the bank |
 | E | Prompt injection through AI-read content | Skills treat content as data; agents only draft | Humans publish; no AI key or production access |
@@ -46,7 +46,7 @@ Current findings (3 Nov 2026): the production dependency audit flagged zod 3.23.
 1. **Done (production profile): Studio sign-in, sessions, CSRF defence, rate and size limits, security headers (CSP report-only), hash-chained audit log, four-eyes publish by default.** See "Studio in production" below. Passwords are set on the People page (Manage access). Still to add: TOTP second factor, SSO, a shared rate-limit store when Studio runs on more than one server.
 2. **Mobile: done except certificate pinning** (secure storage, root/jailbreak check, screenshot blocking, TLS only). See "Mobile app in production".
 3. **Done: signed journeys.** See "Signed journeys" below.
-4. `mock-bank-api` excluded from production bundles.
+4. **Partly done: the sandbox in production builds.** See "The sandbox bank in production builds" below. Excluding the code itself waits for `bank-sdk`.
 5. Done: `.gitignore` covers `.env*`, `*.pem`, `.data/`.
 
 ## Studio in production
@@ -94,3 +94,10 @@ Build with `FINX_ENV=production` (app configuration: https only, no server chang
 Not done: **certificate pinning**. It needs a native module (for example `react-native-ssl-public-key-pinning`), two pins per host (current and backup) and a rotation process agreed with the bank's operations, so it is added with the first real bank. Also not done: code obfuscation, tamper detection of the app binary, Play Integrity and App Attest.
 
 The new native modules (`expo-secure-store`, `expo-screen-capture`, `expo-device`) need a native rebuild (`pod install` and a new dev client) to be present; a binary built earlier still runs the demo because they are loaded lazily and only in production.
+
+## The sandbox bank in production builds
+Today the apps run on the in-memory sandbox bank, and its types and market data are used throughout the web and phone apps, so the code cannot yet be left out of a bundle. What is done instead:
+
+- **A production build will not run customers on it.** `NEXT_PUBLIC_FINX_ENV=production` (web) or `EXPO_PUBLIC_FINX_ENV=production` (phone) turns the sandbox off: the web app shows "Not available yet", the phone app shows "Cannot start", and `MockBank` itself refuses to be created (`packages/mock-bank-api/src/policy.ts`). A labelled demo or pilot sets `NEXT_PUBLIC_FINX_ALLOW_SANDBOX=1` / `EXPO_PUBLIC_FINX_ALLOW_SANDBOX=1`. Demo, UAT, Studio and tests are unchanged.
+- **A bundle audit.** `node scripts/audit-bundle.mjs <folder> [--strict]` searches a build for the sandbox's marker string. The security workflow runs it on a production-flavoured web build; it reports the sandbox as present until `bank-sdk` lands. A release of a bank on a real API must pass `--strict` (see `docs/RELEASE.md`).
+- **Still to do (bank-sdk):** move the bank contract and types into `packages/bank-sdk`, keep the sandbox as one adapter in a separate entry point, and let a production build register only a real adapter. Then the strict audit passes.

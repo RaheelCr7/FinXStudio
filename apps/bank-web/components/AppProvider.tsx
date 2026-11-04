@@ -2,6 +2,7 @@
 import { createContext, useContext, useEffect, useState, useSyncExternalStore } from "react";
 import { BankApp, createLive, isRtl, type AppState } from "@finx/bank-client";
 import { parseTrustedKeys } from "@finx/journey-schema";
+import { sandboxAllowedFor, setSandboxPolicy } from "@finx/mock-bank-api";
 import type { BrandLook, Preset } from "@finx/ui-kit";
 
 export type ProjectInfo = { id: string; preset: Preset; name: string; shell: "meezan" | "bankworkx"; currency: string; /** How this bank's screens differ from the standard look. */ look?: BrandLook; /** Which bank API the project runs against (unset: the reference sandbox). */ bankApi?: string };
@@ -17,7 +18,7 @@ const write = (v: Saved) => { try { sessionStorage.setItem(KEY, JSON.stringify(v
  * One BankApp (shared with the Expo app) per bank, held in the browser. The sandbox bank lives in memory, so a reload starts it fresh:
  * only who is signed in and the language are remembered for the tab.
  */
-export function AppProvider({ project, children }: { project: ProjectInfo; children: React.ReactNode }) {
+function AppProviderInner({ project, children }: { project: ProjectInfo; children: React.ReactNode }) {
   const [app] = useState(() => new BankApp({ preset: project.preset, projectId: project.id, bankApi: project.bankApi, live: createLive({ brand: project.id, trustedKeys: parseTrustedKeys(process.env.NEXT_PUBLIC_FINX_TRUSTED_KEYS) }), studioUrl: "/api/studio" }));
   const [ready, setReady] = useState(false);
 
@@ -51,3 +52,14 @@ export function AppProvider({ project, children }: { project: ProjectInfo; child
 export function useApp() { const v = useContext(C); if (!v) throw new Error("useApp needs AppProvider"); return v; }
 /** The app store's current state, redrawing the component when it changes. */
 export function useAppState(): AppState { const { app } = useApp(); return useSyncExternalStore(app.subscribe, app.getState, app.getState); }
+
+/**
+ * A production build (NEXT_PUBLIC_FINX_ENV=production) does not run customers on the sandbox bank. Until it is connected to a real bank
+ * it shows this notice instead, unless NEXT_PUBLIC_FINX_ALLOW_SANDBOX=1 marks it as a demo or pilot.
+ */
+const SANDBOX_OK = sandboxAllowedFor(process.env.NEXT_PUBLIC_FINX_ENV, process.env.NEXT_PUBLIC_FINX_ALLOW_SANDBOX);
+setSandboxPolicy({ allowed: SANDBOX_OK });
+export function AppProvider(props: { project: ProjectInfo; children: React.ReactNode }) {
+  if (!SANDBOX_OK) return <main role="alert" style={{ padding: 32, maxWidth: 480, margin: "10vh auto", textAlign: "center" }}><h1 style={{ fontSize: 20 }}>Not available yet</h1><p>This app is not connected to a bank yet. Please contact your bank.</p></main>;
+  return <AppProviderInner {...props} />;
+}

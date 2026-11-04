@@ -1,10 +1,12 @@
 import React, { useEffect, useState } from "react";
 import { Text, View } from "react-native";
+import { setSandboxPolicy } from "@finx/mock-bank-api";
 import { DEFAULT_STUDIO_URL } from "../studio-config";
 import { hardeningFor, integrityVerdict, startBlock, type Integrity } from "./policy";
 import { checkIntegrity, protectScreen } from "./native";
 
 const policy = hardeningFor(process.env as Record<string, string | undefined>);
+setSandboxPolicy({ allowed: policy.sandboxAllowed }); // before any bank is created
 
 /** Wraps the whole app. In a demo build it renders the app at once and does nothing else. */
 export function HardeningGate({ children }: { children: React.ReactNode }) {
