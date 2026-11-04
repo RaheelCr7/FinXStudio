@@ -19,7 +19,9 @@ export type RunStep = { at: string; text: string };
 /** A journey as it was before a run first wrote to it, and a fingerprint of what the run left, so undo can tell whether a person edited it since. */
 export type Checkpoint = { at: string; existed: boolean; before?: Journey; after: string };
 export type AgentRun = { id: string; agent: string; title: string; brief?: string; status: RunStatus; summary?: string; journeySlug?: string; steps: RunStep[]; startedAt: string; updatedAt: string; checkpoints?: Record<string, Checkpoint>; undoneAt?: string };
-const fingerprint = (j: Journey) => createHash("sha1").update(JSON.stringify(j)).digest("hex");
+const fingerprint = (j: Journey, alg: "sha1" | "sha256" = "sha256") => createHash(alg).update(JSON.stringify(j)).digest("hex");
+/** Whether a journey still matches a stored fingerprint. Runs saved before the move to SHA-256 hold 40-character SHA-1 values; those still compare. */
+const sameFingerprint = (j: Journey, stored: string) => fingerprint(j, stored.length === 40 ? "sha1" : "sha256") === stored;
 /** Called inside a write, before it is saved: remembers how the journey was before this run's first write, and what the run left. */
 function track(db: Db, runId: string | undefined, slug: string, before: Journey | undefined, after: Journey) {
   const run = runId ? db.runs?.[runId] : undefined;
@@ -330,7 +332,7 @@ export async function checkpointOf(id: string) {
   if (!run) throw new StoreError(404, "Run not found");
   return Object.entries(run.checkpoints ?? {}).map(([slug, cp]) => {
     const rec = db.journeys[slug];
-    return { slug, name: rec ? (typeof rec.draft.name === "string" ? rec.draft.name : rec.draft.name.en ?? slug) : slug, created: !cp.existed, gone: !rec, editedSince: !!rec && fingerprint(rec.draft) !== cp.after, published: !!rec && (!!rec.published || rec.history.length > 0) };
+    return { slug, name: rec ? (typeof rec.draft.name === "string" ? rec.draft.name : rec.draft.name.en ?? slug) : slug, created: !cp.existed, gone: !rec, editedSince: !!rec && !sameFingerprint(rec.draft, cp.after), published: !!rec && (!!rec.published || rec.history.length > 0) };
   });
 }
 
@@ -345,7 +347,7 @@ export async function undoRun(id: string, opts: { force?: boolean } = {}) {
   if (!Object.keys(run.checkpoints ?? {}).length) throw new StoreError(409, run.undoneAt ? "This run was already undone" : "This run changed no journey, so there is nothing to undo");
   const plan = Object.entries(run.checkpoints!).map(([slug, cp]) => ({ slug, cp, rec: db.journeys[slug] }));
   if (!opts.force) {
-    const edited = plan.filter((p) => p.rec && fingerprint(p.rec.draft) !== p.cp.after).map((p) => p.slug);
+    const edited = plan.filter((p) => p.rec && !sameFingerprint(p.rec.draft, p.cp.after)).map((p) => p.slug);
     if (edited.length) throw new StoreError(409, `${edited.join(", ")} ${edited.length > 1 ? "were" : "was"} edited after this run. Undo anyway to overwrite those edits.`);
   }
   const blocked = plan.filter((p) => p.rec && !p.cp.existed && (p.rec.published || p.rec.history.length)).map((p) => p.slug);
