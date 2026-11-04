@@ -5,6 +5,8 @@ export { localTransfer } from "./fixtures/local-transfer";
 export { convertCurrency } from "./fixtures/convert-currency";
 export { ownTransfer } from "./fixtures/own-transfer";
 export { manageBeneficiary } from "./fixtures/manage-beneficiary";
+export { personalTransfer } from "./fixtures/personal-transfer";
+export { internalTransfer } from "./fixtures/internal-transfer";
 export { payBill } from "./fixtures/pay-bill";
 export { corporatePayment, corporateApproval } from "./fixtures/corporate-payments";
 export { bulkPayment } from "./fixtures/bulk-payment";

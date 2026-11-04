@@ -19,7 +19,7 @@ export type FxConfig = {
 };
 export const DEFAULT_FX: FxConfig = { perUsd: PER_USD, spread: FX_SPREAD };
 /** BankWorkx quotes the mid-market rate with no margin; a renewed quote moves within 0.04% either way (fixed values here, so tests repeat). */
-export const BANKWORKX_FX: FxConfig = { perUsd: { ...PER_USD, EUR: 0.926, AED: 3.672 }, spread: 0, drift: [0.0002, -0.0003, 0.0004, -0.0001] };
+export const BANKWORKX_FX: FxConfig = { perUsd: { ...PER_USD, EUR: 0.926, AED: 3.672, GBP: 0.781, JPY: 151, CAD: 1.36, AUD: 1.52, CHF: 0.88, SGD: 1.34, MXN: 17.1 }, spread: 0, drift: [0.0002, -0.0003, 0.0004, -0.0001] };
 
 export const fxSupports = (currency: string, cfg: FxConfig = DEFAULT_FX) => currency in cfg.perUsd;
 /** Units of `to` for one unit of `from`, before the spread. */

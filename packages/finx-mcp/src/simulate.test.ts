@@ -72,6 +72,23 @@ describe("simulate", () => {
     });
     expect(rows.failures).toEqual([]);
   });
+  it("presses the button that is shown, not a hidden one with the same words, and sees the second line of a choice", async () => {
+    const j: any = {
+      id: "j", slug: "j", name: "j", version: 1, status: "draft", channels: ["web"], locale: { default: "en", supported: ["en"] }, entryScreen: "a", integrations: [],
+      screens: [
+        { id: "a", title: "A", blocks: [
+          { type: "button", label: "Go", visibleWhen: "false", actions: [{ type: "navigate", to: "hidden" }] },
+          { type: "button", label: "Stay", actions: [{ type: "navigate", to: "stay" }] },
+          { type: "button", label: "Go", actions: [{ type: "navigate", to: "shown" }] },
+          { type: "select", bind: "x", label: "Pick", choices: [{ id: "one", label: "One", text: "the second line" }] },
+        ] },
+        { id: "hidden", title: "H", kind: "terminal", blocks: [] }, { id: "stay", title: "S", kind: "terminal", blocks: [] }, { id: "shown", title: "G", kind: "terminal", blocks: [] },
+      ],
+    };
+    const r = await simulate({ journey: j, persona: "ayesha", lang: "en", steps: [{ expectText: "the second line" }, { press: "Go" }, { expectScreen: "shown" }] });
+    expect(r.failures).toEqual([]);
+  });
+
   it("stops with the list of real buttons when a button does not exist", async () => {
     const r = await simulate({ journey: payBill, persona: "ayesha", lang: "en", steps: [{ press: "Submit" }, { expectScreen: "review" }] });
     expect(r.failures).toHaveLength(1);

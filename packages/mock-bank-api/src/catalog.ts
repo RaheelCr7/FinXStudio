@@ -16,11 +16,11 @@ export type AdapterInfo = {
 export const ADAPTER_CATALOG: AdapterInfo[] = [
   {
     adapter: "bank.accounts.list", suggestedId: "accounts", description: "The signed-in customer's accounts.",
-    input: {}, returns: "Object map keyed by account id: { id, name, maskedNumber, iban, balance, currency, status, canDebit }. Save as ctx.accounts and use with accountPicker.",
+    input: { homeOnly: "optional, true: only accounts that can pay someone else" }, returns: "Object map keyed by account id: { id, name, maskedNumber, iban, balance, currency, status, canDebit }. Save as ctx.accounts and use with accountPicker.",
   },
   {
     adapter: "bank.beneficiaries.list", suggestedId: "beneficiaries", description: "Saved payees. One added in the last 24 hours is new and may only be sent 500.00 USD in any 24 hours.",
-    input: {}, returns: "Object map keyed by beneficiary id: { id, displayName, bank, maskedNumber, addedAt, ageHours } and, for payees saved with bank.payees.save: kind (internal | domestic | international), region (bw | us | eu | uk | me | world), country, nickname, label, verified, nameCheck, coolingOffUntil (ISO or null), coolingOffHoursLeft, allowanceLeft (USD, null when not new), scheduledCount, scheduledText. Save as ctx.beneficiaries.",
+    input: { sendType: "optional: internal | domestic | international, only payees of that kind" }, returns: "Object map keyed by beneficiary id: { id, displayName, bank, maskedNumber, addedAt, ageHours, sendType } and, for payees saved with bank.payees.save: kind (internal | domestic | international), region (bw | us | eu | uk | me | world), country, nickname, label, verified, nameCheck, coolingOffUntil (ISO or null), coolingOffHoursLeft, allowanceLeft (USD, null when not new), scheduledCount, scheduledText. Save as ctx.beneficiaries.",
   },
   {
     adapter: "bank.payees.validate", suggestedId: "validate", description: "Checks the details of a payee being added (or changed, with payeeId): the account for its region, no second copy, at most 50 payees. Fails with the first problem.",
@@ -49,6 +49,28 @@ export const ADAPTER_CATALOG: AdapterInfo[] = [
     adapter: "bank.payees.delete", suggestedId: "remove", description: "Removes a payee, no code needed. One used by a scheduled payment needs cancelSchedules true, which cancels them.",
     input: { payeeId: "payee to remove", cancelSchedules: "true to cancel the scheduled payments that use it" },
     returns: "{ removed, schedulesCancelled, displayName, bank, maskedNumber }", errors: ["BENEFICIARY_NOT_FOUND", "BENEFICIARY_IN_USE"],
+  },
+  {
+    adapter: "bank.payees.lookup", suggestedId: "lookup", description: "Finds a BankWorkx customer by mobile number, email or BankWorkx ID. No code needed.",
+    input: { by: "mobile | email | id", value: "what was typed" },
+    returns: "{ name, customerNumber, maskedAccount, currency, key }; key goes to bank.payments.quote.", errors: ["CUSTOMER_NOT_FOUND", "BENEFICIARY_EXISTS"],
+  },
+  {
+    adapter: "bank.payments.quote", suggestedId: "quote", description: "Prices and checks a payment to someone else (BankWorkx customer, home-market bank, or abroad): speeds with arrival, limit and fee, the rate (held 60 s), the total, every bank rule. Home-currency accounts only. Nothing moves.",
+    input: { fromAccountId: "home-currency account", payeeId: "a saved payee; or sendType (internal | domestic | international), currency, country, payeeName, payeeKey (from validate or lookup)", receiveAmount: "what the payee gets, in their currency", speed: "optional: standard | sameDay | instant | priority (default: first that fits)", standard: "false if the bank does not offer it (also sameDay, instant); priority only when true", chargeChoice: "true if the customer may pick who pays charges", chargeBearer: "shared | ours | theirs", coolingOff: "false if the bank switched the new-payee limit off", purpose: "abroad: Family support | Goods or services | Salary | Rent | Education | Savings or investment | Other", street: "abroad, when ADDRESS_REQUIRED", city: "as street", relationship: "as street: Myself | Family member | Friend | My employer | Supplier or business | Landlord | School or university | Other" },
+    returns: "{ quoteId, type, speed, speedName, arrives, speeds (map: { id, name, sub, usable }), receive { currency, amount }, rate, converted, pay, fee, feeText, total, currency, expiresAt, sendDates (map: { id, name }) }. Save as ctx.quote.",
+    errors: ["ACCOUNT_CANNOT_DEBIT", "PAYEE_NOT_CHECKED", "INVALID_AMOUNT", "RAIL_NOT_AVAILABLE", "RAIL_LIMIT", "INSUFFICIENT_FUNDS", "DAILY_LIMIT_EXCEEDED", "BENEFICIARY_COOLING_OFF", "PURPOSE_REQUIRED", "ADDRESS_REQUIRED"],
+  },
+  {
+    adapter: "bank.payments.create", suggestedId: "pay", description: "Pays a quote after the one-time code, checking the rules again. A payee named \"Test Sanctions\" is held (nothing moves). when: later only sets it up. save: true also saves a payee typed in the payment (new for 24 hours).",
+    input: { quoteId: "from bank.payments.quote", when: "now | later", sendOn: "later: a date of sendDates", repeat: "later: none | weekly | monthly", save: "true to save a typed payee (with the fields of bank.payees.validate)", reference: "optional" },
+    returns: "{ reference, railReference, status (settled | processing | scheduled | held), speed, speedName, arrives, receive, rate, pay, fee, total, currency, payeeId, payeeName, newBalance }",
+    moneyMoving: true, requiresOtp: true,
+    errors: ["OTP_REQUIRED", "CORE_UNAVAILABLE", "QUOTE_EXPIRED", "INSUFFICIENT_FUNDS", "DAILY_LIMIT_EXCEEDED", "BENEFICIARY_COOLING_OFF", "INVALID_DATE", "BENEFICIARY_EXISTS"],
+  },
+  {
+    adapter: "bank.schedules.list", suggestedId: "schedules", description: "Payments set up to go later or repeat.",
+    input: {}, returns: "Object map keyed by schedule id: { id, beneficiaryId, name, text }.",
   },
   {
     adapter: "bank.limits.get", suggestedId: "limits", description: "Daily transfer limit and how much is used today.",
