@@ -2,7 +2,7 @@ import { alexInvest, type InvestState } from "./invest";
 
 /** Sandbox data for the BankWorkx (money management) app: spending, budgets, subscriptions, cards and linked banks. */
 
-export type Category = "food" | "income" | "shopping" | "coffee" | "rent" | "transport" | "entertainment" | "health" | "groceries" | "vehicle" | "investing";
+export type Category = "food" | "income" | "shopping" | "coffee" | "rent" | "transport" | "entertainment" | "health" | "groceries" | "vehicle" | "investing" | "bills";
 export type Txn = { id: string; title: string; category: Category; /** negative = money out */ amount: number; daysAgo: number; time?: string };
 export type Budget = { id: string; name: string; category: Category; limit: number; spent: number };
 export type Subscription = { id: string; name: string; amount: number; nextInDays: number; color: string };

@@ -8,6 +8,7 @@ export { manageBeneficiary } from "./fixtures/manage-beneficiary";
 export { personalTransfer } from "./fixtures/personal-transfer";
 export { internalTransfer } from "./fixtures/internal-transfer";
 export { payBill } from "./fixtures/pay-bill";
+export { payBillBankworkx } from "./fixtures/pay-bill-bankworkx";
 export { corporatePayment, corporateApproval } from "./fixtures/corporate-payments";
 export { bulkPayment } from "./fixtures/bulk-payment";
 export { payrollRun } from "./fixtures/payroll-run";

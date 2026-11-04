@@ -1,6 +1,7 @@
 import type { Journey } from "./schema";
 import { localTransfer } from "./fixtures/local-transfer";
 import { payBill } from "./fixtures/pay-bill";
+import { payBillBankworkx } from "./fixtures/pay-bill-bankworkx";
 import { corporatePayment, corporateApproval } from "./fixtures/corporate-payments";
 import { bulkPayment } from "./fixtures/bulk-payment";
 import { payrollRun } from "./fixtures/payroll-run";
@@ -93,6 +94,11 @@ export const catalog: CatalogEntry[] = [
     id: personalTransfer.slug, category: "Payments", madeFor: "bankworkx", journey: personalTransfer,
     summary: "Send money to a BankWorkx customer, a person at another bank or another country: choose how fast, see the fee, the rate and the arrival, confirm with a one-time code. A payee typed in the payment can be saved; a new payee is limited to 500.00 USD for 24 hours.",
     highlights: ["Three ways to send, each switched on or off by the bank", "Find a BankWorkx customer by mobile, email or ID", "Standard, Same day, Instant (and Priority) with fee, arrival and limit", "Rate held 60 seconds, then a new price", "Later and repeating payments on business days", "Held for review, timeout and unavailable screens"],
+  },
+  {
+    id: payBillBankworkx.slug, category: "Payments", madeFor: "bankworkx", journey: payBillBankworkx,
+    summary: "Pay a bill from the bank's directory of billers: enter the reference, see the bill, pay the full amount, the minimum or another amount, confirm with a one-time code, and get a receipt.",
+    highlights: ["Directory with search, categories and saved billers", "Reference format per biller", "Full, minimum or other amount", "Late fee, fee and rate in another currency", "Save the biller or pay automatically", "Timeout and unavailable screens"],
   },
   {
     id: internalTransfer.slug, category: "Payments", madeFor: "bankworkx", journey: internalTransfer,

@@ -39,6 +39,7 @@ export function categoryTile(cat: string): { icon: string; color: string } {
     case "health": return { icon: "shield", color: "var(--c-chart6)" };
     case "vehicle": case "transport": return { icon: "trend", color: "var(--c-chart1)" };
     case "entertainment": return { icon: "repeat", color: "var(--c-chart6)" };
+    case "bills": return { icon: "home", color: "var(--c-chart1)" };
     case "investing": return { icon: "trend", color: "var(--c-chart2)" };
     default: return { icon: "bag", color: "var(--c-accent)" };
   }

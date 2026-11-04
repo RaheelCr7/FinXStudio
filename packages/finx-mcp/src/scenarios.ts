@@ -109,18 +109,24 @@ export function bankMutants(journey: Journey): Mutant[] {
     ["payrollPeriod", "The bank takes any pay period and lets a period be paid twice", payroll],
     // a retail customer's own accounts: the rules of moving and converting money between them
     ["sameAccount", "The bank lets money move from an account to itself", uses(/^bank\.transfers\.own$/)],
-    ["canDebit", "The bank lets an account that is frozen send money", uses(/^bank\.(transfers\.own|fx\.quote|payments\.(quote|create))$/)],
-    ["funds", "The bank lets an account send more than it has", uses(/^bank\.(transfers\.own|fx\.(quote|convert)|payments\.(quote|create))$/)],
+    ["canDebit", "The bank lets an account that is frozen send money", uses(/^bank\.(transfers\.own|fx\.quote|payments\.(quote|create)|bills\.(quote|pay))$/)],
+    ["funds", "The bank lets an account send more than it has", uses(/^bank\.(transfers\.own|fx\.(quote|convert)|payments\.(quote|create)|bills\.(quote|pay))$/)],
     ["quoteExpiry", "The bank converts at a rate that has run out", uses(/^bank\.(fx\.convert|payments\.create)$/)],
     ["quoteReplay", "The bank lets one rate be used twice", uses(/^bank\.(fx\.convert|payments\.create)$/)],
     // sending money to someone else: the speeds and their limits, the daily limit, the new-payee allowance, screening, purpose and address
     ["railLimit", "The bank sends a payment that is over the limit of its speed", uses(/^bank\.payments\.quote$/)],
-    ["dailyLimit", "The bank ignores the customer's daily limit", uses(/^bank\.payments\.(quote|create)$/)],
+    ["dailyLimit", "The bank ignores the customer's daily limit", uses(/^bank\.(payments|bills)\.(quote|create|pay)$/)],
     ["coolingOff", "The bank ignores the allowance of a payee added in the last 24 hours", uses(/^bank\.payments\.(quote|create)$/)],
     ["sanctions", "The bank sends a payment to a payee that screening holds", uses(/^bank\.payments\.create$/)],
     ["purposeRule", "The bank takes a payment abroad without a purpose", uses(/^bank\.payments\.quote$/)],
     ["addressRule", "The bank takes a payment abroad without the payee's address when the rules ask for it", uses(/^bank\.payments\.quote$/)],
     ["bankCode", "The bank accepts a transit number, IFSC or BSB in the wrong format", uses(/^bank\.payments\.quote$/) && uses(/^bank\.payees\.validate$/)],
+    // paying a bill: the smallest and the largest payment, what was already paid, an amount due that changed, and the currency of the bill
+    ["billMinimum", "The bank takes a bill payment below the minimum", uses(/^bank\.bills\.(quote|pay)$/)],
+    ["billMaximum", "The bank takes a bill payment above the amount due", uses(/^bank\.bills\.(quote|pay)$/)],
+    ["billMemory", "The bank forgets what was already paid on a bill", uses(/^bank\.bills\.(lookup|quote|pay)$/)],
+    ["billChanged", "The bank pays a bill whose amount due changed since the person saw it", uses(/^bank\.bills\.pay$/)],
+    ["billCurrency", "The bank pays a bill from an account in another currency when that is switched off", uses(/^bank\.bills\.(quote|pay)$/)],
     // the payees a customer saves: what the bank checks about them
     ["payeeLimit", "The bank lets a customer save more than 50 payees", uses(/^bank\.payees\.(validate|save)$/)],
     ["payeeDuplicate", "The bank lets the same payee be saved twice", uses(/^bank\.payees\.(validate|save|update)$/)],
