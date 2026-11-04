@@ -28,7 +28,7 @@ A bank sets, besides the on/off switches and options:
 | `deposit-calculator` | Deposit calculator | Public: before sign-in | Spec | Yes |  |
 | `find-branch-atm` | Find a branch or ATM | Public: before sign-in | Spec | Yes |  |
 | `contact-support` | Contact us | Public: before sign-in | Spec | Yes |  |
-| `open-account` | Open an account | Public: before sign-in | Built | Yes | Offer the United States; Offer the United Kingdom; Offer the European Union; Offer the UAE and Middle East; US: accept an ITIN or a passport instead of an SSN; Allow joint accounts (second holder completes their own checks); Offer Shariah-compliant products (Middle East); UAE: allow UAE Pass instead of photographing the Emirates ID; Saudi Arabia: allow Nafath approval instead of an ID photo; Jordan: allow the Sanad digital ID; Send politically exposed persons to manual review |
+| `open-account` | Open an account | Public: before sign-in | Built | Yes | Offer the savings account; Offer the Islamic account; Ask for a proof of address when the local rules need it; Allow save and resume; Send income over 1M to manual review |
 | `track-application` | Track my application | Public: before sign-in | Spec | Yes |  |
 | `register-digital-banking` | Register for digital banking | Public: before sign-in | Spec | Yes |  |
 | `sign-in` | Sign in | Signing in and security | Built | No (core) | Offer one-time codes by text message (being phased out; app approval is safer); Offer Face ID / fingerprint quick sign-in; Offer passkeys; Offer a 6-digit quick PIN; Let people remember their username on this device; Passwords expire after 12 months (NIST advises against; some regulators expect it); Ask for a code when the sign-in looks unusual, even on a trusted device |
@@ -39,26 +39,26 @@ A bank sets, besides the on/off switches and options:
 | `change-password` | Change password | Signing in and security | Spec | Yes |  |
 | `trusted-devices` | Trusted devices | Signing in and security | Spec | Yes |  |
 | `change-quick-pin` | Change quick PIN | Signing in and security | Spec | Yes |  |
-| `accounts` | Accounts overview | Personal: Accounts | Built | Yes | Offer the hide-balance eye; Show foreign currency accounts; Show Statement and Transfer on each account; Offer sort and filter |
-| `account-details` | Account details | Personal: Accounts | Built | Yes | Offer Share details; Allow closure requests in the app; Offer Report a problem on transactions; Allow hiding an account |
-| `statement` | Account statement | Personal: Accounts | Built | Yes | Offer CSV; Offer OFX and QIF for accounting apps; Offer official stamped statements; Charge a fee ($5.00) for official statements and balance certificates; Offer proof of address letters; Offer balance certificates; Offer paperless settings; Allow sending official documents straight to a third party |
+| `accounts` | Accounts overview | Personal: Accounts | Built | Yes | Offer the hide-balance toggle; Show foreign currency accounts |
+| `account-details` | Account details | Personal: Accounts | Built | Yes | Offer Share for account numbers; Allow closure requests in the app; Offer Report a problem on transactions; Allow hiding an account |
+| `statement` | Account statement | Personal: Accounts | Built | Yes | Offer official stamped statements; Offer proof of address letters; Offer balance certificates; Charge a fee for official statements and balance certificates; Offer paperless statements; Offer OFX and QIF files |
 | `account-nickname` | Rename an account | Personal: Accounts | Spec | Yes |  |
 | `open-another-account` | Open another account | Personal: Accounts | Spec | Yes |  |
 | `create-budget` | Create a budget | Personal: Accounts | Spec | Yes |  |
-| `transfer-types` | Ways to send money | Personal: Payments | Built | Yes | Show the “Which should I use?” helper; Show the side-by-side table |
+| `transfer-types` | Ways to send money | Personal: Payments | Built | Yes |  |
 | `own-transfer` | Between my accounts | Personal: Payments | Built | Yes | Allow conversion between currencies; Charge the 0.20% conversion fee |
 | `internal-transfer` | To a BankWorkx customer | Personal: Payments | Built (alias of `personal-transfer`) | Yes |  |
-| `personal-transfer` | Send money | Personal: Payments | Built | Yes | Offer “Between my accounts”; Offer “To a BankWorkx® customer”; Offer “To another bank in the same region”; Offer “To another country” (SWIFT); Region: United States; Region: United Kingdom; Region: Europe (SEPA); Region: United Arab Emirates; Region: Saudi Arabia; Region: Jordan; Rail: ACH (standard); Rail: Same-day ACH; Rail: Instant (RTP® / FedNow®); Rail: Wire (Fedwire®); Rail: SEPA Credit Transfer; Rail: SEPA Instant; Rail: Faster Payments; Rail: CHAPS; Rail: Bacs; Rail: Aani instant payment; Rail: UAEFTS transfer; Rail: sarie instant; Rail: SARIE transfer; Rail: CliQ instant payment; Rail: JoPACC transfer; Rail: International (SWIFT); Allow currency conversion between my accounts; Run the name check (CoP, VoP and others); Allow “Later” and repeating payments; Apply the 24-hour $500 limit to new payees; Demo: SEPA Instant is unavailable; Demo: it is 16:30, after same-day cut-offs |
-| `single-transfer` | Quick transfer | Personal: Payments | Built | Yes | Offer instant rails (RTP, SEPA Instant, Faster Payments, Aani, sarie, CliQ); Allow “Later” and repeating payments; Apply the 24-hour $500 limit to new payees; Demo: SEPA Instant is unavailable; Demo: it is 16:30, after same-day cut-offs |
+| `personal-transfer` | Send money | Personal: Payments | Built | Yes | Offer “Between my accounts”; Offer “To a BankWorkx® customer”; Offer “To another bank”; Offer “To another country”; Speed: Standard; Speed: Same day (where the market has it); Speed: Instant (where the market has it); Speed: Priority (international); Let the customer choose who pays the bank charges (international); Allow currency conversion between my accounts; Run the payee name check where the market has one; Allow “Later” and repeating payments; Apply the 24-hour limit to new payees |
+| `single-transfer` | Quick transfer | Personal: Payments | Built | Yes | Offer the Instant speed; Allow “Later” and repeating payments; Apply the 24-hour limit to new payees |
 | `international-transfer` | Abroad | Personal: Payments | Built (alias of `personal-transfer`) | Yes |  |
 | `pay-bill` | Pay a bill | Personal: Payments | Built | Yes | Look up the amount due from the biller (off: the person types the amount); Allow the minimum and other amounts where the biller accepts them; Allow paying a bill from an account in another currency; Offer to save the biller; Offer auto-pay after the payment |
 | `mobile-topup` | Mobile top-up | Personal: Payments | Spec | Yes |  |
-| `manage-beneficiary` | Add, edit or delete a payee | Personal: Payments | Built | Yes | Run the name check (Verification of Payee, Confirmation of Payee); Let a person cancel scheduled payments while deleting a payee; Offer payee labels (Family, Friend, Landlord…) |
-| `schedule-payment` | Schedule a payment | Personal: Payments | Built | Yes | Allow schedules between own accounts; Allow scheduling a saved bill (full balance or minimum due); Let the person choose “previous business day” for closed days; Offer “try once more next business day” when there isn’t enough money; Offer “skip only the next payment” when cancelling; Close changes at 09:00 the business day before (default 18:00) |
+| `manage-beneficiary` | Add, edit or delete a payee | Personal: Payments | Built | Yes | Run the name check where the market has one; Let a person cancel scheduled payments while deleting a payee; Offer payee labels (Family, Friend, Landlord…) |
+| `schedule-payment` | Schedule a payment | Personal: Payments | Built | Yes | Allow schedules between own accounts; Allow scheduling a saved bill (full bill or minimum due); Offer “skip only the next payment” when cancelling; If there is not enough money, retry once on the next business day (off: skip and notify); Send one reminder the day before each payment; Close changes at 09:00 the business day before (default 18:00) |
 | `cancel-standing-order` | Cancel a standing order | Personal: Payments | Built (alias of `schedule-payment`) | Yes |  |
-| `cards` | Cards | Personal: Cards | Built | Yes | Show spending summary; Show recent card transactions; Show digital wallet row; Show saved cards row (for add money) |
+| `cards` | Cards | Personal: Cards | Built | Yes | Show recent card transactions; Show the Wallet action |
 | `activate-card` | Activate card | Personal: Cards | Built | Yes | Ask for the 3-digit security code; Let the customer set the PIN during activation |
-| `card-controls` | Card limits and controls | Personal: Cards | Built | Yes | Offer a gambling block (off where gambling is barred by law); Offer the magnetic stripe switch; Let customers lower the contactless limit; A freeze still allows existing recurring payments |
+| `card-controls` | Card limits and controls | Personal: Cards | Built | Yes | Offer trip dates when International is on |
 | `freeze-card` | Freeze card | Personal: Cards | Built (alias of `card-controls`) | Yes |  |
 | `virtual-card` | Virtual card | Personal: Cards | Spec | Yes |  |
 | `replace-card` | Replace card | Personal: Cards | Spec | Yes |  |
@@ -81,18 +81,18 @@ A bank sets, besides the on/off switches and options:
 
 | Slug | Journey | Category | Status | Can a bank switch it off? | Options a bank can set |
 |---|---|---|---|---|---|
-| `business-accounts` | Business accounts | Business: Accounts | Built | Yes | Show the 13-week forecast; Show totals for other companies the person can see; Show account details for receiving money |
-| `business-statement` | Business statement | Business: Accounts | Built | Yes | Offer PDF; Offer CSV; Offer Excel; Offer MT940 / MT942; Offer camt.053 / camt.052; Offer BAI2; Allow intraday reports; Allow scheduled delivery; Allow delivery by email; Allow secure file transfer (sFTP / host-to-host); Allow email to addresses outside the company |
+| `business-accounts` | Business accounts | Business: Accounts | Built | Yes | Show account numbers for receiving money |
+| `business-statement` | Business statement | Business: Accounts | Built | Yes | Offer bank statement files (BAI2, MT940, camt.053); Allow intraday statements; Allow scheduled statements; Allow email to addresses outside the company |
 | `supplier-payment` | Pay a supplier | Business: Payments | Built | Yes |  |
 | `add-supplier` | Add a supplier | Business: Payments | Spec | Yes |  |
 | `payment-template` | Payment template | Business: Payments | Spec | Yes |  |
 | `schedule-business-payment` | Schedule a business payment | Business: Payments | Spec | Yes |  |
 | `withdraw-payment` | Withdraw a payment | Business: Payments | Spec | Yes |  |
-| `bulk-payment` | Bulk payment | Business: Bulk and payroll | Built | Yes | Accept CSV template files; Accept ISO 20022 pain.001 XML files; Accept NACHA files (US); Accept Bacs Standard 18 files (UK); Allow entering lines by hand; Allow pasting lines; Partial acceptance: send the good lines and keep the rest for repair; Allow dropping lines; Let approvers decide per line as well as per batch |
+| `bulk-payment` | Bulk payment | Business: Bulk and payroll | Built | Yes | Allow entering payments by hand; Also accept bank file formats; Offer the Same day speed; Offer the Instant speed |
 | `repair-bulk-lines` | Repair rejected lines | Business: Bulk and payroll | Spec | Yes |  |
 | `bulk-status` | Batch status | Business: Bulk and payroll | Built | Yes |  |
-| `payroll-run` | Payroll run | Business: Bulk and payroll | Built | Yes | Allow payroll upload from a CSV file; Allow bonus lines; Allow deduction lines; Compare with last month and ask for a reason on big changes; Build the WPS file for the UAE and Saudi Arabia; Offer to tell employees their payslip is ready |
-| `approve-payments` | Approve payments | Business: Approvals | Built | Yes | Allow batch approval; Extra security check from 25,000.00; Allow “Ask for changes”; Allow passing a payment to another approver |
+| `payroll-run` | Payroll run | Business: Bulk and payroll | Built | Yes | Allow bonus lines; Allow deduction lines; Ask for a reason when the total changes by more than 20%; Offer to send payslips |
+| `approve-payments` | Approve payments | Business: Approvals | Built | Yes | Allow approving several at once; Ask for a code from 25,000.00; Allow passing a payment to another approver |
 | `manage-user` | Invite, edit or disable a user | Business: Admin | Spec | Yes |  |
 | `change-limits` | Change limits | Business: Admin | Spec | Yes |  |
 | `edit-signatory-group` | Edit a signatory group | Business: Admin | Spec | Yes |  |
@@ -208,3 +208,4 @@ Catalog entries in the module files: 136. Built in the prototype: 26 (26 with a 
 2. Should options be typed (switch, list of allowed values, a number such as a limit) so the catalog panel can validate them?
 3. Entries that move money and entries that only show information may need different approval before a bank can switch them on in production.
 4. Prototype permission names (`pay.create`, `pay.approve`, `accounts.view`) differ from the README vocabulary (`biz.*`, `payments.create`). One list must win before step 2.
+5. The prototype sign-in links to `forgot-password` and `register`, which are not built; the spec calls them `reset-password` and `register-digital-banking`. One naming must win.
