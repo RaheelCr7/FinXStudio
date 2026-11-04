@@ -2,6 +2,7 @@ import type { Journey } from "./schema";
 import { localTransfer } from "./fixtures/local-transfer";
 import { payBill } from "./fixtures/pay-bill";
 import { payBillBankworkx } from "./fixtures/pay-bill-bankworkx";
+import { mobileTopup } from "./fixtures/mobile-topup";
 import { corporatePayment, corporateApproval } from "./fixtures/corporate-payments";
 import { bulkPayment } from "./fixtures/bulk-payment";
 import { payrollRun } from "./fixtures/payroll-run";
@@ -99,6 +100,11 @@ export const catalog: CatalogEntry[] = [
     id: payBillBankworkx.slug, category: "Payments", madeFor: "bankworkx", journey: payBillBankworkx,
     summary: "Pay a bill from the bank's directory of billers: enter the reference, see the bill, pay the full amount, the minimum or another amount, confirm with a one-time code, and get a receipt.",
     highlights: ["Directory with search, categories and saved billers", "Reference format per biller", "Full, minimum or other amount", "Late fee, fee and rate in another currency", "Save the biller or pay automatically", "Timeout and unavailable screens"],
+  },
+  {
+    id: mobileTopup.slug, category: "Payments", madeFor: "bankworkx", journey: mobileTopup,
+    summary: "Add credit to a mobile number: choose the operator, the number (a saved one or another), one of the operator's fixed amounts and the account to pay from, confirm with a one-time code, and get a receipt.",
+    highlights: ["Operators with fixed amounts", "Number rule of the home market", "Saved numbers, saved from the review", "Up to 300.00 a day to one number", "Timeout and unavailable screens"],
   },
   {
     id: internalTransfer.slug, category: "Payments", madeFor: "bankworkx", journey: internalTransfer,

@@ -194,14 +194,31 @@ export const ADAPTER_CATALOG: AdapterInfo[] = [
     errors: ["OTP_REQUIRED", "CORE_UNAVAILABLE", "ACCOUNT_NOT_FOUND", "INSUFFICIENT_FUNDS", "LIMIT_EXCEEDED", "BILL_CHANGED"],
   },
   {
-    adapter: "bank.carriers.list", suggestedId: "carriers", description: "Mobile carriers (Jazz, Zong, Telenor, Ufone).",
-    input: {}, returns: "Object map keyed by carrier id: { id, name }. Save as ctx.carriers and use with a select block (source).",
+    adapter: "bank.carriers.list", suggestedId: "carriers", description: "Mobile carriers (Jazz, Zong, Telenor, Ufone). BankWorkx: operators.",
+    input: {}, returns: "Object map keyed by carrier id: { id, name }. Save as ctx.carriers and use with a select block (source). BankWorkx adds amounts.",
   },
   {
-    adapter: "bank.topup.create", suggestedId: "topup", description: "Mobile top-up from an account. The amount must be between 50 and 5,000 PKR.",
-    input: { fromAccountId: "account id", amount: "number, 50 to 5000", carrier: "optional carrier id", mobile: "optional mobile number" },
-    returns: "{ reference, newBalance }", moneyMoving: true, requiresOtp: true,
-    errors: ["OTP_REQUIRED", "CORE_UNAVAILABLE", "INVALID_AMOUNT", "ACCOUNT_NOT_FOUND", "INSUFFICIENT_FUNDS", "LIMIT_EXCEEDED"],
+    adapter: "bank.topup.amounts", suggestedId: "amounts", description: "BankWorkx: an operator's fixed amounts.",
+    input: { operatorId: "operator id" }, returns: "Map keyed by amount: { id, amount, name }", errors: ["OPERATOR_NOT_FOUND"],
+  },
+  {
+    adapter: "bank.topup.numbers", suggestedId: "savedNumbers", description: "BankWorkx: saved numbers of an operator that fit the market.",
+    input: { operatorId: "optional", market: "A to D, default A" }, returns: "Map keyed by id: { id, name, number, last4, sub }", errors: ["OPERATOR_NOT_FOUND"],
+  },
+  {
+    adapter: "bank.topup.check", suggestedId: "checkNumber", description: "BankWorkx: checks a top-up before the code. Changes nothing.",
+    input: { operatorId: "id", number: "text", market: "A to D", amount: "number", fromAccountId: "account id" }, returns: "{ ok, last4, saved }",
+    errors: ["INVALID_AMOUNT", "NUMBER_INVALID", "NUMBER_NOT_FOUND", "OPERATOR_UNAVAILABLE", "TOPUP_LIMIT", "INSUFFICIENT_FUNDS", "LIMIT_EXCEEDED"],
+  },
+  {
+    adapter: "bank.topup.create", suggestedId: "topup", description: "Mobile top-up from an account. Meezan: 50 to 5,000 PKR. BankWorkx: an operator's amount, up to $300.00 a day to a number.",
+    input: { fromAccountId: "account id", amount: "number", carrier: "optional carrier id", mobile: "optional mobile number", operatorId: "BankWorkx", number: "BankWorkx", market: "BankWorkx", save: "BankWorkx", name: "BankWorkx" },
+    returns: "{ reference, newBalance }; BankWorkx adds last4, date, saved", moneyMoving: true, requiresOtp: true,
+    errors: ["OTP_REQUIRED", "CORE_UNAVAILABLE", "INVALID_AMOUNT", "ACCOUNT_NOT_FOUND", "INSUFFICIENT_FUNDS", "LIMIT_EXCEEDED", "TOPUP_LIMIT"],
+  },
+  {
+    adapter: "bank.activity.list", suggestedId: "activity", description: "BankWorkx: recent activity.",
+    input: {}, returns: "Map keyed by id: { id, title, category, amount }",
   },
   {
     adapter: "bank.banks.list", suggestedId: "banks", description: "Banks a customer can connect (BankWorkx).",
