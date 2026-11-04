@@ -3,6 +3,7 @@ import { ownTransfer } from "./own-transfer";
 import { manageBeneficiary } from "./manage-beneficiary";
 import { personalTransfer } from "./personal-transfer";
 import { internalTransfer } from "./internal-transfer";
+import { internationalTransfer } from "./international-transfer";
 import { payBillBankworkx } from "./pay-bill-bankworkx";
 import { mobileTopup } from "./mobile-topup";
 import { schedulePayment } from "./schedule-payment";
@@ -351,4 +352,4 @@ export const sellInvestment: Journey = {
   ],
 };
 
-export const bankworkxJourneys: Journey[] = [addMoney, addCard, connectAccount, createBudget, invest, sellInvestment, ownTransfer, manageBeneficiary, personalTransfer, internalTransfer, payBillBankworkx, mobileTopup, schedulePayment, cancelStandingOrder];
+export const bankworkxJourneys: Journey[] = [addMoney, addCard, connectAccount, createBudget, invest, sellInvestment, ownTransfer, manageBeneficiary, personalTransfer, internalTransfer, internationalTransfer, payBillBankworkx, mobileTopup, schedulePayment, cancelStandingOrder];

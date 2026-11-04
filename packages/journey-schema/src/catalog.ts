@@ -14,6 +14,7 @@ import { ownTransfer } from "./fixtures/own-transfer";
 import { manageBeneficiary } from "./fixtures/manage-beneficiary";
 import { personalTransfer } from "./fixtures/personal-transfer";
 import { internalTransfer } from "./fixtures/internal-transfer";
+import { internationalTransfer } from "./fixtures/international-transfer";
 import { addMoney, addCard, connectAccount, createBudget, invest, sellInvestment } from "./fixtures/bankworkx";
 import { cabJourneys } from "./fixtures/cab";
 
@@ -122,6 +123,11 @@ export const catalog: CatalogEntry[] = [
     id: internalTransfer.slug, category: "Payments", madeFor: "bankworkx", journey: internalTransfer,
     summary: "Send money to a BankWorkx customer: found by mobile number, email or BankWorkx ID, free and instant, up to 25,000.00. The same flow as Send money, opened at this type; kept so that links to the old name open the right place.",
     highlights: ["Alias of Send money for one type", "Free and instant", "Switched off with the same option", "One-time code"],
+  },
+  {
+    id: internationalTransfer.slug, category: "Payments", madeFor: "bankworkx", journey: internationalTransfer,
+    summary: "Send money abroad: country, name, IBAN or account, SWIFT/BIC, purpose; the rate held 60 seconds. Send money opened at this type, so old links open the right place.",
+    highlights: ["Alias of Send money for one type", "Standard and Priority speeds", "Switched off with the same option", "One-time code"],
   },
   {
     id: connectAccount.slug, category: "Accounts", madeFor: "bankworkx", journey: connectAccount,
