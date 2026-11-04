@@ -6,6 +6,8 @@ import { BankError } from "./errors";
 import { ACME, type CorpCompany, type CorpPayment, type Flaws } from "./corporate";
 import { createCorporateProvider, type CorporateProvider, type ProviderId } from "./corporate-provider";
 import { CabSandbox, CAB_PROFILES, type CabProfile } from "./cab";
+import { checkName, checkPayee, COOLING_OFF_HOURS, COOLING_OFF_USD, hoursSince, MAX_PAYEES, type NameCheck, type PayeeDetails, type PayeeInput, type PayeeKind, type PayeeRegion } from "./payees";
+export { CUSTOMERS, COOLING_OFF_HOURS, COOLING_OFF_USD, MAX_PAYEES, type PayeeKind, type PayeeRegion } from "./payees";
 export * from "./finance";
 export { SANDBOX_MARKER, SandboxNotAllowedError, assertSandboxAllowed, sandboxAllowed, sandboxAllowedFor, setSandboxPolicy } from "./policy";
 import { assertSandboxAllowed } from "./policy";
@@ -19,7 +21,22 @@ export { MAX_BULK_LINES, SALARY_CAP_FACTOR, type CorpEmployee, type BatchCheck, 
 export { PER_USD, FX_SPREAD, FX_FEE_RATE, QUOTE_TTL_SECONDS, DEFAULT_FX, BANKWORKX_FX, midRate, customerRate, type FxConfig, type Quote } from "./fx";
 
 export type Account = { id: string; name: string; maskedNumber: string; iban: string; balance: number; currency: string; status: "active" | "frozen"; canDebit: boolean };
-export type Beneficiary = { id: string; displayName: string; bank: string; maskedNumber: string; addedAt: number };
+export type Beneficiary = {
+  id: string; displayName: string; bank: string; maskedNumber: string; addedAt: number;
+  /** What kind of payee, where its account is and its details: set for payees saved with bank.payees.save (and the Payments cast). */
+  kind?: PayeeKind; region?: PayeeRegion; country?: string; currency?: string; iban?: string; swift?: string; routing?: string; sortCode?: string; accountNumber?: string; accountType?: string; customerNumber?: string;
+  nickname?: string; label?: string;
+  /** Verified: the name matched the owner of the account when it was saved. Saved: it did not, or could not be checked. */
+  verified?: boolean;
+  /** The result of the name check when it was saved. */
+  nameCheck?: NameCheck["result"];
+  /** The same account always has the same key (see payees.ts). */
+  key?: string;
+  /** Seed only: how long before the sandbox clock this payee was added. Turned into addedAt the first time the list is read, so a scenario's clock decides. */
+  addedAgoMs?: number;
+};
+/** A payment set up to repeat, so a payee that is used by one cannot be deleted. */
+export type Schedule = { id: string; beneficiaryId: string; name: string; text: string };
 export type Persona = {
   id: string;
   /** Which bank app this sandbox customer belongs to. */
@@ -34,6 +51,8 @@ export type Persona = {
   phone: string;
   accounts: Account[];
   beneficiaries: Beneficiary[];
+  /** Payments set up to repeat; each names the payee it pays. */
+  schedules?: Schedule[];
   limits: { daily: number; usedToday: number };
   /** Daily limits for accounts in other currencies, by currency code. `limits` applies to the currency of the first account. */
   limitsByCurrency?: Record<string, { daily: number; usedToday: number }>;
@@ -44,6 +63,23 @@ export type Persona = {
 };
 
 const day = 24 * 3600 * 1000;
+const hour = 3600 * 1000;
+/** Alex Morgan's four accounts, for the customers that save payees (the same as alexglobal's). */
+const alexAccounts = (): Account[] => [
+  { id: "acc_main", name: "Main", maskedNumber: "••4410", iban: "US00 BWX 0000 0000 4410", balance: 8720.76, currency: "USD", status: "active", canDebit: true },
+  { id: "acc_save", name: "Savings", maskedNumber: "••7731", iban: "US00 BWX 0000 0000 7731", balance: 15254.37, currency: "USD", status: "active", canDebit: true },
+  { id: "acc_eur", name: "EUR Travel", maskedNumber: "••5502", iban: "US00 BWX 0000 0000 5502", balance: 2400, currency: "EUR", status: "active", canDebit: true },
+  { id: "acc_aed", name: "AED Home", maskedNumber: "••8816", iban: "US00 BWX 0000 0000 8816", balance: 11000, currency: "AED", status: "active", canDebit: true },
+];
+/** The saved payees of the Payments cast: one of each kind, one added 3 hours ago (still in its first 24 hours), and two used in the payee journeys. */
+const alexPayees = (): Beneficiary[] => [
+  { id: "ben_taylor", displayName: "Taylor Brooks", bank: "BankWorkx", maskedNumber: "••3308", addedAt: 0, addedAgoMs: 90 * day, kind: "internal", region: "bw", country: "US", currency: "USD", customerNumber: "3301123308", key: "bw:3301123308", verified: true, nameCheck: "match" },
+  { id: "ben_jamie", displayName: "Jamie Lee", bank: "Northwind Bank", maskedNumber: "••6620", addedAt: 0, addedAgoMs: 40 * day, kind: "domestic", region: "us", country: "US", currency: "USD", routing: "031201360", accountNumber: "100006620", accountType: "checking", key: "us:031201360:100006620", nickname: "Jam", label: "Friend", verified: false, nameCheck: "na" },
+  { id: "ben_marco", displayName: "Marco Rossi", bank: "SWIFT NRWDDEFFXXX", maskedNumber: "••3000", addedAt: 0, addedAgoMs: 60 * day, kind: "international", region: "world", country: "DE", currency: "EUR", swift: "NRWDDEFFXXX", accountNumber: "DE89370400440532013000", key: "swift:NRWDDEFFXXX:DE89370400440532013000", verified: false, nameCheck: "na" },
+  { id: "ben_casey", displayName: "Casey Nguyen", bank: "Harbor Trust", maskedNumber: "••5150", addedAt: 0, addedAgoMs: 3 * hour, kind: "domestic", region: "us", country: "US", currency: "USD", routing: "121000248", accountNumber: "200005150", accountType: "checking", key: "us:121000248:200005150", verified: false, nameCheck: "na" },
+  { id: "ben_lena", displayName: "Lena Fischer", bank: "Bank (IBAN DE)", maskedNumber: "••4931", addedAt: 0, addedAgoMs: 30 * day, kind: "domestic", region: "eu", country: "DE", currency: "EUR", iban: "DE44500105175407324931", key: "iban:DE44500105175407324931", label: "Friend", verified: true, nameCheck: "match" },
+  { id: "ben_james", displayName: "James Whitfield", bank: "UK bank (sort code 20-00-00)", maskedNumber: "••9911", addedAt: 0, addedAgoMs: 120 * day, kind: "domestic", region: "uk", country: "GB", currency: "GBP", sortCode: "20-00-00", accountNumber: "55779911", key: "uk:200000:55779911", label: "Landlord", verified: true, nameCheck: "match" },
+];
 export const BILLERS = [
   { id: "k_electric", name: "K-Electric", category: "Electricity" }, { id: "lesco", name: "LESCO", category: "Electricity" },
   { id: "ssgc", name: "SSGC", category: "Gas" }, { id: "ptcl", name: "PTCL", category: "Internet" },
@@ -93,6 +129,31 @@ export const personas: Record<string, Persona> = {
       { id: "acc_aed", name: "AED Home", maskedNumber: "••8816", iban: "US00 BWX 0000 0000 8816", balance: 11000, currency: "AED", status: "active", canDebit: true },
     ],
     beneficiaries: [],
+    limits: { daily: 50000, usedToday: 0 },
+    limitsByCurrency: { EUR: { daily: 20000, usedToday: 0 }, AED: { daily: 100000, usedToday: 0 } },
+    finance: alexFinance(),
+    behaviour: { otpCode: "482100", kyc: "verified" },
+  },
+  // The Payments cast: Alex with four accounts and saved payees, and a scheduled payment that uses one of them. Separate from Alex and
+  // Alex with three currencies because their tests count what they have.
+  alexpayees: {
+    id: "alexpayees", brand: "bankworkx", name: "Alex Morgan (saved payees)", phone: "+1 415 555 0142",
+    accounts: alexAccounts(),
+    beneficiaries: alexPayees(),
+    schedules: [{ id: "sch_rent", beneficiaryId: "ben_james", name: "Rent", text: "Rent · Monthly, 1 Dec, $1,450.00" }],
+    limits: { daily: 50000, usedToday: 0 },
+    limitsByCurrency: { EUR: { daily: 20000, usedToday: 0 }, AED: { daily: 100000, usedToday: 0 } },
+    finance: alexFinance(),
+    behaviour: { otpCode: "482100", kyc: "verified" },
+  },
+  // Alex with the most payees the bank allows (50), to try the limit.
+  alexfull: {
+    id: "alexfull", brand: "bankworkx", name: "Alex Morgan (50 saved payees)", phone: "+1 415 555 0142",
+    accounts: alexAccounts(),
+    beneficiaries: Array.from({ length: MAX_PAYEES }, (_, i) => {
+      const n = String(i + 1).padStart(2, "0"), account = String(1000000 + i + 1);
+      return { id: `ben_full${n}`, displayName: `Payee ${n}`, bank: "JPMorgan Chase", maskedNumber: `••${account.slice(-4)}`, addedAt: 0, addedAgoMs: 60 * day, kind: "domestic" as const, region: "us" as const, country: "US", currency: "USD", routing: "021000021", accountNumber: account, accountType: "checking", key: `us:021000021:${account}`, verified: false, nameCheck: "na" as const };
+    }),
     limits: { daily: 50000, usedToday: 0 },
     limitsByCurrency: { EUR: { daily: 20000, usedToday: 0 }, AED: { daily: 100000, usedToday: 0 } },
     finance: alexFinance(),
@@ -173,7 +234,9 @@ export function defaultPersonaFor<T extends Persona>(people: T[], integrations: 
   const uses = (prefix: string) => integrations.some((i) => i.adapter.startsWith(prefix));
   // a conversion needs accounts in more than one currency
   const manyCurrencies = (p: Persona) => new Set(p.accounts.map((a) => a.currency)).size > 1;
-  return (uses("corp.") ? people.find((p) => p.corp) : uses("cab.") ? people.find((p) => p.cab) : uses("bank.fx.") ? people.find(manyCurrencies) : undefined) ?? people[0]!;
+  // saving a payee needs a customer who already has some
+  const hasPayees = (p: Persona) => p.beneficiaries.some((b) => b.kind);
+  return (uses("corp.") ? people.find((p) => p.corp) : uses("cab.") ? people.find((p) => p.cab) : uses("bank.payees.") ? people.find(hasPayees) : uses("bank.fx.") ? people.find(manyCurrencies) : undefined) ?? people[0]!;
 }
 
 /**
@@ -203,6 +266,11 @@ export class MockBank {
   private quotes = new Map<string, Quote & { used: boolean }>();
   /** How many quotes were asked for each pair of accounts, so a renewed quote can show the market moving. */
   private quoteCount = new Map<string, number>();
+  /** What was sent to each payee, so a new payee is kept to its allowance for its first 24 hours. */
+  private sent = new Map<string, { at: number; usd: number }[]>();
+  private seeded = false;
+  private benSeq = 0;
+  private schedules: Schedule[];
   private fx: FxConfig;
   private conditions: SandboxConditions;
   private flaws: Flaws;
@@ -216,6 +284,7 @@ export class MockBank {
     const base = personas[personaId];
     if (!base) throw new Error(`Unknown persona ${personaId}`);
     this.p = structuredClone(base);
+    this.schedules = this.p.schedules ?? [];
     this.fx = this.p.brand === "bankworkx" ? BANKWORKX_FX : DEFAULT_FX;
     this.conditions = options.conditions ?? {};
     this.flaws = options.corpFlaws ?? {};
@@ -233,6 +302,66 @@ export class MockBank {
     const own = this.p.limitsByCurrency?.[currency];
     if (!own) throw new BankError("LIMIT_NOT_SET", `No daily limit is set for ${currency}`);
     return own;
+  }
+
+  /** The saved payees. Seeded ones get their date from the clock the bank runs on the first time they are read, so a test's clock decides how old they are. */
+  private payees(): Beneficiary[] {
+    if (!this.seeded) {
+      this.seeded = true;
+      for (const b of this.p.beneficiaries) if (b.addedAgoMs !== undefined) { b.addedAt = this.now() - b.addedAgoMs; delete b.addedAgoMs; }
+    }
+    return this.p.beneficiaries;
+  }
+  /** A payee is new for its first 24 hours: the age in whole hours is under 24. */
+  private isNew(b: Beneficiary) { return hoursSince(b.addedAt, this.now()) < COOLING_OFF_HOURS; }
+  /** What a new payee may still be sent in its first 24 hours, in US dollars. */
+  private allowanceLeft(b: Beneficiary): number {
+    const since = this.now() - COOLING_OFF_HOURS * hour;
+    const used = (this.sent.get(b.id) ?? []).filter((x) => x.at > since).reduce((sum, x) => sum + x.usd, 0);
+    return Math.max(0, Math.round((COOLING_OFF_USD - used) * 100) / 100);
+  }
+  private toUsd(amount: number, currency: string) { return Math.round((amount / (this.fx.perUsd[currency] ?? 1)) * 100) / 100; }
+  /** A saved payee as the list shows it: what was saved, how old it is, and the cooling-off state. */
+  private payeeView(b: Beneficiary) {
+    const { addedAgoMs: _seed, ...saved } = b;
+    const now = this.now(), isNew = this.isNew(b), until = b.addedAt + COOLING_OFF_HOURS * hour;
+    const uses = this.schedules.filter((x) => x.beneficiaryId === b.id);
+    return {
+      ...saved, ageHours: hoursSince(b.addedAt, now),
+      coolingOffUntil: isNew ? new Date(until).toISOString() : null, coolingOffHoursLeft: isNew ? Math.max(1, Math.ceil((until - now) / hour)) : 0,
+      allowanceLeft: isNew ? this.allowanceLeft(b) : null,
+      scheduledCount: uses.length, scheduledText: uses.map((x) => x.text).join("; "),
+    };
+  }
+  /** Checks the details of a payee being added (no payeeId) or changed, and that it is not a second copy of one already saved. */
+  private examinePayee(input: Record<string, any>, payeeId?: string) {
+    const list = this.payees();
+    const current = payeeId ? list.find((b) => b.id === payeeId) : undefined;
+    if (payeeId && !current) throw new BankError("BENEFICIARY_NOT_FOUND", "We can't find that payee.");
+    // the kind and the region of a payee cannot change
+    const d = checkPayee(current ? { ...input, kind: current.kind, region: current.region } : input, this.flaws);
+    if (!current && list.length >= MAX_PAYEES && this.flaws.payeeLimit !== false) throw new BankError("BENEFICIARY_LIMIT", "You can save up to 50 payees. Delete one to add another.");
+    if (this.flaws.payeeDuplicate !== false && list.some((b) => b.id !== payeeId && b.key === d.key)) throw new BankError("BENEFICIARY_EXISTS", "You already saved this payee with these details.");
+    return { d, current };
+  }
+  /** What a change to a saved payee touches: the name, or the bank details (the account, the country, the type of account). */
+  private payeeChange(d: PayeeDetails, cur: Beneficiary) {
+    return { nameChanged: d.displayName !== cur.displayName, detailsChanged: d.key !== cur.key || d.country !== cur.country || (d.accountType ?? "") !== (cur.accountType ?? "") };
+  }
+  /** Changing the bank details starts the 24 hours again; changing only the name or the nickname does not. */
+  private restartsClock(c: { nameChanged: boolean; detailsChanged: boolean }) {
+    return c.detailsChanged ? this.flaws.clockOnDetails !== false : c.nameChanged && this.flaws.nameKeepsClock === false;
+  }
+  /** Refuses a payment to a new payee that is more than its allowance for the first 24 hours. */
+  private coolingOff(b: Beneficiary, usd: number) {
+    if (!this.isNew(b)) return;
+    const left = this.allowanceLeft(b);
+    if (usd <= left) return;
+    const at = new Date(b.addedAt + COOLING_OFF_HOURS * hour), pad = (n: number) => String(n).padStart(2, "0");
+    const when = `${at.getUTCDate()} ${["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"][at.getUTCMonth()]} ${at.getUTCFullYear()} ${pad(at.getUTCHours())}:${pad(at.getUTCMinutes())} UTC`;
+    const hours = hoursSince(b.addedAt, this.now());
+    const head = `${b.displayName} was added ${hours} ${hours === 1 ? "hour" : "hours"} ago. For your security you can send up to $${COOLING_OFF_USD.toFixed(2)} to a new beneficiary in the first ${COOLING_OFF_HOURS} hours.`;
+    throw new BankError("BENEFICIARY_COOLING_OFF", left > 0 ? `${head} You can send up to $${left.toFixed(2)} more now, or the full amount after ${when}.` : `${head} You can send more after ${when}.`);
   }
 
   /** The corporate payment adapters. Starting and approving a payment move money, so they need the one-time code first, like a transfer. */
@@ -320,7 +449,59 @@ export class MockBank {
       case "bank.accounts.list":
         return Object.fromEntries(this.p.accounts.map((a) => [a.id, a]));
       case "bank.beneficiaries.list":
-        return Object.fromEntries(this.p.beneficiaries.map((b) => [b.id, { ...b, ageHours: Math.floor((Date.now() - b.addedAt) / 3600000) }]));
+        return Object.fromEntries(this.payees().map((b) => [b.id, this.payeeView(b)]));
+      case "bank.payees.validate": {
+        const { d, current } = this.examinePayee(input, input.payeeId ? String(input.payeeId) : undefined);
+        const change = current ? this.payeeChange(d, current) : { nameChanged: false, detailsChanged: false };
+        const [first = "", ...rest] = d.displayName.split(" ");
+        return {
+          ok: true, bankName: d.bank, maskedNumber: d.maskedNumber,
+          ...(d.region === "bw" ? { registeredName: d.displayName, found: `${first} ${rest.pop()?.[0] ?? ""}. · ${d.maskedNumber}` } : {}),
+          // for a change: does it need the name check and the code, and does it start the 24 hours again?
+          sensitive: change.nameChanged || change.detailsChanged, restartsClock: this.restartsClock(change),
+        };
+      }
+      case "bank.payees.check": {
+        const d = checkPayee(input, this.flaws);
+        return checkName(d, d.displayName, { skip: input.skip === true, flaws: this.flaws });
+      }
+      case "bank.payees.save": {
+        if (!this.otpVerified) throw new BankError("OTP_REQUIRED", "OTP not verified");
+        const { d } = this.examinePayee(input);
+        const chk = checkName(d, d.displayName, { skip: input.skip === true, flaws: this.flaws });
+        if (chk.result !== "match" && input.acknowledged !== true) throw new BankError("PAYEE_NOT_CHECKED", "Check the payee before you continue.");
+        const b: Beneficiary = { ...d, id: `ben_new${++this.benSeq}`, addedAt: this.now(), verified: this.flaws.verifiedOnMatch === false ? true : chk.result === "match", nameCheck: chk.result };
+        this.payees().push(b);
+        this.otpVerified = false;
+        return { payeeId: b.id, addedAt: b.addedAt, coolingOffUntil: new Date(b.addedAt + COOLING_OFF_HOURS * hour).toISOString(), displayName: b.displayName, bank: b.bank, maskedNumber: b.maskedNumber, verified: b.verified, nameCheck: chk.result, allowanceUsd: COOLING_OFF_USD };
+      }
+      case "bank.payees.update": {
+        const { d, current } = this.examinePayee(input, String(input.payeeId ?? ""));
+        const cur = current!, change = this.payeeChange(d, cur);
+        const sensitive = change.nameChanged || change.detailsChanged;
+        let chk: NameCheck | undefined;
+        // the name or the account changed: check the name again, and ask for the code. A nickname or a label alone needs neither.
+        if (sensitive) {
+          if (!this.otpVerified) throw new BankError("OTP_REQUIRED", "OTP not verified");
+          chk = checkName(d, d.displayName, { skip: input.skip === true, flaws: this.flaws });
+          if (chk.result !== "match" && input.acknowledged !== true) throw new BankError("PAYEE_NOT_CHECKED", "Check the payee before you continue.");
+        }
+        Object.assign(cur, d);
+        if (chk) { cur.verified = this.flaws.verifiedOnMatch === false ? true : chk.result === "match"; cur.nameCheck = chk.result; }
+        const restarted = this.restartsClock(change);
+        if (restarted) cur.addedAt = this.now();
+        if (sensitive) this.otpVerified = false;
+        return { payeeId: cur.id, addedAt: cur.addedAt, coolingOffUntil: this.isNew(cur) ? new Date(cur.addedAt + COOLING_OFF_HOURS * hour).toISOString() : null, displayName: cur.displayName, bank: cur.bank, maskedNumber: cur.maskedNumber, verified: cur.verified === true, nameCheck: cur.nameCheck ?? "na", sensitive, restarted, allowanceUsd: COOLING_OFF_USD };
+      }
+      case "bank.payees.delete": {
+        const list = this.payees(), i = list.findIndex((b) => b.id === input.payeeId);
+        if (i < 0) throw new BankError("BENEFICIARY_NOT_FOUND", "We can't find that payee.");
+        const gone = list[i]!, uses = this.schedules.filter((x) => x.beneficiaryId === gone.id);
+        if (uses.length && input.cancelSchedules !== true && this.flaws.payeeInUse !== false) throw new BankError("BENEFICIARY_IN_USE", `${gone.displayName} is used by ${uses.length} scheduled ${uses.length === 1 ? "payment" : "payments"}. Cancel ${uses.length === 1 ? "it" : "them"} first.`);
+        list.splice(i, 1);
+        this.schedules = this.schedules.filter((x) => x.beneficiaryId !== gone.id);
+        return { removed: true, schedulesCancelled: uses.length, displayName: gone.displayName, bank: gone.bank, maskedNumber: gone.maskedNumber };
+      }
       case "bank.limits.get":
         // with a currency: the limit for accounts in that currency; without: the main one, as before
         return input.currency ? { ...this.limitFor(String(input.currency)), currency: String(input.currency) } : { ...this.p.limits };
@@ -416,8 +597,13 @@ export class MockBank {
         if (amount > from.balance) throw new BankError("INSUFFICIENT_FUNDS", "Insufficient funds");
         const limit = this.limitFor(from.currency);
         if (limit.usedToday + amount > limit.daily) throw new BankError("LIMIT_EXCEEDED", "Daily limit exceeded");
+        // a payee added in the last 24 hours may only be sent a small amount (a payee the bank does not know is not held to it)
+        const payee = input.beneficiaryId ? this.payees().find((b) => b.id === input.beneficiaryId) : undefined;
+        const usd = this.toUsd(amount, from.currency);
+        if (payee) this.coolingOff(payee, usd);
         from.balance = Math.round((from.balance - amount) * 1000) / 1000;
         limit.usedToday += amount;
+        if (payee && this.isNew(payee)) this.sent.set(payee.id, [...(this.sent.get(payee.id) ?? []), { at: this.now(), usd }]);
         this.otpVerified = false;
         this.seq += 1;
         return { reference: `TRX-20261102-${String(930 + this.seq).padStart(4, "0")}`, newBalance: from.balance, currency: from.currency };

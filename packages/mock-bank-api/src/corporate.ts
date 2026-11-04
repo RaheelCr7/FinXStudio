@@ -87,7 +87,7 @@ const dayOf = (ms: number) => new Date(ms).toISOString().slice(0, 10);
  * Rules that can be switched off, to check that a test suite notices: a mutation check runs the scenarios against a sandbox with
  * one rule missing and expects at least one to fail. Every rule is on by default; nothing in the apps ever turns one off.
  */
-export type Flaws = { /** retail rules of the sandbox bank */ sameAccount?: false; canDebit?: false; funds?: false; quoteExpiry?: false; quoteReplay?: false; roles?: false; whitelist?: false; userLimit?: false; companyLimit?: false; dualApproval?: false; fourEyes?: false; cutoff?: false; lineChecks?: false; employeeChecks?: false; payrollPeriod?: false };
+export type Flaws = { /** retail rules of the sandbox bank */ sameAccount?: false; canDebit?: false; funds?: false; quoteExpiry?: false; quoteReplay?: false; /** saved payees */ payeeLimit?: false; payeeDuplicate?: false; payeeInUse?: false; ibanChecksum?: false; sepa?: false; countryMatch?: false; routingChecksum?: false; sortCode?: false; bic?: false; nameCheck?: false; verifiedOnMatch?: false; clockOnDetails?: false; nameKeepsClock?: false; roles?: false; whitelist?: false; userLimit?: false; companyLimit?: false; dualApproval?: false; fourEyes?: false; cutoff?: false; lineChecks?: false; employeeChecks?: false; payrollPeriod?: false };
 
 export class CorporateSandbox implements CorporateBankAdapter {
   private payments = new Map<string, CorpPayment>();
