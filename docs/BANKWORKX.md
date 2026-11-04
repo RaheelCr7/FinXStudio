@@ -30,6 +30,7 @@ The web build, and the iOS Simulator (iPhone 17 Pro, iOS 26.5): sign-in, dashboa
 | Customer | What they show |
 |---|---|
 | **Alex Morgan** | Two accounts, one saved card, a month of transactions, three budgets, three subscriptions, and charts |
+| **Alex Morgan (accounts in three currencies)** | The same as Alex, plus a Euro account (EUR 2,400.00) and a Dirham account (AED 11,000.00), for moving money between accounts in different currencies. Separate from Alex because the dashboards and tests count Alex's two accounts |
 | **Sam Rivera (new customer)** | Nothing yet. The home screen guides them to connect a first account |
 
 Sandbox rules for trying the failure paths:
@@ -61,6 +62,10 @@ Sandbox rules for trying the failure paths:
 | **Invest** | Choose a stock or fund, an account, and an amount ($25 / $50 / $100 / $250 or typed, from $1). Review with a risk notice. Done with the shares bought and a reference, or a failure that says nothing was bought. Opened from a stock's *Buy* button, the stock is already chosen |
 
 | **Sell investment** | Choose a holding, an amount ($25 / $50 / $100 / $250 or typed), and the account to pay. Review. Done with the shares sold and the money received, or a failure that says nothing was sold. Selling the whole value closes the holding. Opened from a stock's *Sell* button, the holding is already chosen |
+
+| **Between my accounts** (`own-transfer`) | Pick From and To (Swap accounts). Same currency: an amount and an optional note, instant and free, one-time code, done. Different currencies: type what you send or what you get, see the rate (mid-market, no margin), the 0.20% fee, the total taken and what you get, tick the confirmation, one-time code, converted. The rate is held 30 seconds; if it ran out while you typed the code you see the old and the new rate and confirm again. Three wrong codes lock it; a timeout and an unavailable service have their own screens |
+
+**Between my accounts: how it differs from the prototype spec.** It is built from the blocks FinX has, so the countdown on the rate, the live conversion summary under the amount, the "Today that is 1 USD = ..." line on the first screen, the note in Activity and the launch values (`accountId`, `toId`, `amount`) are not there; the review says the rate is held for 30 seconds. A rate that ran out is found when the code is entered (nothing is moved) rather than on the confirm button, because only the conversion call checks it. Errors are separate screens (`problem`, `amountProblem`, `failed`) chosen from the bank's error code. The bank's options `allowFx` and `fxFee` are plain data (`opt.allowFx`, `opt.fxFee`, on unless set to false). In the sandbox, BankWorkx quotes with no margin and the spec's Euro and Dirham rates (the reference bank keeps its 0.5% spread), a renewed quote moves by fixed steps within 0.04% so tests repeat, and `bank.transfers.own` is the same-currency move (`CURRENCY_MISMATCH` if the currencies differ). Its scenarios use sandbox conditions (`timeout`, `unavailable`, `latencyMs`, `frozen`, `transferFails`) and the `advance` step that moves the clock; they and the mutation check are in `packages/finx-mcp/src/scenarios.test.ts`.
 
 They carry `apps: ["bankworkx"]`, so the Meezan app never shows them. A journey with no `apps` belongs to Meezan.
 
