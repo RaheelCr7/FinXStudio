@@ -59,11 +59,11 @@ function describeBlock(b: Record<string, any>): string | null {
 function visibleStrings(view: View): string[] {
   const out: string[] = [view.title];
   for (const b of view.blocks as any[]) {
-    for (const k of ["label", "text", "title", "hint", "helper", "meta", "placeholder", "error"]) if (typeof b[k] === "string") out.push(b[k]);
+    for (const k of ["label", "text", "title", "hint", "helper", "meta", "placeholder", "error", "name"]) if (typeof b[k] === "string") out.push(b[k]);
     if (typeof b.value === "string") out.push(b.value);
     for (const r of b.rows ?? []) out.push(r.label, r.value);
-    // a choice, a payee, or a row of a list (its label and the line under it)
-    for (const i of b.items ?? []) { if (i?.name) out.push(i.name); else if (i?.displayName) out.push(i.displayName); if (b.type === "menu") { if (i?.label) out.push(i.label); if (i?.text) out.push(i.text); } }
+    // a choice (its name and the line under it), a payee, or a row of a list (its label and the line under it)
+    for (const i of b.items ?? []) { if (i?.name) out.push(i.name); else if (i?.displayName) out.push(i.displayName); if (b.type === "select" && i?.sub) out.push(i.sub); if (b.type === "menu") { if (i?.label) out.push(i.label); if (i?.text) out.push(i.text); } }
   }
   return out.filter(Boolean);
 }
@@ -143,9 +143,11 @@ export async function simulate(opts: SimOptions): Promise<SimResult> {
       view = snap(n, `advance ${step.advance} seconds`);
     } else if ("press" in step) {
       // a button, or a row of a menu (a list row, a shortcut) with that label
-      const rows = (runner.view().blocks as any[]).filter((b) => b.type === "menu" || b.type === "shortcuts").flatMap((b) => (b.items ?? []).map((i: any) => ({ type: "button", label: i.label, actions: i.actions })));
-      const buttons = [...(runner.view().blocks as any[]).filter((b) => b.type === "button"), ...rows];
-      const raw = [...(runner.screen.blocks as any[]).filter((b) => b.type === "button"), ...rows];
+      const shown = runner.view().blocks as any[];
+      const rows = shown.filter((b) => b.type === "menu" || b.type === "shortcuts").flatMap((b) => (b.items ?? []).map((i: any) => ({ type: "button", label: i.label, actions: i.actions })));
+      const buttons = [...shown.filter((b) => b.type === "button"), ...rows];
+      // the same button as written in the journey (not translated), found by where it sits on the screen: a button that is hidden must not be mistaken for one that is shown
+      const raw = [...shown.filter((b) => b.type === "button").map((b) => (runner.screen.blocks as any[])[b.srcIndex]), ...rows];
       const want = String(step.press).trim().toLowerCase();
       const idx = buttons.findIndex((b, k) => String(b.label).trim().toLowerCase() === want || localize(raw[k]?.label, journey.locale.default, journey.locale.default).trim().toLowerCase() === want);
       if (idx < 0) {
