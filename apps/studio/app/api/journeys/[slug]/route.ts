@@ -3,7 +3,8 @@ import { nameOf, record } from "@/lib/activity";
 import { appsOfJourney } from "@/lib/project-utils";
 import { fail, guardWrite, json, preflight, runIdOf } from "@/lib/http";
 import { lintAll } from "@finx/renderer-core";
-import { requireCan } from "@/lib/people";
+import { requireCan, actorOf } from "@/lib/people";
+import { isProduction } from "@/lib/profile";
 
 export const dynamic = "force-dynamic";
 export const OPTIONS = preflight;
@@ -15,7 +16,7 @@ export async function GET(req: Request, { params }: Ctx) {
     const { slug } = await params;
     const rec = await getRecord(slug);
     const env = new URL(req.url).searchParams.get("env") ?? "published";
-    if (env === "draft") return json(req, { ...rec, issues: lintAll(rec.draft) });
+    if (env === "draft") { if (isProduction()) await actorOf(req); return json(req, { ...rec, issues: lintAll(rec.draft) }); }
     if (!rec.published) return json(req, { error: "Journey is not published yet" }, 404);
     return json(req, rec.published);
   } catch (e) { return fail(e, req); }

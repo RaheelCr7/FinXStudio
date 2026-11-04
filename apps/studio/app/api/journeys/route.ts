@@ -1,12 +1,20 @@
 import { createJourney, listJourneys } from "@/lib/store";
 import { fail, guardWrite, json, preflight, runIdOf } from "@/lib/http";
-import { requireCan } from "@/lib/people";
+import { actorOf, requireCan } from "@/lib/people";
+import { isProduction } from "@/lib/profile";
 import { nameOf, record } from "@/lib/activity";
 import { appsOfJourney } from "@/lib/project-utils";
 
 export const dynamic = "force-dynamic";
 export const OPTIONS = preflight;
-export async function GET(req: Request) { try { return json(req, await listJourneys()); } catch (e) { return fail(e, req); } }
+export async function GET(req: Request) {
+  try {
+    const all = await listJourneys();
+    // production: a caller who is not signed in (an app) sees published journeys only, never drafts
+    const signedIn = !isProduction() || await actorOf(req).then(() => true, () => false);
+    return json(req, signedIn ? all : all.filter((j) => j.publishedVersion != null).map((j) => ({ ...j, draftDiffers: false })));
+  } catch (e) { return fail(e, req); }
+}
 export async function POST(req: Request) {
   const blocked = guardWrite(req); if (blocked) return blocked;
   try {

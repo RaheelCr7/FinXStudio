@@ -7,6 +7,6 @@ const LOCAL = /^https?:\/\/(localhost|127\.0\.0\.1|\[::1\])(:\d+)?$/;
 
 export function originAllowed(origin: string | null | undefined, extra: string = process.env.FINX_STUDIO_ALLOWED_ORIGINS ?? ""): boolean {
   if (!origin) return true;
-  if (LOCAL.test(origin)) return true;
+  if (process.env.FINX_PROFILE !== "production" && LOCAL.test(origin)) return true; // production lists its origins explicitly
   return extra.split(",").map((s) => s.trim()).filter(Boolean).includes(origin);
 }

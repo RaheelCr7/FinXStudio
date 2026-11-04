@@ -94,7 +94,7 @@ Claude Code asks before using each tool. That is deliberate and the choice is yo
 |---|---|---|
 | `FINX_STUDIO_URL` | `http://localhost:3100` | Where Studio is |
 | `FINX_MCP_READONLY` | off | `1` blocks every change to journeys |
-| `FINX_STUDIO_TOKEN` | none | Sent as a bearer token. Reserved for when Studio gets sign-in |
+| `FINX_STUDIO_TOKEN` | none | Sent as a bearer token. Sent to Studio; in the production profile it must equal Studio's `FINX_SERVICE_TOKEN` (see docs/SECURITY.md) |
 | `FINX_STUDIO_ALLOWED_ORIGINS` | none | Extra browser origins allowed to call Studio's API |
 
 The server is registered in `.mcp.json`. Other MCP clients can run `node_modules/.bin/tsx packages/finx-mcp/src/server.ts` over stdio.

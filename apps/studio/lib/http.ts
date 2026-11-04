@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { StoreError } from "./store";
 import { originAllowed } from "./origin";
+import { isProduction } from "./profile";
 
 function corsHeaders(req?: Request): Record<string, string> {
   const h: Record<string, string> = { Vary: "Origin", "Access-Control-Allow-Methods": "GET,PUT,POST,PATCH,DELETE,OPTIONS", "Access-Control-Allow-Headers": "Content-Type" };
@@ -18,6 +19,10 @@ export function preflight(req: Request) {
 
 /** Returns a 403 response when a write comes from a browser origin that is not allowed; otherwise null. */
 export function guardWrite(req: Request): NextResponse | null {
+  // Production: the session cookie is SameSite=Strict, and a browser write must also say where it comes from (CSRF defence by
+  // origin check). Calls without a session cookie (the MCP server with its token) have no browser origin to check.
+  const browser = isProduction() && /(^|;\s*)finx\.session=/.test(req.headers.get("cookie") ?? "");
+  if (browser && !req.headers.get("origin")) return json(req, { error: "Origin required" }, 403);
   return originAllowed(req.headers.get("origin")) ? null : json(req, { error: "Origin not allowed" }, 403);
 }
 

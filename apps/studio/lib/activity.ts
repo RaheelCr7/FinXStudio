@@ -1,5 +1,7 @@
 import { promises as fs } from "node:fs";
 import path from "node:path";
+import { appendAudit } from "./audit";
+import { isProduction } from "./profile";
 
 /** One thing someone did in Studio. The log only ever grows (the oldest entries are dropped past the cap). */
 export type Activity = {
@@ -24,6 +26,7 @@ let chain: Promise<unknown> = Promise.resolve();
 
 /** Adds an entry. It never throws: a log that fails must not stop the work it describes. */
 export function record(entry: Omit<Activity, "id" | "at"> & { at?: string }): Promise<void> {
+  if (isProduction()) void appendAudit({ actor: entry.actor.id, action: entry.action, target: entry.target, detail: entry.detail, at: entry.at });
   chain = chain.then(async () => {
     try {
       const all = await read();

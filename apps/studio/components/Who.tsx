@@ -11,19 +11,21 @@ type Ctx = {
   /** The words for your role (in a project, when named). */
   roleName: (person: PersonInfo, project?: string) => string;
   setYou: (id: string) => void;
+  /** the production profile: you signed in, and switching person is not possible */
+  production: boolean;
 };
 const C = createContext<Ctx | null>(null);
 
 /** Who is using Studio (a demo identity chosen in the sidebar, not a sign-in) and what their roles allow. */
-export function WhoProvider({ people, roles, youId, children }: { people: PersonInfo[]; roles: RoleDef[]; youId: string; children: React.ReactNode }) {
+export function WhoProvider({ people, roles, youId, production = false, children }: { people: PersonInfo[]; roles: RoleDef[]; youId: string; production?: boolean; children: React.ReactNode }) {
   const router = useRouter();
   const you = people.find((p) => p.id === youId) ?? people[0]!;
   const setYou = useCallback((id: string) => { document.cookie = `${COOKIE_USER}=${id}; path=/; max-age=31536000; samesite=lax`; router.refresh(); }, [router]);
   const value = useMemo<Ctx>(() => ({
-    people, you, roles, setYou,
+    people, you, roles, setYou, production,
     can: (a, projects) => canDo(you, a, projects, roles),
     roleName: (p, project) => roleLabel(roleIn(p, project), roles),
-  }), [people, you, roles, setYou]);
+  }), [people, you, roles, setYou, production]);
   return <C.Provider value={value}>{children}</C.Provider>;
 }
 export function useWho() { const v = useContext(C); if (!v) throw new Error("useWho needs WhoProvider"); return v; }
