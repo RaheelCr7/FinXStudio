@@ -1,0 +1,6 @@
+# Everything needs a reviewer; tighten per path as the team grows.
+*                              @RaheelCr7
+/packages/journey-schema/      @RaheelCr7
+/packages/mock-bank-api/       @RaheelCr7
+/.github/                      @RaheelCr7
+/docs/SECURITY.md              @RaheelCr7

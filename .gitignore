@@ -16,3 +16,10 @@ dist
 
 # A bank's design exports (not ours to publish)
 /design/
+
+# Secrets and local data: never commit
+.env
+.env.*
+!.env.example
+*.pem
+.data/

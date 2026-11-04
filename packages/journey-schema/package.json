@@ -5,5 +5,5 @@
   "type": "module",
   "main": "src/index.ts",
   "scripts": { "test": "vitest run", "typecheck": "tsc -p ." },
-  "dependencies": { "zod": "3.23.8" }
+  "dependencies": { "zod": "4.6.7" }
 }
