@@ -6,6 +6,8 @@ import { BankError } from "./errors";
 import { ACME, type CorpCompany, type CorpPayment, type Flaws } from "./corporate";
 import { createCorporateProvider, type CorporateProvider, type ProviderId } from "./corporate-provider";
 import { CabSandbox, CAB_PROFILES, type CabProfile } from "./cab";
+import { ALPHA, BETA, PERSONAL_PERMISSIONS, permissionsOf, seedBeta, type PersonaContext } from "./identity";
+export { ALPHA, BETA, permissionsOf, PERSONAL_PERMISSIONS, type PersonaContext, type Permission } from "./identity";
 export * from "./finance";
 export { CAB_PROFILES, CAB_CURRENCY, PASSWORD_RULES, passwordProblems, type CabProfile } from "./cab";
 export { BankError } from "./errors";
@@ -28,6 +30,8 @@ export type Persona = {
   cab?: CabProfile;
   /** A company with users, a whitelist, limits and approval rules, for the corporate payment journeys. */
   corp?: CorpCompany;
+  /** The companies this person also acts for. Each is a separate context with its own accounts, payments and role. */
+  contexts?: PersonaContext[];
   name: string;
   phone: string;
   accounts: Account[];
@@ -78,6 +82,7 @@ export const personas: Record<string, Persona> = {
     beneficiaries: [],
     limits: { daily: 50000, usedToday: 0 },
     finance: alexFinance(),
+    contexts: [{ id: "alpha", company: ALPHA, userId: "alex" }, { id: "beta", company: BETA, userId: "alex", seed: "waiting-payments" }],
     behaviour: { otpCode: "482100", kyc: "verified" },
   },
   sam: {
@@ -166,12 +171,22 @@ export class MockBank {
   now: () => number = () => Date.now();
   private cab: CabSandbox;
   private corp?: CorporateProvider;
+  /** The signed-in person's places to bank: "personal" or a company id. Held here like a server holds a session. */
+  private active = "personal";
+  private steppedUp = false;
+  private ctxCorps = new Map<string, CorporateProvider>();
   /** `corpProvider` picks which corporate bank API stands behind the corp.* adapters; journeys do not change. */
   constructor(personaId = "ayesha", options: { corpProvider?: ProviderId; /** rules switched off, for mutation checks only */ corpFlaws?: Flaws } = {}) {
     const base = personas[personaId];
     if (!base) throw new Error(`Unknown persona ${personaId}`);
     this.p = structuredClone(base);
     if (this.p.corp) { this.corp = createCorporateProvider(options.corpProvider ?? "reference", this.p.corp, options.corpFlaws); this.corp.now = () => this.now(); }
+    for (const c of this.p.contexts ?? []) {
+      const prov = createCorporateProvider(options.corpProvider ?? "reference", c.company, options.corpFlaws);
+      prov.now = () => this.now();
+      if (c.seed) seedBeta(prov);
+      this.ctxCorps.set(c.id, prov);
+    }
     this.cab = new CabSandbox(this.p, { otpVerified: () => this.otpVerified, clearOtp: () => { this.otpVerified = false; } });
   }
   get persona() { return this.p; }
@@ -187,9 +202,12 @@ export class MockBank {
 
   /** The corporate payment adapters. Starting and approving a payment move money, so they need the one-time code first, like a transfer. */
   private corporate(adapter: string, input: Record<string, any>) {
-    const corp = this.corp;
+    const ctx = this.p.contexts?.find((c) => c.id === this.active);
+    const corp = ctx ? this.ctxCorps.get(ctx.id) : this.corp;
     if (!corp) throw new BankError("NOT_SUPPORTED", "Not available for this customer");
-    const userId = String(input.userId ?? "");
+    // In a company context the acting person is the signed-in one: asking to act as someone else is refused, not trusted.
+    if (ctx && input.userId && String(input.userId) !== ctx.userId) throw new BankError("PERMISSION_DENIED", "You can only act as yourself");
+    const userId = ctx ? ctx.userId : String(input.userId ?? "");
     switch (adapter) {
       case "corp.users.list": return Object.fromEntries(corp.getCompany().users.map((u) => [u.id, { id: u.id, name: u.name, sub: u.roles.join(" and ") }]));
       case "corp.company.get": {
@@ -247,11 +265,49 @@ export class MockBank {
     }
   }
 
+  /** Who is signed in, where they can bank from, what they may do in each place, and which place is active. */
+  private session(adapter: string, input: Record<string, any>) {
+    const view = () => ({
+      identity: { id: this.p.id, name: this.p.name },
+      active: this.active,
+      contexts: [
+        { id: "personal", kind: "personal", name: "Personal", permissions: PERSONAL_PERMISSIONS },
+        ...(this.p.contexts ?? []).map((c) => {
+          const roles = c.company.users.find((u) => u.id === c.userId)?.roles ?? [];
+          return { id: c.id, kind: "business", name: c.company.name, role: roles.includes("initiator") ? "Maker" : "Approver", roles, permissions: permissionsOf(roles), stepUp: true };
+        }),
+      ],
+    });
+    switch (adapter) {
+      case "bank.session.get": return view();
+      case "bank.session.stepUp":
+        if (String(input.code ?? "") !== this.p.behaviour.otpCode && String(input.code ?? "") !== "000000") throw new BankError("OTP_INVALID", "That code is not right");
+        this.steppedUp = true;
+        return { ok: true };
+      case "bank.session.switch": {
+        const to = String(input.contextId ?? "");
+        if (to !== "personal" && !this.ctxCorps.has(to)) throw new BankError("CONTEXT_NOT_FOUND", "You have no access to that company");
+        if (to !== "personal" && !this.steppedUp) throw new BankError("STEP_UP_REQUIRED", "Confirm it is you before opening a company");
+        this.active = to;
+        this.steppedUp = false;
+        this.otpVerified = false;
+        return view();
+      }
+      default: throw new BankError("UNKNOWN_ADAPTER", adapter);
+    }
+  }
+
   /** Single entry point used by journeys: adapter id + input -> result. */
   async call(adapter: string, input: Record<string, any> = {}): Promise<any> {
     if (this.cab.handles(adapter)) {
       const out = this.cab.call(adapter, input);
       if (out !== undefined) return out;
+    }
+    if (adapter.startsWith("bank.session.") && !this.p.contexts) throw new BankError("NOT_SUPPORTED", "Not available for this customer");
+    if (this.p.contexts) {
+      if (adapter.startsWith("bank.session.")) return this.session(adapter, input);
+      const inCompany = this.active !== "personal";
+      if (!adapter.startsWith("bank.otp.") && inCompany !== adapter.startsWith("corp.")) throw new BankError("WRONG_CONTEXT", inCompany ? "Switch to Personal to use your personal accounts" : "Switch to a company to use its accounts");
     }
     if (adapter.startsWith("corp.")) return this.corporate(adapter, input);
     switch (adapter) {

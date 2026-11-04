@@ -44,6 +44,18 @@ export const ADAPTER_CATALOG: AdapterInfo[] = [
     input: { quoteId: "from the quote" }, returns: "{ reference, from: { currency, newBalance }, to: { currency, newBalance }, quoteId }. Errors: OTP_REQUIRED, QUOTE_EXPIRED (get a new quote), QUOTE_USED, QUOTE_NOT_FOUND, INSUFFICIENT_FUNDS.",
   },
   {
+    adapter: "bank.session.get", suggestedId: "session", description: "Who is signed in and every place they can bank from (personal and each company), with the role and permissions in each and which one is active. Only for a customer who acts for companies (alex).",
+    input: {}, returns: "{ identity: { id, name }, active, contexts: [{ id, kind: personal | business, name, role?, roles?, permissions[], stepUp? }] }. Permissions are pay.create, pay.approve, accounts.view, cards.manage. Show or hide menus from them; the bank enforces them anyway.",
+  },
+  {
+    adapter: "bank.session.stepUp", suggestedId: "stepUp", description: "Confirms the person with their one-time code so they may open a company. Valid for one switch.",
+    input: { code: "the one-time code" }, returns: "{ ok: true }. Errors: OTP_INVALID.",
+  },
+  {
+    adapter: "bank.session.switch", suggestedId: "switchContext", description: "Moves the session to personal or to a company. Personal adapters (bank.*) then refuse while a company is active, and corp.* refuse while personal is active, so nothing leaks across.",
+    input: { contextId: "personal, alpha or beta" }, returns: "The same as bank.session.get. Errors: STEP_UP_REQUIRED (call bank.session.stepUp first), CONTEXT_NOT_FOUND. Other adapters answer WRONG_CONTEXT in the wrong place, and corp.* answer PERMISSION_DENIED when asked to act as someone else.",
+  },
+  {
     adapter: "corp.users.list", suggestedId: "companyUsers", description: "The people of the company, to choose who is acting in the sandbox (a real app knows who signed in).",
     input: {}, returns: "Object keyed by user id: { id, name, sub: roles }. Save as ctx.people and use it as a select source.",
   },

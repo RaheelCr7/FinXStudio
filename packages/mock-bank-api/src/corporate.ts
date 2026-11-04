@@ -23,6 +23,8 @@ export type CorpCompany = {
   whitelist: CorpBeneficiary[];
   /** Only these may be paid by a payroll run. Absent for a company that has no payroll. */
   employees?: CorpEmployee[];
+  /** Makes this company's payment ids its own (pay_alpha_1), for a person who acts for several companies. */
+  paymentPrefix?: string;
   companyDailyLimit: number; companyUsedToday: number;
   /** A payment above this needs two different approvers instead of one. */
   dualApprovalAbove: number;
@@ -163,7 +165,7 @@ export class CorporateSandbox implements CorporateBankAdapter {
     this.seq += 1;
     const { valueDate, afterCutoff } = this.valueDate();
     const p: CorpPayment = {
-      id: `pay_${this.seq}`, companyId: c.id, fromAccountId: from.id, beneficiaryId, amount, currency: from.currency, reference, ...(lines ? { lines } : {}), ...(payroll ? { period: payroll.period } : {}),
+      id: `pay_${c.paymentPrefix ? c.paymentPrefix + "_" : ""}${this.seq}`, companyId: c.id, fromAccountId: from.id, beneficiaryId, amount, currency: from.currency, reference, ...(lines ? { lines } : {}), ...(payroll ? { period: payroll.period } : {}),
       status: "pending_approval", initiatedBy: user.id, initiatedAt: new Date(this.now()).toISOString(), valueDate, afterCutoff,
       required: this.flaws.dualApproval !== false && (payroll || amount > c.dualApprovalAbove) ? 2 : 1, approvals: [],
     };
