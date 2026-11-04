@@ -24,13 +24,19 @@ describe("one login, several places to bank", () => {
   });
   it("keeps personal and company data apart", async () => {
     const b = new MockBank("alex");
-    expect(Object.keys(await b.call("bank.accounts.list"))).toEqual(["acc_main", "acc_save"]);
+    expect(Object.keys(await b.call("bank.accounts.list"))).toEqual(["acc_main", "acc_save", "acc_eur", "acc_aed"]);
     await enter(b, "alpha");
     expect(await code(b.call("bank.accounts.list"))).toBe("WRONG_CONTEXT");
     expect(Object.keys((await b.call("corp.company.get")).accounts)).toEqual(["alpha_ops", "alpha_pay", "alpha_eur"]);
     await b.call("bank.session.switch", { contextId: "personal" });
     expect(await code(b.call("corp.company.get"))).toBe("WRONG_CONTEXT");
-    expect(Object.keys(await b.call("bank.accounts.list"))).toEqual(["acc_main", "acc_save"]);
+    expect(Object.keys(await b.call("bank.accounts.list"))).toEqual(["acc_main", "acc_save", "acc_eur", "acc_aed"]);
+  });
+  it("gives Alpha a past: one released, one waiting for Maria, one rejected with a reason", async () => {
+    const b = new MockBank("alex");
+    await enter(b, "alpha");
+    const got = await Promise.all(["pay_alpha_1", "pay_alpha_2", "pay_alpha_3"].map((paymentId) => b.call("corp.payments.get", { paymentId })));
+    expect(got.map((p: any) => [p.amount, p.status])).toEqual([[4800, "released"], [7250, "pending_approval"], [1600, "rejected"]]);
   });
   it("lets Alex start a payment at Alpha as Maker, pending approval, and refuses him approving it", async () => {
     const b = new MockBank("alex");
@@ -52,14 +58,14 @@ describe("one login, several places to bank", () => {
     const b = new MockBank("alex");
     await enter(b, "beta");
     const pending = await b.call("corp.payments.pending");
-    expect(Object.values(pending).map((p: any) => [p.payee, p.amount, p.approvals.length, p.required])).toEqual([["Kestrel Logistics", 12400, 1, 2], ["Orbit Print Co", 2150, 0, 1]]);
+    expect(Object.values(pending).map((p: any) => [p.payee, p.amount, p.approvals.length, p.required])).toEqual([["Kestrel Logistics", 12400, 1, 2], ["Orbit Print Co", 2150, 0, 1], ["Pixel Office Supply", 18900, 0, 2]]);
     const orbit = Object.values(pending).find((p: any) => p.amount === 2150) as any;
     await verified(b);
     expect(await b.call("corp.payments.approve", { paymentId: orbit.id })).toMatchObject({ status: "released" });
     const kestrel = Object.values(pending).find((p: any) => p.amount === 12400) as any;
     await verified(b);
     expect(await b.call("corp.payments.approve", { paymentId: kestrel.id })).toMatchObject({ status: "released" });
-    expect(await b.call("corp.payments.pending")).toEqual({});
+    expect(Object.values(await b.call("corp.payments.pending")).map((p: any) => p.amount)).toEqual([18900]);
   });
   it("shows none of Alpha's payments at Beta", async () => {
     const b = new MockBank("alex");

@@ -6,7 +6,7 @@ import { BankError } from "./errors";
 import { ACME, type CorpCompany, type CorpPayment, type Flaws } from "./corporate";
 import { createCorporateProvider, type CorporateProvider, type ProviderId } from "./corporate-provider";
 import { CabSandbox, CAB_PROFILES, type CabProfile } from "./cab";
-import { ALPHA, BETA, PERSONAL_PERMISSIONS, permissionsOf, seedBeta, type PersonaContext } from "./identity";
+import { ALPHA, BETA, PERSONAL_PERMISSIONS, permissionsOf, seedAlpha, seedBeta, type PersonaContext } from "./identity";
 export { ALPHA, BETA, permissionsOf, PERSONAL_PERMISSIONS, type PersonaContext, type Permission } from "./identity";
 export * from "./finance";
 export { CAB_PROFILES, CAB_CURRENCY, PASSWORD_RULES, passwordProblems, type CabProfile } from "./cab";
@@ -78,11 +78,18 @@ export const personas: Record<string, Persona> = {
     accounts: [
       { id: "acc_main", name: "Main", maskedNumber: "••4410", iban: "US00 BWX 0000 0000 4410", balance: 8720.76, currency: "USD", status: "active", canDebit: true },
       { id: "acc_save", name: "Savings", maskedNumber: "••7731", iban: "US00 BWX 0000 0000 7731", balance: 15254.37, currency: "USD", status: "active", canDebit: true },
+      { id: "acc_eur", name: "Euro", maskedNumber: "••5502", iban: "DE00 BWX0 0000 0055 02", balance: 3200, currency: "EUR", status: "active", canDebit: true },
+      { id: "acc_aed", name: "Dirham", maskedNumber: "••6603", iban: "AE00 BWX0 0000 0066 03", balance: 9500, currency: "AED", status: "active", canDebit: true },
     ],
-    beneficiaries: [],
+    beneficiaries: [
+      { id: "ben_jl", displayName: "Jordan Lee", bank: "Chase", maskedNumber: "••2210", addedAt: Date.now() - 200 * day },
+      { id: "ben_mp", displayName: "Maya Patel", bank: "Wells Fargo", maskedNumber: "••7788", addedAt: Date.now() - 90 * day },
+      { id: "ben_sr", displayName: "Sofia Rossi", bank: "Intesa", maskedNumber: "••4031", addedAt: Date.now() - 20 * day },
+    ],
+    limitsByCurrency: { EUR: { daily: 5000, usedToday: 0 }, AED: { daily: 20000, usedToday: 0 } },
     limits: { daily: 50000, usedToday: 0 },
     finance: alexFinance(),
-    contexts: [{ id: "alpha", company: ALPHA, userId: "alex" }, { id: "beta", company: BETA, userId: "alex", seed: "waiting-payments" }],
+    contexts: [{ id: "alpha", company: ALPHA, userId: "alex", seed: "history" }, { id: "beta", company: BETA, userId: "alex", seed: "waiting-payments" }],
     behaviour: { otpCode: "482100", kyc: "verified" },
   },
   sam: {
@@ -184,7 +191,8 @@ export class MockBank {
     for (const c of this.p.contexts ?? []) {
       const prov = createCorporateProvider(options.corpProvider ?? "reference", c.company, options.corpFlaws);
       prov.now = () => this.now();
-      if (c.seed) seedBeta(prov);
+      if (c.seed === "waiting-payments") seedBeta(prov);
+      if (c.seed === "history") seedAlpha(prov);
       this.ctxCorps.set(c.id, prov);
     }
     this.cab = new CabSandbox(this.p, { otpVerified: () => this.otpVerified, clearOtp: () => { this.otpVerified = false; } });
