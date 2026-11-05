@@ -1,22 +1,24 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { Pressable, ScrollView, Text, View } from "react-native";
-import { BankApp, actionMeta, displayName, notifications, orderedActions, usd, usd2 } from "@finx/bank-client";
+import { type BankApp, actionMeta, displayName, notifications, orderedActions, usd, usd2 } from "@finx/bank-client";
 import { localize } from "@finx/renderer-core";
 import { Gradient, Icon, IconTile, JourneyPlayer, Pill, useTheme, type IconName } from "@finx/renderer-native";
 import { ServerSetting } from "../ServerSetting";
 import { BRAND_INFO } from "../brand";
 import { DEFAULT_STUDIO_URL, SERVER_CHANGE_ALLOWED, loadStudioUrl } from "../studio-config";
-import { live } from "../live";
 import { useBankApp } from "../useBankApp";
 import { Dashboard, type Actions } from "./Dashboard";
 import { Accounts, BudgetDetail, Budgets, Wallet } from "./Tabs";
 import { InstrumentDetail, InvestHome } from "./Invest";
 import { Card, Sheet, TabBar, tab } from "./ui";
+import { WorkspaceShell } from "./workspace/WorkspaceShell";
 
-export function BankWorkxShell() {
+/**
+ * Everything that is not drawing (who is signed in, screens, Studio, journeys, payments, notices) lives in the BankApp of @finx/bank-client,
+ * shared with the web app. App.tsx makes it, because the workspace it is in decides the theme above this component.
+ */
+export function BankWorkxShell({ app }: { app: BankApp }) {
   const { c, r } = useTheme();
-  // Everything that is not drawing (who is signed in, screens, Studio, journeys, payments, notices) lives in @finx/bank-client, shared with the web app.
-  const [app] = useState(() => new BankApp({ preset: BRAND_INFO.preset, bankApi: BRAND_INFO.bankApi, live, studioUrl: DEFAULT_STUDIO_URL }));
   const s = useBankApp(app);
   const [editingServer, setEditingServer] = useState(false);
   const loginScroller = useRef<React.ComponentRef<typeof ScrollView>>(null);
@@ -66,6 +68,9 @@ export function BankWorkxShell() {
   if (screen === "journey" && active) {
     return <JourneyPlayer key={active.journey.slug} journey={active.journey} initial={active.initial} launch={active.launch} onOpenJourney={(r) => { void app.openChained(r.journey, r.launch); }} adapter={app.adapter} onClose={() => app.closeJourney()} onExit={() => app.closeJourney()} />;
   }
+
+  // a customer with a place for each hat (Personal and companies) gets the workspace shell; the others keep the classic tabs
+  if (bank.persona.identity) return <WorkspaceShell app={app} />;
 
   // the Invest screens sit above the tabs, like the budget detail
   if (investView && fin) {

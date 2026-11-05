@@ -21,7 +21,7 @@ export function Login() {
         <span className="wb-mark wb-mark-lg" aria-hidden>{project.name.slice(0, 1)}</span>
         <h1>{project.name}</h1>
         <p className="wb-muted">Sign in with a sandbox customer</p>
-        <form onSubmit={(e) => { e.preventDefault(); setSubmitting(true); app.login(); router.push(safeNext(next, project.id, `/${project.id}/${bw ? "dashboard" : "home"}`)); }}>
+        <form onSubmit={(e) => { e.preventDefault(); setSubmitting(true); app.login(); router.push(safeNext(next, project.id, `/${project.id}/${bw ? (app.persona.identity ? "personal/home" : "dashboard") : "home"}`)); }}>
           <fieldset className="wb-personas">
             <legend className="wb-sr">Sandbox customer</legend>
             {app.personas().map((p) => (

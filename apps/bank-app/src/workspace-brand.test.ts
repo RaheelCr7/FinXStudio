@@ -30,3 +30,13 @@ describe("the brand the mobile app draws", () => {
     expect(n.WORKSPACE).toBeUndefined();
   });
 });
+
+describe("deep links", () => {
+  it("use the build's URL scheme, which the app config registers", async () => {
+    const m = await load({ EXPO_PUBLIC_FINX_BRAND: "bankworkx" });
+    expect(m.LINK_SCHEME).toBe("bankworkx");
+    const { parseLink } = await import("@finx/bank-client");
+    expect(parseLink("bankworkx://business/beta/approvals", m.LINK_SCHEME)).toEqual({ workspace: "business", companyId: "beta", tab: "approvals" });
+    expect(parseLink("finx://business/beta/approvals", m.LINK_SCHEME)).toBeNull(); // another build's links are not ours
+  });
+});
