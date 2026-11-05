@@ -5,6 +5,8 @@ import { payBillBankworkx } from "./fixtures/pay-bill-bankworkx";
 import { mobileTopup } from "./fixtures/mobile-topup";
 import { schedulePayment } from "./fixtures/schedule-payment";
 import { cancelStandingOrder } from "./fixtures/cancel-standing-order";
+import { supplierPayment } from "./fixtures/supplier-payment";
+import { approvePayments } from "./fixtures/approve-payments";
 import { corporatePayment, corporateApproval } from "./fixtures/corporate-payments";
 import { bulkPayment } from "./fixtures/bulk-payment";
 import { payrollRun } from "./fixtures/payroll-run";
@@ -118,6 +120,16 @@ export const catalog: CatalogEntry[] = [
     id: cancelStandingOrder.slug, category: "Payments", madeFor: "bankworkx", journey: cancelStandingOrder,
     summary: "End a scheduled or recurring payment for good, or skip only the next one, from the list of what is scheduled. No code is asked, because it can only reduce what leaves the account. The cancel mode of Schedule a payment, as a journey of its own.",
     highlights: ["All future payments or only the next one", "Refused while running or after changes close", "No code needed", "Timeout and unavailable screens"],
+  },
+  {
+    id: supplierPayment.slug, category: "Payments", madeFor: "bankworkx", journey: supplierPayment,
+    summary: "A Maker pays a saved supplier from the company's account: amount, reference and purpose, the speeds the bank offers, a review, and a code from the company's threshold. The payment then waits for approvers; nothing leaves the account until it is released.",
+    highlights: ["Only saved suppliers", "Speeds with fee and arrival; one over its limit is marked", "Rate and fee for a supplier paid in another currency", "One or two approvers shown on the review", "Code only from the threshold, naming the amount and the supplier", "Refused by the bank for a role without the permission"],
+  },
+  {
+    id: approvePayments.slug, category: "Payments", madeFor: "bankworkx", journey: approvePayments,
+    summary: "An Approver's inbox: the payments colleagues started, who has approved and whose turn it is, the bank's name check of the payee and the cut-off. Approve (with a tick and a code from the threshold), reject with a reason, pass to another approver, or approve several with one code; the last approval releases the payment.",
+    highlights: ["Inbox and history with search and status filter", "Four eyes, order of approvers, cut-off", "Name check chip and the bank's record", "One code for several payments, all or none", "Reject needs a reason", "No-access card for a Maker, refused again by the bank"],
   },
   {
     id: internalTransfer.slug, category: "Payments", madeFor: "bankworkx", journey: internalTransfer,

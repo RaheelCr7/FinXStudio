@@ -2,8 +2,9 @@ import { BankError } from "../errors";
 import type { BankConfig, HomeMarket } from "../config";
 import type { SandboxConditions } from "../index";
 import { BANKWORKX_FX, priceQuote } from "../retail/fx";
-import { PAYMENT_QUOTE_SECONDS, PURPOSES, SENDER_PAYS_ALL, money, railsFor, speedsFor, type Offer, type SendType, type SpeedClass } from "../retail/payments";
-import type { CorpAuditEntry, CorpCompany, CorpPayment } from "./corporate";
+import { PAYMENT_QUOTE_SECONDS, PURPOSES, SENDER_PAYS_ALL, money, railsFor, speedText, speedsFor, type Offer, type SendType, type SpeedClass } from "../retail/payments";
+import { dayName } from "../retail/schedules";
+import { approvalRefusal, isDue, type ApprovalRefusal, type CorpAuditEntry, type CorpBeneficiary, type CorpCompany, type CorpPayment, type Flaws } from "./corporate";
 import type { CorporateProvider } from "./corporate-provider";
 import type { OtpState } from "../retail/retail";
 import { currencyInfo, roundMoney } from "@finx/ui-kit";
@@ -13,6 +14,8 @@ export type Actor = { contextId: string; userId: string; permissions: string[] }
 export type BusinessHost = {
   now: () => number; otp: OtpState; transferFails: () => boolean; config: () => BankConfig; conditions: () => SandboxConditions;
   provider: () => CorporateProvider | undefined; actor: () => Actor | undefined;
+  /** Rules switched off, for mutation checks only. */
+  flaws: () => Flaws;
 };
 
 /** What each adapter needs the context to allow (docs/journeys/README.md 4.2). Checked before the company's own rules, which stay as a second line. */
@@ -21,7 +24,8 @@ const NEEDS: Record<string, string> = {
   "corp.payments.get": "biz.accounts.view", "corp.payments.pending": "biz.approvals.view",
   "corp.payments.initiate": "biz.payments.initiate", "corp.payments.quote": "biz.payments.initiate", "corp.payments.create": "biz.payments.initiate",
   "corp.bulk.check": "biz.payments.bulk", "corp.bulk.submit": "biz.payments.bulk", "corp.payroll.check": "biz.payroll.run", "corp.payroll.submit": "biz.payroll.run",
-  "corp.payments.approve": "biz.approvals.approve", "corp.payments.reject": "biz.approvals.approve", "corp.payments.withdraw": "biz.payments.withdraw",
+  "corp.payments.approve": "biz.approvals.approve", "corp.payments.approveMany": "biz.approvals.approve", "corp.payments.reject": "biz.approvals.approve", "corp.payments.delegate": "biz.approvals.approve", "corp.payments.withdraw": "biz.payments.withdraw",
+  "corp.payments.list": "biz.approvals.view",
   "corp.signatories.list": "biz.audit.view", "corp.audit.list": "biz.audit.view",
 };
 
@@ -54,6 +58,7 @@ export class BusinessSandbox {
       this.log(corp, actor.userId, `${what} (${adapter})`, "Refused");
       throw new BankError("PERMISSION_DENIED", `Your role doesn't allow this. Ask an administrator at ${company.name}.`);
     };
+    if (this.host.flaws().permissions === false) return actor.userId;
     if (input.userId !== undefined && String(input.userId) !== actor.userId) refuse("Tried to act as another user");
     if (need && !actor.permissions.includes(need)) refuse("Tried an action the role does not allow");
     return actor.userId;
@@ -65,10 +70,64 @@ export class BusinessSandbox {
     if (this.needsCode(company, amount) && !this.host.otp.verified) throw new BankError(this.host.otp.attempts >= 3 ? "STEP_UP_FAILED" : "OTP_REQUIRED", this.host.otp.attempts >= 3 ? "We couldn't confirm this payment. Nothing was sent. Start again." : "OTP not verified");
     if (this.host.transferFails()) throw new BankError("CORE_UNAVAILABLE", "Core banking unavailable");
   }
-  private shown(p: CorpPayment, company: CorpCompany) {
+  /** The payment as a person sees it; with the viewer, also what they can do with it now and the words for it (the bank decides, the screen draws). */
+  private shown(p: CorpPayment, company: CorpCompany, viewer?: string) {
     const base = shown(p, company);
     const m = this.meta.get(`${company.id}:${p.id}`);
-    return m ? { ...base, ...m } : base;
+    const view = viewer ? this.review(p, company, viewer) : {};
+    return { ...base, ...(m ?? {}), ...view };
+  }
+
+  private review(p: CorpPayment, co: CorpCompany, viewerId: string) {
+    const now = this.host.now(), flaws = this.host.flaws();
+    const name = (id?: string) => co.users.find((u) => u.id === id)?.name ?? id ?? "";
+    const me = co.users.find((u) => u.id === viewerId);
+    const pending = p.status === "pending_approval";
+    const refusal: ApprovalRefusal | null = me ? approvalRefusal(co, p, viewerId, now, flaws) : { code: "NOT_AUTHORISED", message: "You don't work for this company." };
+    const sentence = !refusal ? "" : ({
+      SELF_APPROVAL: "You started this payment. Another approver must approve it.",
+      ALREADY_APPROVED: "You approved this payment. Waiting for the next approver.",
+      OUT_OF_SEQUENCE: `Waiting for ${name(refusal.by)} to approve first.`,
+      DELEGATED: p.passedBy === viewerId ? `Passed to ${name(p.passedTo)}.` : "This payment was passed to another approver.",
+      APPROVAL_EXPIRED: "The cut-off has passed. This payment can\u2019t be approved today.",
+      PAYMENT_NOT_PENDING: "This payment is no longer waiting for approval.",
+      NOT_AUTHORISED: "You can\u2019t approve payments at this company.",
+    } as Record<ApprovalRefusal["code"], string>)[refusal.code];
+
+    // who must approve, and where each one stands: in the order the payment fixed, or the group that covers its amount, or every approver
+    const group = [...(co.signatoryGroups ?? [])].sort((a, b) => b.above - a.above).find((g) => p.amount > g.above);
+    const ids = (p.sequence ? [...new Set([...p.approvals.map((a) => a.userId), ...p.sequence])] : group?.members ?? co.users.filter((u) => u.roles.includes("approver")).map((u) => u.id)).filter((id) => id !== p.initiatedBy);
+    const next = p.sequence?.find((id) => !p.approvals.some((a) => a.userId === id));
+    const signatories = ids.filter((id) => co.users.some((u) => u.id === id)).map((id) => {
+      const state = p.approvals.some((a) => a.userId === id) ? "approved" : p.passedBy === id ? "passed" : p.sequence ? (id === next ? "next" : "waiting") : "can";
+      const text = { approved: "Approved", passed: "Passed on", next: "Next", waiting: "Waiting", can: "Can approve" }[state];
+      return { id, name: name(id), label: `${name(id)}${id === viewerId ? " (you)" : ""}`, state, text };
+    });
+
+    // when it has to be approved by
+    let cutoffText = "", cutoffTone: "neutral" | "warning" | "negative" = "neutral";
+    if (pending) {
+      if (!isDue(p, now)) cutoffText = `Due ${dayName(p.valueDate)}`;
+      else {
+        const [h, m] = co.cutoff.split(":").map(Number), d = new Date(now);
+        const left = h! * 60 + m! - (d.getUTCHours() * 60 + d.getUTCMinutes());
+        cutoffText = left < 0 ? "Cut-off passed" : `Cut-off in ${left >= 60 ? `${Math.floor(left / 60)}h ` : ""}${left % 60}m`;
+        cutoffTone = left < 30 ? "negative" : left < 90 ? "warning" : "neutral";
+      }
+    }
+    const need = p.required > 1 ? `Needs ${p.required} approvals` : "";
+    const startedByYou = p.initiatedBy === viewerId;
+    const youApproved = p.approvals.some((a) => a.userId === viewerId);
+    return {
+      startedBy: name(p.initiatedBy), startedByYou, passedToName: p.passedTo ? name(p.passedTo) : "", need, progress: `${p.approvals.length} of ${p.required} approved`, cutoffText, cutoffTone,
+      nameResult: p.nameCheck?.result ?? "match", nameRecorded: p.nameCheck?.recorded ?? "", nameSentence: p.nameCheck ? `The bank\u2019s record says \u201c${p.nameCheck.recorded}\u201d.` : "",
+      codeRequired: this.needsCode(co, () => p.amount),
+      you: { can: !refusal, code: refusal?.code ?? "", sentence },
+      statusKey: pending ? (refusal ? "waiting" : "ready") : p.status,
+      note: [startedByYou ? "Started by you" : youApproved && pending ? "You approved" : "", need, cutoffText].filter(Boolean).join(" \u00b7 "),
+      signatories,
+      delegates: pending && !refusal ? Object.fromEntries(co.users.filter((u) => u.roles.includes("approver") && u.id !== viewerId).map((u) => [u.id, { id: u.id, name: u.name }])) : {},
+    };
   }
 
   call(adapter: string, input: Record<string, any>): any {
@@ -76,15 +135,15 @@ export class BusinessSandbox {
     if (!corp) throw new BankError("NOT_SUPPORTED", "Not available for this customer");
     const userId = this.acting(adapter, corp, input);
     const c = () => corp.getCompany();
-    const done = (p: CorpPayment, what: string) => { this.log(corp, userId, `${what} ${p.id}`); return this.shown(p, c()); };
+    const done = (p: CorpPayment, what: string) => { this.log(corp, userId, `${what} ${p.id}`); return this.shown(p, c(), userId); };
     switch (adapter) {
       case "corp.users.list": return Object.fromEntries(c().users.map((u) => [u.id, { id: u.id, name: u.name, sub: u.roles.join(" and ") }]));
       case "corp.company.get": {
         const co = c();
         const me = co.users.find((u) => u.id === userId);
-        return { id: co.id, name: co.name, currency: co.currency, accounts: Object.fromEntries(co.accounts.map((a) => [a.id, a])), beneficiaries: Object.fromEntries(co.whitelist.map((b) => [b.id, { ...b, displayName: b.name }])), employees: Object.fromEntries((co.employees ?? []).map((e) => [e.id, { id: e.id, name: e.name, bank: e.bank, maskedNumber: e.maskedNumber }])), users: co.users.map((u) => ({ id: u.id, name: u.name, roles: u.roles })), me: me ? { id: me.id, name: me.name, roles: me.roles, dailyLimit: me.dailyLimit, usedToday: me.usedToday, remainingToday: me.dailyLimit - me.usedToday } : undefined, companyDailyLimit: co.companyDailyLimit, companyUsedToday: co.companyUsedToday, dualApprovalAbove: co.dualApprovalAbove, codeAbove: co.codeAbove, cutoff: co.cutoff };
+        return { id: co.id, name: co.name, currency: co.currency, accounts: Object.fromEntries(co.accounts.map((a) => [a.id, a])), beneficiaries: Object.fromEntries(co.whitelist.map((b) => [b.id, { ...b, displayName: b.name, line: supplierLine(b, co) }])), employees: Object.fromEntries((co.employees ?? []).map((e) => [e.id, { id: e.id, name: e.name, bank: e.bank, maskedNumber: e.maskedNumber }])), users: co.users.map((u) => ({ id: u.id, name: u.name, roles: u.roles })), me: me ? { id: me.id, name: me.name, roles: me.roles, dailyLimit: me.dailyLimit, usedToday: me.usedToday, remainingToday: me.dailyLimit - me.usedToday } : undefined, defaultAccountId: co.accounts.find((a) => a.currency === co.currency)?.id, companyDailyLimit: co.companyDailyLimit, companyUsedToday: co.companyUsedToday, dualApprovalAbove: co.dualApprovalAbove, codeAbove: co.codeAbove, cutoff: co.cutoff };
       }
-      case "corp.suppliers.list": return Object.fromEntries(c().whitelist.map((b) => [b.id, { ...b, displayName: b.name }]));
+      case "corp.suppliers.list": return Object.fromEntries(c().whitelist.map((b) => [b.id, { ...b, displayName: b.name, line: supplierLine(b, c()) }]));
       case "corp.templates.list": return Object.fromEntries((c().templates ?? []).map((t) => [t.id, t]));
       case "corp.signatories.list": return Object.fromEntries((c().signatoryGroups ?? []).map((g) => [g.id, g]));
       case "corp.audit.list": return Object.fromEntries((this.audit.get(c().id) ?? c().audit ?? []).map((e, i) => [String(i + 1), { id: String(i + 1), ...e }]));
@@ -126,20 +185,66 @@ export class BusinessSandbox {
       case "corp.payments.create": return this.create(corp, userId, input);
       case "corp.payments.approve": {
         this.requireCode(c(), () => corp.getPayment(String(input.paymentId ?? "")).amount);
-        const p = corp.approvePayment({ userId, paymentId: String(input.paymentId ?? "") });
+        const p = corp.approvePayment({ userId, paymentId: String(input.paymentId ?? ""), acknowledged: input.acknowledged === true });
         this.host.otp.verified = false;
         return done(p, p.status === "released" ? "Approved and released" : "Approved");
       }
+      case "corp.payments.approveMany": return this.approveMany(corp, userId, input);
+      case "corp.payments.delegate": {
+        if (!corp.delegatePayment) throw new BankError("NOT_SUPPORTED", "This bank cannot pass a payment on");
+        const p = corp.delegatePayment({ userId, paymentId: String(input.paymentId ?? ""), toUserId: String(input.toUserId ?? "") });
+        return done(p, `Passed to ${c().users.find((u) => u.id === p.passedTo)?.name ?? p.passedTo}:`);
+      }
+      case "corp.payments.list": {
+        if (!corp.all) throw new BankError("NOT_SUPPORTED", "This bank cannot list every payment");
+        const when = (p: CorpPayment) => p.releasedAt ?? p.rejectedAt ?? p.initiatedAt;
+        const status = input.status === "pending" || input.status === "history" || input.status === "ready" ? input.status : "all";
+        // "ready": what the signed-in person can approve now and approve together with others (the name check matches)
+        const ready = (p: CorpPayment) => p.status === "pending_approval" && !p.nameCheck && !approvalRefusal(c(), p, userId, this.host.now(), this.host.flaws());
+        const rows = corp.all().filter((p) => status === "all" || (status === "ready" ? ready(p) : (status === "pending") === (p.status === "pending_approval")));
+        rows.sort((a, b) => (status === "pending" || status === "ready" ? a.initiatedAt.localeCompare(b.initiatedAt) : when(b).localeCompare(when(a))) || a.id.localeCompare(b.id));
+        return Object.fromEntries(rows.map((p) => [p.id, this.shown(p, c(), userId)]));
+      }
       case "corp.payments.withdraw": return done(corp.withdrawPayment({ userId, paymentId: String(input.paymentId ?? "") }), "Withdrew");
       case "corp.payments.reject": return done(corp.rejectPayment({ userId, paymentId: String(input.paymentId ?? ""), reason: input.reason }), "Rejected");
-      case "corp.payments.pending": return Object.fromEntries(corp.listPending({ userId, as: input.as === "initiator" ? "initiator" : input.as === "approver" ? "approver" : undefined }).map((p) => [p.id, this.shown(p, c())]));
+      case "corp.payments.pending": return Object.fromEntries(corp.listPending({ userId, as: input.as === "initiator" ? "initiator" : input.as === "approver" ? "approver" : undefined }).map((p) => [p.id, this.shown(p, c(), userId)]));
       case "corp.payments.get": {
         // a payment is read by someone who works for the company; with a session the permission above already says so, without one a named user must be on the company's list
         if (!this.host.actor() && input.userId !== undefined && !c().users.some((u) => u.id === String(input.userId))) throw new BankError("NOT_AUTHORISED", "You don't work for this company.");
-        return this.shown(corp.getPayment(String(input.paymentId ?? "")), c());
+        return this.shown(corp.getPayment(String(input.paymentId ?? "")), c(), userId);
       }
       default: return undefined;
     }
+  }
+
+  /**
+   * Approves several waiting payments with one code. Every payment is checked first and none is approved unless all can be: someone else's turn,
+   * your own payment, one already approved, a name check to confirm (that one is approved on its own) all refuse the whole group. A code is asked
+   * when any of them is at or above the company's threshold; the money of the payments this completes must be in the account.
+   */
+  private approveMany(corp: CorporateProvider, userId: string, input: Record<string, any>) {
+    const co = corp.getCompany(), flaws = this.host.flaws();
+    const ids = [...new Set((Array.isArray(input.paymentIds) ? input.paymentIds : []).map(String))];
+    if (!ids.length) throw new BankError("EMPTY_BATCH", "Choose at least one payment.");
+    const list = ids.map((id) => corp.getPayment(id));
+    for (const p of list) {
+      const refusal = approvalRefusal(co, p, userId, this.host.now(), flaws);
+      if (refusal) throw new BankError(refusal.code, refusal.message);
+      if (p.nameCheck && flaws.nameAck !== false) throw new BankError("NOT_FOR_BATCH", "A payment with a name check to confirm is approved on its own.");
+    }
+    const leaving = new Map<string, number>();
+    for (const p of list) if (p.approvals.length + 1 >= p.required) leaving.set(p.fromAccountId, (leaving.get(p.fromAccountId) ?? 0) + p.amount);
+    for (const [accountId, sum] of leaving) if (sum > (co.accounts.find((a) => a.id === accountId)?.balance ?? 0)) throw new BankError("INSUFFICIENT_FUNDS", "Insufficient funds");
+    this.requireCode(co, () => Math.max(...list.map((p) => p.amount)));
+    const done = list.map((p) => corp.approvePayment({ userId, paymentId: p.id, acknowledged: false }));
+    this.host.otp.verified = false;
+    this.log(corp, userId, `Approved ${done.length} payments (${done.map((p) => p.id).join(", ")})`);
+    const now = corp.getCompany();
+    return {
+      count: done.length, released: done.filter((p) => p.status === "released").length, currency: now.currency,
+      total: done.reduce((sum, p) => sum + p.amount, 0),
+      payments: Object.fromEntries(done.map((p) => [p.id, this.shown(corp.getPayment(p.id), now, userId)])),
+    };
   }
 
   /**
@@ -158,7 +263,7 @@ export class BusinessSandbox {
     if (from.currency !== co.currency) throw new BankError("CURRENCY_NOT_SUPPORTED", `Payments are limited in ${co.currency}: choose a ${co.currency} account`);
     const cur = sup.currency ?? co.currency, digits = currencyInfo(cur).decimals, receive = Number(input.amount);
     if (!(receive > 0) || Math.abs(receive * 10 ** digits - Math.round(receive * 10 ** digits)) > 1e-6) throw new BankError("INVALID_AMOUNT", `Enter an amount in ${cur} with at most ${digits} decimal places`);
-    if (!PURPOSES.includes(String(input.purpose ?? ""))) throw new BankError("PURPOSE_REQUIRED", "Choose a purpose for this payment.");
+    if (!SUPPLIER_PURPOSES.includes(String(input.purpose ?? ""))) throw new BankError("PURPOSE_REQUIRED", "Choose a purpose for this payment.");
     const reference = String(input.reference ?? "").trim();
     if (!reference) throw new BankError("REFERENCE_REQUIRED", "Enter an invoice or PO number.");
     if (reference.length > 140) throw new BankError("REFERENCE_TOO_LONG", "A reference can have up to 140 characters.");
@@ -192,7 +297,7 @@ export class BusinessSandbox {
     return {
       quoteId: id, expiresAt: new Date(expiresAt).toISOString(), ttlSeconds: PAYMENT_QUOTE_SECONDS, fromAccountId: from.id, payee: { id: sup.id, name: sup.name, masked: sup.maskedNumber },
       type, speed: chosen.speed, speedName: chosen.name, arrives: chosen.arrives, receive: meta.receive, rate, converted: cur !== co.currency, pay, fee, total, currency: co.currency,
-      speeds: Object.fromEntries(speeds.map((x) => [x.speed, { id: x.speed, name: x.name, arrives: x.arrives, fee: x.fee, usable: x.available && x.fits, ...(x.reason ? { reason: x.reason } : {}) }])),
+      speeds: Object.fromEntries(speeds.map((x) => [x.speed, { id: x.speed, name: x.name, sub: speedText(x, cur, co.currency), arrives: x.arrives, fee: x.fee, usable: x.available && x.fits, ...(x.reason ? { reason: x.reason } : {}) }])),
       requiredApprovers: total > co.dualApprovalAbove ? 2 : 1, codeRequired: this.needsCode(co, () => total),
     };
   }
@@ -210,9 +315,16 @@ export class BusinessSandbox {
     q.used = true; this.host.otp.verified = false;
     this.meta.set(`${corp.getCompany().id}:${p.id}`, { ...q.meta, railReference: `${q.meta.rail.id.toUpperCase()}-${String(Number(p.id.replace(/\D/g, "")) || this.seq).padStart(8, "0")}` });
     this.log(corp, userId, `Started payment ${p.id}`);
-    return this.shown(p, corp.getCompany());
+    return this.shown(p, corp.getCompany(), userId);
   }
 }
+
+/** A supplier on a line: the currency it is paid in and the last 4 digits of its account ("USD · ••8841"). */
+const supplierLine = (b: CorpBeneficiary, co: CorpCompany) => `${b.currency ?? co.currency} \u00b7 \u2022\u2022${b.maskedNumber.replace(/\D/g, "").slice(-4)}`;
+
+/** What a company can say a supplier payment is for (the spec's list), besides the personal ones the sandbox has always taken. */
+export const BUSINESS_PURPOSES = ["Goods", "Services", "Rent", "Utilities", "Taxes and duties", "Other"];
+const SUPPLIER_PURPOSES = [...BUSINESS_PURPOSES, ...PURPOSES];
 
 /** The countries a supplier can be in for the bank's home-market rails to serve the payment. */
 const DOMESTIC: Record<HomeMarket, string[]> = { us: ["US"], uk: ["GB"], eu: ["DE", "FR", "ES", "IT", "NL", "IE", "BE", "AT", "PT", "FI", "LU", "GR"], ae: ["AE"], sa: ["SA"], jo: ["JO"] };

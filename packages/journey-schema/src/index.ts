@@ -13,6 +13,8 @@ export { payBillBankworkx } from "./fixtures/pay-bill-bankworkx";
 export { mobileTopup } from "./fixtures/mobile-topup";
 export { schedulePayment } from "./fixtures/schedule-payment";
 export { cancelStandingOrder } from "./fixtures/cancel-standing-order";
+export { supplierPayment } from "./fixtures/supplier-payment";
+export { approvePayments } from "./fixtures/approve-payments";
 export { corporatePayment, corporateApproval } from "./fixtures/corporate-payments";
 export { bulkPayment } from "./fixtures/bulk-payment";
 export { payrollRun } from "./fixtures/payroll-run";

@@ -161,8 +161,8 @@ export const ADAPTER_CATALOG: AdapterInfo[] = [
   },
   {
     adapter: "corp.payments.approve", suggestedId: "approvePayment", description: "Approves a pending payment. The last approval releases it: the money moves. Needs the one-time code first.",
-    input: { userId: "an approver other than the one who started it", paymentId: "from corp.payments.pending" },
-    returns: "The payment, 'released' (with releaseReference) or still 'pending_approval' when a second approver is needed. Errors: OTP_REQUIRED, NOT_AUTHORISED, SELF_APPROVAL, ALREADY_APPROVED, PAYMENT_NOT_PENDING, PAYMENT_NOT_FOUND, INSUFFICIENT_FUNDS, LIMIT_COMPANY_EXCEEDED.",
+    input: { userId: "an approver other than the one who started it", paymentId: "from corp.payments.pending", acknowledged: "true once the person checked a flagged payee name" },
+    returns: "The payment, 'released' (with releaseReference) or still 'pending_approval' when a second approver is needed. Errors: OTP_REQUIRED, NOT_AUTHORISED, SELF_APPROVAL, ALREADY_APPROVED, OUT_OF_SEQUENCE, DELEGATED, APPROVAL_EXPIRED, NAME_CHECK_NOT_CONFIRMED, PAYMENT_NOT_PENDING, INSUFFICIENT_FUNDS, LIMIT_COMPANY_EXCEEDED.",
   },
   {
     adapter: "corp.payments.reject", suggestedId: "rejectPayment", description: "An approver rejects a pending payment, with a reason. The initiator's daily limit is given back. The person who started the payment cannot reject it (NOT_AUTHORISED): they use corp.payments.withdraw.",
@@ -338,8 +338,21 @@ export const ADAPTER_CATALOG: AdapterInfo[] = [
     input: { quoteId: "from corp.payments.quote" }, returns: "The payment: { id, status 'pending_approval', required, rail, speed, receive, rate, fee, purpose, railReference, … }.", moneyMoving: true, requiresOtp: true,
     errors: ["PERMISSION_DENIED", "QUOTE_NOT_FOUND", "QUOTE_USED", "QUOTE_EXPIRED", "RAIL_NOT_AVAILABLE", "OTP_REQUIRED", "STEP_UP_FAILED", "LIMIT_USER_EXCEEDED", "LIMIT_COMPANY_EXCEEDED", "INSUFFICIENT_FUNDS"],
   },
-  { adapter: "corp.suppliers.list", suggestedId: "suppliers", description: "The company's approved suppliers.", input: {}, returns: "Map by id: { id, name, displayName, bank, maskedNumber, country?, currency? }.", errors: ["PERMISSION_DENIED"] },
+  { adapter: "corp.suppliers.list", suggestedId: "suppliers", description: "The company's approved suppliers.", input: {}, returns: "Map by id: { id, name, displayName, line, bank, maskedNumber, country?, currency? }.", errors: ["PERMISSION_DENIED"] },
   { adapter: "corp.templates.list", suggestedId: "templates", description: "Saved payment templates.", input: {}, returns: "Map by id: { id, name, beneficiaryId, amount?, reference, purpose }.", errors: ["PERMISSION_DENIED"] },
+  {
+    adapter: "corp.payments.list", suggestedId: "paymentsList", description: "Payments for an approvals inbox, each as the signed-in person sees it (you, statusKey, note, signatories, nameResult, cutoffText, delegates).",
+    input: { status: "'pending' | 'ready' (approvable together) | 'history'" }, returns: "Map by payment id.",
+  },
+  {
+    adapter: "corp.payments.approveMany", suggestedId: "approveMany", description: "Approves several waiting payments with ONE code, all or none (NOT_FOR_BATCH if one has a name check).",
+    input: { paymentIds: "ids" }, returns: "{ count, released, total, currency, payments }.", moneyMoving: true, requiresOtp: true,
+    errors: ["PERMISSION_DENIED", "OTP_REQUIRED", "NOT_FOR_BATCH", "SELF_APPROVAL", "OUT_OF_SEQUENCE", "APPROVAL_EXPIRED", "INSUFFICIENT_FUNDS"],
+  },
+  {
+    adapter: "corp.payments.delegate", suggestedId: "delegatePayment", description: "An approver passes a waiting payment to another, who alone can then approve it.",
+    input: { paymentId: "id", toUserId: "an approver" }, returns: "The payment with passedTo.", errors: ["DELEGATE_CONFLICT", "DELEGATE_ALREADY_APPROVED", "PERMISSION_DENIED"],
+  },
   { adapter: "corp.signatories.list", suggestedId: "signatories", description: "Signatory groups: who approves, in order (sequential) or any order (parallel), above which amount.", input: {}, returns: "Map by id: { id, name, mode, members, required, above }.", errors: ["PERMISSION_DENIED"] },
   { adapter: "corp.audit.list", suggestedId: "audit", description: "The audit trail, newest first, including what this session did and was refused.", input: {}, returns: "Map by position: { id, at, userId, action, outcome 'Done'|'Refused' }.", errors: ["PERMISSION_DENIED"] },
   // ---- A retail customer's records (BankWorkx) ----
@@ -423,6 +436,8 @@ export function describePersonas() {
   });
 }
 function describe(p: (typeof personas)[string]) {
+  // the approvals cast is Alex again with more waiting at Beta: said in a line
+  if (p.identity?.cast) return { id: p.id, brand: p.brand, name: p.name, otpCode: p.behaviour.otpCode, note: "As alex; Beta also holds PAY-2043 to PAY-2048 (name checks, an order, two approvals) and PAY-2036 rejected." };
   return {
     id: p.id,
     brand: p.brand,

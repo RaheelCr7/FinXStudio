@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { bankworkxJourneys, chainTargets, chainWarnings, bulkPayment, catalog, corporateApproval, corporatePayment, Journey, withdrawPayment, payrollRun, ownTransfer, manageBeneficiary, personalTransfer, internalTransfer, internationalTransfer, payBillBankworkx, mobileTopup, schedulePayment, cancelStandingOrder } from "@finx/journey-schema";
+import { bankworkxJourneys, chainTargets, chainWarnings, bulkPayment, catalog, corporateApproval, corporatePayment, Journey, withdrawPayment, payrollRun, ownTransfer, manageBeneficiary, personalTransfer, internalTransfer, internationalTransfer, payBillBankworkx, mobileTopup, schedulePayment, cancelStandingOrder, supplierPayment, approvePayments } from "@finx/journey-schema";
 import { lintAll } from "@finx/renderer-core";
 import { mutationCheck, runScenarios } from "./scenarios";
 import { simulate } from "./simulate";
@@ -471,6 +471,106 @@ describe("cancel-standing-order: Cancel a standing order", () => {
     expect(j.screens.some((s) => s.blocks.some((b) => b.type === "otp" || b.type === "consent"))).toBe(false);
     expect(catalog.filter((c) => c.id === "cancel-standing-order").map((c) => [c.madeFor, c.category])).toEqual([["bankworkx", "Payments"]]);
     expect([cancelStandingOrder.apps, cancelStandingOrder.channels]).toEqual([["bankworkx"], ["web", "mobile"]]);
+  });
+});
+
+/**
+ * Pay a supplier and Approve payments are the two Business journeys of the combined demo. They run as Alex Morgan, signed in once and switched into a
+ * company (the scenario's `context`), against the sandbox of that company; the company journeys' "second bank API" run does not apply, because a
+ * customer with several places is always served by the reference bank. Survivors of the mutation check are listed with the reason each cannot be
+ * reached from a screen.
+ */
+describe("supplier-payment: Pay a supplier", () => {
+  const j = Journey.parse(supplierPayment);
+  const SUP_ACCEPTED: Record<string, string> = {
+    "no-error-path-55": "Resending the code is a button of the code field that a scenario cannot press; the first send has the same error path and is proved (T-25)",
+    "bank-roles": OTHER_LAYER("The context's permissions are checked before the company's own roles, and only a Maker holds the permission to price or start a payment"),
+    "bank-whitelist": OTHER_LAYER("The price (quote) already refuses a supplier that is not on the company's list before the payment is started, and the bank's unit tests start one directly"),
+    "bank-userLimit": OTHER_LAYER("The price (quote) already refuses an amount over the person's day before the payment is started (T-6, T-7)"),
+    "bank-companyLimit": "The company's limit (1,000,000.00) is above everything a Maker can send in a day (250,000.00 each), and the company's count only moves when a payment is released, which this journey never does",
+  };
+
+  it("is lint clean, every scenario passes and every acceptance criterion is proved", async () => {
+    expect(lintAll(j)).toEqual([]);
+    const r = await runScenarios(j);
+    expect(r.results.filter((x) => !x.ok).map((x) => `${x.id} ${x.name}: ${x.failures.join(" | ")}`)).toEqual([]);
+    expect(r.coverage.map((c) => [c.id, c.status])).toEqual((j.acceptance ?? []).map((a) => [a.id, "proved"]));
+    expect([r.passed, r.total, r.coverage.length]).toEqual([33, 33, 9]);
+    expect(r.ok).toBe(true);
+  });
+
+  it("the tests notice when the journey or the bank's rules are broken (mutation check)", async () => {
+    const m = await mutationCheck(j, SUP_ACCEPTED);
+    expect(m.survived.map((s) => `${s.id}: ${s.what}`)).toEqual([]);
+    expect([m.total, m.killed, m.accepted.length]).toEqual([35, 30, 5]);
+    expect(m.ok).toBe(true);
+  }, 240_000);
+
+  it("the permission and approval rules of the bank are each checked by a mutant, and the permissions one is caught by a screen", async () => {
+    const m = await mutationCheck(j, SUP_ACCEPTED);
+    const bank = m.results.filter((x) => x.kind === "bank");
+    expect(bank.map((x) => x.id).sort()).toEqual(["bank-companyLimit", "bank-cutoff", "bank-dualApproval", "bank-permissions", "bank-roles", "bank-userLimit", "bank-whitelist"]);
+    expect(bank.filter((x) => x.killed).map((x) => x.id).sort()).toEqual(["bank-cutoff", "bank-dualApproval", "bank-permissions"]);
+  }, 240_000);
+
+  it("is for BankWorkx only, for the web and the phone; it asks for the confirmation and for the code before it starts the payment", () => {
+    expect(catalog.filter((c) => c.id === "supplier-payment").map((c) => [c.madeFor, c.category])).toEqual([["bankworkx", "Payments"]]);
+    expect([supplierPayment.apps, supplierPayment.channels]).toEqual([["bankworkx"], ["web", "mobile"]]);
+    expect(bankworkxJourneys.map((x) => x.slug)).toContain("supplier-payment");
+    const otp = supplierPayment.screens.find((s) => s.id === "otp")!;
+    expect(otp.blocks.flatMap((b: any) => (b.type === "button" ? b.actions : [])).filter((a: any) => a.type === "callApi").map((a: any) => a.integration)).toEqual(["otpVerify", "create"]);
+    expect(supplierPayment.screens.some((s) => s.blocks.some((b: any) => b.type === "consent" && b.validation?.mustBeTrue))).toBe(true);
+  });
+});
+
+describe("approve-payments: Approve payments", () => {
+  const j = Journey.parse(approvePayments);
+  const SAME_ADAPTER = (what: string) => `${what} reads the same list as the inbox, which is read first, so a scenario (which makes a whole adapter fail) cannot make only this call fail; the inbox's own error path is proved (T-37)`;
+  const AP_ACCEPTED: Record<string, string> = {
+    "no-error-path-15": SAME_ADAPTER("The list of what can be approved together"),
+    "no-error-path-21": SAME_ADAPTER("The history"),
+    "no-error-path-71": SAME_ADAPTER("The list of what can be approved together on Approve several"),
+    "no-error-path-49": "Resending the code is a button of the code field that a scenario cannot press; the first send has the same error path and is proved (T-19)",
+    "no-error-path-80": "Resending the code is a button of the code field that a scenario cannot press; the first send has the same error path and is proved (T-32)",
+    "no-rule-start-0": "The journey's authorisation sends the same person to the same no-access card once their roles are read, so the permission rule on the first screen is a second line that shows the card sooner (T-11)",
+    "no-authorisation": "The permission rule on the first screen sends the same person to the same no-access card, and the screen is only reached for the permissions the apps provide; a customer with no session is stopped by the bank (T-11)",
+    "bank-roles": OTHER_LAYER("The context's permissions are checked before the company's own roles, and only an Approver holds the permission to approve"),
+    "bank-companyLimit": "The company's limit (1,000,000.00) is above everything the account holds (310,000.00) and the waiting payments, so no screen can reach it; the bank's unit tests cover it",
+    "bank-dualApproval": "How many approvers a payment needs is fixed when it is started, and every waiting payment was started in the seed; the Maker's journey proves the rule (supplier-payment T-3)",
+  };
+
+  it("is lint clean, every scenario passes and every acceptance criterion is proved", async () => {
+    expect(lintAll(j)).toEqual([]);
+    const r = await runScenarios(j);
+    expect(r.results.filter((x) => !x.ok).map((x) => `${x.id} ${x.name}: ${x.failures.join(" | ")}`)).toEqual([]);
+    expect(r.coverage.map((c) => [c.id, c.status])).toEqual((j.acceptance ?? []).map((a) => [a.id, "proved"]));
+    expect([r.passed, r.total, r.coverage.length]).toEqual([49, 49, 12]);
+    expect(r.ok).toBe(true);
+  });
+
+  it("the tests notice when the journey or the bank's rules are broken (mutation check)", async () => {
+    const m = await mutationCheck(j, AP_ACCEPTED);
+    expect(m.survived.map((s) => `${s.id}: ${s.what}`)).toEqual([]);
+    expect([m.total, m.killed, m.accepted.length]).toEqual([55, 45, 10]);
+    expect(m.ok).toBe(true);
+  }, 240_000);
+
+  it("the approval rules of the bank are each checked by a mutant and caught by a screen: the order, the cut-off, the name tick, four eyes, passing on, the permissions", async () => {
+    const m = await mutationCheck(j, AP_ACCEPTED);
+    const bank = m.results.filter((x) => x.kind === "bank");
+    expect(bank.map((x) => x.id).sort()).toEqual(["bank-approvalCutoff", "bank-companyLimit", "bank-delegation", "bank-dualApproval", "bank-fourEyes", "bank-nameAck", "bank-permissions", "bank-roles", "bank-sequence"]);
+    expect(bank.filter((x) => x.killed).map((x) => x.id).sort()).toEqual(["bank-approvalCutoff", "bank-delegation", "bank-fourEyes", "bank-nameAck", "bank-permissions", "bank-sequence"]);
+  }, 240_000);
+
+  it("is for BankWorkx only, for the web and the phone, only for the role that approves; a code is asked before an approval and the tick is required", () => {
+    expect(catalog.filter((c) => c.id === "approve-payments").map((c) => [c.madeFor, c.category])).toEqual([["bankworkx", "Payments"]]);
+    expect([approvePayments.apps, approvePayments.channels, approvePayments.authorisation?.role]).toEqual([["bankworkx"], ["web", "mobile"], "approver"]);
+    expect(bankworkxJourneys.map((x) => x.slug)).toContain("approve-payments");
+    for (const id of ["otp", "otpMany"]) {
+      const calls = approvePayments.screens.find((s) => s.id === id)!.blocks.flatMap((b: any) => (b.type === "button" ? b.actions : [])).filter((a: any) => a.type === "callApi").map((a: any) => a.integration);
+      expect(calls[0]).toBe("otpVerify");
+    }
+    expect(approvePayments.screens.some((s) => s.blocks.some((b: any) => b.type === "consent" && b.validation?.mustBeTrue))).toBe(true);
   });
 });
 

@@ -239,6 +239,8 @@ export const Journey = z.object({
     persona: z.string().min(1), lang: z.string().optional(),
     /** Which bank API stands behind the corporate adapters: reference (default) or bank-b. */
     provider: z.string().optional(),
+    /** For a customer with several places to bank from: the one to be working in when the walk starts (for example "alpha"), switched into with the step-up before setup runs. */
+    context: z.string().optional(),
     /** The sandbox clock, as an ISO time, for rules that depend on it (a cut-off). */
     now: z.string().optional(),
     /**

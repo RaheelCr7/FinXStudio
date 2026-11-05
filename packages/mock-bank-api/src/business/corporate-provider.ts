@@ -8,6 +8,10 @@ export interface CorporateProvider extends CorporateBankAdapter {
   getCompany(): CorpCompany;
   getPayment(id: string): CorpPayment;
   now: (() => number) | undefined;
+  /** Every payment of the company, in any state (the reference sandbox only: the history of the approvals inbox). */
+  all?(): CorpPayment[];
+  /** Passes a waiting payment to another approver (the reference sandbox only). */
+  delegatePayment?(input: { userId: string; paymentId: string; toUserId: string }): CorpPayment;
 }
 export type ProviderId = "reference" | "bank-b";
 export const PROVIDERS: ProviderId[] = ["reference", "bank-b"];

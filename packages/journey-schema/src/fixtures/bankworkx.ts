@@ -8,6 +8,8 @@ import { payBillBankworkx } from "./pay-bill-bankworkx";
 import { mobileTopup } from "./mobile-topup";
 import { schedulePayment } from "./schedule-payment";
 import { cancelStandingOrder } from "./cancel-standing-order";
+import { supplierPayment } from "./supplier-payment";
+import { approvePayments } from "./approve-payments";
 
 /** Journeys for the BankWorkx app. English only for now; the app filters them out of other banks' apps with `apps`. */
 const base = { version: 1, status: "published" as const, channels: ["mobile" as const], apps: ["bankworkx"], locale: { default: "en", supported: ["en"] } };
@@ -352,4 +354,4 @@ export const sellInvestment: Journey = {
   ],
 };
 
-export const bankworkxJourneys: Journey[] = [addMoney, addCard, connectAccount, createBudget, invest, sellInvestment, ownTransfer, manageBeneficiary, personalTransfer, internalTransfer, internationalTransfer, payBillBankworkx, mobileTopup, schedulePayment, cancelStandingOrder];
+export const bankworkxJourneys: Journey[] = [addMoney, addCard, connectAccount, createBudget, invest, sellInvestment, ownTransfer, manageBeneficiary, personalTransfer, internalTransfer, internationalTransfer, payBillBankworkx, mobileTopup, schedulePayment, cancelStandingOrder, supplierPayment, approvePayments];

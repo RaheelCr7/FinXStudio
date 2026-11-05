@@ -22,7 +22,7 @@ export async function runScenarios(journey: Journey, over: Overrides = {}): Prom
     const opts: SimOptions = {
       journey, persona: t.persona, lang: t.lang ?? journey.locale.default, steps: t.steps as unknown as Step[],
       provider: (over.provider ?? (t.provider as ProviderId | undefined)), now: t.now ? Date.parse(t.now) : undefined,
-      setup: t.setup as SimOptions["setup"], flaws: over.flaws, conditions: t.conditions, launch: t.launch, journeys: over.journeys,
+      setup: t.setup as SimOptions["setup"], context: t.context, flaws: over.flaws, conditions: t.conditions, launch: t.launch, journeys: over.journeys,
     };
     try {
       const r = await simulate(opts);
@@ -95,7 +95,10 @@ export function journeyMutants(journey: Journey): Mutant[] {
 
 /** The sandbox bank's rules, one at a time switched off. Only meaningful for journeys that call the corporate adapters. */
 export function bankMutants(journey: Journey): Mutant[] {
-  const calls = (name: string) => journey.integrations.some((i) => i.adapter === `corp.payments.${name}` || (name === "initiate" && /^corp\.(bulk|payroll)\.(check|submit)$/.test(i.adapter)));
+  // starting a payment is also pricing it and creating it (the combined demo's companies); approving is also approving several at once
+  const calls = (name: string) => journey.integrations.some((i) => i.adapter === `corp.payments.${name}` || (name === "initiate" && (/^corp\.(bulk|payroll)\.(check|submit)$/.test(i.adapter) || /^corp\.payments\.(quote|create)$/.test(i.adapter))) || (name === "approve" && i.adapter === "corp.payments.approveMany"));
+  // a journey for the combined demo's companies (one login, several places): the permissions of the context and the approval rules of those companies apply
+  const demo = journey.integrations.some((i) => /^corp\.payments\.(quote|create|approveMany|delegate|list)$/.test(i.adapter));
   const bulk = journey.integrations.some((i) => /^corp\.(bulk|payroll)\./.test(i.adapter));
   const payroll = journey.integrations.some((i) => /^corp\.payroll\./.test(i.adapter));
   const uses = (re: RegExp) => journey.integrations.some((i) => re.test(i.adapter));
@@ -108,6 +111,12 @@ export function bankMutants(journey: Journey): Mutant[] {
     ["dualApproval", "The bank never asks for a second approver", calls("initiate") || calls("approve")],
     ["fourEyes", "The bank lets people approve their own payments", calls("approve")],
     ["cutoff", "The bank ignores the cut-off time", calls("initiate")],
+    // the companies of the combined demo: what the context allows, the order of approvers, the approval cut-off, the name tick, passing a payment on
+    ["permissions", "The bank lets a role use an adapter its permissions do not allow", demo],
+    ["sequence", "The bank lets an approver go before the one whose turn it is", demo && calls("approve")],
+    ["approvalCutoff", "The bank lets a payment be approved after the cut-off", demo && calls("approve")],
+    ["nameAck", "The bank approves a payment whose name check was flagged without the approver saying they checked it", demo && calls("approve")],
+    ["delegation", "The bank lets a payment be passed to the person who started it or who already approved it, and lets others approve it after", demo && uses(/^corp\.payments\.delegate$/)],
     ["lineChecks", "The bank accepts every row of a bulk file without checking it", bulk],
     ["employeeChecks", "The bank pays anyone, and any amount, on a payroll file", payroll],
     ["payrollPeriod", "The bank takes any pay period and lets a period be paid twice", payroll],

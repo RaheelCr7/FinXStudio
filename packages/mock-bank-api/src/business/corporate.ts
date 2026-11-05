@@ -60,6 +60,14 @@ export type CorpPayment = {
   lines?: { n: number; beneficiaryId: string; amount: number; reference: string }[];
   /** A payroll run is a bulk payment to employees for one pay period (YYYY-MM): `beneficiaryId` is "payroll" and the lines are employee ids. */
   period?: string;
+  /** Who must approve, in this order (a sequential group when it started): only the next one on the list may approve. Absent: any approver, in any order. */
+  sequence?: string[];
+  /** What the bank's record of the account holder says when it is not the name the payment was made out to. Absent: the names match. */
+  nameCheck?: { result: "close" | "none"; recorded: string };
+  /** An approver passed the payment on: only this person may approve it now. */
+  passedTo?: string; passedBy?: string;
+  /** What the payee receives, when it is another currency than the payment. */
+  receive?: { amount: number; currency: string };
 };
 
 /** One row of a bulk file, as the person gave it. */
@@ -76,7 +84,7 @@ export type InitiateInput = { userId: string; fromAccountId: string; beneficiary
 /** What a corporate bank API has to offer the generated journeys. Both simulated APIs (and a real one later) implement it. */
 export interface CorporateBankAdapter {
   initiatePayment(input: InitiateInput): CorpPayment;
-  approvePayment(input: { userId: string; paymentId: string }): CorpPayment;
+  approvePayment(input: { userId: string; paymentId: string; /** the person checked the payee details the name check flagged */ acknowledged?: boolean }): CorpPayment;
   rejectPayment(input: { userId: string; paymentId: string; reason?: string }): CorpPayment;
   /** The person who started a payment takes it back while it waits. Only them, and only while it is pending. */
   withdrawPayment(input: { userId: string; paymentId: string }): CorpPayment;
@@ -99,7 +107,28 @@ const dayOf = (ms: number) => new Date(ms).toISOString().slice(0, 10);
  * Rules that can be switched off, to check that a test suite notices: a mutation check runs the scenarios against a sandbox with
  * one rule missing and expects at least one to fail. Every rule is on by default; nothing in the apps ever turns one off.
  */
-export type Flaws = { /** retail rules of the sandbox bank */ sameAccount?: false; canDebit?: false; funds?: false; quoteExpiry?: false; quoteReplay?: false; /** sending money to someone else */ railLimit?: false; dailyLimit?: false; coolingOff?: false; sanctions?: false; purposeRule?: false; addressRule?: false; bankCode?: false; /** paying a bill */ billMinimum?: false; billMaximum?: false; billMemory?: false; billChanged?: false; billCurrency?: false; /** scheduled payments */ scheduleLimit?: false; scheduleDates?: false; scheduleEnd?: false; scheduleCutoff?: false; scheduleRunning?: false; /** mobile top-up */ topupAmount?: false; topupLimit?: false; topupNumber?: false; /** saved payees */ payeeLimit?: false; payeeDuplicate?: false; payeeInUse?: false; ibanChecksum?: false; sepa?: false; countryMatch?: false; routingChecksum?: false; sortCode?: false; bic?: false; nameCheck?: false; verifiedOnMatch?: false; clockOnDetails?: false; nameKeepsClock?: false; roles?: false; whitelist?: false; userLimit?: false; companyLimit?: false; dualApproval?: false; fourEyes?: false; cutoff?: false; lineChecks?: false; employeeChecks?: false; payrollPeriod?: false };
+export type Flaws = { /** retail rules of the sandbox bank */ sameAccount?: false; canDebit?: false; funds?: false; quoteExpiry?: false; quoteReplay?: false; /** sending money to someone else */ railLimit?: false; dailyLimit?: false; coolingOff?: false; sanctions?: false; purposeRule?: false; addressRule?: false; bankCode?: false; /** paying a bill */ billMinimum?: false; billMaximum?: false; billMemory?: false; billChanged?: false; billCurrency?: false; /** scheduled payments */ scheduleLimit?: false; scheduleDates?: false; scheduleEnd?: false; scheduleCutoff?: false; scheduleRunning?: false; /** mobile top-up */ topupAmount?: false; topupLimit?: false; topupNumber?: false; /** saved payees */ payeeLimit?: false; payeeDuplicate?: false; payeeInUse?: false; ibanChecksum?: false; sepa?: false; countryMatch?: false; routingChecksum?: false; sortCode?: false; bic?: false; nameCheck?: false; verifiedOnMatch?: false; clockOnDetails?: false; nameKeepsClock?: false; roles?: false; /** the permissions of the signed-in context */ permissions?: false; whitelist?: false; userLimit?: false; companyLimit?: false; dualApproval?: false; fourEyes?: false; cutoff?: false; lineChecks?: false; employeeChecks?: false; payrollPeriod?: false; /** approving: the order of a sequential payment, the cut-off, the name check tick, and passing a payment on */ sequence?: false; approvalCutoff?: false; nameAck?: false; delegation?: false };
+
+/** Why a person cannot approve a payment now, or null when they can. The same answer the bank gives when they try, and the one a screen reads to say so before they do. */
+export type ApprovalRefusal = { code: "NOT_AUTHORISED" | "PAYMENT_NOT_PENDING" | "SELF_APPROVAL" | "ALREADY_APPROVED" | "DELEGATED" | "OUT_OF_SEQUENCE" | "APPROVAL_EXPIRED"; message: string; /** who goes first (OUT_OF_SEQUENCE) or who it was passed to (DELEGATED), by user id */ by?: string };
+/** A payment is due on its value date; its approval closes at the cut-off of that day (a payment started after the cut-off is due the next working day). */
+export const isDue = (p: CorpPayment, now: number) => p.valueDate <= dayOf(now);
+export const cutoffPassed = (company: CorpCompany, now: number) => { const d = new Date(now); return `${pad(d.getUTCHours())}:${pad(d.getUTCMinutes())}` > company.cutoff; };
+export function approvalRefusal(company: CorpCompany, p: CorpPayment, userId: string, now: number, flaws: Flaws = {}): ApprovalRefusal | null {
+  const user = company.users.find((u) => u.id === userId);
+  if (!user) return { code: "NOT_AUTHORISED", message: "You don't work for this company." };
+  if (flaws.roles !== false && !user.roles.includes("approver")) return { code: "NOT_AUTHORISED", message: `${user.name} is not allowed to approve payments` };
+  if (p.status !== "pending_approval") return { code: "PAYMENT_NOT_PENDING", message: `This payment is already ${p.status.replace("_", " ")}` };
+  if (flaws.fourEyes !== false && p.initiatedBy === user.id) return { code: "SELF_APPROVAL", message: "You cannot approve a payment you started" };
+  if (p.approvals.some((a) => a.userId === user.id)) return { code: "ALREADY_APPROVED", message: "You have already approved this payment" };
+  if (flaws.delegation !== false && p.passedTo && p.passedTo !== user.id) return { code: "DELEGATED", message: "This payment was passed to another approver.", by: p.passedTo };
+  if (flaws.sequence !== false && p.sequence?.includes(user.id)) {
+    const next = p.sequence.find((id) => !p.approvals.some((a) => a.userId === id));
+    if (next && next !== user.id) return { code: "OUT_OF_SEQUENCE", message: "Another approver goes first.", by: next };
+  }
+  if (flaws.approvalCutoff !== false && isDue(p, now) && cutoffPassed(company, now)) return { code: "APPROVAL_EXPIRED", message: "The cut-off has passed. This payment can't be approved today." };
+  return null;
+}
 
 export class CorporateSandbox implements CorporateBankAdapter {
   private payments = new Map<string, CorpPayment>();
@@ -185,6 +214,9 @@ export class CorporateSandbox implements CorporateBankAdapter {
       status: "pending_approval", initiatedBy: user.id, initiatedAt: new Date(this.now()).toISOString(), valueDate, afterCutoff,
       required: this.flaws.dualApproval !== false && (payroll || amount > c.dualApprovalAbove) ? 2 : 1, approvals: [],
     };
+    // a sequential signatory group that covers the amount fixes the order the approvers go in
+    const group = [...(c.signatoryGroups ?? [])].sort((a, b) => b.above - a.above).find((g) => amount > g.above);
+    if (group?.mode === "sequential" && p.required > 1) p.sequence = group.members.filter((m) => m !== user.id);
     this.payments.set(p.id, p);
     return structuredClone(p);
   }
@@ -257,16 +289,35 @@ export class CorporateSandbox implements CorporateBankAdapter {
     return this.start(user, from, check.total, "payroll", `Payroll ${input.period}`, check.lines.filter((l) => l.ok).map(({ n, beneficiaryId, amount, reference }) => ({ n, beneficiaryId, amount, reference })), { period: input.period });
   }
 
-  approvePayment(input: { userId: string; paymentId: string }): CorpPayment {
-    const c = this.company;
+  approvePayment(input: { userId: string; paymentId: string; acknowledged?: boolean }): CorpPayment {
     const user = this.user(input.userId);
     if (this.flaws.roles !== false && !user.roles.includes("approver")) throw new BankError("NOT_AUTHORISED", `${user.name} is not allowed to approve payments`);
     const p = this.payment(input.paymentId);
-    if (p.status !== "pending_approval") throw new BankError("PAYMENT_NOT_PENDING", `This payment is already ${p.status.replace("_", " ")}`);
-    if (this.flaws.fourEyes !== false && p.initiatedBy === user.id) throw new BankError("SELF_APPROVAL", "You cannot approve a payment you started");
-    if (p.approvals.some((a) => a.userId === user.id)) throw new BankError("ALREADY_APPROVED", "You have already approved this payment");
+    const refusal = approvalRefusal(this.company, p, user.id, this.now(), this.flaws);
+    if (refusal) throw new BankError(refusal.code, refusal.message);
+    // the bank flagged the name: the approver has to say they checked the payee's details
+    if (p.nameCheck && this.flaws.nameAck !== false && input.acknowledged !== true) throw new BankError("NAME_CHECK_NOT_CONFIRMED", "Confirm that you checked the payee details.");
     p.approvals.push({ userId: user.id, at: new Date(this.now()).toISOString() });
     if (p.approvals.length >= p.required) this.release(p);
+    return structuredClone(p);
+  }
+
+  /** An approver passes a payment to another approver, who alone can approve it now. Not to the person who started it or who already approved: they could not act on it anyway. */
+  delegatePayment(input: { userId: string; paymentId: string; toUserId: string }): CorpPayment {
+    const user = this.user(input.userId);
+    if (!user.roles.includes("approver")) throw new BankError("NOT_AUTHORISED", `${user.name} is not allowed to approve payments`);
+    const p = this.payment(input.paymentId);
+    const refusal = approvalRefusal(this.company, p, user.id, this.now(), this.flaws);
+    if (refusal) throw new BankError(refusal.code, refusal.message);
+    const to = this.user(String(input.toUserId ?? ""));
+    if (to.id === user.id || !to.roles.includes("approver")) throw new BankError("NOT_AUTHORISED", `${to.name} cannot approve payments for this company`);
+    if (this.flaws.delegation !== false) {
+      if (p.initiatedBy === to.id) throw new BankError("DELEGATE_CONFLICT", "That person started this payment. Choose someone else.");
+      if (p.approvals.some((a) => a.userId === to.id)) throw new BankError("DELEGATE_ALREADY_APPROVED", "That person already approved this payment. Choose someone else.");
+    }
+    p.passedTo = to.id; p.passedBy = user.id;
+    // the new person takes the other's place in the order
+    if (p.sequence?.includes(user.id)) p.sequence = p.sequence.map((id) => (id === user.id ? to.id : id));
     return structuredClone(p);
   }
 
