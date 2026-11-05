@@ -88,6 +88,37 @@ describe("journeys", () => {
     expect(a.getState().tick).toBe(tick + 1);
   });
 
+  it("opens a journey with launch values that are there before its first screen", async () => {
+    const a = make("bankworkx"); a.login();
+    await a.openJourney("mobile-topup", undefined, { "launch.operatorId": "bright" });
+    expect(a.getState()).toMatchObject({ screen: "journey", active: { launch: { "launch.operatorId": "bright" } } });
+  });
+
+  it("a journey that opens another one replaces itself with it, keeping the values it gave", async () => {
+    const a = make("bankworkx"); a.login();
+    await a.openJourney("internal-transfer");
+    expect(a.getState().active?.journey.slug).toBe("internal-transfer");
+    await a.openChained("personal-transfer", { "launch.type": "internal" });
+    expect(a.getState()).toMatchObject({ screen: "journey", active: { launch: { "launch.type": "internal" } } });
+    expect(a.getState().active?.journey.slug).toBe("personal-transfer");
+  });
+
+  it("closes the calling journey with a notice when the one it opens is not available", async () => {
+    const a = make("bankworkx"); a.login();
+    await a.openJourney("internal-transfer");
+    await a.openChained("no-such-journey", {});
+    expect(a.getState()).toMatchObject({ screen: "app", active: null, toast: { text: "That journey is not available right now.", ok: false } });
+  });
+
+  it("keeps launch values for a journey an address opens, until it closes", async () => {
+    const a = make("bankworkx"); a.login();
+    a.setLaunch("personal-transfer", { "launch.type": "domestic" });
+    expect(a.launchFor("personal-transfer")).toEqual({ "launch.type": "domestic" });
+    expect(a.launchFor("invest")).toBeUndefined();
+    a.clearLaunch();
+    expect(a.launchFor("personal-transfer")).toBeUndefined();
+  });
+
   it("says so, and stays put, when a journey is not available", async () => {
     const a = make("bankworkx"); a.login();
     await a.openJourney("no-such-journey");

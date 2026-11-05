@@ -1,6 +1,6 @@
 import type { Journey } from "../schema";
 
-/** What must be true for "To a BankWorkx® customer" to be right. The rules are those of Send money; this is the same flow, opened at its first step. */
+/** What must be true for "To a BankWorkx® customer" to be right. The rules are those of Send money; this journey opens Send money (launch value launch.type) so it is the same flow, opened at its first step. */
 export const internalTransferAcceptance: NonNullable<Journey["acceptance"]> = [
   { id: "AC-1", text: "It opens at the BankWorkx® customer step with no choice of type: saved customers first, a new one found by mobile number, email or BankWorkx ID. When the bank has switched this way of sending off it says \"Nothing to send with\"." },
   { id: "AC-2", text: "It keeps every rule of Send money for this type: free, instant, up to 25,000.00 a payment, the 500.00 allowance of a new payee, the confirmation and the one-time code, three wrong codes stop it, and every bank call has a way out." },
@@ -23,8 +23,8 @@ const base = { persona: "alexpayees", now: NOW };
 
 export const internalTransferScenarios: NonNullable<Journey["scenarios"]> = [
   {
-    id: "T-1", name: "Opens at the saved customers, with no choice of type; a new customer is found by mobile number", covers: ["AC-1"], ...base,
-    steps: [screen("payee"), text("Taylor Brooks"), noText("To another bank"), noText("To another country"), press("New payee"), screen("details"), text("Mobile number"), press("Back"), screen("payee")],
+    id: "T-1", name: "Opens Send money at the saved customers, with no choice of type; a new customer is found by mobile number", covers: ["AC-1"], ...base,
+    steps: [{ expectOpens: { journey: "personal-transfer", with: { "launch.type": "internal" } } }, screen("payee"), text("Taylor Brooks"), noText("To another bank"), noText("To another country"), press("New payee"), screen("details"), text("Mobile number"), press("Back"), screen("payee")],
   },
   {
     id: "T-2", name: "With no saved customer it opens at the search; a customer found by mobile number gets $50, free and instant", covers: ["AC-1", "AC-2"], ...base, persona: "alexglobal",
@@ -37,8 +37,8 @@ export const internalTransferScenarios: NonNullable<Journey["scenarios"]> = [
     ],
   },
   {
-    id: "T-3", name: "When the bank has switched this way of sending off: Nothing to send with", covers: ["AC-1"], ...base,
-    steps: [set({ "opt.typeInternal": false }), press("Back"), screen("type"), text("Nothing to send with"), text("Sending money isn’t available right now."), press("Continue")],
+    id: "T-3", name: "When the bank has switched this way of sending off: Nothing to send with", covers: ["AC-1"], ...base, launch: { "opt.typeInternal": false },
+    steps: [screen("off"), text("Nothing to send with"), text("Sending money isn’t available right now."), noText("Who are you paying?"), press("Continue")],
   },
   {
     id: "T-4", name: "Over 25,000.00 is refused; a saved customer gets a payment of $20 straight away", covers: ["AC-2"], ...base,

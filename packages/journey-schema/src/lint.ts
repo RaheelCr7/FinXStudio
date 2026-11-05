@@ -36,6 +36,21 @@ const collectNav = (j: Journey, id: string): string[] => {
   return out;
 };
 
+/** The slugs of the journeys this one opens with `navigate.toJourney`. */
+export const chainTargets = (j: Journey): string[] => {
+  const out = new Set<string>();
+  const walk = (a: any) => { if (a?.type === "navigate" && a.toJourney) out.add(a.toJourney); };
+  for (const s of j.screens) { s.onEnter?.forEach(walk); s.blocks.forEach((b: any) => blockActions(b).forEach(walk)); }
+  return [...out];
+};
+
+/** Non-blocking: a `toJourney` that is not in the list of journeys the apps know (a copy made for a bank keeps its name with the bank appended). */
+export function chainWarnings(j: Journey, known: Iterable<string>): LintIssue[] {
+  const slugs = [...known];
+  return chainTargets(j).filter((t) => !slugs.some((k) => k === t || k.startsWith(`${t}-`)))
+    .map((t) => ({ code: "unknown_journey", message: `navigate.toJourney "${t}" is not a journey in the catalog, so opening it will fail in the apps.` }));
+}
+
 export function lintJourney(j: Journey): LintIssue[] {
   const issues: LintIssue[] = [];
   const ids = new Set(j.screens.map((s) => s.id));

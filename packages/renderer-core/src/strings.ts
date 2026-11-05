@@ -3,7 +3,7 @@ const STRINGS: Record<string, Record<string, string>> = {
   en: {
     step: "Step {n} of {total}", required: "Required", enterAmount: "Enter an amount", minimum: "Minimum is {n}", maximum: "Maximum is {n}",
     allDigits: "Enter all {n} digits", invalid: "Invalid format", account: "Account", payTo: "Pay to", addBeneficiary: "+ Add new beneficiary",
-    wait: "Please wait…", back: "Back", close: "Close",
+    wait: "Please wait…", back: "Back", close: "Close", journeyNotLoaded: "This step opens another journey, which is not loaded here.",
     cardNumber: "Enter a valid card number", cardExpiry: "Enter a valid expiry date (MM/YY)", cardCvv: "Enter the 3 or 4 digit code", cardHolder: "Enter the name on the card",
     cardNumberLabel: "Card number", cardHolderLabel: "Name on card", cardHolderPlaceholder: "As shown on the card", cardExpiryLabel: "Expiry", cardCvvLabel: "Security code",
     dateInvalid: "Choose a real date", dateTooEarly: "That date is too early", dateTooLate: "That date is too late", pickDate: "Choose a date", prevMonth: "Previous month", nextMonth: "Next month", prevYear: "Previous year", nextYear: "Next year",

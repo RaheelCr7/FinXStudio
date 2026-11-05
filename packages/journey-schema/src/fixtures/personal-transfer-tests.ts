@@ -15,6 +15,7 @@ export const personalTransferAcceptance: NonNullable<Journey["acceptance"]> = [
   { id: "AC-11", text: "\"Save this payee\" saves a payee typed in the payment as a new payee (24 hours, 500.00 allowance, what was already sent counts) when ticked, and not otherwise." },
   { id: "AC-12", text: "Every payment needs the confirmation tick and a one-time code that names the amount and the payee; three wrong codes stop it and no money moves." },
   { id: "AC-13", text: "A timeout on the payment tells the person to check Activity first and applies nothing; a service that is not available, a slow answer and a failing core each say that nothing was sent; every bank call has a way out." },
+  { id: "AC-14", text: "Opened with a type (the launch value launch.type, as Abroad and To a BankWorkx® customer open it) it skips the choice of type and opens the saved payees of that type, when the bank has that way on; with it off, or for a type it does not know, the choice of type shows. Back goes to those payees, not to the choice of type." },
 ];
 
 // The sandbox customer "alexpayees" has Main $8,720.76, Savings $15,254.37, EUR Travel €2,400.00, AED Home AED 11,000.00 and six saved payees:
@@ -496,5 +497,25 @@ export const personalTransferScenarios: NonNullable<Journey["scenarios"]> = [
     steps: [
       ...typed("Jamie Lee", "031201360", "100006620"), screen("details"), text("You already saved this payee with these details."), ...unchanged,
     ],
+  },
+  {
+    id: "T-50", name: "Opened for a BankWorkx® customer: no choice of type, the saved BankWorkx® customers, and Back stays with them", covers: ["AC-14"], ...base, launch: { "launch.type": "internal" },
+    steps: [screen("payee"), text("Taylor Brooks"), noText("Jamie Lee"), noText("Marco Rossi"), press("Back"), screen("payee"), text("Taylor Brooks")],
+  },
+  {
+    id: "T-51", name: "Opened for another bank: the saved payees of another bank", covers: ["AC-14"], ...base, launch: { "launch.type": "domestic" },
+    steps: [screen("payee"), text("Jamie Lee"), noText("Taylor Brooks"), noText("Marco Rossi")],
+  },
+  {
+    id: "T-52", name: "Opened for another country: the saved payees abroad", covers: ["AC-14"], ...base, launch: { "launch.type": "international" },
+    steps: [screen("payee"), text("Marco Rossi"), noText("Taylor Brooks"), noText("Jamie Lee")],
+  },
+  {
+    id: "T-53", name: "Opened for a way of sending the bank has switched off: the choice of type shows without it", covers: ["AC-14"], ...base, launch: { "launch.type": "domestic", "opt.typeDomestic": false },
+    steps: [screen("type"), text(BANKWORKX), text(ABROAD), noText(DOMESTIC)],
+  },
+  {
+    id: "T-54", name: "Opened for a type it does not know: the choice of type shows, and choosing one works as usual", covers: ["AC-14"], ...base, launch: { "launch.type": "nonsense" },
+    steps: [screen("type"), text(DOMESTIC), press(DOMESTIC), screen("payee"), text("Jamie Lee")],
   },
 ];

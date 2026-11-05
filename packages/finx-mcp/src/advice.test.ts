@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { payBill } from "@finx/journey-schema";
+import { internalTransfer, payBill } from "@finx/journey-schema";
 import { adviceFor, lintForAgent } from "./advice";
 
 describe("advice for authors", () => {
@@ -8,6 +8,14 @@ describe("advice for authors", () => {
     const j = structuredClone(payBill);
     delete (j.screens[0]!.blocks[2] as any).patternMessage;
     expect(adviceFor(j).join(" ")).toContain('text input "bill.reference" has a format but no patternMessage');
+  });
+
+  it("warns, without blocking, about a toJourney that is not a shipped journey; a shipped one is fine", () => {
+    expect(adviceFor(internalTransfer).join(" ")).not.toContain("toJourney");
+    const j = structuredClone(internalTransfer);
+    (j.screens[0]!.onEnter![0] as any).toJourney = "no-such-journey";
+    expect(adviceFor(j).join(" ")).toContain('navigate.toJourney "no-such-journey" is not a journey in the catalog');
+    expect(lintForAgent(j).map((i) => i.code)).not.toContain("unknown_journey");
   });
 
   it("flags callApi without onError, and a money-moving journey without a failed screen", () => {

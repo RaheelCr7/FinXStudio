@@ -25,9 +25,11 @@ export async function screensOf(journey: Journey, persona = "alex") {
   const bank = new MockBank(persona);
   const out: { screenId: string; layout: ReturnType<JourneyController["layout"]> }[] = [];
   for (const s of journey.screens) {
-    const c = new JourneyController(journey, { adapter: (id, input) => bank.call(id, input) });
+    const c = new JourneyController(journey, { adapter: (id, input) => bank.call(id, input), onOpenJourney: () => {} });
     await c.start();
     try { await (c.runner as any).enter(s.id); } catch { /* a screen that needs earlier answers still shows its blocks */ }
+    // a screen that hands over to another journey draws nothing: that journey's screens are checked on their own
+    if (c.runner.chained) continue;
     out.push({ screenId: s.id, layout: c.layout() });
   }
   return out;

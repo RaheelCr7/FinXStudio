@@ -23,13 +23,17 @@ export function JourneyScreen() {
     return () => { alive = false; };
   }, [app, slug]);
 
-  const leave = () => { app.bump(); router.push(`/${project.id}/${project.shell === "bankworkx" ? "dashboard" : "home"}`); };
+  // values another journey gave this one (navigate.toJourney), set by the app before the address changed
+  const launch = app.launchFor(slug);
+  // a journey asked to open another: the address changes, the values wait in the app until the next journey loads
+  const openOther = (r: { journey: string; launch: Record<string, any> }) => { app.setLaunch(r.journey, r.launch); router.replace(`/${project.id}/j/${app.resolveSlug(r.journey)}`); };
+  const leave = () => { app.clearLaunch(); app.bump(); router.push(`/${project.id}/${project.shell === "bankworkx" ? "dashboard" : "home"}`); };
   if (live === "loading") return <main className="wb-loading" aria-busy="true"><span className="wb-sr">Opening</span></main>;
   if (!live) return <main className="wb-journey"><div className="wb-journey-card wb-pad"><h1>That journey is not available right now</h1><p className="wb-muted">It may not be published for this bank yet.</p><button className="wb-btn wb-btn-primary" onClick={leave}>Back</button></div></main>;
   return (
     <main className="wb-journey">
       <div className="wb-journey-card">
-        <JourneyPlayer journey={live.journey} adapter={app.adapter} lang={s.lang} initial={initial} onClose={leave} onExit={leave} look={project.look} brandName={project.name} />
+        <JourneyPlayer key={live.journey.slug} journey={live.journey} adapter={app.adapter} lang={s.lang} initial={initial} launch={launch} onOpenJourney={openOther} onClose={leave} onExit={leave} look={project.look} brandName={project.name} />
       </div>
     </main>
   );

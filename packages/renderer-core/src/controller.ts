@@ -1,5 +1,5 @@
 import type { Journey } from "@finx/journey-schema";
-import { JourneyRunner, type Adapter, type RunEvent, type View } from "./runner";
+import { JourneyRunner, type Adapter, type ChainRequest, type RunEvent, type View } from "./runner";
 
 /** A run event with where and when it happened. `session` groups the events of one play-through. */
 export type JourneyEvent = RunEvent & { session: string; slug: string; version: number; lang: string; at: string };
@@ -11,6 +11,10 @@ export type JourneyControllerOptions = {
   lang?: string;
   /** Answers to fill in when the journey opens, by data path, for example the item the customer was looking at. */
   initial?: Record<string, any>;
+  /** Values at data paths that are there BEFORE the first screen runs, so the entry screen can branch or skip steps on them (unlike `initial`, which is applied after). */
+  launch?: Record<string, any>;
+  /** The journey asked to open another one (navigate.toJourney). Without it the person sees a message and stays on the screen. */
+  onOpenJourney?: (req: ChainRequest) => void;
 };
 
 /** What a renderer needs to draw the current screen of a journey. */
@@ -43,12 +47,12 @@ export class JourneyController {
   constructor(journey: Journey, private opts: JourneyControllerOptions) {
     const session = `${Date.now().toString(36)}${Math.random().toString(36).slice(2, 8)}`;
     this.runner = new JourneyRunner(journey, {
-      adapter: opts.adapter, lang: opts.lang,
+      adapter: opts.adapter, lang: opts.lang, launch: opts.launch, openJourney: opts.onOpenJourney,
       onEvent: opts.onEvent ? (e) => opts.onEvent!({ ...e, session, slug: journey.slug, version: journey.version, lang: this.runner.lang, at: new Date().toISOString() }) : undefined,
     });
   }
 
-  /** Opens the first screen, then fills in any initial answers. */
+  /** Opens the first screen (launch values are already in place), then fills in any initial answers. */
   async start() {
     await this.runner.start();
     for (const [path, value] of Object.entries(this.opts.initial ?? {})) this.runner.set(path, value);

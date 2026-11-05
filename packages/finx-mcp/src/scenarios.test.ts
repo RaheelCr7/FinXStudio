@@ -1,7 +1,8 @@
 import { describe, expect, it } from "vitest";
-import { bulkPayment, catalog, corporateApproval, corporatePayment, Journey, withdrawPayment, payrollRun, ownTransfer, manageBeneficiary, personalTransfer, internalTransfer, internationalTransfer, payBillBankworkx, mobileTopup, schedulePayment, cancelStandingOrder } from "@finx/journey-schema";
+import { bankworkxJourneys, chainTargets, chainWarnings, bulkPayment, catalog, corporateApproval, corporatePayment, Journey, withdrawPayment, payrollRun, ownTransfer, manageBeneficiary, personalTransfer, internalTransfer, internationalTransfer, payBillBankworkx, mobileTopup, schedulePayment, cancelStandingOrder } from "@finx/journey-schema";
 import { lintAll } from "@finx/renderer-core";
 import { mutationCheck, runScenarios } from "./scenarios";
+import { simulate } from "./simulate";
 
 const journeys = [corporatePayment, corporateApproval, withdrawPayment, bulkPayment, payrollRun].map((j) => Journey.parse(j));
 
@@ -205,14 +206,14 @@ describe("personal-transfer: Send money", () => {
     const r = await runScenarios(j);
     expect(r.results.filter((x) => !x.ok).map((x) => `${x.id} ${x.name}: ${x.failures.join(" | ")}`)).toEqual([]);
     expect(r.coverage.map((c) => [c.id, c.status])).toEqual((j.acceptance ?? []).map((a) => [a.id, "proved"]));
-    expect([r.passed, r.total, r.coverage.length]).toEqual([49, 49, 13]);
+    expect([r.passed, r.total, r.coverage.length]).toEqual([54, 54, 14]);
     expect(r.ok).toBe(true);
   });
 
   it("the tests notice when the journey or the bank's rules are broken (mutation check)", async () => {
     const m = await mutationCheck(j, PT_ACCEPTED);
     expect(m.survived.map((s) => `${s.id}: ${s.what}`)).toEqual([]);
-    expect([m.total, m.killed, m.accepted.length]).toEqual([58, 50, 8]);
+    expect([m.total, m.killed, m.accepted.length]).toEqual([62, 54, 8]);
     expect(m.ok).toBe(true);
   }, 240_000);
 
@@ -235,10 +236,10 @@ describe("personal-transfer: Send money", () => {
 });
 
 /**
- * To a BankWorkx customer is Send money opened at its first step (the engine cannot open one journey from another with a value), so the
- * rules and their mutants are those of Send money; here the alias is proved to open where it says and to keep the rules of its type.
+ * To a BankWorkx customer is a thin entry: it opens Send money (personal-transfer) with the launch value launch.type, so it carries none of
+ * its screens or bank calls. Its scenarios follow the chain into Send money, so the rules are proved there, by the journey they belong to.
  */
-describe("internal-transfer: To a BankWorkx customer (alias of Send money)", () => {
+describe("internal-transfer: To a BankWorkx customer (opens Send money)", () => {
   const j = Journey.parse(internalTransfer);
   it("is lint clean, every scenario passes and every acceptance criterion is proved", async () => {
     expect(lintAll(j)).toEqual([]);
@@ -249,28 +250,27 @@ describe("internal-transfer: To a BankWorkx customer (alias of Send money)", () 
     expect(r.ok).toBe(true);
   });
 
-  it("is the same flow as Send money: the same bank calls, and no screen of its own other than the empty state of the type", () => {
-    expect(j.integrations).toEqual(personalTransfer.integrations);
-    expect(j.screens.map((s) => s.id)).toEqual(personalTransfer.screens.map((s) => s.id));
+  it("is a thin entry: no bank calls and two screens of its own, and it opens Send money with the type", async () => {
+    expect(j.integrations).toEqual([]);
+    expect(j.screens.map((s) => s.id)).toEqual(["start", "off"]);
     expect(j.slug).not.toBe(personalTransfer.slug);
+    expect(chainTargets(j)).toEqual(["personal-transfer"]);
+    expect(chainWarnings(j, bankworkxJourneys.map((x) => x.slug))).toEqual([]);
+    const r = await simulate({ journey: j, persona: "alexpayees", lang: "en", steps: [] });
+    expect(r.opened).toEqual([{ journey: "personal-transfer", launch: { "launch.type": "internal" }, followed: true }]);
+    expect(r.endedIn).toBe("personal-transfer");
   });
 });
 
 /**
- * Abroad is Send money opened at "To another country" (the engine cannot open one journey from another with a value), so the rules and
- * their mutants are those of Send money; here the alias is proved to open where it says and to differ as the list of "what differs" says.
- * Survivors of the mutation check are listed with the reason each cannot be reached from a screen.
+ * Abroad is a thin entry: it opens Send money (personal-transfer) with the launch value launch.type "international". Its scenarios follow
+ * the chain into Send money, so the bank rules a payment abroad meets are still caught (mutants of the bank), and the entry's own few
+ * parts are mutated here.
  */
-describe("international-transfer: Abroad (alias of Send money)", () => {
+describe("international-transfer: Abroad (opens Send money)", () => {
   const j = Journey.parse(internationalTransfer);
+  // the bank rules a payment abroad cannot reach (the entry's own parts are all caught)
   const IT_ACCEPTED: Record<string, string> = {
-    "no-error-path-67": "The customer lookup is the button of the BankWorkx customer type, which this journey never offers (Send money proves it, T-46)",
-    "no-validate-69": "The customer lookup is the button of the BankWorkx customer type, which this journey never offers (Send money proves it)",
-    "no-error-path-91": "The second Continue of the amount screen goes straight to the review for a BankWorkx customer, a type this journey never offers; the Continue abroad is proved (T-23)",
-    "no-validate-96": "The second Continue of the amount screen goes straight to the review for a BankWorkx customer, a type this journey never offers; the Continue abroad is proved (T-5)",
-    "no-error-path-100": "The address step asks for the price a second time, with the same answer the first time had; the same error path is proved on the first price (T-23, T-24)",
-    "no-error-path-129": "The new price after a rate ran out is asked a second time; the same error path is proved on the first price (T-23, T-24)",
-    "no-error-path-116": "Resending the code is a button of the code field that a scenario cannot press; the first send has the same error path and is proved (T-28)",
     "bank-quoteReplay": "A price can only be used once because the journey never offers the same price twice; the bank's unit test replays one (QUOTE_USED), a screen cannot",
     "bank-railLimit": "The international speeds (Standard, Priority) have no limit in the sandbox, so no payment abroad is over the limit of its speed (the bank's unit test sets one for the other types)",
     "bank-bankCode": OTHER_LAYER("The journey's own pattern on the field already refuses a transit number, IFSC or BSB in the wrong format (T-3)"),
@@ -285,13 +285,13 @@ describe("international-transfer: Abroad (alias of Send money)", () => {
     const r = await runScenarios(j);
     expect(r.results.filter((x) => !x.ok).map((x) => `${x.id} ${x.name}: ${x.failures.join(" | ")}`)).toEqual([]);
     expect(r.coverage.map((c) => [c.id, c.status])).toEqual((j.acceptance ?? []).map((a) => [a.id, "proved"]));
-    expect([r.passed, r.total, r.coverage.length]).toEqual([32, 32, 11]);
+    expect([r.passed, r.total, r.coverage.length]).toEqual([33, 33, 11]);
     expect(r.ok).toBe(true);
   });
 
-  it("is the same flow as Send money: the same bank calls and screens, with the type preset", () => {
-    expect(j.integrations).toEqual(personalTransfer.integrations);
-    expect(j.screens.map((s) => s.id)).toEqual(personalTransfer.screens.map((s) => s.id));
+  it("is a thin entry: no bank calls and two screens of its own, and it opens Send money with the type", () => {
+    expect(j.integrations).toEqual([]);
+    expect(j.screens.map((s) => s.id)).toEqual(["start", "off"]);
     expect(j.slug).not.toBe(personalTransfer.slug);
     expect(j.apps).toEqual(["bankworkx"]);
     expect(catalog.find((c) => c.id === "international-transfer")?.madeFor).toBe("bankworkx");
@@ -300,7 +300,7 @@ describe("international-transfer: Abroad (alias of Send money)", () => {
   it("the tests notice when the journey or the bank's rules are broken (mutation check)", async () => {
     const m = await mutationCheck(j, IT_ACCEPTED);
     expect(m.survived.map((s) => `${s.id}: ${s.what}`)).toEqual([]);
-    expect([m.total, m.killed, m.accepted.length]).toEqual([59, 45, 14]);
+    expect([m.total, m.killed, m.accepted.length]).toEqual([22, 15, 7]);
     expect(m.ok).toBe(true);
   }, 240_000);
 
@@ -365,7 +365,7 @@ describe("pay-bill: Pay a bill", () => {
 describe("mobile-topup: Mobile top-up", () => {
   const j = Journey.parse(mobileTopup);
   const MT_ACCEPTED: Record<string, string> = {
-    "no-error-path-51": "Resending the code is a button of the code field that a scenario cannot press; the first send has the same error path and is proved (T-33)",
+    "no-error-path-54": "Resending the code is a button of the code field that a scenario cannot press; the first send has the same error path and is proved (T-33)",
   };
 
   it("is lint clean, every scenario passes and every acceptance criterion is proved", async () => {
@@ -373,14 +373,14 @@ describe("mobile-topup: Mobile top-up", () => {
     const r = await runScenarios(j);
     expect(r.results.filter((x) => !x.ok).map((x) => `${x.id} ${x.name}: ${x.failures.join(" | ")}`)).toEqual([]);
     expect(r.coverage.map((c) => [c.id, c.status])).toEqual((j.acceptance ?? []).map((a) => [a.id, "proved"]));
-    expect([r.passed, r.total, r.coverage.length]).toEqual([33, 33, 9]);
+    expect([r.passed, r.total, r.coverage.length]).toEqual([35, 35, 10]);
     expect(r.ok).toBe(true);
   });
 
   it("the tests notice when the journey or the bank's rules are broken (mutation check)", async () => {
     const m = await mutationCheck(j, MT_ACCEPTED);
     expect(m.survived.map((s) => `${s.id}: ${s.what}`)).toEqual([]);
-    expect([m.total, m.killed, m.accepted.length]).toEqual([29, 28, 1]);
+    expect([m.total, m.killed, m.accepted.length]).toEqual([30, 29, 1]);
     expect(m.ok).toBe(true);
   }, 240_000);
 

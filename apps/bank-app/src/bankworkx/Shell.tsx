@@ -64,7 +64,7 @@ export function BankWorkxShell() {
   }
 
   if (screen === "journey" && active) {
-    return <JourneyPlayer journey={active.journey} initial={active.initial} adapter={app.adapter} onClose={() => app.closeJourney()} onExit={() => app.closeJourney()} />;
+    return <JourneyPlayer key={active.journey.slug} journey={active.journey} initial={active.initial} launch={active.launch} onOpenJourney={(r) => { void app.openChained(r.journey, r.launch); }} adapter={app.adapter} onClose={() => app.closeJourney()} onExit={() => app.closeJourney()} />;
   }
 
   // the Invest screens sit above the tabs, like the budget detail

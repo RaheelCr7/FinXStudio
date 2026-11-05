@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { localTransfer, manageBeneficiary, payBill } from "@finx/journey-schema";
+import { internalTransfer, localTransfer, manageBeneficiary, mobileTopup, payBill } from "@finx/journey-schema";
 import { simulate, type Step } from "./simulate";
 
 const payHappy: Step[] = [
@@ -121,5 +121,46 @@ describe("simulate", () => {
     await expect(simulate({ journey: payBill, persona: "nobody", lang: "en", steps: [] })).rejects.toThrow(/Unknown persona/);
     await expect(simulate({ journey: payBill, persona: "ayesha", lang: "fr", steps: [] })).rejects.toThrow(/not supported/);
     await expect(simulate({ journey: payBill, persona: "ayesha", lang: "en", steps: Array(81).fill({ expectScreen: "bill" }) })).rejects.toThrow(/Too many steps/);
+  });
+});
+
+describe("simulate: launch values and journeys that open journeys", () => {
+  it("starts a journey with launch values that are there before its entry screen runs", async () => {
+    const r = await simulate({ journey: mobileTopup, persona: "alextopup", lang: "en", launch: { "launch.operatorId": "bright" }, steps: [{ expectScreen: "num" }, { expectText: "Brightline" }] });
+    expect(r.failures).toEqual([]);
+    expect(r.ok).toBe(true);
+    expect(r.frames[0]!.screen).toBe("num");
+  });
+
+  it("follows navigate.toJourney into the target (found by slug) with the values it was given", async () => {
+    const r = await simulate({
+      journey: internalTransfer, persona: "alexpayees", lang: "en",
+      steps: [{ expectOpens: { journey: "personal-transfer", with: { "launch.type": "internal" } } }, { expectScreen: "payee" }, { expectText: "Taylor Brooks" }],
+    });
+    expect(r.failures).toEqual([]);
+    expect(r.endedIn).toBe("personal-transfer");
+    expect(r.opened).toEqual([{ journey: "personal-transfer", launch: { "launch.type": "internal" }, followed: true }]);
+  });
+
+  it("records the request without following when the target is not among the journeys it was given", async () => {
+    const r = await simulate({ journey: internalTransfer, persona: "alexpayees", lang: "en", journeys: [], steps: [{ expectOpens: { journey: "personal-transfer", with: { "launch.type": "internal" } } }] });
+    expect(r.failures).toEqual([]);
+    expect(r.endedIn).toBe("internal-transfer");
+    expect(r.opened).toEqual([{ journey: "personal-transfer", launch: { "launch.type": "internal" }, followed: false }]);
+  });
+
+  it("fails expectOpens when no journey was opened, the wrong one, or with other values", async () => {
+    const none = await simulate({ journey: payBill, persona: "ayesha", lang: "en", steps: [{ expectOpens: { journey: "personal-transfer" } }] });
+    expect(none.failures[0]).toContain("no other journey was opened");
+    const wrong = await simulate({ journey: internalTransfer, persona: "alexpayees", lang: "en", steps: [{ expectOpens: { journey: "add-money" } }] });
+    expect(wrong.failures[0]).toContain('the last journey it opened is "personal-transfer"');
+    const values = await simulate({ journey: internalTransfer, persona: "alexpayees", lang: "en", steps: [{ expectOpens: { journey: "personal-transfer", with: { "launch.type": "domestic" } } }] });
+    expect(values.failures[0]).toContain('launch.type = "internal"');
+  });
+
+  it("carries the bank's options (opt.*) into the journey it opens", async () => {
+    const r = await simulate({ journey: internalTransfer, persona: "alexpayees", lang: "en", launch: { "opt.typeDomestic": false }, steps: [{ expectScreen: "payee" }] });
+    expect(r.ok).toBe(true);
+    expect(r.opened[0]!.launch).toEqual({ "opt.typeDomestic": false, "launch.type": "internal" });
   });
 });

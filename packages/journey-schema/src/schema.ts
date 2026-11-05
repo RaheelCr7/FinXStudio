@@ -9,7 +9,15 @@ export type LocalizedText = z.infer<typeof LocalizedText>;
 export const Action: z.ZodType<any> = z.lazy(() =>
   z.discriminatedUnion("type", [
     z.object({ type: z.literal("validate") }),
-    z.object({ type: z.literal("navigate"), to: z.string().optional(), toJourney: z.string().optional(), returnTo: z.string().optional() }),
+    z.object({
+      type: z.literal("navigate"), to: z.string().optional(),
+      /** Opens another journey (by its slug) in place of this one. A navigation rule of the screen that matches still wins. */
+      toJourney: z.string().optional(),
+      /** Values for the other journey, by data path. A value may be a {{template}} read from this journey's data. */
+      with: z.record(z.string(), z.any()).optional(),
+      /** Reserved: the calling journey is replaced, so nothing comes back to this screen yet. */
+      returnTo: z.string().optional(),
+    }),
     z.object({ type: z.literal("setData"), path: z.string(), value: z.any() }),
     z.object({
       type: z.literal("callApi"),
@@ -166,6 +174,8 @@ export const Journey = z.object({
       timeout: z.array(z.string()).optional(), unavailable: z.array(z.string()).optional(), latencyMs: z.number().int().nonnegative().optional(),
       frozen: z.array(z.string()).optional(), transferFails: z.boolean().optional(), limitUsed: z.number().nonnegative().optional(), closedDays: z.array(z.string().regex(/^\d{4}-\d{2}-\d{2}$/)).optional(),
     }).optional(),
+    /** Values the journey is opened with, by data path (as when another journey opens it, or an app deep link): they are there before the entry screen runs. */
+    launch: z.record(z.string(), z.unknown()).optional(),
     /** Calls made on the bank before the walk starts, for example a payment waiting for approval. */
     setup: z.array(z.object({ adapter: z.string(), input: z.record(z.string(), z.unknown()).optional(), saveAs: z.string().regex(/^[a-zA-Z][a-zA-Z0-9]*$/).optional() })).optional(),
     steps: z.array(z.record(z.string(), z.unknown())).min(1),

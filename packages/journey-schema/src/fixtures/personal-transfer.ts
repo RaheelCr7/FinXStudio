@@ -104,6 +104,7 @@ export const personalTransfer: Journey = {
     "pt.consent": { type: "boolean", required: true },
     "pt.moved": { type: "boolean" },
     // the bank's options, set by the bank: left alone they are on (Priority and who pays the charges: off)
+    "launch.type": { type: "string" },
     "opt.typeInternal": { type: "boolean" },
     "opt.typeDomestic": { type: "boolean" },
     "opt.typeIntl": { type: "boolean" },
@@ -134,7 +135,8 @@ export const personalTransfer: Journey = {
         { type: "callApi", integration: "accounts", input: { homeOnly: true }, saveAs: "ctx.accounts", onError: toRoute },
         { type: "setData", path: "ctx.error", value: null },
         { type: "setData", path: "pt.from", value: "acc_main" },
-        { type: "setData", path: "pt.type", value: "" },
+        // opened with a type (launch.type, from Abroad or To a BankWorkx customer): take it and skip the choice of type when the bank offers it
+        { type: "setData", path: "pt.type", value: "{{launch.type ? launch.type : ''}}" },
         { type: "setData", path: "pt.payeeId", value: "" },
         { type: "setData", path: "pt.payeeName", value: "" },
         { type: "setData", path: "pt.mask", value: "" },
@@ -172,6 +174,13 @@ export const personalTransfer: Journey = {
         { type: "setData", path: "otp.code", value: "" },
         { type: "navigate", to: "type" },
       ],
+      navigation: {
+        rules: [
+          { when: "pt.type == 'internal' && opt.typeInternal != false", to: "payeeList" },
+          { when: "pt.type == 'domestic' && opt.typeDomestic != false", to: "payeeList" },
+          { when: "pt.type == 'international' && opt.typeIntl != false", to: "payeeList" },
+        ],
+      },
       blocks: [],
     },
     {
@@ -234,7 +243,7 @@ export const personalTransfer: Journey = {
           },
         },
         { type: "button", label: "New payee", variant: "secondary", actions: [{ type: "setData", path: "pt.payeeId", value: "" }, { type: "navigate", to: "details" }] },
-        { type: "button", label: "Back", variant: "ghost", actions: [{ type: "navigate", to: "type" }] },
+        { type: "button", label: "Back", variant: "ghost", actions: [{ type: "navigate", to: "typeBack" }] },
       ],
     },
     {
@@ -298,7 +307,7 @@ export const personalTransfer: Journey = {
             { type: "navigate", to: "amount" },
           ],
         },
-        { type: "button", label: "Back", variant: "ghost", actions: [{ type: "navigate", to: "type" }] },
+        { type: "button", label: "Back", variant: "ghost", actions: [{ type: "navigate", to: "typeBack" }] },
       ],
     },
     {
@@ -501,7 +510,7 @@ export const personalTransfer: Journey = {
       navigation: {
         rules: [
           { when: "ctx.error.integration == 'accounts'", to: "start" },
-          { when: "ctx.error.integration == 'payees'", to: "type" },
+          { when: "ctx.error.integration == 'payees'", to: "typeBack" },
           { when: "ctx.error.integration == 'lookup' || ctx.error.integration == 'validate'", to: "details" },
           { when: "ctx.error.integration == 'quote'", to: "amount" },
         ],
@@ -581,6 +590,13 @@ export const personalTransfer: Journey = {
         { type: "button", label: "Start again", variant: "primary", actions: [{ type: "navigate", to: "start" }] },
         { type: "button", label: "Close", variant: "secondary", actions: [{ type: "exit" }] },
       ],
+    },
+    {
+      // Back to the choice of type; when the journey was opened with a type there is no choice, so it goes to the payees of that type
+      id: "typeBack", title: "Send money", kind: "branch",
+      onEnter: [{ type: "navigate", to: "type" }],
+      navigation: { rules: [{ when: "!isEmpty(launch.type)", to: "payeeList" }] },
+      blocks: [],
     },
   ],
 };
