@@ -177,3 +177,15 @@ describe("Alex at Alpha is a Maker, at Beta an Approver, whatever is forced", ()
     expect((await b.call("corp.payments.withdraw", { paymentId: "PAY-2040" })).rejectReason).toMatch(/Withdrawn/);
   });
 });
+
+describe("the notification centre", () => {
+  it("answers in every place, each item tagged with the place it belongs to", async () => {
+    const { b } = alex();
+    const inPersonal = Object.values(await b.call("bank.notifications.list")) as any[];
+    await enter(b, "alpha");
+    const inAlpha = Object.values(await b.call("bank.notifications.list")) as any[];
+    expect(inAlpha).toEqual(inPersonal);
+    expect(new Set(inAlpha.map((n) => n.context))).toEqual(new Set(["personal", "alpha", "beta"]));
+    expect(Object.values(await b.call("bank.notifications.list", { context: "beta" })).map((n: any) => n.context)).toEqual(["beta"]);
+  });
+});

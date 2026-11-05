@@ -458,6 +458,8 @@ export class MockBank {
       }
     }
     const business = adapter.startsWith("corp.");
+    // the notification centre spans every place the person banks from (each item says which), so it answers in any context
+    if (adapter === "bank.notifications.list") return this.retail.call(adapter, input);
     // a persona with companies keeps each place apart: personal adapters work only in the personal context and company adapters only in a company
     if (this.p.identity) {
       const inCompany = this.session.active !== "personal";

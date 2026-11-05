@@ -1,7 +1,13 @@
 import { MockBank, isProviderId, personasFor, type Persona } from "@finx/mock-bank-api";
-import type { Preset } from "@finx/ui-kit";
+import type { Preset, WorkspaceId } from "@finx/ui-kit";
 import { slugIs, type CatalogResult, type Live, type createLive } from "./live";
 import { usd } from "./format";
+import { NO_SETTINGS, activeContext, findContext, workspaceOf, type BankSettings, type ContextInfo, type SessionInfo } from "./session";
+import { entryFor, launchPointsFor, launchValues, type LaunchPoint } from "./launch-points";
+import { linkContext, needsSwitch, type Link } from "./links";
+import { FIRST_TAB, isTab, type ShellTab } from "./view-models/menus";
+import { noticesFor, type ContextNotice, type RawNotification } from "./view-models/notices";
+import { loadScreen, type Screen } from "./view-models/screens";
 
 export type TabId = "dashboard" | "accounts" | "budgets" | "wallet";
 export type Sheet = null | "fab" | "menu" | "notes";
@@ -9,6 +15,16 @@ export type Sheet = null | "fab" | "menu" | "notes";
 export type InvestView = null | { symbol?: string };
 export type ActiveJourney = Live & { initial?: Record<string, any>; /** Values there before the entry screen runs. */ launch?: Record<string, any> };
 export type Toast = { text: string; ok: boolean } | null;
+
+/** One screen's data while it loads: the app keeps it per place so a switch can clear it. */
+export type ViewData<T = unknown> = { status: "loading" | "ready" | "error"; data?: T; error?: string; code?: string };
+/** `unavailable` is a customer with a single place (no `bank.session`): the classic shell is used instead. */
+export type SessionState = { status: "idle" | "loading" | "ready" | "unavailable" | "error"; info: SessionInfo | null; settings: BankSettings; error?: string };
+/** Asking the customer to confirm it is them before opening a company: password (or biometrics) first, then the one-time code. */
+export type StepUpState = { contextId: string; phase: "password" | "code"; busy: boolean; error?: string; phone?: string } | null;
+/** What a switch keeps: the customer's own settings, not anything the bank showed them. */
+export type Prefs = { scheme: "system" | "light" | "dark"; lastTab: Record<WorkspaceId, ShellTab> };
+const DEFAULT_PREFS: Prefs = { scheme: "system", lastTab: { personal: "home", business: "overview" } };
 
 export type AppState = {
   screen: "login" | "app" | "journey";
@@ -29,6 +45,26 @@ export type AppState = {
   /** The slug of the journey being fetched, while it loads. */
   opening: string | null;
   studioUrl: string;
+  // ---- sessions with workspaces (one login, Personal and companies) ----
+  session: SessionState;
+  /** The place the shell shows: Personal, or a company. Decides the theme. */
+  workspace: WorkspaceId;
+  shellTab: ShellTab;
+  /** The name of the place being switched to, during the "Switching to ..." moment. */
+  switching: string | null;
+  stepUp: StepUpState;
+  /** A link into another place, waiting for the customer to accept switching to it. */
+  offer: Link | null;
+  /** A link whose switch is done: the app opens it and calls `clearArrived`. */
+  arrived: Link | null;
+  prefs: Prefs;
+  /** Sensitive, per place: all of these are cleared on a switch. */
+  search: string;
+  filters: Record<string, string>;
+  drafts: Record<string, Record<string, any>>;
+  views: Record<string, ViewData>;
+  /** Notifications opened in this sitting (the bank has no "mark read" call in the sandbox). */
+  readIds: string[];
 };
 
 /** Launch values waiting for a journey that a web address opens (the address cannot carry them). */
@@ -47,6 +83,8 @@ export type BankAppDeps = {
   defaultPersona?: string;
   money?: (n: number) => string;
   toastMs?: number;
+  /** How long the "Switching to ..." moment lasts at least (apps give it a short pause; tests none). */
+  switchMs?: number;
 };
 
 /**
@@ -62,6 +100,10 @@ export class BankApp {
   private adapterFor: MockBank | null = null;
   private pending: PendingLaunch | null = null;
   private adapterFn!: (id: string, input: Record<string, any>) => Promise<any>;
+  /** Goes up whenever the place changes or the customer signs out, so an answer that arrives late is dropped, never shown in the wrong place. */
+  private epoch = 0;
+  private arriveAfter: Link | null = null;
+  private inflight = new Map<string, Promise<void>>();
 
   constructor(private deps: BankAppDeps) {
     const personaId = deps.defaultPersona ?? personasFor(deps.preset, deps.projectId)[0]?.id ?? "ayesha";
@@ -69,6 +111,7 @@ export class BankApp {
     this.state = {
       screen: "login", personaId, lang: "en", tab: "dashboard", budgetId: null, investView: null, sheet: null, subId: null, paying: false, toast: null, tick: 0,
       catalog: { entries: deps.live.bundledEntries(), source: "bundled" }, active: null, opening: null, studioUrl: deps.studioUrl,
+      ...this.freshShell(),
     };
   }
 
@@ -86,19 +129,26 @@ export class BankApp {
   personas = () => personasFor(this.deps.preset, this.deps.projectId);
   money = (n: number) => (this.deps.money ?? usd)(n);
 
+  /** The shell fields of a signed-out or just-switched app. Preferences are not in it: they survive a switch. */
+  private freshShell() {
+    return { session: { status: "idle", info: null, settings: NO_SETTINGS } as SessionState, workspace: "personal" as WorkspaceId, shellTab: "home" as ShellTab, switching: null, stepUp: null as StepUpState, offer: null as Link | null, arrived: null as Link | null,
+      prefs: this.state?.prefs ?? DEFAULT_PREFS, search: "", filters: {} as Record<string, string>, drafts: {} as AppState["drafts"], views: {} as AppState["views"], readIds: [] as string[] };
+  }
   private set(patch: Partial<AppState>) { this.state = { ...this.state, ...patch }; for (const l of [...this.listeners]) l(); }
   private newBank(personaId: string) { return new MockBank(personaId, { corpProvider: isProviderId(this.deps.bankApi) ? this.deps.bankApi : undefined }); }
   private freshBank() { this.current = this.newBank(this.state.personaId); }
 
   // ---- signing in and out ------------------------------------------------------------------------------------------
-  selectPersona(id: string) { this.set({ personaId: id }); this.freshBank(); this.set({ tick: this.state.tick + 1 }); }
+  selectPersona(id: string) { this.epoch++; this.set({ personaId: id, ...this.freshShell() }); this.freshBank(); this.set({ tick: this.state.tick + 1 }); }
   login() {
     this.set({ screen: "app", tab: "dashboard" });
     void this.refreshCatalog();
   }
   logout() {
+    this.epoch++;
+    this.arriveAfter = null; this.pending = null;
     this.freshBank();
-    this.set({ screen: "login", budgetId: null, investView: null, sheet: null, subId: null, active: null, toast: null, tick: this.state.tick + 1 });
+    this.set({ screen: "login", budgetId: null, investView: null, sheet: null, subId: null, active: null, toast: null, ...this.freshShell(), tick: this.state.tick + 1 });
   }
   setLang(lang: string) { this.set({ lang }); }
   toggleLang() { this.setLang(this.state.lang === "en" ? "ur" : "en"); }
@@ -113,7 +163,7 @@ export class BankApp {
   backInvest() { this.set({ investView: this.state.investView?.symbol ? {} : null }); }
   openSheet(sheet: Exclude<Sheet, null>) { this.set({ sheet }); }
   closeSheet() { this.set({ sheet: null }); }
-  bump() { this.set({ tick: this.state.tick + 1 }); }
+  bump() { this.set({ tick: this.state.tick + 1, views: {} }); }
 
   // ---- Studio and journeys -----------------------------------------------------------------------------------------
   async refreshCatalog() {
@@ -156,7 +206,7 @@ export class BankApp {
   /** The journey finished or was closed: back to the app, and everything redraws because balances may have changed. */
   closeJourney() {
     this.pending = null;
-    this.set({ screen: "app", active: null, tick: this.state.tick + 1 });
+    this.set({ screen: "app", active: null, views: {}, tick: this.state.tick + 1 });
     void this.refreshCatalog();
   }
 
@@ -176,6 +226,182 @@ export class BankApp {
       this.set({ paying: false });
       this.say(e?.message ?? "Payment failed", false);
     }
+  }
+
+  // ---- places: Personal and each company ------------------------------------------------------------------------------
+  /** The context the customer is in now, as the bank described it (its permissions are what menus and buttons follow). */
+  get context(): ContextInfo | undefined { return activeContext(this.state.session.info); }
+  private call = (id: string, input: Record<string, any> = {}) => this.current.call(id, input);
+
+  /** Asks the bank who is signed in, where they bank from and what the bank has switched on. A customer with one place gets `unavailable`. */
+  async loadSession() {
+    const epoch = this.epoch, prev = this.state.session;
+    this.set({ session: { ...prev, status: "loading", error: undefined } });
+    try {
+      const [info, settings] = await Promise.all([this.call("bank.session.get"), this.call("bank.app.config")]);
+      if (epoch !== this.epoch) return;
+      const ctx = findContext(info, info.activeContextId);
+      const workspace = workspaceOf(ctx);
+      this.set({ session: { status: "ready", info, settings: { homeMarket: settings.homeMarket, disabled: settings.disabled ?? [], options: settings.options ?? {} } }, workspace, shellTab: this.state.prefs.lastTab[workspace] });
+      if (workspace === "business") void this.loadShell("approvals");
+    } catch (e: any) {
+      if (epoch !== this.epoch) return;
+      this.set({ session: { ...prev, status: e?.code === "NOT_SUPPORTED" ? "unavailable" : "error", error: e?.message ?? "Could not load your accounts" } });
+    }
+  }
+
+  /**
+   * Moves to another place. The bank may ask for a step-up first ("step-up" is returned and `stepUp` is set: the app asks, then
+   * `confirmStepUp` finishes the switch). Everything that belongs to the place being left is cleared; language, light or dark and
+   * the last tab of each workspace stay.
+   */
+  async switchContext(contextId: string): Promise<"switched" | "step-up" | "failed"> {
+    const info = this.state.session.info, target = findContext(info, contextId);
+    if (!info || !target) { this.say("You don't have access to that.", false); return "failed"; }
+    if (contextId === info.activeContextId) { this.deliver(); return "switched"; }
+    this.set({ switching: target.workspace === "business" ? `Switching to ${target.label}...` : "Switching to Personal...", offer: null });
+    try {
+      await this.call("bank.session.switch", { contextId });
+      if (this.deps.switchMs) await new Promise((r) => setTimeout(r, this.deps.switchMs));
+    } catch (e: any) {
+      this.set({ switching: null });
+      if (e?.code === "STEP_UP_REQUIRED") { this.set({ stepUp: { contextId, phase: "password", busy: false } }); return "step-up"; }
+      this.arriveAfter = null;
+      this.say(e?.message ?? "Could not switch", false);
+      return "failed";
+    }
+    this.leave(info, target);
+    await this.loadSession();
+    this.set({ switching: null });
+    this.deliver();
+    return "switched";
+  }
+  /** Clears what belongs to the place being left, remembers its last tab and swaps the theme (the workspace). */
+  private leave(info: SessionInfo, to: ContextInfo) {
+    this.epoch++;
+    if (this.timer) { clearTimeout(this.timer); this.timer = null; }
+    const from = workspaceOf(findContext(info, info.activeContextId)), next = workspaceOf(to);
+    const lastTab = { ...this.state.prefs.lastTab, [from]: this.state.shellTab };
+    this.pending = null;
+    this.set({
+      active: null, opening: null, sheet: null, subId: null, budgetId: null, investView: null, toast: null, stepUp: null, offer: null,
+      search: "", filters: {}, drafts: {}, views: {}, readIds: [], workspace: next, shellTab: lastTab[next], prefs: { ...this.state.prefs, lastTab },
+      screen: "app", session: { ...this.state.session, info: { ...info, activeContextId: to.id } }, tick: this.state.tick + 1,
+    });
+  }
+  private deliver() { if (this.arriveAfter) { const link = this.arriveAfter; this.arriveAfter = null; this.set({ arrived: link }); } }
+  clearArrived() { if (this.state.arrived) this.set({ arrived: null }); }
+
+  /** Step 1 of the confirmation: the password (or biometrics); the bank then sends a code. */
+  async beginStepUp(input: { method?: "password" | "biometric"; secret?: string } = {}) {
+    const su = this.state.stepUp;
+    if (!su) return;
+    this.set({ stepUp: { ...su, busy: true, error: undefined } });
+    try {
+      await this.call("bank.otp.send");
+      await this.call("bank.session.stepUp", { method: input.method ?? "password", ...(input.secret !== undefined ? { secret: input.secret } : {}) });
+    } catch (e: any) {
+      // the right password is answered "code needed": that is the way forward
+      if (e?.code === "OTP_REQUIRED") { this.set({ stepUp: { ...su, phase: "code", busy: false, phone: this.persona.phone.replace(/\d(?=\d{4})/g, "•") } }); return; }
+      this.set({ stepUp: { ...su, busy: false, error: e?.message ?? "That didn't work. Try again." } });
+    }
+  }
+  /** Step 2: the one-time code. Done, the switch that asked for it finishes. */
+  async confirmStepUp(code: string) {
+    const su = this.state.stepUp;
+    if (!su) return;
+    this.set({ stepUp: { ...su, busy: true, error: undefined } });
+    try {
+      await this.call("bank.otp.verify", { code });
+      await this.call("bank.session.stepUp", { method: "password" });
+    } catch (e: any) {
+      this.set({ stepUp: { ...su, busy: false, error: e?.message ?? "That didn't work. Try again." } });
+      return;
+    }
+    this.set({ stepUp: null });
+    await this.switchContext(su.contextId);
+  }
+  cancelStepUp() { this.arriveAfter = null; this.set({ stepUp: null, switching: null }); }
+
+  // ---- links ------------------------------------------------------------------------------------------------------
+  /**
+   * What to do with a link: "go" when it points into the place the customer is in, "offer" when it points into another one (the
+   * app shows `offer` and the customer decides), "denied" when the customer has no such place.
+   */
+  followLink(link: Link): "go" | "offer" | "denied" {
+    const info = this.state.session.info;
+    if (!info || !findContext(info, linkContext(link))) { this.say("You don't have access to that.", false); return "denied"; }
+    if (!needsSwitch(link, info.activeContextId)) return "go";
+    this.set({ offer: link });
+    return "offer";
+  }
+  declineOffer() { this.set({ offer: null }); }
+  /** The customer accepted: switch (with a step-up if the bank wants one), then `arrived` carries the link. */
+  async acceptOffer() {
+    const link = this.state.offer;
+    if (!link) return;
+    this.arriveAfter = link;
+    this.set({ offer: null });
+    await this.switchContext(linkContext(link));
+  }
+
+  // ---- tabs, preferences and cached screens ---------------------------------------------------------------------------
+  setShellTab(tab: ShellTab) {
+    if (!isTab(this.state.workspace, tab)) tab = FIRST_TAB[this.state.workspace];
+    this.set({ shellTab: tab, search: "", filters: {}, prefs: { ...this.state.prefs, lastTab: { ...this.state.prefs.lastTab, [this.state.workspace]: tab } } });
+  }
+  setPrefs(patch: Partial<Prefs>) { this.set({ prefs: { ...this.state.prefs, ...patch } }); }
+  setSearch(search: string) { this.set({ search }); }
+  setFilter(key: string, value: string) { this.set({ filters: { ...this.state.filters, [key]: value } }); }
+  /** A half-filled form of the place; cleared with everything else on a switch. */
+  setDraft(key: string, values: Record<string, any>) { this.set({ drafts: { ...this.state.drafts, [key]: values } }); }
+
+  /** Loads data for a screen once per place (and again on `force`), keeping the last answer while it reloads. An answer from a place the customer has since left is dropped. */
+  loadView<T>(key: string, loader: () => Promise<T>, force = false): Promise<void> {
+    const cur = this.state.views[key];
+    if (!force && cur && cur.status !== "error") return this.inflight.get(key) ?? Promise.resolve();
+    const epoch = this.epoch;
+    this.set({ views: { ...this.state.views, [key]: { status: "loading", data: cur?.data } } });
+    const done = loader().then(
+      (data) => { if (epoch === this.epoch) this.set({ views: { ...this.state.views, [key]: { status: "ready", data } } }); },
+      (e: any) => { if (epoch === this.epoch) this.set({ views: { ...this.state.views, [key]: { status: "error", data: cur?.data, error: e?.message ?? "Something went wrong", code: e?.code } } }); },
+    ).finally(() => { if (this.inflight.get(key) === done) this.inflight.delete(key); });
+    this.inflight.set(key, done);
+    return done;
+  }
+  viewKey = (name: string) => `${this.state.session.info?.activeContextId ?? "none"}:${name}`;
+  view<T = unknown>(name: string): ViewData<T> | undefined { return this.state.views[this.viewKey(name)] as ViewData<T> | undefined; }
+  /** The data of a tab's screen in the active place. */
+  loadShell(tab: ShellTab, force = false): Promise<void> {
+    const ctx = this.context;
+    if (!ctx) return Promise.resolve();
+    return this.loadView<Screen>(this.viewKey(tab), () => loadScreen(this.call, ctx, tab), force);
+  }
+  /** The approvals waiting for the person, as the badge on Approvals counts them (known once that screen's data has loaded). */
+  get approvalsBadge(): number { return this.view<Screen>("approvals")?.data?.approvals ?? 0; }
+
+  /**
+   * Notifications of every place, tagged. They are made safe as they arrive (the active place's in full, the others as a pointer),
+   * so the details of another place are never held in the app's state.
+   */
+  loadNotices(force = false) {
+    const info = this.state.session.info;
+    return this.loadView<ContextNotice[]>(this.viewKey("notices"), async () => noticesFor(Object.values((await this.call("bank.notifications.list")) ?? {}) as RawNotification[], info?.contexts ?? [], info?.activeContextId ?? ""), force);
+  }
+  notices(): ContextNotice[] {
+    const read = new Set(this.state.readIds);
+    return (this.view<ContextNotice[]>("notices")?.data ?? []).map((n) => (read.has(n.id) ? { ...n, read: true } : n));
+  }
+  markRead(id: string) { if (!this.state.readIds.includes(id)) this.set({ readIds: [...this.state.readIds, id] }); }
+
+  // ---- launch points ------------------------------------------------------------------------------------------------
+  /** The buttons for a place (or the + quick actions): what the active place's permissions allow, that this app has and the bank has not switched off. */
+  launchPoints(filter: { place?: string; quick?: boolean } = {}): LaunchPoint[] {
+    return launchPointsFor({ context: this.context, entries: this.state.catalog.entries, settings: this.state.session.settings }, filter);
+  }
+  /** The journey to open and its starting values for a button, with the values the place passed in. */
+  launchTarget(lp: LaunchPoint, passed: Record<string, unknown> = {}) {
+    return { slug: entryFor(lp.journey, this.state.catalog.entries) ?? lp.journey, values: launchValues(lp, passed) };
   }
 
   // ---- notices -----------------------------------------------------------------------------------------------------
