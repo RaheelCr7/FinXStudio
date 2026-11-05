@@ -60,7 +60,7 @@
 .wb-signin-panel .fx-player { background: transparent; color: var(--si-ink); }
 .wb-signin-panel .fx-player-head, .wb-signin-panel .fx-player-bar { background: transparent; border: 0; padding-inline: 0; }
 .wb-signin-panel .fx-player-title h1 { font-size: 26px; line-height: 1.15; letter-spacing: -.025em; font-weight: 600; color: var(--si-ink); }
-.wb-signin-panel .fx-icon-btn[aria-label="Close"] { display: none; }
+.wb-signin-panel .wb-journey-card:not([data-handover]) .fx-icon-btn[aria-label="Close"] { display: none; }
 .wb-signin-panel .fx-icon-btn { color: var(--si-ink-2); background: transparent; }
 .wb-signin-panel .fx-icon-btn:hover { background: rgba(140,160,255,.12); color: var(--si-ink); }
 .wb-signin-panel .fxc-hero { display: none; }

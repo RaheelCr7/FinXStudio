@@ -71,7 +71,7 @@ export class JourneyController {
   set(path: string, value: any) { this.runner.set(path, value); }
   press(actions: any[]) { return this.runner.press(actions); }
 
-  get canStepBack() { return this.runner.screen.kind !== "terminal" && this.runner.history.length > 0; }
+  get canStepBack() { return this.runner.screen.kind !== "terminal" && this.runner.canGoBack; }
   /** The back button and the Android back key: step back when a step can, otherwise report that the player should close. */
   stepBack(): boolean {
     if (!this.canStepBack) return false;
@@ -83,7 +83,7 @@ export class JourneyController {
     const view = this.runner.view();
     const terminal = view.kind === "terminal";
     return {
-      view, terminal, hero: view.blocks[0]?.type === "hero", canGoBack: !terminal && this.runner.history.length > 0, rtl: this.runner.isRtl, lang: this.runner.lang,
+      view, terminal, hero: view.blocks[0]?.type === "hero", canGoBack: !terminal && this.runner.canGoBack, rtl: this.runner.isRtl, lang: this.runner.lang,
       body: view.blocks.filter((b) => b.type !== "button" && b.type !== "dialog"), dialogs: view.blocks.filter((b) => b.type === "dialog"), buttons: view.blocks.filter((b) => b.type === "button"),
       steps: view.stepCount > 0 && view.stepIndex >= 0 ? { count: view.stepCount, done: Array.from({ length: view.stepCount }, (_, i) => i <= view.stepIndex), label: view.stepLabel } : null,
     };

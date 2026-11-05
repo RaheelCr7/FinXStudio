@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { addMoney, payBill } from "@finx/journey-schema";
+import { addMoney, payBill, signIn } from "@finx/journey-schema";
 import { MockBank } from "@finx/mock-bank-api";
 import { JourneyController } from "./controller";
 
@@ -17,6 +17,17 @@ describe("JourneyController", () => {
     expect(l.body.some((b) => b.type === "button")).toBe(false);
     expect(l).toMatchObject({ terminal: false, canGoBack: false, rtl: false, lang: "en" });
     expect(l.steps).toEqual({ count: 3, done: [true, false, false], label: "Step 1 of 3" });
+  });
+
+  it("does not offer Back onto a branch screen: the sign-in opens on its first real screen with no back button", async () => {
+    const bank = new MockBank("alex");
+    const c = new JourneyController(signIn, { adapter: (id, i) => bank.call(id, i) });
+    await c.start();
+    // the entry screen is a branch that asks the bank for device options and moves on at once
+    expect(c.layout().view.screenId).toBe("credentials");
+    expect(c.layout().canGoBack).toBe(false);
+    expect(c.stepBack()).toBe(false);
+    expect(c.layout().view.screenId).toBe("credentials");
   });
 
   it("applies initial answers after the journey opens", async () => {

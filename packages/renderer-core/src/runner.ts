@@ -292,8 +292,14 @@ export class JourneyRunner {
     return out;
   }
 
+  /** A branch screen decides where to go and shows nothing, so it is never a place to go back to. */
+  private isBranch(id: string) { return this.journey.screens.find((s) => s.id === id)?.kind === "branch"; }
+  /** Whether there is a screen the person saw to go back to. */
+  get canGoBack() { return this.history.some((id) => !this.isBranch(id)); }
+
   back() {
-    const prev = this.history.pop();
+    let prev = this.history.pop();
+    while (prev && this.isBranch(prev)) prev = this.history.pop();
     if (prev) { const from = this.current; this.current = prev; this.toast = undefined; this.note({ type: "back", screen: from }); this.emit(); }
   }
 

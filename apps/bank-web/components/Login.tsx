@@ -2,7 +2,7 @@
 import { useRouter, useSearchParams } from "next/navigation";
 import { useEffect, useState } from "react";
 import { JourneyPlayer } from "@finx/renderer-web";
-import { personaSummary, type Live } from "@finx/bank-client";
+import { personaSummary, slugIs, type Live } from "@finx/bank-client";
 import { formatMoney } from "@finx/ui-kit";
 import { safeNext } from "@/lib/safe-next";
 import { useApp, useAppState } from "./AppProvider";
@@ -52,7 +52,8 @@ function SignInJourney({ onSignedIn }: { onSignedIn: () => void }) {
   if (live === "loading") return <main className="wb-loading" aria-busy="true"><span className="wb-sr">Opening</span></main>;
   return (
     <SignInStage bank={project.name} after={<p className="wb-fine wb-signin-fine"><button type="button" className="wb-link" onClick={() => app.showPicker(true)}>Use the sandbox customer picker</button></p>}>
-      <div className="wb-journey-card">
+      {/* a journey the sign-in handed over to (forgot password, unlock…) keeps its close button: that is the way back to the sign-in */}
+      <div className="wb-journey-card" data-handover={slugIs(run.slug, "sign-in") ? undefined : "true"}>
         {s.notice === "locked" ? <p className="wb-note" role="alert">Sign-in is locked to protect your account. Unlock it to continue.</p> : null}
         {live ? (
           <JourneyPlayer key={`${run.slug}:${run.n}`} journey={live.journey} adapter={app.adapter} lang={s.lang} launch={run.launch ?? reason} onOpenJourney={open} onClose={ended} onExit={ended} look={project.look} brandName={project.name} />
