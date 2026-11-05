@@ -118,3 +118,12 @@ describe("payments the sandbox did not have an access check on", () => {
     expect((await b.call("corp.payments.get", { paymentId: p.id })).id).toBe(p.id);
   });
 });
+
+describe("maskPhone", () => {
+  it("keeps the country code and the last four digits", async () => {
+    const { maskPhone } = await import("./phone");
+    expect(maskPhone("+1 415 555 0142")).toBe("+1 ••• ••• 0142");
+    expect(maskPhone("+92 300 1234471")).toBe("+92 ••• •••4471");
+    expect(maskPhone("4155550142")).toBe("••••••0142");
+  });
+});

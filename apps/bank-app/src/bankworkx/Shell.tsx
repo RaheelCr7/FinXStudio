@@ -66,7 +66,7 @@ export function BankWorkxShell({ app }: { app: BankApp }) {
   }
 
   if (screen === "journey" && active) {
-    return <JourneyPlayer key={active.journey.slug} journey={active.journey} initial={active.initial} launch={active.launch} session={app.context ? { permissions: app.context.permissions } : undefined} onOpenJourney={(r) => { void app.openChained(r.journey, r.launch); }} adapter={app.adapter} onClose={() => app.closeJourney()} onExit={() => app.closeJourney()} />;
+    return <JourneyPlayer key={active.journey.slug} journey={active.journey} initial={active.initial} launch={active.launch} session={app.context ? { permissions: app.context.permissions } : undefined} onOpenJourney={(r) => { void app.openChained(r.journey, r.launch); }} onEvent={(e) => { if (e.type === "screen" && e.kind === "terminal") app.journeyFinished(); }} adapter={app.adapter} onClose={() => app.closeJourney()} onExit={() => app.closeJourney()} />;
   }
 
   // a customer with a place for each hat (Personal and companies) gets the workspace shell; the others keep the classic tabs

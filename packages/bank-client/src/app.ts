@@ -1,4 +1,4 @@
-import { MockBank, isProviderId, personasFor, type Persona } from "@finx/mock-bank-api";
+import { MockBank, isProviderId, maskPhone, personasFor, type Persona } from "@finx/mock-bank-api";
 import type { Preset, WorkspaceId } from "@finx/ui-kit";
 import { slugIs, type CatalogResult, type Live, type createLive } from "./live";
 import { usd } from "./format";
@@ -323,7 +323,7 @@ export class BankApp {
       if (e?.code === "OTP_REQUIRED") {
         try { await this.call("bank.otp.send"); } catch (err: any) { this.set({ stepUp: { ...su, busy: false, error: err?.message ?? "We couldn't send the code. Try again." } }); return; }
         this.stepUpProof = proof;
-        this.set({ stepUp: { ...su, phase: "code", busy: false, error: undefined, phone: this.persona.phone.replace(/\d(?=(?:\D*\d){4})/g, "•") } });
+        this.set({ stepUp: { ...su, phase: "code", busy: false, error: undefined, phone: maskPhone(this.persona.phone) } });
         return;
       }
       this.set({ stepUp: { ...su, busy: false, error: e?.message ?? "That didn't work. Try again." } });
@@ -426,6 +426,8 @@ export class BankApp {
     if (!ctx) return Promise.resolve();
     return this.loadView<Screen>(this.viewKey(tab), () => loadScreen(this.call, ctx, tab), force);
   }
+  /** A journey reached its end (a result screen): what it may have changed is read again now, not when the person closes it. At the moment that is the approvals count in a company. */
+  journeyFinished() { if (this.state.workspace === "business" && this.state.session.status === "ready") void this.loadShell("approvals", true); }
   /** The approvals waiting for the person, as the badge on Approvals counts them (known once that screen's data has loaded). */
   get approvalsBadge(): number { return this.view<Screen>("approvals")?.data?.approvals ?? 0; }
 
