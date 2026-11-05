@@ -11,6 +11,7 @@ import { BusinessSandbox, type Actor } from "./business/business";
 import { hit, isListAdapter } from "./conditions";
 import { DEFAULT_CONFIG, journeyEnabled, type BankConfig } from "./config";
 import { STEP_UP_SECONDS, contextsOf, type IdentityDef } from "./identity";
+import { ACCESS, AccessDirectory, AccessSandbox, type DeviceInfo } from "./access";
 import { assertSandboxAllowed } from "./policy";
 import { addDays, addMonths, scheduleLine, type AmountMode, type Freq, type ScheduleDetail, type ScheduleKind } from "./retail/schedules";
 import { hoursSince, MAX_PAYEES, type NameCheck, type PayeeKind, type PayeeRegion } from "./retail/payees";
@@ -34,6 +35,8 @@ export { BILLERS, CARRIERS } from "./retail/retail";
 export * from "./retail/data";
 export { DEFAULT_CONFIG, CORE_JOURNEYS, journeyEnabled, HOME_MARKETS, type BankConfig, type HomeMarket } from "./config";
 export { PERSONAL_PERMISSIONS, permissionsOf, ROLE_LABEL, STEP_UP_SECONDS, type ContextInfo, type IdentityDef } from "./identity";
+export { ACCESS, AccessDirectory, KNOWN_DEVICE, NEW_DEVICE, FIXED_CODE, EXPIRED_CODE, PASSWORD_RULES_BWX, bwxPasswordProblems, pinProblem, type AccessUser, type AccessDevice, type DeviceInfo } from "./access";
+export { sha256, secretHash } from "./hash";
 
 export type Account = { id: string; name: string; maskedNumber: string; iban: string; balance: number; currency: string; status: "active" | "frozen"; canDebit: boolean;
   /** What can be spent now: the balance less what is on hold. Absent: the whole balance. `balance` is the ledger balance. */
@@ -340,6 +343,16 @@ personas.alexbiz = {
   identity: { id: "alex", name: "Alex Morgan", password: "Bwx!Demo2026", cast: true, business: [{ id: "alpha", company: ALPHA, userId: "alex" }, { id: "beta", company: BETA_CAST, userId: "alex" }] },
 };
 
+// The customers behind the sign-in cast (access.ts): people who can sign in with a username and password. They have no accounts of their own
+// (what a screen shows after signing in is the new-customer start), so they are not offered at the sign-in picker; scenarios and the demo use them.
+for (const [id, name, phone] of [["demolocked", "Jamie Locke (locked profile)", "+1 415 555 0177"], ["demoexpired", "Omar Nassar (password expired)", "+1 415 555 0150"], ["demoinactive", "Yasmin Khoury (not active)", "+1 415 555 0163"], ["demonew", "Noor Hayes (temporary password)", "+1 415 555 0121"]] as const) {
+  personas[id] = { ...structuredClone(personas.sam!), id, testCast: true, name, phone, behaviour: { otpCode: "482100", kyc: "verified" } };
+}
+
+/** Nobody is signed in yet: the one a bank starts as before `bank.auth.completeSignIn` (never offered, never in `personas`). */
+export const SIGNED_OUT = "signed-out";
+const GUEST: Persona = { id: SIGNED_OUT, brand: "bankworkx", testCast: true, name: "Not signed in", phone: "", accounts: [], beneficiaries: [], limits: { daily: 0, usedToday: 0 }, behaviour: { otpCode: "482100", kyc: "verified" } };
+
 /**
  * The sandbox customers for one bank app: the ones made for that project when there are any, otherwise the ones
  * for its look (a project that only chose a look shares that look's customers).
@@ -383,13 +396,23 @@ export type SandboxConditions = {
   limitUsed?: number;
   /** Dates (YYYY-MM-DD) the bank is closed on top of Saturdays and Sundays: no scheduled payment is made, or can start, on them. */
   closedDays?: string[];
+  /** The device a sign-in comes from: one the customer trusts (known), a new one, or a trusted one that looks unusual (it asks for a code when the bank's option riskStepUp is on). */
+  device?: "known" | "new" | "unusual";
+  /** A session with no call for this many seconds ends: the next call answers SESSION_EXPIRED (the shell's timeout is 300). Off unless set. */
+  idleTimeoutSeconds?: number;
 };
 /** How long a journey waits for the bank before it treats the call as timed out. */
 export const ANSWER_LIMIT_MS = 10_000;
 
 
+/** What answers before anyone is signed in: signing in, recovering, the rules of a password, the codes for them, the bank's setup. */
+const SIGNED_OUT_ADAPTERS = /^(bank\.(auth|recover)\.|bank\.device\.options$|bank\.password\.policy$|bank\.otp\.(send|verify)$|bank\.app\.config$|sandbox\.access\.inspect$)/;
+const ACCESS_ADAPTERS = /^(bank\.(auth|recover)\.|bank\.device\.options$|bank\.password\.policy$|sandbox\.access\.inspect$)/;
+/** What a signed-in customer manages about their own access: devices, quick sign-in and PIN, the password, the login history. */
+const SECURITY_ADAPTERS = /^bank\.(devices\.|device\.setDefault$|password\.(check|change)$|loginHistory\.)/;
+
 export class MockBank {
-  private p: Persona;
+  private p!: Persona;
   private otp: OtpState = { attempts: 0, verified: false };
   /** The clock quotes expire by; tests replace it. */
   now: () => number = () => Date.now();
@@ -397,20 +420,39 @@ export class MockBank {
   conditions: SandboxConditions;
   /** The bank's own configuration: home market, journeys switched off, their options. */
   config: BankConfig;
-  private retail: RetailSandbox;
-  private business: BusinessSandbox;
+  private retail!: RetailSandbox;
+  private business!: BusinessSandbox;
   private providers = new Map<string, CorporateProvider>();
   /** The session, as a server would hold it: which context is active, whether a step-up is still valid, and whether it has ended. */
-  private session = { active: "personal", stepUpUntil: undefined as number | undefined, ended: false, audit: 0 };
+  private session = { active: "personal", stepUpUntil: undefined as number | undefined, ended: false, audit: 0, lastActivity: undefined as number | undefined };
+  /** Nobody is signed in: only the sign-in and recovery adapters answer, until `bank.auth.completeSignIn` loads the customer who signed in. */
+  private signedOut: boolean;
+  private opts: { corpProvider?: ProviderId; corpFlaws?: Flaws };
+  /** Usernames, passwords (as hashes), devices and history: what the bank remembers about who can sign in. Shared by the banks of one app, so a trusted device or a new password outlasts a sign-out. */
+  readonly access: AccessSandbox;
 
-  /** `corpProvider` picks which corporate bank API stands behind the corp.* adapters; journeys do not change. */
-  constructor(personaId = "ayesha", options: { corpProvider?: ProviderId; /** rules switched off, for mutation checks only */ corpFlaws?: Flaws; /** things that go wrong on purpose, for scenarios */ conditions?: SandboxConditions; /** how the bank is set up */ config?: Partial<BankConfig> } = {}) {
+  /**
+   * `personaId` is the customer the bank serves; SIGNED_OUT ("signed-out") starts with nobody signed in, for a sign-in journey (the customer is loaded when it completes).
+   * `corpProvider` picks which corporate bank API stands behind the corp.* adapters; journeys do not change.
+   */
+  constructor(personaId = "ayesha", options: { corpProvider?: ProviderId; /** rules switched off, for mutation checks only */ corpFlaws?: Flaws; /** things that go wrong on purpose, for scenarios */ conditions?: SandboxConditions; /** how the bank is set up */ config?: Partial<BankConfig>; /** the credentials the bank remembers, shared between banks; a new one is made when left out */ directory?: AccessDirectory; /** the device the app is on (for trusted devices and the code on a new one) */ device?: DeviceInfo } = {}) {
     assertSandboxAllowed(); // a production build must not run customers on the sandbox (policy.ts)
-    const base = personas[personaId];
-    if (!base) throw new Error(`Unknown persona ${personaId}`);
-    this.p = structuredClone(base);
+    this.opts = { corpProvider: options.corpProvider, corpFlaws: options.corpFlaws };
     this.conditions = structuredClone(options.conditions ?? {});
     this.config = { ...structuredClone(DEFAULT_CONFIG), ...structuredClone(options.config ?? {}) };
+    this.signedOut = personaId === SIGNED_OUT;
+    this.access = new AccessSandbox(options.directory ?? new AccessDirectory(), { now: () => this.now(), flaws: () => this.opts.corpFlaws ?? {}, config: () => this.config, deviceKind: () => this.conditions.device, appDevice: () => options.device, signedIn: () => !this.signedOut });
+    this.load(personaId);
+  }
+  /** Sets the bank up for one customer: their accounts, their companies and a fresh session. Also what signing in does for the customer who signed in. */
+  private load(personaId: string) {
+    const options = this.opts, base = personaId === SIGNED_OUT ? GUEST : personas[personaId];
+    if (!base) throw new Error(`Unknown persona ${personaId}`);
+    this.p = structuredClone(base);
+    this.providers.clear();
+    this.session = { active: "personal", stepUpUntil: undefined, ended: false, audit: 0, lastActivity: undefined };
+    this.otp.attempts = 0; this.otp.verified = false;
+    this.access.user = personaId === SIGNED_OUT ? undefined : this.access.dir.byPersona(personaId)?.username;
     const c = this.conditions;
     if (c.transferFails) this.p.behaviour.transferFails = true;
     if (c.limitUsed !== undefined) this.p.limits.usedToday = c.limitUsed;
@@ -424,6 +466,8 @@ export class MockBank {
       provider: () => this.activeProvider(), actor: () => this.actor(), flaws: () => options.corpFlaws ?? {},
     });
   }
+  /** Whether a customer is signed in (a bank made for a customer is; one made as SIGNED_OUT is, once its sign-in has completed). */
+  get signedIn() { return !this.signedOut; }
   get persona() { return this.p; }
 
   private activeProvider(): CorporateProvider | undefined {
@@ -463,14 +507,34 @@ export class MockBank {
     }
     if (isListAdapter(adapter) && hit(c.empty, adapter)) return {};
     if (this.session.ended) throw new BankError("SESSION_EXPIRED", "You were signed out for your security. Sign in again to continue.");
+    // a session with no call for the idle time ends (the shell's timeout is 300 seconds; the sandbox applies it when a scenario asks for it)
+    const now = this.now(), idle = c.idleTimeoutSeconds;
+    if (!this.signedOut && idle && this.session.lastActivity !== undefined && now - this.session.lastActivity > idle * 1000) {
+      this.session.ended = true; this.access.noteInactivity();
+      throw new BankError("SESSION_EXPIRED", "You were signed out for your security. Sign in again to continue.");
+    }
+    this.session.lastActivity = now;
+    // before sign-in only the sign-in and recovery adapters answer
+    if (this.signedOut && !SIGNED_OUT_ADAPTERS.test(adapter)) throw new BankError("NOT_SIGNED_IN", "Sign in to continue.");
+    if (adapter === "bank.session.keepAlive") return { expiresAt: new Date(now + (idle ?? ACCESS.idleSeconds) * 1000).toISOString() };
+    if (ACCESS_ADAPTERS.test(adapter)) {
+      const out = this.access.call(adapter, input);
+      if (adapter === "bank.auth.signOut" && !this.signedOut) this.session.ended = true;
+      // a finished sign-in: the bank now serves the customer who signed in (the same object, so a journey holding it keeps working)
+      const next = this.access.takePersona();
+      if (next) { this.signedOut = false; if (this.p.id !== next) this.load(next); }
+      return out;
+    }
     if (adapter.startsWith("bank.session.")) return this.sessionCall(adapter, input);
     switch (adapter) {
       case "bank.app.config": return { homeMarket: this.config.homeMarket, disabled: [...this.config.disabled], options: structuredClone(this.config.options) };
       case "bank.otp.send":
+        if (this.access.ownsCodes) return this.access.codeCall(adapter, input);
         this.otp.attempts = 0;
         this.otp.verified = false;
         return { sent: true, maskedPhone: maskPhone(this.p.phone), channel: input.channel ?? "sms" };
       case "bank.otp.verify": {
+        if (this.access.ownsCodes) return this.access.codeCall(adapter, input);
         this.otp.attempts += 1;
         if (String(input.code) !== this.p.behaviour.otpCode && String(input.code) !== "000000") throw new BankError("OTP_INVALID", "Incorrect code", this.otp.attempts);
         this.otp.verified = true;
@@ -486,6 +550,7 @@ export class MockBank {
       if (business && !inCompany) throw new BankError("WRONG_CONTEXT", "This belongs to your business banking. Switch to your business to continue.");
       if (!business && inCompany) throw new BankError("WRONG_CONTEXT", "This belongs to your personal banking. Switch to Personal to continue.");
     }
+    if (SECURITY_ADAPTERS.test(adapter)) return this.access.security(adapter, input, { codeVerified: () => this.otp.verified, clearCode: () => { this.otp.verified = false; } });
     if (business) {
       const out = this.business.call(adapter, input);
       if (out === undefined) throw new BankError("UNKNOWN_ADAPTER", `No sandbox handler for ${adapter}`);
@@ -501,7 +566,7 @@ export class MockBank {
     const stepUpValid = () => this.session.stepUpUntil !== undefined && now <= this.session.stepUpUntil;
     switch (adapter) {
       case "bank.session.get":
-        return { identity: { id: id.id, name: id.name }, activeContextId: this.session.active, contexts: this.contexts(), ...(stepUpValid() ? { stepUpUntil: new Date(this.session.stepUpUntil!).toISOString() } : {}), expiresAt: new Date(now + 30 * 60_000).toISOString() };
+        return { identity: { id: id.id, name: id.name }, activeContextId: this.session.active, contexts: this.contexts(), ...(stepUpValid() ? { stepUpUntil: new Date(this.session.stepUpUntil!).toISOString() } : {}), expiresAt: new Date(now + (this.conditions.idleTimeoutSeconds ? this.conditions.idleTimeoutSeconds * 1000 : 30 * 60_000)).toISOString() };
       case "bank.session.switch": {
         const ctx = this.contexts().find((x) => x.id === input.contextId);
         if (!ctx) throw new BankError("PERMISSION_DENIED", "You don't have access to that.");
@@ -518,7 +583,7 @@ export class MockBank {
         if (method !== "password" && method !== "biometric") throw new BankError("STEP_UP_FAILED", "That didn't work. Try again.");
         // the proof comes with every call (the password, or the device's biometric check) and nothing is remembered between calls: a password
         // given once cannot be reused later by a call that leaves it out
-        if (method === "password" && (typeof input.secret !== "string" || input.secret !== id.password)) throw new BankError("STEP_UP_FAILED", "That password isn't right.");
+        if (method === "password" && !this.access.passwordIs(input.secret, id.password)) throw new BankError("STEP_UP_FAILED", "That password isn't right.");
         if (!this.otp.verified) throw new BankError("OTP_REQUIRED", "OTP not verified");
         this.otp.verified = false;
         this.session.stepUpUntil = now + STEP_UP_SECONDS * 1000;
