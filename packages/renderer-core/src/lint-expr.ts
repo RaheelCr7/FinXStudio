@@ -42,6 +42,8 @@ export function lintExpressions(j: Journey): LintIssue[] {
   const checkPath = (path: string, expr: string, where: string, screen: string, extraRoots: string[]) => {
     const [root, second] = path.split(".");
     if (!root || root === "item" || extraRoots.includes(root)) return; // "item" is the row of a menu that is built from a list
+    // session.permissions is read-only data the app provides, not the journey's own (other session.* paths are the journey's, checked below)
+    if (root === "session" && second === "permissions") return;
     if (!roots.has(root)) {
       issues.push({ code: "unknown_reference", screen, message: `${where}: "${expr}" uses "${root}", which is not data, ctx or a saved result.${didYouMean(root, roots)}` });
     } else if (root === "ctx") {

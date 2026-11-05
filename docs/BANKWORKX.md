@@ -136,11 +136,19 @@ These are available to every journey, in Studio's block picker and in the AI too
 | `statusChip` | A status word with an icon and a tone (Paid, Waiting for approval, Rejected); known words get theirs, a journey can write its own words per value |
 | `timeline` | What happened and what is still to come, top to bottom; fixed steps or one per row of a saved list; a step is done, current, upcoming (dashed) or failed |
 | `chart` | A line (one series at a time, a switch for several) or a ring over a saved list, readable by pointer, keys or as a table (“Show as table”); money in the journey's currency |
+| `fileUpload` | Choose a csv, xml, pdf or image file (by button or drop; the phone's file picker on the app). csv and xml are read so a bank call can check the rows; pdf and pictures are kept as a name and a size. Wrong kind, empty or too big is refused in words |
+| `documentViewer` | A text (terms, an agreement) that must be read to the end; the screen does not validate until it was. A text that fits without scrolling counts as read |
+| `signature` | Typed (a plain labelled field, the keyboard way) or drawn; `expectedName` makes a typed name match the profile. Pair with `otp` for the code |
+| `idCapture` | A simulated capture of an ID document (front, back) and a selfie: no camera, nothing kept; a counted reference (`SIM-FRONT-1`) is what is saved. Every step is required |
+| `share` action | A receipt of the screen: the page prints it on the web, the share sheet opens on a phone (`rows` and `title` shape it; without them it takes the screen's review rows and the result) |
+| `session.permissions` | Read-only list of what the signed-in person may do where they bank from, for `visibleWhen`: `has(session.permissions, 'biz.payments.initiate')`. It hides; the bank still refuses |
 | `dateInput` `min` / `max` as `{{path}}` | A date range is two date fields, the second with `min: "{{form.from}}"`: the end cannot be before the start |
 
 Charts, the gradient card, the donut, icons and pills are shared widgets in `packages/renderer-native/src/widgets.tsx` (and `renderer-web/src/widgets`). The `chart` block draws with the same `LineChart` and `Donut`.
 
 **How the data blocks work.** The runner (`renderer-core/src/runner.ts`) turns the saved list into display rows once (`blocks/table.ts`: money with the currency's own digits, `12 Nov 2026` dates, status chips); sorting, searching, filtering and paging are pure functions of the table's own state (`tableView`), which the renderer keeps, so they are never part of a journey's answers. Only the ticked row ids are saved, at the block's `bind`. A table shows as cards when its column is narrower than 520 px (web: measured on the block, so a phone frame inside a wide page works; phone app: the screen or block width). The shared presentational parts are `DataTable`, `StatusChip` and `Timeline` in `@finx/components`; a status word's tone and icon come from `renderer-core/src/blocks/status.ts`.
+
+**Files, documents and signatures.** Logic is in `renderer-core/src/blocks/` (`file.ts`, `document.ts`, `signature.ts`, `id-capture.ts`, `receipt.ts`); the shared parts are `FileField`, `DocumentViewer`, `SignaturePad` and `IdCapture` in `@finx/components`. Only `fileUpload` needs native code: the phone app uses `expo-document-picker`, a new dependency of `apps/bank-app`, so **a native rebuild is needed** (`pnpm ios:sim` / `pnpm android:apk`) before the picker works on a device; the web app and the other blocks do not need it. The player (`JourneyPlayer`) takes `session={{ permissions }}` and an optional `onShare`; the apps do not pass `session` yet (it comes with the shell, step 5), so until then `session.permissions` is empty in the apps and `finx_simulate_journey` / scenarios take it from the sandbox customer's current place.
 
 **There is no `datePicker` block.** `dateInput` already covers one date with a calendar; ranges are two fields as above.
 

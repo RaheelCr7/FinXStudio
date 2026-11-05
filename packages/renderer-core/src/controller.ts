@@ -1,5 +1,5 @@
 import type { Journey } from "@finx/journey-schema";
-import { JourneyRunner, type Adapter, type ChainRequest, type RunEvent, type View } from "./runner";
+import { JourneyRunner, type Adapter, type ChainRequest, type RunEvent, type RunnerOptions, type View } from "./runner";
 
 /** A run event with where and when it happened. `session` groups the events of one play-through. */
 export type JourneyEvent = RunEvent & { session: string; slug: string; version: number; lang: string; at: string };
@@ -15,6 +15,10 @@ export type JourneyControllerOptions = {
   launch?: Record<string, any>;
   /** The journey asked to open another one (navigate.toJourney). Without it the person sees a message and stays on the screen. */
   onOpenJourney?: (req: ChainRequest) => void;
+  /** What the person may do where they bank from (`session.permissions` in a journey's rules). Read-only for the journey. */
+  session?: RunnerOptions["session"];
+  /** A receipt was shared (the share action). The player normally handles this itself: print on the web, the share sheet on a phone. */
+  onShare?: RunnerOptions["onShare"];
 };
 
 /** What a renderer needs to draw the current screen of a journey. */
@@ -47,7 +51,7 @@ export class JourneyController {
   constructor(journey: Journey, private opts: JourneyControllerOptions) {
     const session = `${Date.now().toString(36)}${Math.random().toString(36).slice(2, 8)}`;
     this.runner = new JourneyRunner(journey, {
-      adapter: opts.adapter, lang: opts.lang, launch: opts.launch, openJourney: opts.onOpenJourney,
+      adapter: opts.adapter, lang: opts.lang, launch: opts.launch, openJourney: opts.onOpenJourney, session: opts.session, onShare: opts.onShare,
       onEvent: opts.onEvent ? (e) => opts.onEvent!({ ...e, session, slug: journey.slug, version: journey.version, lang: this.runner.lang, at: new Date().toISOString() }) : undefined,
     });
   }

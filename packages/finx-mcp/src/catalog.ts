@@ -162,6 +162,30 @@ export const BLOCKS: BlockDoc[] = [
     example: { type: "chart", kind: "line", source: "ctx.cashflow", label: { en: "13-week cash flow" }, x: "weekStart", xFormat: "date", series: [{ key: "inflow", label: { en: "Money in" } }, { key: "outflow", label: { en: "Money out" } }, { key: "closing", label: { en: "Closing balance" } }], currency: "USD", table: true },
   },
   {
+    type: "fileUpload", purpose: "Choose a file: csv, xml, pdf or an image.",
+    fields: { bind: "path that receives { name, size, kind, content? }", label: "Loc", accept: "[csv | xml | pdf | image], at least one", maxKb: "replaces the limit (256 KB for csv and xml, 10 MB for pdf and images)?", helper: "Loc?" },
+    notes: ["csv and xml are read: content holds the text, to send to a bank call that checks the rows (pass {{upload.content}}). Pdf and images are kept as a name and a size only. A wrong kind, an empty file or one over the limit is refused with a message. Mark the bind required: true in dataModel."],
+    example: { type: "fileUpload", bind: "bulk.file", label: { en: "Payment file" }, accept: ["csv", "xml"] },
+  },
+  {
+    type: "documentViewer", purpose: "A text the person must read to the end (terms, an agreement).",
+    fields: { bind: "boolean path, true once the end was reached", title: "Loc", text: "Loc: paragraphs separated by a blank line, a line starting with ## is a heading", height: "120-600?" },
+    notes: ["A button that validates is refused until the document was read to the end. Put a consent block under it for the tick."],
+    example: { type: "documentViewer", bind: "terms.read", title: { en: "Terms of use" }, text: { en: "## 1. Using the account\nKeep your details up to date.\n\n## 2. Payments\nA released payment cannot be undone." } },
+  },
+  {
+    type: "signature", purpose: "A signature, typed or drawn.",
+    fields: { bind: "path that receives { mode: type, name } or { mode: draw, path, points }", label: "Loc", modes: "[type, draw] (both by default; typing is the one a keyboard can use)?", expectedName: "{{template}}: a typed name must match it (case and spaces ignored)?", helper: "Loc?" },
+    notes: ["A drawn signature needs about a dozen points. Add an otp block after it when the signature must be confirmed with a code. Mark the bind required: true."],
+    example: { type: "signature", bind: "agreement.signature", label: { en: "Sign here" }, expectedName: "{{ctx.profile.name}}" },
+  },
+  {
+    type: "idCapture", purpose: "A simulated capture of an identity document and a selfie (no camera, nothing kept).",
+    fields: { bind: "path that receives { front: { ref }, selfie: { ref } }", label: "Loc", steps: "[front, back, selfie] (front and selfie by default)?" },
+    notes: ["Every step must be captured before the screen validates. A retake gives a new reference (SIM-FRONT-2). The reference, not a picture, is what a bank call receives."],
+    example: { type: "idCapture", bind: "kyc.id", label: { en: "Verify your identity" }, steps: ["front", "back", "selfie"] },
+  },
+  {
     type: "result", purpose: "The outcome on a terminal screen.", fields: { tone: "success | error", title: "Loc", text: "Loc", meta: "Loc, e.g. \"Ref {{result.reference}}\"" },
     notes: ["An error result for a money-moving journey must say that no money has left the account."],
     example: { type: "result", tone: "success", title: { en: "Bill paid", ur: "بل ادا ہو گیا" }, text: { en: "PKR {{ctx.bill.amount | money}} to {{ctx.bill.billerName}}", ur: "PKR {{ctx.bill.amount | money}} بنام {{ctx.bill.billerName}}" }, meta: { en: "Ref {{result.reference}}", ur: "حوالہ {{result.reference}}" } },
@@ -184,7 +208,7 @@ export const ACTIONS = [
     example: { type: "callApi", integration: "billLookup", input: { billerId: "{{bill.billerId}}", reference: "{{bill.reference}}" }, saveAs: "ctx.bill", onError: { showToast: { en: "We couldn't find that bill.", ur: "یہ بل نہیں ملا۔" }, stay: true } },
   },
   { type: "showToast", does: "Shows a short message at the top of the screen.", example: { type: "showToast", text: { en: "Saved", ur: "محفوظ ہو گیا" } } },
-  { type: "share", does: "Reserved for sharing a receipt. Does nothing yet.", example: { type: "share", template: "receipt-transfer" } },
+  { type: "share", does: "Shares a receipt of the screen: the page prints it on the web (the print dialog also saves a PDF), the share sheet opens on a phone. template names the kind (receipt). The receipt has title (default: the result's title or the screen's) and rows [{ label, value }] (templates allowed); without rows it takes the screen's reviewSummary rows and the result's text and reference line. Put it on a terminal screen's button.", example: { type: "share", template: "receipt", title: { en: "Transfer receipt" }, rows: [{ label: { en: "Amount" }, value: "{{transfer.amount | money2:USD}}" }] } },
   { type: "exit", does: "Closes the journey and returns to the app home. Use it on the last button of a terminal screen.", example: { type: "exit" } },
 ];
 
@@ -192,7 +216,8 @@ const EXPRESSIONS = {
   where: "navigation.rules[].when, a block's visibleWhen, amountInput validation min and max, accountPicker filter, and inside {{ }} in any text.",
   operators: ["+", "-", "*", "/", "%", "==", "!=", "<", ">", "<=", ">=", "&&", "||", "!", "a ? b : c", "parentheses"],
   literals: ["numbers", "'text' or \"text\"", "true", "false", "null", "Infinity"],
-  functions: ["min(a, b, ...)", "max(a, b, ...)", "abs(x)", "round(x)", "floor(x)", "ceil(x)", "len(x)", "isEmpty(x)"],
+  functions: ["min(a, b, ...)", "max(a, b, ...)", "abs(x)", "round(x)", "floor(x)", "ceil(x)", "len(x)", "isEmpty(x)", "has(list, value) / has(map, key)", "get(map, key)"],
+  session: "session.permissions is the list of what the signed-in person may do where they bank from (for example biz.payments.initiate), read-only, provided by the app. Use it to hide what they cannot use: visibleWhen \"has(session.permissions, 'biz.payments.initiate')\". It only hides things; the bank still refuses what is not allowed. Empty when the app gives none.",
   paths: "Dotted paths such as transfer.amount or ctx.limits.daily, and lookups with brackets such as ctx.accounts[transfer.fromAccountId].balance. A missing value is simply empty, never an error. == is a loose comparison.",
   templates: "{{ expression }} or {{ expression | formatter }}. Formatters: money (amounts with thousands separators, up to two decimals), money2 (always two decimals; money2:USD adds the symbol), upper. A missing value renders as empty text. Do not use templates in bind, source, pattern or ids.",
   notAvailable: ["no assignment", "no ??", "no method calls (only the functions above)", "no string concatenation in rules (use templates in text instead)"],

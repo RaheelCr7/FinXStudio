@@ -10,3 +10,8 @@ export * from "./table";
 export * from "./timeline";
 export * from "./chart";
 export * from "./table-block";
+export * from "./file";
+export * from "./document";
+export * from "./signature";
+export * from "./id-capture";
+export * from "./receipt";
