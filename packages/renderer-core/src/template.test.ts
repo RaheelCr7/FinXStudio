@@ -31,7 +31,7 @@ describe("wholeExpression", () => {
     for (const v of ["a {{ b }}", "{{ b }} a", "{{ }}", "{{}}", "{{ a } b }}", 5, undefined, "{{ a }"]) expect(wholeExpression(v as any), String(v)).toBeNull();
   });
   it("is not slow on braces and spaces", () => {
-    const nasty = "{{" + " ".repeat(200_000) + "{{{{";
+    const nasty = "{{".repeat(100_000) + " ".repeat(100_000);
     const t = Date.now();
     wholeExpression(nasty); interpolate(nasty, {});
     expect(Date.now() - t).toBeLessThan(500);

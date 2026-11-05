@@ -20,13 +20,13 @@ export const FORMATTERS: Record<string, (v: any, arg?: string) => string> = {
 export function wholeExpression(v: unknown): string | null {
   if (typeof v !== "string" || !v.startsWith("{{") || !v.endsWith("}}") || v.length < 5) return null;
   const inner = v.slice(2, -2);
-  if (inner.includes("}")) return null;
+  if (inner.includes("}") || inner.includes("{")) return null;
   return inner.trim() || null;
 }
 
 /** Interpolates {{ expr | formatter }} using the safe evaluator. Missing values render as empty string. */
 export function interpolate(text: string, scope: any): string {
-  return text.replace(/\{\{([^}]*)\}\}/g, (match, raw: string) => {
+  return text.replace(/\{\{([^{}]*)\}\}/g, (match, raw: string) => {
     const inner = raw.trim();
     if (!inner) return match;
     const [exprPart, fmtPart] = inner.split("|").map((s) => s.trim());
