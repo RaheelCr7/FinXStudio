@@ -14,6 +14,7 @@ import { amountChoices, dayKey, marketOf, normaliseNumber, numberCase, OPERATORS
 import { ADDRESS_RULE_USD, businessDays, money, PAYMENT_QUOTE_SECONDS, PURPOSES, RELATIONSHIPS, REPEATS, SANCTIONS_NAME, SENDER_PAYS_ALL, speedsFor, speedText, railsFor, type Offer, type SendType, type SpeedClass } from "./payments";
 import { credit, debit, spendable } from "./money";
 import { retailRecords } from "./records";
+import { AccountsApi } from "./accounts";
 
 const hour = 3600 * 1000;
 
@@ -65,12 +66,15 @@ export class RetailSandbox {
   private fx: FxConfig;
   private flaws: Flaws;
   readonly cab: CabSandbox;
+  /** Accounts, statements, budgets and the speeds on offer (accounts.ts). */
+  private accounts: AccountsApi;
   constructor(private p: Persona, private host: RetailHost) {
     this.schedules = p.schedules ?? [];
     this.savedBillers = p.savedBillers ?? [];
     this.savedNumbers = p.savedNumbers ?? [];
     this.fx = p.brand === "bankworkx" ? BANKWORKX_FX : DEFAULT_FX;
     this.flaws = host.flaws;
+    this.accounts = new AccountsApi(p, { now: () => host.now(), otp: host.otp, conditions: () => host.conditions(), flaws: host.flaws, config: host.config });
     this.cab = new CabSandbox(p, { otpVerified: () => host.otp.verified, clearOtp: () => { host.otp.verified = false; }, now: () => host.now() });
   }
   private get otp(): OtpState { return this.host.otp; }
@@ -731,6 +735,8 @@ export class RetailSandbox {
       const out = this.cab.call(adapter, input);
       if (out !== undefined) return out;
     }
+    // the accounts of a customer, their statements, budgets and the speeds on offer
+    if (this.accounts.handles(adapter)) return this.accounts.call(adapter, input);
     // a BankWorkx customer pays bills from the bank's own directory (bills.ts); the Meezan customers keep the older billers below
     if (this.p.brand === "bankworkx" && /^bank\.bill(er)?s\./.test(adapter)) return this.bankworkxBills(adapter, input);
     // a BankWorkx customer tops up from the bank's own operators (topup.ts); the Meezan customers keep the carriers and the 50 to 5,000 rule below
@@ -999,8 +1005,6 @@ export class RetailSandbox {
         return Object.fromEntries(BANKS.map((b) => [b.id, { id: b.id, name: b.name, color: b.color }]));
       case "bank.cards.list":
         return Object.fromEntries((this.p.finance?.cards ?? []).map((c) => [c.id, { ...c, name: `${c.nickname} ••${c.last4}` }]));
-      case "bank.budgets.list":
-        return Object.fromEntries((this.p.finance?.budgets ?? []).map((b) => [b.id, b]));
       case "bank.subscriptions.list":
         return Object.fromEntries((this.p.finance?.subscriptions ?? []).map((x) => [x.id, x]));
       case "bank.deposit.create": {
@@ -1041,17 +1045,6 @@ export class RetailSandbox {
         const linked = { id: `l_${bank.id}`, bank: bank.name, kind, maskedNumber: `••${String(1000 + (String(input.username).length * 977) % 9000).slice(-4)}`, balance: kind === "Credit" ? 1240.5 : 4210.25 } as const;
         fin.linked.push(linked);
         return { connectedId: linked.id, bank: bank.name, kind, maskedNumber: linked.maskedNumber, balance: linked.balance };
-      }
-      case "bank.budgets.create": {
-        const fin = this.p.finance; if (!fin) throw new BankError("NOT_SUPPORTED", "Not available for this customer");
-        const limit = Number(input.limit);
-        if (!(limit >= 10 && limit <= 100000)) throw new BankError("INVALID_AMOUNT", "A budget must be between $10 and $100,000");
-        const name = String(input.category ?? "").trim();
-        if (!name) throw new BankError("CATEGORY_REQUIRED", "Choose a category");
-        if (fin.budgets.some((b) => b.name.toLowerCase() === name.toLowerCase())) throw new BankError("BUDGET_EXISTS", `You already have a ${name} budget`);
-        const b = { id: `b_${name.toLowerCase().replace(/[^a-z]+/g, "_")}`, name, category: "shopping" as const, limit, spent: 0 };
-        fin.budgets.push(b);
-        return { budgetId: b.id, name, limit };
       }
       case "bank.subscriptions.pay": {
         const fin = this.p.finance; if (!fin) throw new BankError("NOT_SUPPORTED", "Not available for this customer");

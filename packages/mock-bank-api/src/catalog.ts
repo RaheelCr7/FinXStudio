@@ -271,13 +271,17 @@ export const ADAPTER_CATALOG: AdapterInfo[] = [
     returns: "{ connectedId, bank, kind, maskedNumber, balance }", errors: ["BANK_NOT_FOUND", "BANK_AUTH_FAILED", "ALREADY_CONNECTED"],
   },
   {
-    adapter: "bank.budgets.list", suggestedId: "budgets", description: "The customer's monthly budgets (BankWorkx).",
-    input: {}, returns: "Map by budget id: { id, name, category, limit, spent }. Save as ctx.budgets.",
+    adapter: "bank.budgets.list", suggestedId: "budgets", description: "Monthly budgets, with how far each is used (BankWorkx).",
+    input: {}, returns: "Map by id: { id, name, category, limit, spent, pct, barPct (max 100), tone ok|warn|over, chip 'On track' (under 80%) | 'Close to limit' (80%) | 'Over budget' (100%), spentText, limitText, line, leftText, alert80, alert100, canAdd (fewer than 8) }.",
   },
   {
-    adapter: "bank.budgets.create", suggestedId: "createBudget", description: "Creates a monthly budget for a category (BankWorkx).",
-    input: { category: "category name", limit: "number, 10 to 100000" }, returns: "{ budgetId, name, limit }", errors: ["INVALID_AMOUNT", "CATEGORY_REQUIRED", "BUDGET_EXISTS"],
+    adapter: "bank.budgets.create", suggestedId: "createBudget", description: "Creates a budget for a category; no code, no money moves (BankWorkx).",
+    input: { category: "Food & Drinks | Shopping | Transport | Health | Travel | Bills | Entertainment | Subscriptions", limit: "10.00 to 100000.00", alert80: "default true", alert100: "default true" },
+    returns: "{ budgetId, name, limit }; spent starts at the last 30 days.", errors: ["INVALID_AMOUNT", "CATEGORY_REQUIRED", "BUDGET_EXISTS"],
   },
+  { adapter: "bank.budgets.update", suggestedId: "updateBudget", description: "Changes a budget's amount and alerts.", input: { budgetId: "id", limit: "10.00 to 100000.00", alert80: "boolean", alert100: "boolean" }, returns: "{ budgetId, name, limit }", errors: ["BUDGET_NOT_FOUND", "INVALID_AMOUNT"] },
+  { adapter: "bank.budgets.delete", suggestedId: "deleteBudget", description: "Removes a budget.", input: { budgetId: "id" }, returns: "{ budgetId, name }", errors: ["BUDGET_NOT_FOUND"] },
+  { adapter: "bank.spending.byCategory", suggestedId: "spending", description: "Spending of the last 30 days per budget category.", input: { category: "optional: one category" }, returns: "{ id, category, amount, text, hasBudget, budgetId, days } for the category, or a map of them for all 8." },
   {
     adapter: "bank.subscriptions.list", suggestedId: "subscriptions", description: "Recurring payments the customer has (BankWorkx).",
     input: {}, returns: "Map by subscription id: { id, name, amount, nextInDays, color }. Save as ctx.subscriptions.",
@@ -356,8 +360,55 @@ export const ADAPTER_CATALOG: AdapterInfo[] = [
   { adapter: "corp.signatories.list", suggestedId: "signatories", description: "Signatory groups: who approves, in order (sequential) or any order (parallel), above which amount.", input: {}, returns: "Map by id: { id, name, mode, members, required, above }.", errors: ["PERMISSION_DENIED"] },
   { adapter: "corp.audit.list", suggestedId: "audit", description: "The audit trail, newest first, including what this session did and was refused.", input: {}, returns: "Map by position: { id, at, userId, action, outcome 'Done'|'Refused' }.", errors: ["PERMISSION_DENIED"] },
   // ---- A retail customer's records (BankWorkx) ----
-  { adapter: "bank.accounts.get", suggestedId: "account", description: "One account: ledger balance (balance), available balance (available), nickname.", input: { accountId: "id" }, returns: "The account.", errors: ["ACCOUNT_NOT_FOUND"] },
-  { adapter: "bank.accounts.rename", suggestedId: "renameAccount", description: "Sets an account nickname (1 to 30 characters).", input: { accountId: "id", nickname: "text" }, returns: "{ accountId, nickname }", errors: ["ACCOUNT_NOT_FOUND", "INVALID_NICKNAME"] },
+  {
+    adapter: "bank.accounts.overview", suggestedId: "overview", description: "All accounts in groups, with the total",
+    input: { showFx: "false leaves accounts in other currencies out of the list and the total" },
+    returns: "{ count, visible, total { currency, amount, text } | null, groups { everyday, savings, other, hidden: [ { id, name, line '••4410 · USD', balanceText (available), chip Frozen|Dormant|Closing|'', hidden } ] } }. The total adds ledger balances of visible accounts at the sandbox rate.",
+  },
+  {
+    adapter: "bank.accounts.get", suggestedId: "account", description: "One account: both balances, holds, product, numbers",
+    input: { accountId: "id" },
+    returns: "The account plus: name, ledgerText, availableText, heldText, onHold, holds [ { id, title, text, date } ], productName, openedOn, interestRate, paperless, rows [ { label, value } ] (routing and account number; sort code; or IBAN and BIC), chip, hiddenChip, warning dormant|closing|'', closureReference, destinations (where a balance can go on closing, by id).",
+    errors: ["ACCOUNT_NOT_FOUND"],
+  },
+  { adapter: "bank.accounts.rename", suggestedId: "renameAccount", description: "Names an account, or puts the original name back.", input: { accountId: "id", nickname: "2 to 24 letters, digits, spaces and & _ . ' -; not another account's name (any case)", reset: "true: use the original name" }, returns: "{ accountId, nickname }", errors: ["ACCOUNT_NOT_FOUND", "INVALID_NICKNAME", "NAME_CHARS", "NAME_TAKEN"] },
+  {
+    adapter: "bank.accounts.transactions", suggestedId: "accountActivity", description: "One account's transactions, pending first, filtered",
+    input: { accountId: "id", q: "title, category, reference or amount", direction: "all | in | out", limit: "default 10, to 100" },
+    returns: "{ items [ { id, title, category, amountText, line, when, status, date, reference, party From|To, counterparty, incoming, pending, reportable, reported (case) } ], total, shown, more, empty, filtered }.", errors: ["ACCOUNT_NOT_FOUND"],
+  },
+  { adapter: "bank.accounts.setHidden", suggestedId: "setHidden", description: "Hides an account from the overview and total, or shows it", input: { accountId: "id", hidden: "boolean" }, returns: "{ accountId, hidden }", errors: ["ACCOUNT_NOT_FOUND", "LAST_VISIBLE_ACCOUNT"] },
+  {
+    adapter: "bank.accounts.reportProblem", suggestedId: "reportProblem", description: "Reports a problem with a payment, once per payment",
+    input: { accountId: "id", transactionId: "id", reason: "card payment: 'I do not recognise it' | 'I was charged twice' | 'The amount is wrong' | 'Something else'; other payment: 'I sent it to the wrong person' | 'I did not make this transfer' | 'Something else'", note: "10 characters or more for 'Something else'" },
+    returns: "{ caseRef DSP-..., transactionId, title, amountText }. A pending payment takes only 'I do not recognise it', 'I did not make this transfer' and 'Something else'.", errors: ["TRANSACTION_NOT_FOUND", "NOT_REPORTABLE", "REASON_INVALID", "PENDING_NOT_DISPUTABLE", "NOTE_TOO_SHORT", "DUPLICATE_REPORT"],
+  },
+  {
+    adapter: "bank.accounts.requestClosure", suggestedId: "requestClosure", description: "Asks to close an account, after the code",
+    input: { accountId: "id", reason: "'I do not need it' | 'I am moving to another bank' | 'Fees are too high' | 'Something else'", note: "10 characters or more for 'Something else'", destination: "with a balance above zero: another account of the same currency (from bank.accounts.get destinations) or 'post'" },
+    returns: "{ accountId, reference CLS-..., destination, name, maskedNumber }", requiresOtp: true, errors: ["OTP_REQUIRED", "ACCOUNT_HAS_HOLDS", "ACCOUNT_OVERDRAWN", "CLOSURE_PENDING", "REASON_REQUIRED", "NOTE_TOO_SHORT", "DESTINATION_INVALID"],
+  },
+  { adapter: "bank.accounts.restore", suggestedId: "restoreAccount", description: "Cancels a closure, or reactivates a dormant account", input: { accountId: "id" }, returns: "{ accountId, status, was closing|dormant }", errors: ["NOT_RESTORABLE"] },
+  {
+    adapter: "bank.accounts.open", suggestedId: "openAccount", description: "Opens an empty account after the code; at most 6",
+    input: { product: "current | savings | currency", currency: "currency account: EUR | GBP | AED", name: "2 to 24 characters, not used by another account (any case)", dryRun: "true: apply every rule and open nothing (no code needed)" },
+    returns: "{ accountId, name, productName, currency, maskedNumber, last4, openedOn, status }", requiresOtp: true, errors: ["OTP_REQUIRED", "PRODUCT_UNAVAILABLE", "CURRENCY_REQUIRED", "ACCOUNT_LIMIT", "INVALID_NICKNAME", "NAME_CHARS", "NAME_TAKEN"],
+  },
+  {
+    adapter: "bank.statements.prepare", suggestedId: "prepareStatement", description: "Checks a statement or letter and shows what it will be. Changes nothing.",
+    input: { accountId: "id", kind: "statement | official | letter | certificate", period: "this | last | 3m | custom (statement and official only)", from: "custom: YYYY-MM-DD", to: "custom: YYYY-MM-DD", format: "pdf (csv, and ofx or qif with allowOfxQif true, for a statement only)", delivery: "download | email", fee: "false when the bank charges none" },
+    returns: "{ kind, kindLabel, kindLower, periodText, from, to, file, sizeKb, count, openingText, closingText, balanceText, fee, feeText, needsCode, emailMasked, paperFeeText, paperless }. Official statement and certificate cost 5.00 USD (converted); a letter and certificate have no period.",
+    errors: ["RANGE_INVALID", "BEFORE_OPENING", "PERIOD_TOO_LONG (24 months, 12 official)", "NO_TRANSACTIONS", "FEE_INSUFFICIENT_FUNDS", "ACCOUNT_DORMANT (letter)", "FORMAT_UNAVAILABLE", "KIND_UNAVAILABLE"],
+  },
+  { adapter: "bank.statements.deliver", suggestedId: "deliverStatement", description: "Delivers a plain statement, free and without a code.", input: { "...": "as bank.statements.prepare", paperless: "boolean" }, returns: "The prepared statement plus reference STM-...", errors: ["OTP_REQUIRED (not a plain statement)", "the errors of prepare"] },
+  {
+    adapter: "bank.statements.issue", suggestedId: "issueStatement", description: "Issues an official document after the code and takes the fee.",
+    input: { "...": "as bank.statements.prepare" }, returns: "The prepared document plus reference STM-..., newBalanceText, availableText", moneyMoving: true, requiresOtp: true, errors: ["OTP_REQUIRED", "NOT_OFFICIAL (a plain statement)", "the errors of prepare"],
+  },
+  {
+    adapter: "bank.payments.speeds", suggestedId: "speeds", description: "Speeds to another bank and country: arrival, fee, limit",
+    input: { standard: "false if off (also sameDay, instant)", priority: "true if on" }, returns: "{ domestic, international [ { id, speed, arrives, fee ('Free' or amount), limit ('None' from 1,000,000) } ], domesticLine, internationalLine } for the bank's home market. Names no scheme or country.",
+  },
   {
     adapter: "bank.transactions.list", suggestedId: "transactions", description: "Account transactions, newest first. A pending item lowers the available balance, not yet the ledger balance.",
     input: { accountId: "optional", from: "YYYY-MM-DD", to: "YYYY-MM-DD", direction: "'in'|'out'", category: "text", status: "'posted'|'pending'", q: "text in the title", minAmount: "number", maxAmount: "number", limit: "1-100 (default 100)" },
@@ -514,12 +565,15 @@ export function describePersonas() {
     // customers that start with the same accounts say so, to keep the catalog short
     const twin = accounts.length > 2 ? seen.find((x) => x.accounts.join("|") === accounts.join("|")) : undefined;
     seen.push({ id: p.id, accounts });
+    // the account-states customer is Alex with two more accounts: said in a line
+    if (p.id === "alexaccounts") return { ...describe(p), accounts: ["As alex, plus acc_old: Old savings ••6602, USD 12 (dormant); acc_spare: Spare ••6603, USD -5 (overdrawn)"] };
     return { ...describe(p), accounts: twin ? [`Same accounts as ${twin.id}`] : accounts };
   });
 }
 const SIGN_IN_CAST = ["demolocked", "demoexpired", "demoinactive", "demonew", "demolimit"];
 function describe(p: (typeof personas)[string]) {
   if (SIGN_IN_CAST.includes(p.id)) return { id: p.id, brand: p.brand, name: p.name, otpCode: p.behaviour.otpCode, note: "Sign-in cast (see bank.auth.signIn)." };
+  if (p.id === "alexaccounts") return { id: p.id, brand: p.brand, name: p.name, otpCode: p.behaviour.otpCode, note: "As alex; 6 accounts for the limit, budgets in all 8 categories at the edges of the chips (79.99%, 80%, 99.99%, 100%, 320%)." };
   // the approvals cast is Alex again with more waiting at Beta: said in a line
   if (p.identity?.cast) return { id: p.id, brand: p.brand, name: p.name, otpCode: p.behaviour.otpCode, note: "As alex; Beta also holds PAY-2043 to PAY-2048 (name checks, an order, two approvals) and PAY-2036 rejected." };
   return {

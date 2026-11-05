@@ -24,6 +24,8 @@ export function personalNeeds(adapter: string, input: Record<string, any> = {}):
   if (/^bank\.(transfers\.(create|own)|payments\.create|fx\.convert|bills\.pay|topup\.create)$/.test(adapter)) need.push("payments.create");
   else if (/^bank\.schedules\.(create|update|cancel)$/.test(adapter)) need.push("payments.schedule");
   else if (/^bank\.payees\.(save|update|delete)$/.test(adapter)) need.push("beneficiaries.manage");
+  else if (/^bank\.(accounts\.(open|rename|setHidden|requestClosure|restore)|budgets\.(create|update|delete))$/.test(adapter)) need.push("accounts.manage");
+  else if (/^bank\.statements\.(deliver|issue)$/.test(adapter)) need.push("accounts.statement");
   if (adapter === "bank.payments.create" && input.when === "later") need.push("payments.schedule");
   if (adapter === "bank.bills.pay" && input.autopay === true) need.push("payments.schedule");
   if ((adapter === "bank.payments.create" || adapter === "bank.bills.pay" || adapter === "bank.topup.create") && input.save === true) need.push("beneficiaries.manage");

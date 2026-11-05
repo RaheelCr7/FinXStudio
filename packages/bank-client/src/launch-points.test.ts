@@ -33,6 +33,26 @@ describe("the launch-points registry", () => {
   });
 });
 
+describe("the Accounts journeys", () => {
+  it("a budget row edits or deletes through create-budget, and the old name of the statement still opens it", () => {
+    const at = (journey: string, label: string) => LAUNCH_POINTS.find((l) => l.journey === journey && l.label === label && l.workspace === "personal")!;
+    expect(at("create-budget", "Edit")).toMatchObject({ place: "accounts.budget", needs: "accounts.manage", passes: ["budgetId"] });
+    expect(launchValues(at("create-budget", "Delete"), { budgetId: "b_food" })).toEqual({ budgetId: "b_food", mode: "delete" });
+    expect(launchFromValues("create-budget", { budgetId: "b_food", mode: "delete", category: "Health", other: "x" })).toEqual({ "launch.budgetId": "b_food", "launch.mode": "delete", "launch.category": "Health" });
+    expect(launchFromValues("account-details", { accountId: "acc_main", mode: "delete" })).toEqual({ "launch.accountId": "acc_main" });
+    expect(entryFor("statement", slugs("account-statement"))).toBe("account-statement");
+    expect(launchFromValues("open-another-account", { offerId: "o1", product: "savings" })).toEqual({ "launch.offerId": "o1", "launch.product": "savings" });
+  });
+  it("the views and the ways to send open from a link and the command bar, with the permission of the context", async () => {
+    const personal = await ctx("personal");
+    for (const j of ["accounts", "budgets", "account-details", "transfer-types", "single-transfer", "account-nickname", "statement", "open-another-account"]) expect(journeyAllowed(j, { context: personal, entries: ALL }), j).toBe(true);
+    const none = { ...personal, permissions: [] };
+    for (const j of ["accounts", "budgets", "transfer-types"]) expect(journeyAllowed(j, { context: none, entries: ALL }), j).toBe(false);
+    expect(launchPointsFor({ context: personal, entries: ALL }).filter((l) => l.passes.length === 0 && ["accounts", "budgets", "transfer-types", "single-transfer"].includes(l.journey)).map((l) => l.label))
+      .toEqual(["Accounts overview", "Budgets", "Ways to send money", "Quick transfer"]);
+  });
+});
+
 describe("which buttons a person sees", () => {
   it("shows Personal buttons only in Personal and Business buttons only in a company", async () => {
     const personal = launchPointsFor({ context: await ctx("personal"), entries: ALL });

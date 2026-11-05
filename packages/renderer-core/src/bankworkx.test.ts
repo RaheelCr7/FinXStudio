@@ -139,26 +139,34 @@ describe("Connect an account", () => {
 });
 
 describe("Create a budget", () => {
+  // the journey was rebuilt (docs/BANKWORKX.md, Accounts): the category is chosen first (or passed in), then the amount, then the alerts, and a category that has a budget cannot be chosen
+  const open = async (bank: MockBank, launch: Record<string, unknown> = {}) => { const r = new JourneyRunner(createBudget, { adapter: (id, input) => bank.call(id, input), launch }); await r.start(); return r; };
   it("creates a budget and refuses a duplicate category", async () => {
-    const { r, bank } = mk(createBudget); await r.start();
-    r.set("budget.category", "Travel"); r.set("budget.limit", 500); r.set("budget.alert", true);
+    const { bank } = mk(createBudget);
+    const r = await open(bank, { "launch.category": "Travel" });
+    expect(r.current).toBe("amt");
+    r.set("budget.limit", 500);
     await press(r, "Continue");
-    expect(r.view().blocks.find((b) => b.type === "reviewSummary")!.rows[1]).toEqual({ label: "Monthly limit", value: "$500" });
+    expect(r.current).toBe("alerts");
     await press(r, "Create budget");
     expect(r.current).toBe("success");
     expect(bank.persona.finance!.budgets.some((b) => b.name === "Travel" && b.limit === 500)).toBe(true);
 
-    const second = new JourneyRunner(createBudget, { adapter: (id, input) => bank.call(id, input) }); await second.start();
-    second.set("budget.category", "Travel"); second.set("budget.limit", 100);
-    await press(second, "Continue"); await press(second, "Create budget");
-    expect(second.current).toBe("failed");
+    // a second budget for Travel: the category is marked and cannot be chosen, and the bank refuses it
+    const second = await open(bank, { "launch.category": "Travel" });
+    expect(second.current).toBe("cat");
+    expect(second.view().blocks.find((b) => b.type === "menu")!.items.find((i: any) => i.label === "Travel").text).toBe("Budget set");
+    await expect(bank.call("bank.budgets.create", { category: "Travel", limit: 100 })).rejects.toMatchObject({ code: "BUDGET_EXISTS" });
   });
-  it("needs a category and a limit of at least $10", async () => {
-    const { r } = mk(createBudget); await r.start();
+  it("needs a limit of at least $10", async () => {
+    const { bank } = mk(createBudget);
+    const r = await open(bank, { "launch.category": "Health" });
     r.set("budget.limit", 5);
     await press(r, "Continue");
-    expect(r.errors["budget.category"]).toBeTruthy();
-    expect(r.errors["budget.limit"]).toBe("A budget must be at least $10");
+    expect(r.current).toBe("amt");
+    expect(r.errors["budget.limit"]).toBe("The smallest budget is $10.00.");
+    const none = await open(bank);
+    expect(none.current).toBe("cat");
   });
 });
 

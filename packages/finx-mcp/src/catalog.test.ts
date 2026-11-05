@@ -71,7 +71,9 @@ describe("catalog stays in sync with the real schema and lint", () => {
   // Agents read the whole catalog (section "all") first, so it is kept small: the adapters are an index there, and their inputs, results and
   // errors are fetched by family. When a size below fails, the message lists every section's size (also: pnpm --filter @finx/mcp catalog-size).
   // Trim the section that grew (shorter wording, no repeats) before raising a number, and raise it by what the new entries need, not more.
-  const SECTION_CEILINGS: Record<string, number> = { overview: 900, journey: 2_600, blocks: 22_500, actions: 3_000, expressions: 1_900, data: 900, localization: 1_100, adapters: 12_700, personas: 5_800, lint: 4_300, patterns: 1_700 };
+  // adapters 12,700 -> 12,800: the 14 adapters of the Accounts journeys (overview, transactions, hide, report, closure, open, three statement calls, budgets update and delete,
+  // spending, speeds), each cut to one short line before raising (12,796 now). The whole stays at 54,530 of 56,000.
+  const SECTION_CEILINGS: Record<string, number> = { overview: 900, journey: 2_600, blocks: 22_500, actions: 3_000, expressions: 1_900, data: 900, localization: 1_100, adapters: 12_800, personas: 5_800, lint: 4_300, patterns: 1_700 };
   it("each section stays within its ceiling, and the whole stays within the size the tool returns", () => {
     const sizes = catalogSizes();
     const report = JSON.stringify(sizes);
