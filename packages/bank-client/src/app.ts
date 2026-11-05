@@ -236,7 +236,8 @@ export class BankApp {
   /** Asks the bank who is signed in, where they bank from and what the bank has switched on. A customer with one place gets `unavailable`. */
   async loadSession() {
     const epoch = this.epoch, prev = this.state.session;
-    this.set({ session: { ...prev, status: "loading", error: undefined } });
+    // a refresh behind a screen that is already showing does not blank it
+    this.set({ session: { ...prev, status: prev.status === "ready" ? "ready" : "loading", error: undefined } });
     try {
       const [info, settings] = await Promise.all([this.call("bank.session.get"), this.call("bank.app.config")]);
       if (epoch !== this.epoch) return;
@@ -302,7 +303,7 @@ export class BankApp {
       await this.call("bank.session.stepUp", { method: input.method ?? "password", ...(input.secret !== undefined ? { secret: input.secret } : {}) });
     } catch (e: any) {
       // the right password is answered "code needed": that is the way forward
-      if (e?.code === "OTP_REQUIRED") { this.set({ stepUp: { ...su, phase: "code", busy: false, phone: this.persona.phone.replace(/\d(?=\d{4})/g, "•") } }); return; }
+      if (e?.code === "OTP_REQUIRED") { this.set({ stepUp: { ...su, phase: "code", busy: false, phone: this.persona.phone.replace(/\d(?=(?:\D*\d){4})/g, "•") } }); return; }
       this.set({ stepUp: { ...su, busy: false, error: e?.message ?? "That didn't work. Try again." } });
     }
   }

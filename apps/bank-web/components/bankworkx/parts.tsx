@@ -9,7 +9,8 @@ export function Modal({ open, onClose, title, children }: { open: boolean; onClo
   const ref = useRef<HTMLDialogElement>(null);
   useEffect(() => {
     const d = ref.current; if (!d) return;
-    if (open && !d.open) d.showModal();
+    // the browser focuses the first control (the close button): a dialog with a field puts the cursor in it instead
+    if (open && !d.open) { d.showModal(); d.querySelector<HTMLElement>("input:not([type=radio]), textarea, select")?.focus(); }
     if (!open && d.open) d.close();
   }, [open]);
   return (

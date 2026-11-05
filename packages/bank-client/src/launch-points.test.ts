@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { MockBank } from "@finx/mock-bank-api";
-import { LAUNCH_POINTS, entryFor, journeyOn, launchPointsFor, launchValues, tabOfPlace } from "./launch-points";
+import { LAUNCH_POINTS, entryFor, journeyAllowed, journeyOn, launchPointsFor, launchValues, tabOfPlace } from "./launch-points";
 import { tabsOf } from "./view-models/menus";
 import type { ContextInfo } from "./session";
 
@@ -92,5 +92,44 @@ describe("the values a button passes", () => {
     const freeze = LAUNCH_POINTS.find((l) => l.journey === "freeze-card")!;
     expect(launchValues(freeze, { cardId: "card_debit", action: "block" })).toEqual({ cardId: "card_debit", action: "freeze" });
     expect(launchValues(freeze, { cardId: "" })).toEqual({ action: "freeze" });
+  });
+});
+
+describe("icons", () => {
+  it("only names icons both apps can draw", async () => {
+    const { ICON_SHAPES } = await import("@finx/ui-kit");
+    const { menuFor } = await import("./view-models/menus");
+    for (const l of LAUNCH_POINTS) if (l.icon) expect(Object.keys(ICON_SHAPES), l.id).toContain(l.icon);
+    for (const id of ["personal", "alpha"]) for (const m of menuFor(await ctx(id))) expect(Object.keys(ICON_SHAPES), m.id).toContain(m.icon);
+  });
+});
+
+describe("opening a journey from a link", () => {
+  it("allows a journey some button of the place runs and the context may use, and nothing else", async () => {
+    const personal = await ctx("personal"), alpha = await ctx("alpha"), beta = await ctx("beta");
+    const at = (c: ContextInfo, j: string, settings?: { disabled: string[]; options: Record<string, Record<string, unknown>> }) => journeyAllowed(j, { context: c, entries: ALL, settings });
+    expect(at(personal, "freeze-card")).toBe(true);
+    expect(at(personal, "supplier-payment")).toBe(false); // a business journey in Personal
+    expect(at(alpha, "supplier-payment")).toBe(true);
+    expect(at(alpha, "approve-payments")).toBe(false); // Maker
+    expect(at(beta, "approve-payments")).toBe(true);
+    expect(at(beta, "approve-payments-acme")).toBe(true); // a bank's copy
+    expect(at(personal, "mobile-topup", { disabled: ["mobile-topup"], options: {} })).toBe(false);
+    expect(at(personal, "made-up-journey")).toBe(false);
+    expect(at(personal, "pay-a-bill")).toBe(true); // older name
+  });
+});
+
+describe("row and section buttons", () => {
+  it("tells a button of one row from a button of the section", async () => {
+    const { isRowLevel, isSectionLevel } = await import("./launch-points");
+    const by = (journey: string, label: string) => LAUNCH_POINTS.find((l) => l.journey === journey && l.label === label)!;
+    expect(isRowLevel(by("freeze-card", "Freeze"))).toBe(true);
+    expect(isRowLevel(by("term-deposit", "Open a deposit"))).toBe(false); // its only value is fixed
+    expect(isSectionLevel(by("term-deposit", "Open a deposit"))).toBe(true);
+    expect(isSectionLevel(by("schedule-payment", "New"))).toBe(true);
+    expect(isRowLevel(by("schedule-payment", "Change"))).toBe(true);
+    const several = by("approve-payments", "Approve several");
+    expect([isRowLevel(several), isSectionLevel(several)]).toEqual([false, false]);
   });
 });

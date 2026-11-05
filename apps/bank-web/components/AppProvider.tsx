@@ -10,16 +10,18 @@ type Ctx = { app: BankApp; project: ProjectInfo; /** False until a signed-in ses
 const C = createContext<Ctx | null>(null);
 
 const KEY = "finx.session";
-type Saved = { project: string; personaId: string; lang: string; signedIn: boolean };
+type Saved = { project: string; personaId: string; lang: string; signedIn: boolean; scheme?: "system" | "light" | "dark" };
 const readSaved = (project: string): Saved | null => { try { const v = JSON.parse(sessionStorage.getItem(KEY) ?? "null"); return v?.project === project ? v : null; } catch { return null; } };
 const write = (v: Saved) => { try { sessionStorage.setItem(KEY, JSON.stringify(v)); } catch { /* private mode: the session just will not survive a reload */ } };
+
+const reducedMotion = () => typeof matchMedia === "function" && matchMedia("(prefers-reduced-motion: reduce)").matches;
 
 /**
  * One BankApp (shared with the Expo app) per bank, held in the browser. The sandbox bank lives in memory, so a reload starts it fresh:
  * only who is signed in and the language are remembered for the tab.
  */
 function AppProviderInner({ project, children }: { project: ProjectInfo; children: React.ReactNode }) {
-  const [app] = useState(() => new BankApp({ preset: project.preset, projectId: project.id, bankApi: project.bankApi, live: createLive({ brand: project.id, trustedKeys: parseTrustedKeys(process.env.NEXT_PUBLIC_FINX_TRUSTED_KEYS) }), studioUrl: "/api/studio" }));
+  const [app] = useState(() => new BankApp({ preset: project.preset, projectId: project.id, bankApi: project.bankApi, live: createLive({ brand: project.id, trustedKeys: parseTrustedKeys(process.env.NEXT_PUBLIC_FINX_TRUSTED_KEYS) }), studioUrl: "/api/studio", switchMs: reducedMotion() ? 250 : 900 }));
   const [ready, setReady] = useState(false);
 
   useEffect(() => {
@@ -27,6 +29,7 @@ function AppProviderInner({ project, children }: { project: ProjectInfo; childre
     if (saved) {
       app.selectPersona(saved.personaId);
       app.setLang(saved.lang);
+      if (saved.scheme) app.setPrefs({ scheme: saved.scheme });
       if (saved.signedIn) app.login();
     }
     setReady(true);
@@ -37,9 +40,11 @@ function AppProviderInner({ project, children }: { project: ProjectInfo; childre
     if (!ready) return;
     const save = () => {
       const s = app.getState();
-      write({ project: project.id, personaId: s.personaId, lang: s.lang, signedIn: s.screen !== "login" });
+      write({ project: project.id, personaId: s.personaId, lang: s.lang, signedIn: s.screen !== "login", scheme: s.prefs.scheme });
       document.documentElement.lang = s.lang;
       document.documentElement.dir = isRtl(s.lang) ? "rtl" : "ltr";
+      // light or dark is the customer's choice and survives switching places; "system" leaves it to the device
+      if (s.prefs.scheme === "system") delete document.documentElement.dataset.mode; else document.documentElement.dataset.mode = s.prefs.scheme;
     };
     save();
     return app.subscribe(save);

@@ -39,7 +39,7 @@ export async function loadPersonal(call: Call, tab: ShellTab): Promise<Screen> {
       const first = accs[0];
       const tx = first ? list<any>(await call("bank.transactions.list", { accountId: first.id })) : [];
       return { tab, sections: [
-        { id: "accounts", title: "Accounts", empty: "No accounts yet", place: "accounts", rows: accs.map((a) => ({ id: a.id, title: a.name, subtitle: `${a.maskedNumber} · ${a.currency}`, value: money(a.balance, a.currency), tag: a.kind === "savings" ? "Savings" : undefined, place: "accounts.detail", passes: { accountId: a.id } })) },
+        { id: "accounts", title: "Accounts", empty: "No accounts yet", rows: accs.map((a) => ({ id: a.id, title: a.name, subtitle: `${a.maskedNumber} · ${a.currency}`, value: money(a.balance, a.currency), tag: a.kind === "savings" ? "Savings" : undefined, place: "accounts.detail", passes: { accountId: a.id } })) },
         { id: "transactions", title: first ? `${first.name} activity` : "Activity", empty: "No transactions yet", rows: tx.map((t) => ({ id: t.id, title: t.title, subtitle: `${t.date} · ${t.category}`, value: money(t.amount, t.currency), tone: t.amount > 0 ? "positive" as const : "neutral" as const, tag: t.status === "pending" ? "Pending" : undefined, place: "accounts.transaction", passes: { transactionId: t.id } })) },
         { id: "budgets", title: "Budgets", empty: "No budgets yet", place: "accounts.budgets", rows: list<RawBudget>(budgets).map((b) => ({ id: b.id, title: b.name, subtitle: `${money(b.spent, first?.currency ?? "USD")} of ${money(b.limit, first?.currency ?? "USD")}`, progress: b.limit > 0 ? Math.min(100, Math.round((b.spent / b.limit) * 100)) : 0, tone: b.spent > b.limit ? "negative" as const : "neutral" as const })) },
       ] };
@@ -47,13 +47,14 @@ export async function loadPersonal(call: Call, tab: ShellTab): Promise<Screen> {
     case "payments": {
       const [bens, scheds] = await Promise.all([call("bank.beneficiaries.list"), call("bank.schedules.list")]);
       return { tab, sections: [
-        { id: "beneficiaries", title: "Beneficiaries", empty: "No beneficiaries yet", place: "payments.beneficiaries", rows: list<any>(bens).map((b) => ({ id: b.id, title: b.displayName, subtitle: `${b.bank} ${b.maskedNumber}`, place: "payments.beneficiary", passes: { beneficiaryId: b.id } })) },
+        { id: "beneficiaries", title: "Beneficiaries", empty: "No beneficiaries yet", place: "payments.beneficiaries", rows: list<any>(bens).map((b) => ({ id: b.id, title: b.displayName, subtitle: `${b.maskedNumber} · ${b.country}`, // the bank's own wording for the account (scheme names) stays off the screen
+ place: "payments.beneficiary", passes: { beneficiaryId: b.id } })) },
         { id: "scheduled", title: "Scheduled", empty: "Nothing scheduled", place: "payments.scheduled", rows: list<RawSchedule>(scheds).map((s) => ({ id: s.id, title: s.name ?? "Payment", subtitle: s.nextRunOn ?? s.text, value: s.amount !== undefined ? money(s.amount, s.currency ?? "USD") : undefined, place: "payments.scheduled", passes: { scheduleId: s.id } })) },
       ] };
     }
     case "cards": {
       const cards = list<any>(await call("bank.cards.issued"));
-      return { tab, sections: [{ id: "cards", title: "Cards", empty: "No cards yet", place: "cards", rows: cards.map((c) => ({ id: c.id, title: c.nickname ?? c.kind, subtitle: `${c.network} •• ${c.last4} · ${c.expiry}`, tag: c.status === "active" ? undefined : String(c.status).replace(/^./, (x: string) => x.toUpperCase()), tone: c.status === "active" ? "neutral" as const : "warning" as const, place: "cards.card", passes: { cardId: c.id } })) }] };
+      return { tab, sections: [{ id: "cards", title: "Cards", empty: "No cards yet", rows: cards.map((c) => ({ id: c.id, title: c.nickname ?? c.kind, subtitle: `${c.network} •• ${c.last4} · ${c.expiry}`, tag: c.status === "active" ? undefined : String(c.status).replace(/^./, (x: string) => x.toUpperCase()), tone: c.status === "active" ? "neutral" as const : "warning" as const, place: "cards.card", passes: { cardId: c.id } })) }] };
     }
     case "save": {
       const [deps, goals, loans] = await Promise.all([call("bank.deposits.list"), call("bank.goals.list"), call("bank.loans.list")]);
@@ -91,7 +92,7 @@ export async function loadBusiness(call: Call, ctx: ContextInfo, tab: ShellTab):
       const queue = await pending();
       const o = businessOverview({ currency: company.currency, accounts: list<RawCorpAccount>(company.accounts), cutoff: company.cutoff, queue, me: company.me });
       return { tab, approvals: approvalBadge(queue), hero: { label: "Total balance", value: o.total, lines: o.others }, sections: [
-        { id: "accounts", title: "Accounts", empty: "No accounts", place: "overview", rows: o.balances.map((a) => ({ id: a.id, title: a.name, subtitle: `${a.masked} · ${a.currency}`, value: a.balance, place: "accounts.detail", passes: { accountId: a.id } })) },
+        { id: "accounts", title: "Accounts", empty: "No accounts", rows: o.balances.map((a) => ({ id: a.id, title: a.name, subtitle: `${a.masked} · ${a.currency}`, value: a.balance, place: "accounts.detail", passes: { accountId: a.id } })) },
         { id: "approvals", title: "Waiting for approval", empty: "Nothing waiting", rows: queueRows(queue, "overview.approvals") },
         { id: "limits", title: "Today", empty: "", rows: [{ id: "cutoff", title: "Payment cut-off", value: `${o.cutoff} UTC` }, ...(o.limit ? [{ id: "limit", title: "Your daily limit", subtitle: `${o.limit.used} of ${o.limit.daily}`, progress: o.limit.pct }] : [])] },
       ] };
@@ -103,7 +104,7 @@ export async function loadBusiness(call: Call, ctx: ContextInfo, tab: ShellTab):
       const [pend, suppliers, templates] = await Promise.all([call("corp.payments.pending"), call("corp.suppliers.list"), call("corp.templates.list")]);
       return { tab, sections: [
         { id: "tracker", title: "In progress", empty: "No payments in progress", rows: payments(pend).map((p) => ({ id: p.id, title: p.payee ?? "Payment", subtitle: `${p.id} · value date ${p.valueDate ?? ""}`, value: money(p.amount, p.currency), tag: `${p.approvals.length} of ${p.required} approved`, place: "payments.payment", passes: { paymentId: p.id } })) },
-        { id: "templates", title: "Templates", empty: "No templates yet", place: "payments.templates", rows: list<any>(templates).map((t) => ({ id: t.id, title: t.name, subtitle: t.reference, value: t.amount !== undefined ? money(t.amount, "USD") : undefined, place: "payments.templates", passes: { templateId: t.id } })) },
+        { id: "templates", title: "Templates", empty: "No templates yet", place: "payments.templates", rows: list<any>(templates).map((t) => ({ id: t.id, title: t.name, subtitle: t.reference, value: t.amount !== undefined ? money(t.amount, company.currency) : undefined, place: "payments.templates", passes: { templateId: t.id } })) },
         { id: "suppliers", title: "Suppliers", empty: "No suppliers yet", place: "payments.suppliers", rows: list<any>(suppliers).map((s) => ({ id: s.id, title: s.name, subtitle: `${s.bank} · ${s.currency}`, place: "payments.suppliers", passes: { supplierId: s.id } })) },
       ] };
     }

@@ -19,6 +19,8 @@ export type LaunchPoint = {
   fixed?: Record<string, unknown>;
   /** The permission the context must hold. */
   needs?: string;
+  /** Acts on a selection of rows, not on one: no row shows it (the inbox offers it once rows are selected). */
+  many?: boolean;
   /** Shown in the + quick actions. */
   quick?: boolean;
   icon?: string;
@@ -32,7 +34,7 @@ const make = (workspace: LaunchPoint["workspace"], defs: Def[]): LaunchPoint[] =
 
 const PERSONAL: Def[] = [
   ["home", "Send money", "personal-transfer", "payments.create", [], { quick: true, icon: "send" }],
-  ["home", "Pay a bill", "pay-bill", "payments.create", [], { quick: true, icon: "receipt" }],
+  ["home", "Pay a bill", "pay-bill", "payments.create", [], { quick: true, icon: "repeat" }],
   ["home", "Top up", "mobile-topup", "payments.create", [], { quick: true, icon: "phone" }],
   ["home", "Add money", "add-money", "payments.create", [], { quick: true, icon: "dollar" }],
   ["home.upcoming", "Edit", "schedule-payment", "payments.schedule", ["scheduleId"]],
@@ -58,7 +60,8 @@ const PERSONAL: Def[] = [
   ["payments.beneficiary", "Delete", "manage-beneficiary", "beneficiaries.manage", ["beneficiaryId"], { fixed: { mode: "delete" } }],
   ["payments.beneficiary", "Send money", "personal-transfer", "payments.create", ["beneficiaryId"]],
   ["payments.beneficiary", "Schedule", "schedule-payment", "payments.schedule", ["beneficiaryId"]],
-  ["payments.scheduled", "New", "schedule-payment", "payments.schedule", ["scheduleId"]],
+  ["payments.scheduled", "New", "schedule-payment", "payments.schedule"],
+  ["payments.scheduled", "Change", "schedule-payment", "payments.schedule", ["scheduleId"]],
   ["payments.scheduled", "Cancel", "cancel-standing-order", "payments.schedule", ["scheduleId"]],
   ["payments.payment", "Repeat payment", "personal-transfer", "payments.create", ["paymentId"]],
   ["cards", "Add a card", "add-card", "cards.manage"],
@@ -72,9 +75,9 @@ const PERSONAL: Def[] = [
   ["save.deposits", "Open a deposit", "term-deposit", "savings.manage", ["mode"], { fixed: { mode: "open" } }],
   ["save.deposit", "Renew", "term-deposit", "savings.manage", ["depositId"], { fixed: { mode: "renew" } }],
   ["save.deposit", "Close", "term-deposit", "savings.manage", ["depositId"], { fixed: { mode: "close" } }],
-  ["save.goals", "New goal", "savings-goal", "savings.manage", ["goalId"]],
+  ["save.goals", "New goal", "savings-goal", "savings.manage"],
   ["save.goal", "Add money", "savings-goal", "savings.manage", ["goalId"]],
-  ["save.loans", "Apply for a loan", "apply-loan", "loans.apply", ["productId"]],
+  ["save.loans", "Apply for a loan", "apply-loan", "loans.apply"],
   ["save.loan", "Repay", "repay-loan", "loans.repay", ["loanId", "mode"], { fixed: { mode: "repay" } }],
   ["save.loan", "Settle early", "repay-loan", "loans.repay", ["loanId", "mode"], { fixed: { mode: "settle" } }],
   ["save.investments", "Buy", "invest", "invest.trade", ["symbol"]],
@@ -95,8 +98,8 @@ const PERSONAL: Def[] = [
 
 const BUSINESS: Def[] = [
   ["overview", "Pay a supplier", "supplier-payment", "biz.payments.initiate", [], { quick: true, icon: "send" }],
-  ["overview", "Upload payments", "bulk-payment", "biz.payments.bulk", [], { quick: true, icon: "upload" }],
-  ["overview", "Run payroll", "payroll-run", "biz.payroll.run", [], { quick: true, icon: "users" }],
+  ["overview", "Upload payments", "bulk-payment", "biz.payments.bulk", [], { quick: true, icon: "plus" }],
+  ["overview", "Run payroll", "payroll-run", "biz.payroll.run", [], { quick: true, icon: "userPlus" }],
   ["overview.approvals", "Approve", "approve-payments", "biz.approvals.approve", ["paymentId"]],
   ["overview.cutoff", "Pay now", "supplier-payment", "biz.payments.initiate"],
   ["accounts.detail", "Statement", "business-statement", "biz.accounts.export", ["accountId"]],
@@ -111,16 +114,16 @@ const BUSINESS: Def[] = [
   ["payments.payment", "Repair rejected lines", "repair-bulk-lines", "biz.payments.bulk", ["paymentId"]],
   ["payments.payment", "Save as template", "payment-template", "biz.templates.manage", ["paymentId"]],
   ["payments.payment", "Repeat", "supplier-payment", "biz.payments.initiate", ["paymentId"]],
-  ["payments.templates", "New template", "payment-template", "biz.templates.manage", ["templateId"]],
+  ["payments.templates", "New template", "payment-template", "biz.templates.manage"],
   ["payments.templates", "Use", "supplier-payment", "biz.payments.initiate", ["templateId"]],
-  ["payments.suppliers", "Add", "add-supplier", "biz.suppliers.manage", ["supplierId"]],
+  ["payments.suppliers", "Add", "add-supplier", "biz.suppliers.manage"],
   ["payments.suppliers", "Edit", "add-supplier", "biz.suppliers.manage", ["supplierId"]],
   ["payments.scheduled", "Stop", "schedule-business-payment", "biz.payments.schedule", ["scheduleId"]],
   ["payments.history", "New run", "payroll-run", "biz.payroll.run", ["period"]],
   ["approvals.inbox", "Approve", "approve-payments", "biz.approvals.approve", ["paymentId"]],
-  ["approvals.inbox", "Approve several", "approve-payments", "biz.approvals.approve", ["paymentIds"]],
-  ["approvals.inbox", "Reject several", "approve-payments", "biz.approvals.approve", ["paymentIds"]],
-  ["admin.users", "Invite", "manage-user", "biz.admin.users", ["userId"]],
+  ["approvals.inbox", "Approve several", "approve-payments", "biz.approvals.approve", ["paymentIds"], { many: true }],
+  ["approvals.inbox", "Reject several", "approve-payments", "biz.approvals.approve", ["paymentIds"], { many: true }],
+  ["admin.users", "Invite", "manage-user", "biz.admin.users"],
   ["admin.users", "Edit", "manage-user", "biz.admin.users", ["userId"]],
   ["admin.users", "Change limit", "change-limits", "biz.admin.limits", ["userId"]],
   ["admin.permissions", "Edit roles", "manage-user", "biz.admin.users", ["userId"]],
@@ -179,12 +182,28 @@ export function launchPointsFor(ctx: LaunchContext, filter: { place?: string; qu
     && entryFor(lp.journey, ctx.entries) !== undefined);
 }
 
+/**
+ * Whether a link may open this journey in this context: some launch point of the workspace runs it, the context holds that
+ * launch point's permission, and the bank has it on. Used for deep links and the command bar, which are not buttons.
+ */
+export function journeyAllowed(journey: string, ctx: LaunchContext): boolean {
+  const workspace = ctx.context?.workspace;
+  if (!workspace) return false;
+  return LAUNCH_POINTS.some((lp) => lp.workspace === workspace && (slugIs(journey, lp.journey) || (JOURNEY_ALIASES[lp.journey] ?? []).some((a) => slugIs(journey, a))) && can(ctx.context, lp.needs))
+    && journeyOn(journey, ctx.settings);
+}
+
 /** The values to start the journey with: the launch point's fixed values, then the ones the place passed in (only the names it declares). */
 export function launchValues(lp: LaunchPoint, passed: Record<string, unknown> = {}): Record<string, unknown> {
   const out: Record<string, unknown> = {};
   for (const k of lp.passes) if (passed[k] !== undefined && passed[k] !== "") out[k] = passed[k];
   return { ...out, ...(lp.fixed ?? {}) };
 }
+
+/** Whether a button belongs to one row (it needs a value the row passes in) rather than to the section or the tab. */
+export const isRowLevel = (lp: LaunchPoint) => !lp.many && lp.passes.some((p) => !(lp.fixed && p in lp.fixed));
+/** Whether a button belongs to the section or the tab itself. */
+export const isSectionLevel = (lp: LaunchPoint) => !lp.many && !isRowLevel(lp);
 
 /** The tab a place belongs to. */
 export const tabOfPlace = (place: string) => place.split(".")[0]!;

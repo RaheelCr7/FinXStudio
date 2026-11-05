@@ -27,9 +27,14 @@ describe("sign in", () => {
     await userEvent.click(screen.getByRole("button", { name: "Log in" }));
     expect(nav.push).toHaveBeenCalledWith("/meezan/home");
   });
-  it("goes to the dashboard for BankWorkx, and back to the page asked for when it is inside the bank", async () => {
+  it("goes to Personal for BankWorkx's customer with companies, the dashboard for the others, and back to the page asked for when it is inside the bank", async () => {
     renderPage(<Login />, BANKWORKX, { signedIn: false });
     await userEvent.click(await screen.findByRole("button", { name: "Log in" }));
+    expect(nav.push).toHaveBeenCalledWith("/bankworkx/personal/home");
+    cleanup(); nav.push.mockClear();
+    renderPage(<Login />, BANKWORKX, { signedIn: false });
+    await userEvent.click((await screen.findAllByRole("radio")).find((r) => (r as HTMLInputElement).value === "sam")!);
+    await userEvent.click(screen.getByRole("button", { name: "Log in" }));
     expect(nav.push).toHaveBeenCalledWith("/bankworkx/dashboard");
     cleanup(); nav.push.mockClear();
     nav.search = new URLSearchParams("next=/bankworkx/invest/LMRB");
@@ -40,7 +45,7 @@ describe("sign in", () => {
     nav.search = new URLSearchParams("next=https://evil.example");
     renderPage(<Login />, BANKWORKX, { signedIn: false });
     await userEvent.click(await screen.findByRole("button", { name: "Log in" }));
-    expect(nav.push).toHaveBeenCalledWith("/bankworkx/dashboard");
+    expect(nav.push).toHaveBeenCalledWith("/bankworkx/personal/home");
   });
   it("sends a signed-out visitor to sign in, and shows nothing until it knows", async () => {
     nav.path = "/bankworkx/wallet";

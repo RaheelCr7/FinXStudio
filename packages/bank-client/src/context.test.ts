@@ -50,7 +50,7 @@ describe("switching places", () => {
     expect(a.getState().workspace).toBe("personal");
     await a.beginStepUp({ secret: PASSWORD });
     expect(a.getState().stepUp).toMatchObject({ phase: "code", busy: false });
-    expect(a.getState().stepUp!.phone).toMatch(/^[+•\d ]+0142$/);
+    expect(a.getState().stepUp!.phone).toBe("+• ••• ••• 0142");
     await a.confirmStepUp("000000");
     expect(a.getState()).toMatchObject({ stepUp: null, workspace: "business", switching: null });
     expect(a.getState().session.info!.activeContextId).toBe("alpha");
@@ -82,6 +82,13 @@ describe("switching places", () => {
     expect(a.context!.label).toBe("Beta Services Ltd");
     expect(await a.switchContext("personal")).toBe("switched");
     expect(a.getState().workspace).toBe("personal");
+  });
+  it("keeps the screen up while the session is refreshed during a switch", async () => {
+    const a = await alex();
+    const seen = new Set<string>();
+    a.subscribe(() => seen.add(a.getState().session.status));
+    await a.switchContext("alpha"); await confirm(a);
+    expect([...seen]).toEqual(["ready"]);
   });
   it("refuses a place the customer does not have", async () => {
     const a = await alex();

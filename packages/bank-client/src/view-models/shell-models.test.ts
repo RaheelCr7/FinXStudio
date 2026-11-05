@@ -118,6 +118,15 @@ describe("the tab screens, from the sandbox", () => {
     const cards = await loadScreen(call, ctx("personal"), "cards");
     expect(cards.sections[0]!.rows[0]).toMatchObject({ place: "cards.card", passes: { cardId: "card_debit" } });
   });
+  it("puts no payment scheme names or codes on any screen (the owner's journey design rules)", async () => {
+    const SCHEMES = /SWIFT|IBAN|\bACH\b|SEPA|sort code|\bABA\b|UETR|CHAPS|SARIE|Faster Payments/i;
+    const personal = await sandbox();
+    for (const tab of tabsOf("personal")) expect(JSON.stringify(await loadScreen(personal.call, personal.ctx("personal"), tab)), tab).not.toMatch(SCHEMES);
+    for (const id of ["alpha", "beta"] as const) {
+      const biz = await sandbox(id);
+      for (const tab of tabsOf("business")) expect(JSON.stringify(await loadScreen(biz.call, biz.ctx(id), tab)), `${id} ${tab}`).not.toMatch(SCHEMES);
+    }
+  });
   it("shows an empty section as empty, not as missing", async () => {
     const { call, ctx, b } = await sandbox();
     b.conditions = { ...b.conditions, empty: ["bank.schedules.list"] } as typeof b.conditions;

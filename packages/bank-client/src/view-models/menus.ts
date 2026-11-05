@@ -13,16 +13,16 @@ const PERSONAL: Def[] = [
   { id: "accounts", label: "Accounts", icon: "wallet", any: ["accounts.view"] },
   { id: "payments", label: "Payments", icon: "send", any: ["payments.create", "payments.schedule", "beneficiaries.manage"] },
   { id: "cards", label: "Cards", icon: "card", any: ["cards.view"] },
-  { id: "save", label: "Save & Borrow", icon: "save", any: ["savings.manage", "loans.apply", "loans.repay", "invest.trade"] },
-  { id: "more", label: "More", icon: "more" },
+  { id: "save", label: "Save & Borrow", icon: "bank", any: ["savings.manage", "loans.apply", "loans.repay", "invest.trade"] },
+  { id: "more", label: "More", icon: "menu" },
 ];
 const BUSINESS: Def[] = [
-  { id: "overview", label: "Overview", icon: "chart", any: ["biz.accounts.view"] },
+  { id: "overview", label: "Overview", icon: "trend", any: ["biz.accounts.view"] },
   { id: "accounts", label: "Accounts", icon: "wallet", any: ["biz.accounts.view"] },
   { id: "payments", label: "Payments", icon: "send", any: ["biz.accounts.view"] },
-  { id: "approvals", label: "Approvals", icon: "inbox", any: ["biz.approvals.view", "biz.approvals.approve"] },
+  { id: "approvals", label: "Approvals", icon: "shield", any: ["biz.approvals.view", "biz.approvals.approve"] },
   { id: "admin", label: "Admin", icon: "user", any: ["biz.admin.users", "biz.admin.limits", "biz.admin.signatories", "biz.audit.view"] },
-  { id: "more", label: "More", icon: "more" },
+  { id: "more", label: "More", icon: "menu" },
 ];
 
 export const FIRST_TAB: Record<WorkspaceId, ShellTab> = { personal: "home", business: "overview" };
