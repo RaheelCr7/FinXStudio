@@ -21,7 +21,8 @@ const wipe = [set("login.password", ""), set("login.newPassword", ""), set("logi
  */
 export const signIn: Journey = {
   id: "jrn_bankworkx_sign_in",
-  slug: "sign-in",
+  // the Cairo Amman Bank journey is called sign-in too, and the catalog has one id per slug: this one keeps the name with the bank appended, and every other journey asks for "sign-in"
+  slug: "sign-in-bankworkx",
   name: "Sign in",
   version: 1,
   status: "published",

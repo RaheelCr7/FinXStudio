@@ -131,7 +131,7 @@ const rec = (at: string, result: LoginResult, method: LoginRecord["method"], d: 
 type Seed = { username: string; personaId: string; firstName: string; lastName: string; email: string; phone: string; dob: string; status: AccessStatus; mustChange?: boolean; changed: string; devices?: AccessDevice[]; history?: LoginRecord[] };
 function userOf(s: Seed): AccessUser {
   const h = hashOf(DEMO_PASSWORD, s.username);
-  return { username: s.username, personaId: s.personaId, firstName: s.firstName, lastName: s.lastName, email: s.email, phone: s.phone, dob: s.dob, status: s.status, ...(s.mustChange ? { mustChange: true } : {}), passwordHash: h, passwordChangedAt: iso(s.changed), usedHashes: [h], failedSignIns: 0, devices: s.devices ?? [], history: s.history ?? [] };
+  return { username: s.username, personaId: s.personaId, firstName: s.firstName, lastName: s.lastName, email: s.email, phone: s.phone, dob: s.dob, status: s.status, ...(s.mustChange ? { mustChange: true } : {}), passwordHash: h, passwordChangedAt: iso(s.changed), usedHashes: [h], failedSignIns: 0, devices: structuredClone(s.devices ?? []), history: structuredClone(s.history ?? []) };
 }
 const alexDevices = () => [
   device("dev_iphone15", "iPhone 15", "phone", "2026-11-03T08:00:00Z"),

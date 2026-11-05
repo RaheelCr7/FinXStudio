@@ -160,7 +160,8 @@ function MeezanApp() {
  * Switching place swaps the brand object ThemeProvider gets; light or dark follows the customer's choice, then the device.
  */
 function BankworkxApp() {
-  const [app] = useState(() => new BankApp({ preset: BRAND_INFO.preset, bankApi: BRAND_INFO.bankApi, live, studioUrl: DEFAULT_STUDIO_URL, switchMs: 900 }));
+  // BankWorkx has a real sign-in (the sign-in journey); the phone is the device the bank sees, so a trusted phone asks for no code next time
+  const [app] = useState(() => new BankApp({ preset: BRAND_INFO.preset, bankApi: BRAND_INFO.bankApi, live, studioUrl: DEFAULT_STUDIO_URL, switchMs: 900, signIn: true, device: { id: "dev_phone", name: "This phone", kind: "phone" } }));
   const s = useBankApp(app);
   const device = useColorScheme();
   useEffect(() => { loadStudioUrl().then((u) => app.setStudioUrl(u)); return () => app.dispose(); }, [app]);

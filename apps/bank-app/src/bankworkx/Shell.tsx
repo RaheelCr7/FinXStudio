@@ -12,6 +12,7 @@ import { Accounts, BudgetDetail, Budgets, Wallet } from "./Tabs";
 import { InstrumentDetail, InvestHome } from "./Invest";
 import { Card, Sheet, TabBar, tab } from "./ui";
 import { WorkspaceShell } from "./workspace/WorkspaceShell";
+import { SignIn } from "./SignIn";
 
 /**
  * Everything that is not drawing (who is signed in, screens, Studio, journeys, payments, notices) lives in the BankApp of @finx/bank-client,
@@ -36,6 +37,8 @@ export function BankWorkxShell({ app }: { app: BankApp }) {
     menu: () => app.openSheet("menu"), notifications: () => app.openSheet("notes"), openInvest: () => app.openInvest(),
   };
 
+  // a bank with a real sign-in runs the sign-in journey here; the customer picker below is the development way in
+  if (screen === "login" && !s.picker) return <SignIn app={app} lang={s.lang} />;
   if (screen === "login") {
     return (
       <ScrollView ref={loginScroller} keyboardShouldPersistTaps="handled" onContentSizeChange={() => { if (editingServer) loginScroller.current?.scrollToEnd({ animated: true }); }}
@@ -59,6 +62,11 @@ export function BankWorkxShell({ app }: { app: BankApp }) {
         <Pressable accessibilityRole="button" onPress={() => app.login()} style={({ pressed }) => ({ minHeight: 54, borderRadius: r.lg, backgroundColor: c.accent, alignItems: "center", justifyContent: "center", opacity: pressed ? 0.88 : 1, marginTop: 6 })}>
           <Text style={{ color: c.accentOn, fontWeight: "700", fontSize: 16 }}>Log in</Text>
         </Pressable>
+        {app.hasSignIn ? (
+          <Pressable accessibilityRole="button" onPress={() => app.showPicker(false)} style={{ minHeight: 44, alignItems: "center", justifyContent: "center" }}>
+            <Text style={{ color: c.textMuted, fontSize: 14 }}>Back to sign in</Text>
+          </Pressable>
+        ) : null}
         {SERVER_CHANGE_ALLOWED ? <ServerSetting url={s.studioUrl} onChange={(u) => app.setStudioUrl(u)} onEditingChange={setEditingServer} /> : null}
         <Text style={{ textAlign: "center", color: c.textFaint, fontSize: 12, marginTop: 10 }}>Sandbox build · no real money moves</Text>
       </ScrollView>

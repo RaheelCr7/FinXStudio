@@ -3,7 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { cleanup, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import * as matchers from "vitest-axe/matchers";
-import { axeCheck, BANKWORKX, MEEZAN, nav, renderPage } from "./test-utils";
+import { axeCheck, BANKWORKX, BANKWORKX_SIGNIN, MEEZAN, nav, renderPage } from "./test-utils";
 import { Login } from "./Login";
 import { MeezanHome } from "./MeezanHome";
 import { Guard } from "./Guard";
@@ -58,6 +58,82 @@ describe("sign in", () => {
     renderPage(<Guard><p>hello</p></Guard>, BANKWORKX);
     expect(await screen.findByText("hello")).toBeTruthy();
     expect(nav.replace).not.toHaveBeenCalled();
+  });
+});
+
+describe("sign in with the real sign-in journey (BankWorkx)", () => {
+  const PW = "Bwx!Demo2026";
+  it("shows the sign-in journey, not the list of sandbox customers, and keeps the picker one link away", async () => {
+    const { container } = renderPage(<Login />, BANKWORKX_SIGNIN, { signedIn: false });
+    expect(await screen.findByLabelText("Username")).toBeTruthy();
+    expect(screen.getByLabelText("Password")).toBeTruthy();
+    expect(screen.queryAllByRole("radio")).toEqual([]);
+    expect(screen.getByRole("button", { name: "Forgot password?" })).toBeTruthy();
+    expect(await axeCheck(container)).toHaveNoViolations();
+    await userEvent.click(screen.getByRole("button", { name: "Use the sandbox customer picker" }));
+    expect((await screen.findAllByRole("radio")).map((r) => (r as HTMLInputElement).value)).toEqual(["alex", "sam"]);
+    await userEvent.click(screen.getByRole("button", { name: "Back to sign in" }));
+    expect(await screen.findByLabelText("Username")).toBeTruthy();
+  });
+  it("?picker=1 opens the picker straight away", async () => {
+    nav.search = new URLSearchParams("picker=1");
+    renderPage(<Login />, BANKWORKX_SIGNIN, { signedIn: false });
+    expect((await screen.findAllByRole("radio")).length).toBe(2);
+    await userEvent.click(screen.getByRole("button", { name: "Log in" }));
+    expect(nav.push).toHaveBeenCalledWith("/bankworkx/personal/home");
+  });
+  it("a wrong password says so and the field is empty again; the right one, the code from a new browser and the end of the journey open Personal", async () => {
+    renderPage(<Login />, BANKWORKX_SIGNIN, { signedIn: false });
+    await userEvent.type(await screen.findByLabelText("Username"), "alex.morgan");
+    await userEvent.type(screen.getByLabelText("Password"), "not-my-password");
+    await userEvent.click(screen.getByRole("button", { name: "Continue" }));
+    expect(await screen.findByText("The username or password isn’t right. Check them and try again.")).toBeTruthy();
+    expect((screen.getByLabelText("Password") as HTMLInputElement).value).toBe("");
+    await userEvent.type(screen.getByLabelText("Password"), PW);
+    await userEvent.click(screen.getByRole("button", { name: "Continue" }));
+    // a browser the bank does not know yet: a code first
+    await userEvent.type(await screen.findByLabelText("One-time code, 6 digits"), "482100");
+    await userEvent.click(screen.getByRole("button", { name: "Continue" }));
+    expect(await screen.findByRole("heading", { level: 1, name: "Trust this device?" })).toBeTruthy();
+    await userEvent.click(screen.getByRole("radio", { name: /Don’t trust/ }));
+    await userEvent.click(screen.getByRole("button", { name: "Continue" }));
+    expect(await screen.findByText("Welcome, Alex. Taking you to your accounts.")).toBeTruthy();
+    expect(nav.push).not.toHaveBeenCalled();
+    await userEvent.click(screen.getByRole("button", { name: "Go to Home" }));
+    await waitFor(() => expect(nav.push).toHaveBeenCalledWith("/bankworkx/personal/home"));
+    // the tab remembers who is signed in, never the password
+    expect(sessionStorage.getItem("finx.session")).toContain('"personaId":"alex"');
+    expect(sessionStorage.getItem("finx.session")).not.toContain(PW);
+  });
+  it("a customer without companies goes to the dashboard, and the page asked for is kept when it is inside the bank", async () => {
+    nav.search = new URLSearchParams("next=/bankworkx/wallet");
+    renderPage(<Login />, BANKWORKX_SIGNIN, { signedIn: false });
+    await userEvent.type(await screen.findByLabelText("Username"), "sam.rivera");
+    await userEvent.type(screen.getByLabelText("Password"), PW);
+    await userEvent.click(screen.getByRole("button", { name: "Continue" }));
+    await userEvent.type(await screen.findByLabelText("One-time code, 6 digits"), "482100");
+    await userEvent.click(screen.getByRole("button", { name: "Continue" }));
+    await userEvent.click(await screen.findByRole("radio", { name: /Don’t trust/ }));
+    await userEvent.click(screen.getByRole("button", { name: "Continue" }));
+    await userEvent.click(await screen.findByRole("button", { name: "Go to Home" }));
+    await waitFor(() => expect(nav.push).toHaveBeenCalledWith("/bankworkx/wallet"));
+  });
+  it("Forgot username opens that journey in place, and nobody is signed in by it", async () => {
+    renderPage(<Login />, BANKWORKX_SIGNIN, { signedIn: false });
+    await userEvent.click(await screen.findByRole("button", { name: "Forgot username?" }));
+    expect(await screen.findByRole("heading", { level: 1, name: "Forgot your username?" })).toBeTruthy();
+    expect(nav.push).not.toHaveBeenCalled();
+  });
+  it("a visit that was not signed in does not pick a customer: closing a journey cannot sign anyone in without a password", async () => {
+    renderPage(<Login />, BANKWORKX_SIGNIN, { signedIn: false, personaId: "alex" });
+    expect(await screen.findByLabelText("Username")).toBeTruthy();
+    expect(sessionStorage.getItem("finx.session")).toContain('"signedIn":false');
+  });
+  it("keeps the picker as the sign-in of a bank without the real sign-in, as before", async () => {
+    renderPage(<Login />, BANKWORKX, { signedIn: false });
+    expect((await screen.findAllByRole("radio")).length).toBe(2);
+    expect(screen.queryByRole("button", { name: "Back to sign in" })).toBeNull();
+    expect(screen.queryByLabelText("Username")).toBeNull();
   });
 });
 

@@ -615,6 +615,8 @@ const linked = (ids: string[], where: string) => Object.fromEntries(ids.map((id)
 
 describe("sign-in: Sign in", () => {
   const j = Journey.parse(signIn);
+  // the recovery rules it meets through the "Forgot username?" link
+  const SI_ACCEPTED = linked(["bank-recoveryLock", "bank-tokenExpiry", "bank-resetNeedsCode"], "forgot-username");
   it("is lint clean, every scenario passes and every acceptance criterion is proved", async () => {
     expect(lintAll(j)).toEqual([]);
     const r = await runScenarios(j);
@@ -624,25 +626,27 @@ describe("sign-in: Sign in", () => {
     expect(r.ok).toBe(true);
   });
 
-  it("the tests notice when the journey or the bank's rules are broken (mutation check): every mutant is killed", async () => {
-    const m = await mutationCheck(j, {});
+  it("the tests notice when the journey or the bank's rules are broken (mutation check): every mutant of the journey and of its own rules is killed", async () => {
+    const m = await mutationCheck(j, SI_ACCEPTED);
     expect(m.survived.map((s) => `${s.id}: ${s.what}`)).toEqual([]);
-    expect([m.total, m.killed, m.accepted.length]).toEqual([60, 60, 0]);
+    expect([m.total, m.killed, m.accepted.length]).toEqual([60, 57, 3]);
+    expect(m.results.filter((x) => x.kind === "journey" && !x.killed)).toEqual([]);
     expect(m.ok).toBe(true);
   }, 240_000);
 
   it("every sign-in rule of the bank is checked by a mutant and caught by a screen", async () => {
-    const m = await mutationCheck(j, {});
+    const m = await mutationCheck(j, SI_ACCEPTED);
     const bank = m.results.filter((x) => x.kind === "bank").map((x) => x.id).sort();
     expect(bank).toEqual(["bank-codeExpiry", "bank-codeLock", "bank-credentials", "bank-deviceLimit", "bank-expiredPassword", "bank-newDeviceCode", "bank-passwordBreach", "bank-passwordCommon", "bank-passwordLength", "bank-passwordReuse", "bank-passwordUsername", "bank-pinRules", "bank-recoveryLock", "bank-resendLimit", "bank-resetNeedsCode", "bank-signInLock", "bank-tokenExpiry", "bank-usernameHiding"]);
-    expect(m.results.filter((x) => x.kind === "bank" && !x.killed)).toEqual([]);
+    expect(m.results.filter((x) => x.kind === "bank" && !x.killed).map((x) => x.id).sort()).toEqual(["bank-recoveryLock", "bank-resetNeedsCode", "bank-tokenExpiry"]);
   }, 240_000);
 
   it("is for BankWorkx only, for the web and the phone, and opens the recovery journeys and the unlock", () => {
-    // the Cairo Amman Bank journey of the same name is another journey for another app
-    expect(catalog.filter((c) => c.id === "sign-in").map((c) => c.madeFor).sort()).toEqual(["bankworkx", "cab"]);
+    // the Cairo Amman Bank journey of the same name is another journey for another app: the catalog has one id per slug, so this one keeps the name with the bank appended
+    expect(catalog.filter((c) => c.id === "sign-in-bankworkx").map((c) => [c.madeFor, c.category])).toEqual([["bankworkx", "Access"]]);
+    expect(catalog.filter((c) => c.id === "sign-in").map((c) => c.madeFor)).toEqual(["cab"]);
     expect([signIn.apps, signIn.channels]).toEqual([["bankworkx"], ["web", "mobile"]]);
-    expect(bankworkxJourneys.map((x) => x.slug)).toEqual(expect.arrayContaining(["sign-in", "forgot-username", "reset-password", "forgot-password", "unlock-account"]));
+    expect(bankworkxJourneys.map((x) => x.slug)).toEqual(expect.arrayContaining(["sign-in-bankworkx", "forgot-username", "reset-password", "forgot-password", "unlock-account"]));
     expect(chainTargets(signIn).sort()).toEqual(["forgot-password", "forgot-username", "unlock-account"]);
     expect(chainWarnings(signIn, bankworkxJourneys.map((x) => x.slug))).toEqual([]);
   });

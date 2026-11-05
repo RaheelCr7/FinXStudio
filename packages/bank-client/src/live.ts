@@ -61,9 +61,12 @@ export function createLive(opts: LiveOptions) {
       if (opts.trustedKeys?.length && !verifyJourney(raw, opts.trustedKeys).ok) throw new Error("journey is not signed by a trusted key");
       const parsed = Journey.safeParse(raw);
       if (!parsed.success || lintAll(parsed.data).length) throw new Error("invalid journey");
+      // a journey of another bank's app that has the same name (the sign-in of Cairo Amman Bank) is not this app's: the bundled copy is used
+      if (!forThisApp(parsed.data)) throw new Error("journey is for another app");
       return { journey: parsed.data, source: "studio" };
     } catch {
-      const fallback = bundled[slug];
+      // a copy made for a bank keeps its name with the bank appended (sign-in-bankworkx for sign-in)
+      const fallback = bundled[slug] ?? Object.values(bundled).find((j) => slugIs(j.slug, slug));
       return fallback ? { journey: fallback, source: "bundled" } : null;
     }
   }

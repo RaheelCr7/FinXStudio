@@ -201,6 +201,76 @@ Cases E-2 to E-16 check one rule each (step-up, a Maker's missing approve, no mo
 
 Known gaps, kept as `it.fails` cases so they show when fixed: a Personal payment is not recorded in Activity, and the sandbox does not raise a notification when a colleague starts a payment at another company (the "act as someone else" panel of the spec).
 
+## Signing in and security (step 6b, part 1)
+
+BankWorkx has a real sign-in: a username and a password, a one-time code on a new or unusual device, a new password when the old one expired, trusting the device, and quick sign-in. Part 1 is the sandbox's credential model and five journeys; the shell screens and the Security journeys are part 2 (see the end). Spec: the "Signing in and security" group of the journey catalog. This is lean and country-neutral: no country rules were invented.
+
+### How the apps sign in
+
+On the web (`apps/bank-web`, `components/Login.tsx`) and the phone (`apps/bank-app/src/bankworkx/SignIn.tsx`) the sign-in screen is the `sign-in` journey. **The journey signs the customer in at the sandbox bank, and the app then asks the bank who is signed in.** Nothing else passes between them:
+
+1. `BankApp` (packages/bank-client) starts with a bank that nobody is signed in to (`new MockBank("signed-out")`). Only the sign-in and recovery adapters answer; anything else is `NOT_SIGNED_IN`.
+2. The journey calls `bank.auth.signIn` (the password, checked as a hash), then, when the bank asks, the one-time code, a new password, `trustDevice` and `setQuickSignIn`, and last `bank.auth.completeSignIn`. That opens the session: **the same bank object now serves the customer who signed in** (so the journey's adapter handle stays valid), with the same session as the sandbox customer of the same name (Alex has Personal, Alpha as Maker, Beta as Approver).
+3. The journey ends. `app.finishSignIn()` reads `bank.signedIn` and `bank.persona.id` and opens that customer. It returns false unless the bank was the one made for the sign-in and a customer is signed in, so a journey that was closed, or a customer chosen another way (a restored tab), cannot sign anyone in without a password.
+4. **No secret travels.** The journey clears the password, the new password, the PIN and the code as soon as the bank has them (also when the bank did not answer: the `problem` screen clears them again); the bank never answers with a password, hash, PIN or the code; the events of a run carry only screen names, field names and error codes; the tab remembers a customer id and the language, never a password. All of it is tested (`packages/finx-mcp/src/signin-security.test.ts`, `packages/bank-client/src/signin.test.ts`, `apps/bank-web/components/pages.test.tsx`).
+5. What the bank remembers (`AccessDirectory`: users, trusted devices, locks, the remembered username) is held by the app for as long as it runs, so signing out and in again finds the device trusted and the username greeted. A reload starts the sandbox empty, as everywhere in the sandbox.
+
+**The customer picker stays, for development.** On the web a small link under the sign-in ("Use the sandbox customer picker") or `?picker=1` shows the list of sandbox customers (Alex Morgan, Sam Rivera) and "Log in" as before; "Back to sign in" returns. On the phone the same link sits under the sign-in. A bank without a real sign-in (Meezan, the other brands, and a project of the BankWorkx look that has no `sign-in` journey) is unchanged: the picker is its sign-in. `ProjectInfo.signIn` (web) and `BankAppDeps.signIn` turn it on; the web app turns it on for projects of the BankWorkx look, the phone app for BankWorkx.
+
+### Sandbox users and numbers
+
+All have the demo password `Bwx!Demo2026` (in the seed file `packages/mock-bank-api/src/access.ts` only; the sandbox keeps it as a hash) and the one-time code `482100`.
+
+| Username | Person | Status | What it shows |
+|---|---|---|---|
+| `alex.morgan` | Alex Morgan | Active | Personal, Maker at Alpha, Approver at Beta. Phone +1 415 555 0142, email `alex.morgan@example.com`, born 14/03/1988. Three trusted devices (iPhone 15, Work laptop Chrome, Android tablet) and twelve sign-ins over the last 30 days |
+| `sam.rivera` | Sam Rivera | Active | New customer, no trusted device |
+| `demo.locked` | Jamie Locke | Locked | `LOCKED` and the unlock journey. `jamie.locke@example.com`, +1 415 555 0177, born 02/03/1990 |
+| `demo.expired` | Omar Nassar | Password expired | The forced new password. `omar.nassar@example.com`, +1 415 555 0150, born 20/11/1995 |
+| `demo.inactive` | Yasmin Khoury | Not active | `INACTIVE` |
+| `new.user` | Noor Hayes | Temporary password | The first sign-in (added, not in the spec's list) |
+| `device.limit` | Riley Park | Active | Already trusts five devices (added, to reach the limit) |
+
+The last four sandbox customers behind the new names (`demolocked`, `demoexpired`, `demoinactive`, `demonew`, `demolimit`) have no accounts and are hidden from the picker (`testCast`). The numbers (`ACCESS` in `access.ts`): **5** wrong passwords or quick PINs lock a profile for 30 minutes (the fifth answers `LOCKED`; an unknown username counts the same way, so the screen never says whether a name exists; a seeded lock ends only by unlocking); **5** wrong codes lock a sign-in, **3** wrong identity checks or codes lock a recovery; a code works 5 minutes and once, a new code makes the old one useless (`482100`, then `482101`, `482102`, `482103`; `000000` is always wrong and `999999` always expired), at most **3** resends; the reset token lives 10 minutes and works once; a device is trusted for 90 days, at most 5; **3** wrong quick PINs turn quick sign-in off on that device. Passwords are 12 to 64 characters, not containing the username, not a common word, not in a known breach (a short sandbox sample), not one used before.
+
+### What the sandbox adds
+
+`packages/mock-bank-api/src/access.ts` (credentials, devices, history, recovery, the security adapters), `hash.ts` (a small SHA-256: the sandbox runs in the apps, where there is no `node:crypto`; sandbox only, not a password scheme), and in `index.ts`: `new MockBank("signed-out")`, `bank.auth.completeSignIn` opening the session, `SandboxConditions.device` (`known` | `new` | `unusual`: the device a sign-in comes from) and `idleTimeoutSeconds` (a session with no call that long ends: the next call answers `SESSION_EXPIRED`; off unless set, so nothing that existed changes), `bank.session.keepAlive`, and the shell step-up now checks the customer's current password. A scenario can set the bank's options (`config: { options: { "sign-in": { forceExpiry: false, riskStepUp: false } } }`) and starts with nobody signed in by naming the persona `signed-out` (the simulator, `finx_simulate_journey` and the scenarios accept it). A hidden field is never written into a simulator transcript.
+
+| Adapter | Used by |
+|---|---|
+| `bank.auth.signIn`, `quickSignIn`, `changePassword`, `trustDevice`, `setQuickSignIn`, `completeSignIn`, `signOut` | `sign-in` |
+| `bank.device.options` | `sign-in` (the greeting, the remembered username, the default method) |
+| `bank.recover.verifyUser`, `sendUsername`, `resetPassword`, `unlock` | `forgot-username`, `reset-password`, `unlock-account` |
+| `bank.password.policy` | the password rules as a list (used-before only for a signed-in customer or a recovery token) |
+| `bank.otp.send` / `verify` | the code, which goes to the customer who is signing in or recovering while nobody is signed in |
+| `sandbox.access.inspect` | scenarios only (`expectBank`): what the bank holds about a username (locked, failed tries, trusted devices, quick method, the outbox, whether a session is open); never a secret |
+
+Built for part 2 (the state and the adapters, tested in `access.test.ts`, not in the AI catalog yet to keep it within its size): `bank.devices.list` / `rename` / `remove` (a code first; never the device in hand) / `setQuickSignIn` / `verifyPin` / `changePin`, `bank.device.setDefault`, `bank.password.check` (shares the sign-in count) / `change` (a code first), `bank.loginHistory.list`. The model fits `setup-quick-login` (devices, PIN and biometrics state, the code before turning on), `change-password`, `trusted-devices` and `change-quick-pin`. Part 2 also needs `bank.system.status`, `bank.session.stepUp` with a PIN, and the shell screens.
+
+### The five journeys
+
+| Journey | Slug | Scenarios | Criteria | Mutation check |
+|---|---|---|---|---|
+| Sign in | `sign-in-bankworkx` (opened as `sign-in`) | 64 | 16 | 60 mutants, 57 killed, 3 accepted (the recovery rules it meets through "Forgot username?"); every mutant of the journey and of the sign-in rules is killed |
+| Forgot username | `forgot-username` | 18 | 9 | 34 mutants, 20 killed, 14 accepted (rules of `sign-in` and `reset-password`, which it only links to) |
+| Reset password (modes reset and unlock) | `reset-password` | 23 | 10 | 40 mutants, 33 killed, 7 accepted (rules of `sign-in`) |
+| Forgot password (alias, mode reset) | `forgot-password` | 4 | 3 | 15 mutants, 4 killed, 11 accepted (rules of `reset-password`) |
+| Unlock account (alias, mode unlock) | `unlock-account` | 5 | 4 | 17 mutants, 6 killed, 11 accepted (rules of `reset-password`) |
+
+`forgot-password` and `unlock-account` are thin entries, like `internal-transfer`: they open `reset-password` with `launch.mode` and `launch.user`, and carry none of its screens or bank calls. Every accepted survivor is listed with its reason in `packages/finx-mcp/src/scenarios.test.ts`; the bank rules each journey owns are all killed by its own screens. They are for BankWorkx only (`apps: ["bankworkx"]`), in the catalog under Access, registered in `bankworkxJourneys`. The Cairo Amman Bank journey `sign-in` has the same name and is another journey for another app. The catalog has one id per slug, so this one is `sign-in-bankworkx` (the convention for a journey that shares a name: the copy keeps the name with the bank appended, and every journey and the apps still ask for `sign-in`); the app uses a published journey only when it is for its own app, and falls back to the bundled copy otherwise. They never appear in a list of things to do (`PUBLIC_JOURNEYS`). The options the spec names are plain data a bank sets (`opt.allowSms`, `allowBio`, `allowPasskey`, `allowQuickPin`, `rememberUser`, `allowEmail`, `allowUnlock`), left alone they are on; `forceExpiry` and `riskStepUp` are options of the bank's sandbox (`config`), because the bank decides.
+
+### Where it differs from the spec (the prototype), and why
+
+- **Outcomes are data, not errors**, as in the Cairo Amman Bank sandbox (`{ ok: false, code, attemptsLeft }`), so a journey can show how many tries are left; the engine puts only the code and the message of a thrown error where a journey can read them. Codes that are thrown (the code, the token, the service) are routed by `ctx.error.code`.
+- **5 wrong passwords lock**, as the journey says (the shell text says 3). One constant, `ACCESS.maxFailedSignIns`. Wrong quick PINs share that count and also turn quick sign-in off after 3.
+- **000000 is wrong and 999999 expired** in the sign-in and recovery (the prototype); for a signed-in customer's own code the sandbox keeps accepting 000000, as before. A resend gives the next code (482101 ...), so "the old code is useless" is real.
+- The sample profiles of the prototype (mobile 5550104410, born 1 Jan 1990) are replaced by the seed table's (mobile +1 415 555 0142, born 14 March 1988).
+- The date of birth is one calendar field (`dateInput`); the prototype has Day, Month and Year. "Changed" shows `03 / 11 / 2026` (the `date` formatter), not "Tue 3 Nov 2026". The "photo ID check" in the unlock card is not there: unlocking is the code. "Contact us" and "Call us instead" show a sandbox number, there is no `contact-support` journey.
+- The engine lacks, and these were **skipped, not built**: the live checklist beyond the length (the other four rules are checked by the bank and reported with their message), Show / Hide beside the password (the field has its own Show button), the Caps Lock line, the resend countdown (the resend is a button; a scenario cannot press the code field's own resend), the "Register" link (no such journey), the place and time on the device card, the bank's options as app settings (the apps do not pass `opt.*`), and a separate returning-sign-in pop-up (the "Welcome back" card and the PIN field do it).
+- Not built, listed: the shell screens (Returning sign-in on the phone as its own pop-up, Session timeout with its warning dialog, the Step-up dialog, Sign-out confirmation, System states, Settings > Security), `bank.system.status`, the biometric prompt of the phone, and the notifications the spec raises. The session timeout exists at the bank (`idleTimeoutSeconds`, `bank.session.keepAlive`, `SESSION_EXPIRED`); the apps do not draw the warning yet. `setup-quick-login`, `change-password`, `trusted-devices` and `change-quick-pin` are part 2.
+- The AI catalog (`finx_get_catalog`) grew with 13 of the adapters above (the rest are in this document); it is trimmed to one line each and its cap raised from 90,000 to 95,000 (and `MAX_OUTPUT_CHARS` with it, because the whole catalog has to arrive as valid JSON).
+
 ## How a bank is defined
 
 A bank is a **project**: see [PROJECTS.md](PROJECTS.md). In short, `packages/ui-kit/src/brands.json` holds each bank's name, ids, look ("preset"), accent colour and currency; the design system turns that into a full light and dark theme, and Studio can add new ones. The sandbox customers are in `packages/mock-bank-api`, tagged by look. Banks with a Personal and a Business side can theme each apart (BankWorkx has Aurora and Graphite); see [WORKSPACE-THEMES.md](WORKSPACE-THEMES.md). Build with `--brand <id>`. Icons come from `scripts/generate-brand-assets.py` (the build makes them if missing).

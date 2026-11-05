@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { generateKeyPair, localTransfer, signJourney } from "@finx/journey-schema";
+import { cabSignIn, generateKeyPair, localTransfer, signJourney } from "@finx/journey-schema";
 import { createLive, forBrand, slugIs } from "./live";
 import { resolveBrandId } from "./brand";
 
@@ -30,6 +30,13 @@ describe("journeys over the air", () => {
     const r = await createLive({ brand: "meezan", fetch: json(broken) }).loadJourney("http://x", "fund-transfer-local");
     expect(r!.source).toBe("bundled");
     expect(await createLive({ brand: "meezan", fetch: json({}, false) }).loadJourney("http://x", "no-such-journey")).toBeNull();
+  });
+
+  it("a published journey of another bank's app with the name asked for is not used: Cairo Amman Bank's sign-in is not BankWorkx's, whose bundled copy keeps the name with the bank appended", async () => {
+    const r = await createLive({ brand: "bankworkx", fetch: json(cabSignIn) }).loadJourney("http://x", "sign-in");
+    expect(r!.source).toBe("bundled");
+    expect([r!.journey.slug, r!.journey.apps]).toEqual(["sign-in-bankworkx", ["bankworkx"]]);
+    expect((await createLive({ brand: "cab", fetch: json(cabSignIn) }).loadJourney("http://x", "sign-in"))!.source).toBe("studio");
   });
 
   it("matches copied journeys and defaults to Meezan", () => {

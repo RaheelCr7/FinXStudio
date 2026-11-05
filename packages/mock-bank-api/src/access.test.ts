@@ -27,6 +27,22 @@ describe("the sandbox's own hash", () => {
   });
 });
 
+describe("the directory of customers", () => {
+  it("is its own copy of the seed: what one sandbox changes another does not see", () => {
+    const a = new AccessDirectory(), b = new AccessDirectory();
+    a.find("device.limit")!.devices.push({ ...a.find("device.limit")!.devices[0]!, id: "dev_x" });
+    a.find("alex.morgan")!.devices.length = 0;
+    expect(b.find("device.limit")!.devices).toHaveLength(5);
+    expect(b.find("alex.morgan")!.devices).toHaveLength(3);
+    expect(new AccessDirectory().find("device.limit")!.devices).toHaveLength(5);
+  });
+  it("keeps passwords only as hashes", () => {
+    const u = new AccessDirectory().find("alex.morgan")!;
+    expect(JSON.stringify(u)).not.toContain(PW);
+    expect(u.passwordHash).toMatch(/^[0-9a-f]{64}$/);
+  });
+});
+
 describe("a bank nobody is signed in to", () => {
   it("answers only the sign-in and recovery adapters", async () => {
     const { b } = make();

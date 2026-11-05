@@ -91,6 +91,8 @@ describe("catalog and home view-models", () => {
   const entries = [{ slug: "create-budget", name: "x", version: 1 }, { slug: "zzz-custom", name: "y", version: 1 }, { slug: "invest-acme", name: "z", version: 1 }, { slug: "add-money", name: "a", version: 1 }];
   it("orders known actions first and finds them even as copies", () => {
     expect(orderedActions(entries).map((e) => e.slug)).toEqual(["add-money", "create-budget", "invest-acme", "zzz-custom"]);
+    // the journeys that run before sign-in are never offered as something to do
+    expect(orderedActions([...entries, { slug: "sign-in", name: "Sign in", version: 1 }, { slug: "reset-password", name: "Reset", version: 1 }, { slug: "unlock-account-acme", name: "Unlock", version: 1 }]).map((e) => e.slug)).toEqual(["add-money", "create-budget", "invest-acme", "zzz-custom"]);
     expect(actionOf("invest-acme")).toBe("invest");
     expect(actionMeta("zzz-custom").icon).toBe("plus");
     expect(hasAction(entries, "invest")).toBe(true);
