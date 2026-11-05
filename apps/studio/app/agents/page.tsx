@@ -21,7 +21,7 @@ export default async function AgentsPage() {
       <div className="row" style={{ alignItems: "flex-end" }}>
         <div>
           <h1>AI assistant</h1>
-          <p className="sub">Describe a journey in plain words. Claude builds a draft here for you to review. Nothing goes live until you publish it.</p>
+          <p className="sub">Say what you want in plain words. Claude builds the draft here for you to review.</p>
         </div>
       </div>
       <div style={{ marginTop: 24 }}><NewAiTask journeys={picks} /></div>
