@@ -18,8 +18,9 @@
 /* Sidebar: same surface as the page, separated by a line; active item is a quiet fill with a small marker */
 .sidebar { background: var(--side-bg); }
 .brand .mark { background: var(--accent-solid) !important; border-radius: 8px; }
-.workspace, .search-btn { background: var(--surface); border-color: var(--border); }
-.workspace:hover, .search-btn:hover { border-color: var(--border-strong); }
+/* The sidebar stays dark in both themes, so its boxes use the sidebar's own colours, never the page surface (white in light mode) */
+.workspace, .search-btn { background: var(--side-hover); border-color: var(--side-border); }
+.workspace:hover, .search-btn:hover { background: var(--side-active); border-color: var(--side-border); }
 .nav a.on { background: var(--side-active); }
 .nav a.on::before { background: var(--accent); }
 
