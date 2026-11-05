@@ -92,7 +92,6 @@ export const BETA_CAST: CorpCompany = {
 
 /** What already happened or waits when the day starts. Alpha: Alex's own payment waits and an earlier one settled. Beta: two payments started by others wait for Alex, one of them for a second approver after Lee. */
 export function seedPayments(companyId: string, corp: CorporateProvider, cast = false) {
-  const sandbox = corp as unknown as { seedPayment(p: CorpPayment): void };
   const list: CorpPayment[] = companyId === "alpha" ? [
     pay({ id: "PAY-1187", companyId, fromAccountId: "alpha_ops", beneficiaryId: "harb", amount: 12_450, reference: "PO-5581", initiatedBy: "alex", initiatedAt: "2026-10-30T10:00:00Z", status: "released", required: 1, approvals: [{ userId: "dana", at: "2026-10-30T11:00:00Z" }], releasedAt: "2026-10-30T11:00:00Z", releaseReference: "CORP-20261030-1187" }),
     pay({ id: "PAY-2040", companyId, fromAccountId: "alpha_ops", beneficiaryId: "harb", amount: 18_900, reference: "PO-5612", initiatedBy: "alex", initiatedAt: "2026-11-03T09:30:00Z", status: "pending_approval", required: 1, approvals: [] }),
@@ -110,5 +109,6 @@ export function seedPayments(companyId: string, corp: CorporateProvider, cast = 
     pay({ id: "PAY-2048", companyId, fromAccountId: "beta_ops", beneficiaryId: "gulf", amount: 6_100, reference: "INV-2325", initiatedBy: "omar", initiatedAt: "2026-11-03T10:05:00Z", status: "pending_approval", required: 1, approvals: [], nameCheck: { result: "none", recorded: "Zenith Holdings" }, receive: { amount: 22_403, currency: "AED" } }),
     pay({ id: "PAY-2036", companyId, fromAccountId: "beta_ops", beneficiaryId: "rhine", amount: 4_300, reference: "INV-2260", initiatedBy: "priya", initiatedAt: "2026-10-30T09:00:00Z", status: "rejected", required: 1, approvals: [], rejectedBy: "lee", rejectedAt: "2026-10-30T11:30:00Z", rejectReason: "Wrong amount" }),
   );
-  for (const p of list) sandbox.seedPayment(p);
+  if (list.length && !corp.seedPayment) throw new Error("This corporate bank API cannot be seeded");
+  for (const p of list) corp.seedPayment!(p);
 }

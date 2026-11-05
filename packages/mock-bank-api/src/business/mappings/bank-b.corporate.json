@@ -30,7 +30,9 @@
             "maskedNumber": {
               "from": "item.last4",
               "as": "mask4"
-            }
+            },
+            "country": "item.country",
+            "currency": "item.ccy"
           }
         },
         "users": {
@@ -42,7 +44,8 @@
               "from": "item.perms",
               "mapEach": {
                 "MAKE": "initiator",
-                "SIGN": "approver"
+                "SIGN": "approver",
+                "ADMIN": "admin"
               }
             },
             "dailyLimit": "item.cap.perDay",
@@ -68,6 +71,44 @@
               "as": "mask4"
             },
             "salary": "item.baseMonthly"
+          }
+        },
+        "codeAbove": "response.confirmAbove",
+        "signatoryGroups": {
+          "from": "response.signChains",
+          "each": {
+            "id": "item.key",
+            "name": "item.label",
+            "mode": {
+              "from": "item.order",
+              "map": {
+                "IN_TURN": "sequential",
+                "ANY_ORDER": "parallel"
+              }
+            },
+            "members": "item.signers",
+            "required": "item.needed",
+            "above": "item.aboveAmount"
+          }
+        },
+        "templates": {
+          "from": "response.quickTemplates",
+          "each": {
+            "id": "item.key",
+            "name": "item.label",
+            "beneficiaryId": "item.creditorRef",
+            "amount": "item.amountValue",
+            "reference": "item.memo",
+            "purpose": "item.purposeText"
+          }
+        },
+        "audit": {
+          "from": "response.auditSeed",
+          "each": {
+            "at": "item.ts",
+            "userId": "item.by",
+            "action": "item.what",
+            "outcome": "item.result"
           }
         }
       }
@@ -116,10 +157,10 @@
       "request": {
         "awaiting": {
           "from": "input.userId",
-          "unless": {
+          "if": {
             "path": "input.as",
             "in": [
-              "initiator"
+              "approver"
             ]
           }
         },
@@ -128,6 +169,16 @@
           "if": {
             "path": "input.as",
             "in": [
+              "initiator"
+            ]
+          }
+        },
+        "signerOrMaker": {
+          "from": "input.userId",
+          "unless": {
+            "path": "input.as",
+            "in": [
+              "approver",
               "initiator"
             ]
           }
@@ -297,6 +348,11 @@
         }
       },
       "response": "payment"
+    },
+    "listAll": {
+      "call": "payments.all",
+      "list": "response.items",
+      "response": "payment"
     }
   },
   "shapes": {
@@ -357,7 +413,17 @@
           }
         }
       },
-      "period": "response.payPeriod"
+      "period": "response.payPeriod",
+      "sequence": "response.authOrder",
+      "nameCheck.result": "response.nameMatch.result",
+      "nameCheck.recorded": "response.nameMatch.recorded",
+      "passedTo": "response.reassignedTo",
+      "passedBy": "response.reassignedBy",
+      "receive.amount": {
+        "from": "response.payeeGets.value",
+        "as": "number"
+      },
+      "receive.currency": "response.payeeGets.ccy"
     }
   },
   "errors": {

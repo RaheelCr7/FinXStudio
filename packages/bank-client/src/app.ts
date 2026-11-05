@@ -149,6 +149,8 @@ export class BankApp {
   logout() {
     this.epoch++;
     this.arriveAfter = null; this.pending = null; this.stepUpProof = null;
+    // the session ends at the bank too: a journey still holding `adapter` (or a late call) must not keep working in the old sandbox
+    this.current.expireSession();
     this.freshBank();
     this.set({ screen: "login", budgetId: null, investView: null, sheet: null, subId: null, active: null, toast: null, ...this.freshShell(), tick: this.state.tick + 1 });
   }
@@ -278,7 +280,9 @@ export class BankApp {
       this.set({ switching: null });
       if (e?.code === "STEP_UP_REQUIRED") { this.set({ stepUp: { contextId, phase: "password", busy: false } }); return "step-up"; }
       this.arriveAfter = null;
-      this.say(e?.message ?? "Could not switch", false);
+      // a bank that did not answer: nothing was applied, so the person says where they still are (README 2.3)
+      const stay = findContext(info, info.activeContextId)?.label ?? "Personal";
+      this.say(e?.code === "TIMEOUT" || e?.code === "SERVICE_UNAVAILABLE" ? `We couldn't switch. You are still in ${stay}. Try again.` : e?.message ?? "Could not switch", false);
       return "failed";
     }
     this.leave(info, target);
@@ -337,6 +341,8 @@ export class BankApp {
       await this.call("bank.otp.verify", { code });
       await this.call("bank.session.stepUp", proof);
     } catch (e: any) {
+      // the third wrong code ends the attempt: the sheet closes, the person stays where they were and starts again from the password
+      if (e?.code === "OTP_INVALID" && (e.attempt ?? 0) >= 3) { this.cancelStepUp(); this.say("Too many wrong codes. Start again.", false); return; }
       this.set({ stepUp: { ...su, busy: false, error: e?.message ?? "That didn't work. Try again." } });
       return;
     }
