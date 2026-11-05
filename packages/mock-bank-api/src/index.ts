@@ -412,7 +412,7 @@ export class MockBank {
     if (c.limitUsed !== undefined) this.p.limits.usedToday = c.limitUsed;
     for (const a of this.p.accounts) if (c.frozen?.includes(a.id)) { a.status = "frozen"; a.canDebit = false; }
     const clock = (prov: CorporateProvider) => { prov.now = () => this.now(); return prov; };
-    if (this.p.identity) for (const b of this.p.identity.business) { const prov = clock(createCorporateProvider("reference", b.company, options.corpFlaws)); seedPayments(b.id, prov, !!this.p.identity.cast); this.providers.set(b.id, prov); }
+    if (this.p.identity) for (const b of this.p.identity.business) { const prov = clock(createCorporateProvider(options.corpProvider ?? "reference", b.company, options.corpFlaws)); seedPayments(b.id, prov, !!this.p.identity.cast); this.providers.set(b.id, prov); }
     else if (this.p.corp) this.providers.set(this.p.corp.id, clock(createCorporateProvider(options.corpProvider ?? "reference", this.p.corp, options.corpFlaws)));
     this.retail = new RetailSandbox(this.p, { now: () => this.now(), otp: this.otp, conditions: () => this.conditions, flaws: options.corpFlaws ?? {}, config: () => this.config, setNow: (fn) => { this.now = fn; } });
     this.business = new BusinessSandbox({

@@ -178,6 +178,29 @@ A customer with one login and several places to bank from (Alex Morgan: Personal
 - **Mobile** (`apps/bank-app`): the same screens, a floating pill tab bar for Personal and a flat bar for Business, and deep links `bankworkx://personal/cards` or `bankworkx://business/<company>/j/<journey>?<values>` through `Linking`. A link or notification into another place offers to switch first; one that arrives before sign-in is held until the session is ready. The theme follows the active place (`brandOf(workspace)`).
 - **Not built yet.** The Business Overview has no 13-week cash-flow chart (the sandbox has no cash-flow data); the other Business journeys (`bulk-payment`, `payroll-run`, `withdraw-payment`, `add-supplier`, ...) are step 6 part 2 onward (the two payment ones are above); the command bar on mobile; keeping the chosen light or dark across an app restart on mobile.
 
+### The combined Alex Morgan demo and its test
+
+The demo for one login: Alex signs in once and works as himself, as a Maker at Alpha Trading LLC and as an Approver at Beta Services Ltd. Run it in the app with the customer **Alex Morgan** (password `Bwx!Demo2026` for the step-up, code `482100`), or let the test run it: `packages/bank-client/src/combined-demo.test.ts` (30 cases, `pnpm --filter @finx/bank-client test`). The sandbox clock is pinned to Wed 4 Nov 2026, 10:00 UTC, so it does not depend on the date.
+
+| Step | What happens | What the test proves |
+|---|---|---|
+| 1 | Sign in once | one `login()`, one sandbox from start to end; three places (Personal, Alpha as Maker, Beta as Approver) |
+| 2 | Personal home | Main $8,720.76, Savings $15,254.37, no company name on any Personal screen |
+| 3 | `personal-transfer`, $250.00 to Taylor Brooks | balance $8,470.76, daily limit used 250, savings unchanged |
+| 4 | Switch to Alpha | step-up asked first (password, then code), Overview, a Maker's menu with no Approve anywhere |
+| 5 | `supplier-payment`, $12,500.00 to Harbour Packaging | "Sent for approval", PAY-2042 waits, the account is still $480,000 and the company limit unused |
+| 6 | Forced approvals at Alpha | `PERMISSION_DENIED` for Alex and for `userId: "dana"`, two Refused rows in the audit trail, payment unchanged |
+| 7 | Switch to Beta | no new step-up within five minutes, an Approver cannot start a payment, no trace of Alpha |
+| 8 | Approvals inbox | PAY-2039 and PAY-2041 wait for Alex, badge 2, nothing of Alpha's |
+| 9 | `approve-payments`, PAY-2041 ($8,200.00) | no code below 25,000, released as CORP-20261103-2041, Beta's account $301,800 |
+| 10, 11 | Back to Personal | no step-up, every Beta view gone; the JSON of Home, Accounts, Payments, Cards, Save, More and the raw answers behind them has none of the 13 banned strings (companies, suppliers, invoices, amounts, release references, account ids); company calls answer `WRONG_CONTEXT`. The same search finds all of them in the Business views, so the check can fail |
+| 12 | A notice for Beta while in Personal | it shows only "New activity" tagged "Beta Services Ltd"; tapping it asks first, *Not now* changes nothing, *Switch* asks for the step-up (it ran out) and opens the approval at that payment |
+| 13 | Sign out | the app is on the sign-in screen, the old session and any adapter handle a journey still holds answer `SESSION_EXPIRED`, a new sign-in has the seed again |
+
+Cases E-2 to E-16 check one rule each (step-up, a Maker's missing approve, no money moves while pending, expiry at five minutes, forced approvals, an Approver cannot pay, four-eyes with both roles through a test-only customer, `WRONG_CONTEXT`, links, leaks, the code per place, sign-out, a timeout on the switch, an unavailable bank on an approval) and **E-16 runs the corporate steps on Bank B** and compares everything visible with the reference bank. Where the real code differs from the proposed 13 steps (ids are `PAY-xxxx`, Beta has two payments waiting, the saved BankWorkx payee is Taylor Brooks) the header of the test says so.
+
+Known gaps, kept as `it.fails` cases so they show when fixed: a Personal payment is not recorded in Activity, and the sandbox does not raise a notification when a colleague starts a payment at another company (the "act as someone else" panel of the spec).
+
 ## How a bank is defined
 
 A bank is a **project**: see [PROJECTS.md](PROJECTS.md). In short, `packages/ui-kit/src/brands.json` holds each bank's name, ids, look ("preset"), accent colour and currency; the design system turns that into a full light and dark theme, and Studio can add new ones. The sandbox customers are in `packages/mock-bank-api`, tagged by look. Banks with a Personal and a Business side can theme each apart (BankWorkx has Aurora and Graphite); see [WORKSPACE-THEMES.md](WORKSPACE-THEMES.md). Build with `--brand <id>`. Icons come from `scripts/generate-brand-assets.py` (the build makes them if missing).

@@ -23,18 +23,32 @@ export type BTransaction = {
   batchItems?: { seq: number; creditorRef: string; amountValue: string; remark: string }[];
   /** A salary run: the month it pays for (YYYY-MM). */
   payPeriod?: string;
+  /** Signers in the order they must sign, when the chain is in turn. */
+  authOrder?: string[];
+  /** What the bank's record of the account holder says, when it is not the name the transaction was made out to. */
+  nameMatch?: { result: "close" | "none"; recorded: string };
+  /** A signer passed the transaction to another signer. */
+  reassignedTo?: string; reassignedBy?: string;
+  /** What the creditor receives, when it is not the debit currency. */
+  payeeGets?: { value: number; ccy: string };
 };
 /** A row of a batch as this bank takes it and answers it. */
 export type BBatchItem = { creditorRef: string; amountValue: string; remark?: string };
 export type BCompanyProfile = {
   companyId: string; legalName: string; baseCcy: string;
   accounts: { accountNo: string; title: string; last4: string; ccy: string; available: number }[];
-  approvedCreditors: { ref: string; name: string; bank: string; last4: string }[];
+  approvedCreditors: { ref: string; name: string; bank: string; last4: string; country?: string; ccy?: string }[];
   /** the salary register; absent when the company has no payroll */
   salaryRegister?: { staffRef: string; name: string; bank: string; last4: string; baseMonthly: number }[];
-  staff: { id: string; name: string; perms: ("MAKE" | "SIGN")[]; cap: { perDay: number; spentToday: number } }[];
+  staff: { id: string; name: string; perms: ("MAKE" | "SIGN" | "ADMIN")[]; cap: { perDay: number; spentToday: number } }[];
   limits: { companyPerDay: number; companySpent: number };
   signOffAbove: number; cutOffUtc: string;
+  /** From this amount a signer confirms with a one-time code. */
+  confirmAbove?: number;
+  signChains?: { key: string; label: string; order: "IN_TURN" | "ANY_ORDER"; signers: string[]; needed: number; aboveAmount: number }[];
+  quickTemplates?: { key: string; label: string; creditorRef: string; amountValue?: number; memo: string; purposeText: string }[];
+  /** What the bank's trail already held when the day began. */
+  auditSeed?: { ts: string; by: string; what: string; result: "Done" | "Refused" }[];
 };
 
 const STATE = { pending_approval: "AWAITING_AUTH", released: "EXECUTED", rejected: "CANCELLED" } as const;
@@ -45,8 +59,16 @@ export class BankBApi {
   constructor(company: CorpCompany, flaws: Flaws = {}) { this.inner = new CorporateSandbox(company, flaws); }
   set now(fn: () => number) { this.inner.now = fn; }
 
-  private txnId(id: string) { return `TXN-${String(id.split("_")[1]).padStart(6, "0")}`; }
-  private innerId(txnId: string) { const m = /^TXN-0*([0-9]+)$/.exec(txnId); if (!m) throw new ApiError("ERR-4042", 404, `Transaction ${txnId} does not exist`, { txnId }); return `pay_${m[1]}`; }
+  /** The number of a payment is the last number in its id (pay_7 and PAY-2041 are 7 and 2041), and the same number on this side. */
+  private txnId(id: string) { return `TXN-${id.replace(/\D/g, "").padStart(6, "0")}`; }
+  private innerId(txnId: string) {
+    const m = /^TXN-0*([0-9]+)$/.exec(txnId);
+    if (!m) throw new ApiError("ERR-4042", 404, `Transaction ${txnId} does not exist`, { txnId });
+    const seq = this.inner.summary.paymentSeq;
+    return seq ? `${seq.prefix}-${m[1]}` : `pay_${m[1]}`;
+  }
+  /** Puts a transaction that already happened (or waits) into the bank's books, for the sandbox's seed data. It is not a call a client of the API can make. */
+  seedPayment(p: CorpPayment) { this.inner.seedPayment(p); }
   private name(userId: string) { return this.inner.summary.users.find((u) => u.id === userId)?.name ?? userId; }
 
   private shape(p: CorpPayment): BTransaction {
@@ -58,6 +80,10 @@ export class BankBApi {
       valueDt: p.valueDate, pastCutOff: p.afterCutoff, createdTs: p.initiatedAt,
       ...(p.releaseReference ? { execRef: p.releaseReference, executedTs: p.releasedAt } : {}),
       ...(p.period ? { payPeriod: p.period } : {}),
+      ...(p.sequence ? { authOrder: p.sequence } : {}),
+      ...(p.nameCheck ? { nameMatch: p.nameCheck } : {}),
+      ...(p.passedTo ? { reassignedTo: p.passedTo, reassignedBy: p.passedBy } : {}),
+      ...(p.receive ? { payeeGets: { value: p.receive.amount, ccy: p.receive.currency } } : {}),
       ...(p.lines ? { batchItems: p.lines.map((l) => ({ seq: l.n, creditorRef: l.beneficiaryId, amountValue: l.amount.toFixed(digits), remark: l.reference })) } : {}),
       ...(p.status === "rejected" ? { cancelledBy: p.rejectedBy, cancelNote: p.rejectReason ?? "", cancelledTs: p.rejectedAt } : {}),
     };
@@ -142,10 +168,11 @@ export class BankBApi {
         const id = this.innerId(String(body.txnId ?? ""));
         try { return this.shape(this.inner.getPayment(id)); } catch (e) { return this.fail(e, { action: "create", user: "" }); }
       }
+      case "payments.all": return { items: this.inner.all().map((p) => this.shape(p)) };
       case "payments.list": {
-        // awaiting: a signer id (what waits for them); madeBy: a maker id (what they started)
-        const user = String(body.awaiting ?? body.madeBy ?? "");
-        try { return { items: this.inner.listPending({ userId: user, as: body.madeBy ? "initiator" : "approver" }).map((p) => this.shape(p)) }; } catch (e) { return this.fail(e, { action: "create", user }); }
+        // awaiting: a signer id (what waits for them); madeBy: a maker id (what they started); signerOrMaker: a staff id, and the bank answers for the role they hold
+        const user = String(body.awaiting ?? body.madeBy ?? body.signerOrMaker ?? "");
+        try { return { items: this.inner.listPending({ userId: user, as: body.madeBy ? "initiator" : body.awaiting ? "approver" : undefined }).map((p) => this.shape(p)) }; } catch (e) { return this.fail(e, { action: "create", user }); }
       }
       default: throw new ApiError("ERR-4000", 400, `Unknown operation ${op}`);
     }
@@ -166,11 +193,15 @@ export class BankBApi {
     return {
       companyId: c.id, legalName: c.name, baseCcy: c.currency,
       accounts: c.accounts.map((a) => ({ accountNo: a.id, title: a.name, last4: a.maskedNumber.replace(/[^0-9]/g, ""), ccy: a.currency, available: a.balance })),
-      approvedCreditors: c.whitelist.map((b) => ({ ref: b.id, name: b.name, bank: b.bank, last4: b.maskedNumber.replace(/[^0-9]/g, "") })),
+      approvedCreditors: c.whitelist.map((b) => ({ ref: b.id, name: b.name, bank: b.bank, last4: b.maskedNumber.replace(/[^0-9]/g, ""), ...(b.country ? { country: b.country } : {}), ...(b.currency ? { ccy: b.currency } : {}) })),
       ...(c.employees ? { salaryRegister: c.employees.map((e) => ({ staffRef: e.id, name: e.name, bank: e.bank, last4: e.maskedNumber.replace(/[^0-9]/g, ""), baseMonthly: e.salary })) } : {}),
-      staff: c.users.map((u) => ({ id: u.id, name: u.name, perms: [...(u.roles.includes("initiator") ? ["MAKE" as const] : []), ...(u.roles.includes("approver") ? ["SIGN" as const] : [])], cap: { perDay: u.dailyLimit, spentToday: u.usedToday } })),
+      staff: c.users.map((u) => ({ id: u.id, name: u.name, perms: [...(u.roles.includes("initiator") ? ["MAKE" as const] : []), ...(u.roles.includes("approver") ? ["SIGN" as const] : []), ...(u.roles.includes("admin") ? ["ADMIN" as const] : [])], cap: { perDay: u.dailyLimit, spentToday: u.usedToday } })),
       limits: { companyPerDay: c.companyDailyLimit, companySpent: c.companyUsedToday },
       signOffAbove: c.dualApprovalAbove, cutOffUtc: c.cutoff,
+      ...(c.codeAbove !== undefined ? { confirmAbove: c.codeAbove } : {}),
+      ...(c.signatoryGroups ? { signChains: c.signatoryGroups.map((g) => ({ key: g.id, label: g.name, order: g.mode === "sequential" ? "IN_TURN" as const : "ANY_ORDER" as const, signers: g.members, needed: g.required, aboveAmount: g.above })) } : {}),
+      ...(c.templates ? { quickTemplates: c.templates.map((t) => ({ key: t.id, label: t.name, creditorRef: t.beneficiaryId, ...(t.amount !== undefined ? { amountValue: t.amount } : {}), memo: t.reference, purposeText: t.purpose })) } : {}),
+      ...(c.audit ? { auditSeed: c.audit.map((e) => ({ ts: e.at, by: e.userId, what: e.action, result: e.outcome })) } : {}),
     };
   }
 }

@@ -12,6 +12,8 @@ export interface CorporateProvider extends CorporateBankAdapter {
   all?(): CorpPayment[];
   /** Passes a waiting payment to another approver (the reference sandbox only). */
   delegatePayment?(input: { userId: string; paymentId: string; toUserId: string }): CorpPayment;
+  /** Puts a payment that already happened (or waits) into the bank's books without running the rules: the sandbox's seed data, never a client call. */
+  seedPayment?(p: CorpPayment): void;
 }
 export type ProviderId = "reference" | "bank-b";
 export const PROVIDERS: ProviderId[] = ["reference", "bank-b"];
@@ -24,7 +26,7 @@ export const isProviderId = (v: unknown): v is ProviderId => typeof v === "strin
 
 /** A corporate bank reached through a mapping file: the neutral operations become that bank's API calls, and its answers and errors come back in neutral form. */
 export class MappedCorporateProvider implements CorporateProvider {
-  constructor(private spec: MappingSpec, private api: { request(op: string, body?: Record<string, any>): any }, private context: { companyId: string }, private clock: (fn: () => number) => void) {}
+  constructor(private spec: MappingSpec, private api: { request(op: string, body?: Record<string, any>): any; seedPayment?(p: CorpPayment): void }, private context: { companyId: string }, private clock: (fn: () => number) => void) {}
   set now(fn: (() => number) | undefined) { if (fn) this.clock(fn); }
   get now() { return undefined; }
 
@@ -44,6 +46,8 @@ export class MappedCorporateProvider implements CorporateProvider {
 
   getCompany() { return this.run("company", {}) as CorpCompany; }
   getPayment(id: string) { return this.run("getPayment", { paymentId: id }) as CorpPayment; }
+  all() { return this.run("listAll", {}) as CorpPayment[]; }
+  seedPayment(p: CorpPayment) { if (!this.api.seedPayment) throw new Error(`The API of ${this.spec.provider} cannot be seeded`); this.api.seedPayment(p); }
   initiatePayment(input: InitiateInput) { return this.run("initiatePayment", input) as CorpPayment; }
   approvePayment(input: { userId: string; paymentId: string }) { return this.run("approvePayment", input) as CorpPayment; }
   rejectPayment(input: { userId: string; paymentId: string; reason?: string }) { return this.run("rejectPayment", input) as CorpPayment; }

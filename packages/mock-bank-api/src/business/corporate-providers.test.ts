@@ -247,3 +247,56 @@ describe("payroll runs", () => {
     expect(p).toMatchObject({ payee: "Payroll 2026-10 · 2 employees", required: 2 });
   });
 });
+
+describe("a customer with several companies, on either API", () => {
+  const NOW = Date.parse("2026-11-04T10:00:00Z");
+  /** Alex signed in and inside a company, as the shell leaves him after the step-up. */
+  async function enter(corpProvider: (typeof PROVIDERS)[number], company: "alpha" | "beta", cast = false) {
+    const b = new MockBank(cast ? "alexbiz" : "alex", { corpProvider }); b.now = () => NOW;
+    await b.call("bank.session.stepUp", { method: "password", secret: "Bwx!Demo2026" }).catch(() => undefined);
+    await b.call("bank.otp.send"); await b.call("bank.otp.verify", { code: "482100" });
+    await b.call("bank.session.stepUp", { method: "password", secret: "Bwx!Demo2026" });
+    await b.call("bank.session.switch", { contextId: company });
+    return b;
+  }
+  /**
+   * Each bank numbers its own payments: pay_2042, PAY-2042 and TXN-002042 are all "#2042". Bank B keeps only the last four digits of a
+   * supplier's account ("••8841"), where the reference bank also says the scheme ("ABA 021000021 · ••8841"): that is the one difference left.
+   */
+  const numbered = (v: unknown) => JSON.parse(JSON.stringify(v).replace(/(?:PAY-|TXN-0*|pay_)(\d+)/g, "#$1").replace(/"maskedNumber":"[^"]*?(\d{4})"/g, '"maskedNumber":"••$1"'));
+
+  it("honours the bank API for the companies of the identity, and seeds the same payments", async () => {
+    const b = await enter("bank-b", "beta");
+    expect(Object.keys(await b.call("corp.payments.pending"))).toEqual(["TXN-002039", "TXN-002041"]);
+    expect((await enter("reference", "beta").then((x) => x.call("corp.payments.pending")))["PAY-2041"]).toMatchObject({ amount: 8_200, initiatedBy: "priya" });
+  });
+  it("gives the same company, payments waiting, inbox and contexts as the reference bank", async () => {
+    for (const company of ["alpha", "beta"] as const) {
+      const a = await enter("reference", company), b = await enter("bank-b", company);
+      for (const [adapter, input] of [["corp.company.get", {}], ["corp.payments.pending", {}], ["corp.payments.pending", { as: "initiator" }], ["corp.payments.list", {}], ["corp.suppliers.list", {}], ["corp.templates.list", {}], ["bank.session.get", {}]] as const) {
+        const [x, y] = await Promise.all([a.call(adapter, input), b.call(adapter, input)]);
+        expect(numbered(y), `${adapter} at ${company}`).toEqual(numbered(x));
+      }
+    }
+    const [a, b] = [await enter("reference", "beta"), await enter("bank-b", "beta")];
+    expect(numbered(await b.call("corp.audit.list"))).toEqual(numbered(await a.call("corp.audit.list")));
+    expect(numbered(await b.call("corp.signatories.list"))).toEqual(numbered(await a.call("corp.signatories.list")));
+  });
+  it("keeps what the fuller Beta cast carries: the order of approvers, the name check and what the payee receives", async () => {
+    const [a, b] = [await enter("reference", "beta", true), await enter("bank-b", "beta", true)];
+    expect(numbered(await b.call("corp.payments.list", {}))).toEqual(numbered(await a.call("corp.payments.list", {})));
+    const p = (await b.call("corp.payments.get", { paymentId: "TXN-002047" }));
+    expect(p).toMatchObject({ sequence: ["lee", "alex"], required: 2 });
+    expect((await b.call("corp.payments.get", { paymentId: "TXN-002043" }))).toMatchObject({ nameCheck: { result: "close", recorded: "Rhine Fracht GmbH" }, receive: { amount: 25_465, currency: "EUR" } });
+  });
+  it("approves the same way, with the same words and the same release", async () => {
+    const [a, b] = [await enter("reference", "beta"), await enter("bank-b", "beta")];
+    const [x, y] = [await a.call("corp.payments.approve", { paymentId: "PAY-2041" }), await b.call("corp.payments.approve", { paymentId: "TXN-002041" })];
+    expect(numbered(y)).toEqual(numbered(x));
+    expect(y).toMatchObject({ status: "released", releaseReference: "CORP-20261103-2041" });
+    expect(numbered(await b.call("corp.company.get"))).toEqual(numbered(await a.call("corp.company.get")));
+    // a second approval of the same payment is refused with the same code
+    expect(await code(b.call("corp.payments.approve", { paymentId: "TXN-002041" }))).toBe(await code(a.call("corp.payments.approve", { paymentId: "PAY-2041" })));
+  });
+});
+const code = (p: Promise<unknown>) => p.then(() => "no error", (e: { code: string }) => e.code);
