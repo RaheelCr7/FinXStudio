@@ -57,6 +57,7 @@ describe("test conditions", () => {
   });
   it("a slow answer inside the limit still arrives, and time moves on", async () => {
     const b = await verified({ timeout: ["bank.transfers.own"], latencyMs: 4000 });
+    b.now = () => 1_800_000_000_000; // a fixed clock: the real one moves a millisecond between the two reads
     const t = b.now();
     await b.call("bank.transfers.own", { fromAccountId: "acc_main", toAccountId: "acc_save", amount: 5 });
     expect(b.now() - t).toBe(4000);
