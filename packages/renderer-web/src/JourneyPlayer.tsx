@@ -1,7 +1,7 @@
 "use client";
 import { useEffect, useMemo, useReducer, useRef } from "react";
 import type { Journey } from "@finx/journey-schema";
-import { JourneyController, ui, type Adapter, type BlockType, type JourneyEvent } from "@finx/renderer-core";
+import { JourneyController, ui, type Adapter, type BlockType, type ChainRequest, type JourneyEvent } from "@finx/renderer-core";
 import type { BrandLook } from "@finx/ui-kit";
 import { AppBar, componentsCss } from "@finx/components";
 import { Button, registry } from "./blocks/blocks";
@@ -13,6 +13,10 @@ export type JourneyPlayerProps = {
   lang?: string;
   /** Answers to fill in when the journey opens, by data path. */
   initial?: Record<string, any>;
+  /** Values there before the first screen runs, by data path (the entry screen can branch on them). */
+  launch?: Record<string, any>;
+  /** The journey asked to open another one (navigate.toJourney); without it a message is shown. */
+  onOpenJourney?: (req: ChainRequest) => void;
   /** Receives screen views, mistakes, bank failures and exits (never answers), for analytics. */
   onEvent?: (e: JourneyEvent) => void;
   /** The close button, and back from the first screen. */
@@ -29,8 +33,8 @@ export type JourneyPlayerProps = {
  * this draws it with real form elements: labels, error messages that are announced, a step list, Enter to continue,
  * and focus that moves to the screen title (or the first mistake) so keyboard and screen-reader users are never left behind.
  */
-export function JourneyPlayer({ journey, adapter, lang, initial, onEvent, onClose, onExit, look, brandName }: JourneyPlayerProps) {
-  const controller = useMemo(() => new JourneyController(journey, { adapter, lang, initial, onEvent }), [journey, adapter]);
+export function JourneyPlayer({ journey, adapter, lang, initial, launch, onOpenJourney, onEvent, onClose, onExit, look, brandName }: JourneyPlayerProps) {
+  const controller = useMemo(() => new JourneyController(journey, { adapter, lang, initial, launch, onOpenJourney, onEvent }), [journey, adapter]);
   const [, force] = useReducer((x: number) => x + 1, 0);
   useEffect(() => controller.subscribe(force), [controller]);
   useEffect(() => { void controller.start(); }, [controller]);

@@ -9,6 +9,8 @@ const COUNTRIES = [
   ["AU", "Australia"], ["CA", "Canada"], ["FR", "France"], ["DE", "Germany"], ["IN", "India"], ["IE", "Ireland"], ["IT", "Italy"], ["JP", "Japan"], ["JO", "Jordan"],
   ["MX", "Mexico"], ["NL", "Netherlands"], ["SA", "Saudi Arabia"], ["SG", "Singapore"], ["ES", "Spain"], ["CH", "Switzerland"], ["AE", "United Arab Emirates"], ["GB", "United Kingdom"],
 ] as const;
+/** The country's name as an expression, so the review shows "Germany", not "DE". */
+const COUNTRY_NAME = COUNTRIES.reduceRight<string>((rest, [id, label]) => `pt.country == '${id}' ? '${label}' : ${rest}`, "pt.country");
 const is = (...codes: string[]) => codes.map((c) => `pt.country == '${c}'`).join(" || ");
 const IBAN = `(${is("DE", "FR", "ES", "IT", "IE", "NL", "CH", "GB", "JO", "SA", "AE")})`;
 const PLAIN = `(${is("AU", "CA", "IN", "JP", "SG")})`;
@@ -19,7 +21,7 @@ const NEW_PAYEE = "pt.payeeId == ''";
 const HOME = "ctx.accounts[pt.from].currency";
 const ACCT = "{{ctx.accounts[pt.from].name}} {{ctx.accounts[pt.from].maskedNumber}}";
 /** What the payee gets, as the hero and the code read it. */
-const RECEIVE = "{{ctx.quote.receive.amount | money:ctx.quote.receive.currency}}";
+const RECEIVE = "{{ctx.quote.receive.amount | money2:ctx.quote.receive.currency}}";
 const LATER = "pt.when == 'later' && pt.type != 'internal'";
 
 /** What the bank is told about the payment. The bank's options are plain data (on unless set to false; Priority and who pays the charges are off unless true). */
@@ -40,7 +42,7 @@ const PURPOSES = ["Family support", "Goods or services", "Salary", "Rent", "Educ
 const RELATIONSHIPS = ["Myself", "Family member", "Friend", "My employer", "Supplier or business", "Landlord", "School or university", "Other"];
 const choices = (list: string[]) => list.map((l) => ({ id: l, label: l }));
 /** The money that goes into a review or a receipt. */
-const feeAndTotal = [{ label: "Fee", value: "{{ctx.quote.feeText}}" }, { label: "You pay", value: "{{ctx.quote.total | money:ctx.quote.currency}}" }];
+const feeAndTotal = [{ label: "Fee", value: "{{ctx.quote.feeText}}" }, { label: "You pay", value: "{{ctx.quote.total | money2:ctx.quote.currency}}" }];
 
 /**
  * Send money (BankWorkx, Payments). Money to a BankWorkx customer, to a person at another bank, or to another country: pick or add the payee, enter
@@ -102,6 +104,7 @@ export const personalTransfer: Journey = {
     "pt.consent": { type: "boolean", required: true },
     "pt.moved": { type: "boolean" },
     // the bank's options, set by the bank: left alone they are on (Priority and who pays the charges: off)
+    "launch.type": { type: "string" },
     "opt.typeInternal": { type: "boolean" },
     "opt.typeDomestic": { type: "boolean" },
     "opt.typeIntl": { type: "boolean" },
@@ -132,7 +135,8 @@ export const personalTransfer: Journey = {
         { type: "callApi", integration: "accounts", input: { homeOnly: true }, saveAs: "ctx.accounts", onError: toRoute },
         { type: "setData", path: "ctx.error", value: null },
         { type: "setData", path: "pt.from", value: "acc_main" },
-        { type: "setData", path: "pt.type", value: "" },
+        // opened with a type (launch.type, from Abroad or To a BankWorkx customer): take it and skip the choice of type when the bank offers it
+        { type: "setData", path: "pt.type", value: "{{launch.type ? launch.type : ''}}" },
         { type: "setData", path: "pt.payeeId", value: "" },
         { type: "setData", path: "pt.payeeName", value: "" },
         { type: "setData", path: "pt.mask", value: "" },
@@ -170,6 +174,13 @@ export const personalTransfer: Journey = {
         { type: "setData", path: "otp.code", value: "" },
         { type: "navigate", to: "type" },
       ],
+      navigation: {
+        rules: [
+          { when: "pt.type == 'internal' && opt.typeInternal != false", to: "payeeList" },
+          { when: "pt.type == 'domestic' && opt.typeDomestic != false", to: "payeeList" },
+          { when: "pt.type == 'international' && opt.typeIntl != false", to: "payeeList" },
+        ],
+      },
       blocks: [],
     },
     {
@@ -232,7 +243,7 @@ export const personalTransfer: Journey = {
           },
         },
         { type: "button", label: "New payee", variant: "secondary", actions: [{ type: "setData", path: "pt.payeeId", value: "" }, { type: "navigate", to: "details" }] },
-        { type: "button", label: "Back", variant: "ghost", actions: [{ type: "navigate", to: "type" }] },
+        { type: "button", label: "Back", variant: "ghost", actions: [{ type: "navigate", to: "typeBack" }] },
       ],
     },
     {
@@ -296,7 +307,7 @@ export const personalTransfer: Journey = {
             { type: "navigate", to: "amount" },
           ],
         },
-        { type: "button", label: "Back", variant: "ghost", actions: [{ type: "navigate", to: "type" }] },
+        { type: "button", label: "Back", variant: "ghost", actions: [{ type: "navigate", to: "typeBack" }] },
       ],
     },
     {
@@ -308,7 +319,7 @@ export const personalTransfer: Journey = {
         { type: "accountPicker", bind: "pt.from", source: "ctx.accounts", showBalance: true },
         {
           type: "amountInput", bind: "pt.amount", currency: "{{pt.ccy}}", label: `{{pt.ccy == ${HOME} ? 'Amount' : 'They receive (' + pt.ccy + ')'}}`,
-          helper: `Available in {{ctx.accounts[pt.from].name}}: {{ctx.accounts[pt.from].balance | money:${HOME}}}.`,
+          helper: `Available in {{ctx.accounts[pt.from].name}}: {{ctx.accounts[pt.from].balance | money2:${HOME}}}.`,
         },
         { type: "select", bind: "pt.purpose", label: "Purpose", variant: "dropdown", visibleWhen: INTL, choices: choices(PURPOSES) },
         {
@@ -396,7 +407,7 @@ export const personalTransfer: Journey = {
             { label: "Arrives", value: "{{ctx.quote.arrives}}" },
           ],
         },
-        { type: "reviewSummary", visibleWhen: INTL, rows: [{ label: "Country", value: "{{pt.country}}" }, { label: "Purpose", value: "{{pt.purpose}}" }] },
+        { type: "reviewSummary", visibleWhen: INTL, rows: [{ label: "Country", value: `{{ ${COUNTRY_NAME} }}` }, { label: "Purpose", value: "{{pt.purpose}}" }] },
         {
           type: "reviewSummary", visibleWhen: "ctx.quote.converted",
           rows: [
@@ -499,7 +510,7 @@ export const personalTransfer: Journey = {
       navigation: {
         rules: [
           { when: "ctx.error.integration == 'accounts'", to: "start" },
-          { when: "ctx.error.integration == 'payees'", to: "type" },
+          { when: "ctx.error.integration == 'payees'", to: "typeBack" },
           { when: "ctx.error.integration == 'lookup' || ctx.error.integration == 'validate'", to: "details" },
           { when: "ctx.error.integration == 'quote'", to: "amount" },
         ],
@@ -521,10 +532,10 @@ export const personalTransfer: Journey = {
             { label: "Speed", value: "{{pt.result.speedName}}" },
             { label: "{{pt.result.status == 'scheduled' ? 'First payment' : 'Arrives'}}", value: "{{pt.result.status == 'scheduled' ? ctx.quote.sendDates[pt.sendOn].name : pt.result.arrives}}" },
             { label: "Fee", value: "{{ctx.quote.feeText}}" },
-            { label: "Total", value: "{{pt.result.total | money:pt.result.currency}}" },
+            { label: "Total", value: "{{pt.result.total | money2:pt.result.currency}}" },
           ],
         },
-        { type: "text", variant: "caption", text: "{{pt.payeeName}} is saved as a new payee for 24 hours.", visibleWhen: "pt.result.payeeId && pt.payeeId == ''" },
+        { type: "text", variant: "caption", text: "{{pt.payeeName}} is saved. In their first 24 hours you can send them up to $500.00 in total.", visibleWhen: "pt.result.payeeId && pt.payeeId == ''" },
         { type: "button", label: "Track payment", variant: "primary", visibleWhen: "pt.result.status == 'settled' || pt.result.status == 'processing'", actions: [{ type: "exit" }] },
         { type: "button", label: "See scheduled payments", variant: "primary", visibleWhen: "pt.result.status == 'scheduled'", actions: [{ type: "exit" }] },
         { type: "button", label: "Back to Payments", variant: "primary", visibleWhen: "pt.result.status == 'held'", actions: [{ type: "exit" }] },
@@ -579,6 +590,13 @@ export const personalTransfer: Journey = {
         { type: "button", label: "Start again", variant: "primary", actions: [{ type: "navigate", to: "start" }] },
         { type: "button", label: "Close", variant: "secondary", actions: [{ type: "exit" }] },
       ],
+    },
+    {
+      // Back to the choice of type; when the journey was opened with a type there is no choice, so it goes to the payees of that type
+      id: "typeBack", title: "Send money", kind: "branch",
+      onEnter: [{ type: "navigate", to: "type" }],
+      navigation: { rules: [{ when: "!isEmpty(launch.type)", to: "payeeList" }] },
+      blocks: [],
     },
   ],
 };

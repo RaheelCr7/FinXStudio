@@ -196,15 +196,16 @@ export function registerTools(server: McpServer, deps: ToolDeps) {
       persona: z.enum(Object.keys(personas) as [string, ...string[]]).default("ayesha"),
       lang: z.string().default("en").describe("en, or ur to test Urdu"),
       steps: z.array(stepSchema).max(80).describe("The scenario, in order"),
+      launch: z.record(z.string(), z.unknown()).optional().describe("Values the journey is opened with, by data path, there before its entry screen runs"),
     }),
     annotations: { readOnlyHint: true, openWorldHint: false },
-  }, ({ slug, journey, persona, lang, steps }) => guarded(async () => {
+  }, ({ slug, journey, persona, lang, steps, launch }) => guarded(async () => {
     if (!slug === !journey) return fail("Pass exactly one of slug or journey.");
     const input = journey ?? (await deps.studio.getRecord(slug!)).draft;
     const v = validateJourney(input);
     if (!v.ok) return fail("The journey does not match the FinX schema, so it cannot run:", v.errors);
     try {
-      const result = await simulate({ journey: v.journey, persona, lang, steps: steps as any });
+      const result = await simulate({ journey: v.journey, persona, lang, steps: steps as any, launch });
       return ok({ ...result, lint: lintForAgent(v.journey).length ? "The journey still has lint issues: run finx_lint_journey." : "no lint issues" }, false);
     } catch (e) { return fail((e as Error).message); }
   }));

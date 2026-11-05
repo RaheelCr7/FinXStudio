@@ -1,5 +1,5 @@
-import type { Journey } from "@finx/journey-schema";
-import { JourneyRunner, localize, type View } from "@finx/renderer-core";
+import { bankworkxJourneys, type Journey } from "@finx/journey-schema";
+import { JourneyRunner, localize, wholeExpression, type ChainRequest, type View } from "@finx/renderer-core";
 import { MockBank, personas, type Flaws, type ProviderId, type SandboxConditions } from "@finx/mock-bank-api";
 
 /** One scripted action or check. Actions change state; expectations only check it. */
@@ -12,6 +12,8 @@ export type Step =
   | { expectNoText: string }
   | { expectError: string }
   | { expectToast: string }
+  /** The journey asked to open journey `journey` (navigate.toJourney) with these launch values (a subset is enough). Checked on the last such request. */
+  | { expectOpens: { journey: string; with?: Record<string, unknown> } }
   /** Moves the sandbox clock forward (seconds), for rules that depend on time, such as a rate that is only held for 30 seconds. */
   | { advance: number }
   /** Reads the bank with a read adapter and checks one value: { adapter, input?, path, equals } (for example that no money has moved). An input value of the form {{path}} is read from the journey's data. */
@@ -30,6 +32,10 @@ export type SimResult = {
   visited: string[];
   unvisited: string[];
   data: Record<string, unknown>;
+  /** The journeys that were asked for by navigate.toJourney, in order, with the values they were given. Followed when found in `journeys`. */
+  opened: { journey: string; launch: Record<string, unknown>; followed: boolean }[];
+  /** The slug of the journey the walk ended in (the target when a chain was followed). */
+  endedIn: string;
   bank: { balances: Record<string, number>; limitUsedToday: number };
 };
 
@@ -80,6 +86,10 @@ export type SimOptions = {
   flaws?: Flaws;
   /** Things that go wrong in the sandbox on purpose (a timeout, an unavailable adapter, a frozen account). */
   conditions?: SandboxConditions;
+  /** Values the journey is opened with, by data path: they are there before the entry screen runs. */
+  launch?: Record<string, unknown>;
+  /** Where to find a journey that this one opens (navigate.toJourney, by slug; a copy for a bank, add-money-acme, matches add-money). Default: the shipped BankWorkx journeys. A target not found here is recorded, not followed. */
+  journeys?: Journey[];
 };
 
 export async function simulate(opts: SimOptions): Promise<SimResult> {
@@ -96,7 +106,7 @@ export async function simulate(opts: SimOptions): Promise<SimResult> {
   const saved: Record<string, unknown> = {};
   const pick = (path: string) => path.split(".").reduce((o: any, k) => o?.[k], { setup: saved });
   const resolve = (v: unknown): unknown => {
-    if (typeof v === "string") { const m = /^\{\{\s*(setup\.[^}]+?)\s*\}\}$/.exec(v); return m ? pick(m[1]!) : v; }
+    if (typeof v === "string") { const e = wholeExpression(v); return e?.startsWith("setup.") ? pick(e) : v; }
     if (Array.isArray(v)) return v.map(resolve);
     if (v && typeof v === "object") return Object.fromEntries(Object.entries(v).map(([k, x]) => [k, resolve(x)]));
     return v;
@@ -107,7 +117,25 @@ export async function simulate(opts: SimOptions): Promise<SimResult> {
       if (call.saveAs) saved[call.saveAs] = answer;
     } catch (e) { setupFailures.push(`Setup ${k + 1} (${call.adapter}) failed: ${(e as Error).message}`); }
   }
-  const runner = new JourneyRunner(journey, { adapter: (id, input) => bank.call(id, input), lang });
+  const catalog = opts.journeys ?? bankworkxJourneys;
+  const find = (want: string) => catalog.find((j) => j.slug === want) ?? catalog.find((j) => j.slug.startsWith(`${want}-`));
+  const opened: SimResult["opened"] = [];
+  let asked: ChainRequest | null = null;
+  const make = (j: Journey, launch?: Record<string, unknown>) => new JourneyRunner(j, { adapter: (id, input) => bank.call(id, input), lang, launch: launch as Record<string, any> | undefined, openJourney: (r) => { asked = r; } });
+  let runner = make(journey, opts.launch);
+  let cur = journey;
+  /** A journey asked to open another: switch to it when it can be found (and it supports the language), else just remember the request. */
+  const follow = async () => {
+    for (let hops = 0; asked && hops < 5; hops++) {
+      const req: ChainRequest = asked; asked = null;
+      const target = find(req.journey);
+      const usable = !!target && target.locale.supported.includes(lang);
+      opened.push({ journey: req.journey, launch: req.launch, followed: usable });
+      if (!usable) return;
+      cur = target!; runner = make(cur, req.launch);
+      await runner.start();
+    }
+  };
   const frames: Frame[] = [];
   const failures: string[] = [...setupFailures];
   const visited = new Set<string>();
@@ -126,7 +154,7 @@ export async function simulate(opts: SimOptions): Promise<SimResult> {
     failures.push(`Step ${step} ${what}${errs.length ? ` (validation errors: ${errs.map(([k, m]) => `${k}: ${m}`).join("; ")})` : ""}${v.toast ? ` (toast: "${v.toast}")` : ""}`);
   };
 
-  try { await runner.start(); } catch (e) { failures.push(`The journey failed to start: ${(e as Error).message}`); }
+  try { await runner.start(); await follow(); } catch (e) { failures.push(`The journey failed to start: ${(e as Error).message}`); }
   let view = snap(0, "start");
   let stopped = failures.length > 0;
 
@@ -149,7 +177,7 @@ export async function simulate(opts: SimOptions): Promise<SimResult> {
       // the same button as written in the journey (not translated), found by where it sits on the screen: a button that is hidden must not be mistaken for one that is shown
       const raw = [...shown.filter((b) => b.type === "button").map((b) => (runner.screen.blocks as any[])[b.srcIndex]), ...rows];
       const want = String(step.press).trim().toLowerCase();
-      const idx = buttons.findIndex((b, k) => String(b.label).trim().toLowerCase() === want || localize(raw[k]?.label, journey.locale.default, journey.locale.default).trim().toLowerCase() === want);
+      const idx = buttons.findIndex((b, k) => String(b.label).trim().toLowerCase() === want || localize(raw[k]?.label, cur.locale.default, cur.locale.default).trim().toLowerCase() === want);
       if (idx < 0) {
         view = snap(n, `press "${step.press}"`);
         fail(n, `press "${step.press}": there is no such button on screen "${view.screenId}". Buttons here: ${buttons.map((b) => `"${b.label}"`).join(", ") || "none"}`, view);
@@ -158,6 +186,7 @@ export async function simulate(opts: SimOptions): Promise<SimResult> {
       }
       try {
         await runner.press(buttons[idx].actions);
+        await follow();
         view = snap(n, `press "${buttons[idx].label}"`);
       } catch (e) {
         view = snap(n, `press "${buttons[idx].label}"`);
@@ -189,11 +218,20 @@ export async function simulate(opts: SimOptions): Promise<SimResult> {
           const got = e.path.split(".").reduce((o: any, k: string) => o?.[k], await bank.call(e.adapter, input as Record<string, any>));
           if (JSON.stringify(got) !== JSON.stringify(e.equals)) fail(n, `${did}: it is ${JSON.stringify(got)}`, view);
         } catch (err) { fail(n, `${did}: the bank call failed: ${(err as Error).message}`, view); }
+      } else if ("expectOpens" in step) {
+        const e = step.expectOpens;
+        did = `expect it opens journey "${e.journey}"${e.with ? ` with ${JSON.stringify(e.with)}` : ""}`;
+        const last = opened[opened.length - 1];
+        if (!last || last.journey !== e.journey) fail(n, `${did}: ${last ? `the last journey it opened is "${last.journey}"` : "no other journey was opened"}`, view);
+        else {
+          const wrong = Object.entries(e.with ?? {}).filter(([k, v]) => JSON.stringify(last.launch[k]) !== JSON.stringify(v));
+          if (wrong.length) fail(n, `${did}: it was opened with ${wrong.map(([k]) => `${k} = ${JSON.stringify(last.launch[k])}`).join(", ")}`, view);
+        }
       } else if ("expectToast" in step) {
         did = `expect message "${step.expectToast}"`;
         if (!view.toast || !view.toast.toLowerCase().includes(String(step.expectToast).toLowerCase())) fail(n, `${did}: the message shown is ${view.toast ? `"${view.toast}"` : "none"}`, view);
       } else {
-        failures.push(`Step ${n} is not a known action. Use set, press, advance, expectScreen, expectText, expectNoText, expectError, expectToast or expectBank.`);
+        failures.push(`Step ${n} is not a known action. Use set, press, advance, expectScreen, expectText, expectNoText, expectError, expectToast, expectOpens or expectBank.`);
         stopped = true;
         break;
       }
@@ -209,7 +247,7 @@ export async function simulate(opts: SimOptions): Promise<SimResult> {
     failures: failures.slice(0, 10),
     finalScreen: finalView.screenId, finalKind: finalView.kind, exited: finalView.exited,
     visited: [...visited], unvisited: journey.screens.map((s) => s.id).filter((id) => !visited.has(id)),
-    data,
+    data, opened, endedIn: cur.slug,
     bank: { balances: Object.fromEntries(bank.persona.accounts.map((a) => [a.id, a.balance])), limitUsedToday: bank.persona.limits.usedToday },
   };
 }

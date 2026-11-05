@@ -7,7 +7,7 @@ export type TabId = "dashboard" | "accounts" | "budgets" | "wallet";
 export type Sheet = null | "fab" | "menu" | "notes";
 /** The Invest area sits above the tabs: null is closed, {} is its home, { symbol } is one stock or fund. */
 export type InvestView = null | { symbol?: string };
-export type ActiveJourney = Live & { initial?: Record<string, any> };
+export type ActiveJourney = Live & { initial?: Record<string, any>; /** Values there before the entry screen runs. */ launch?: Record<string, any> };
 export type Toast = { text: string; ok: boolean } | null;
 
 export type AppState = {
@@ -30,6 +30,9 @@ export type AppState = {
   opening: string | null;
   studioUrl: string;
 };
+
+/** Launch values waiting for a journey that a web address opens (the address cannot carry them). */
+type PendingLaunch = { slug: string; values: Record<string, any> };
 
 export type BankAppDeps = {
   /** The bank this app is. Decides which sandbox customers can sign in. */
@@ -57,6 +60,7 @@ export class BankApp {
   private timer: ReturnType<typeof setTimeout> | null = null;
   private current: MockBank;
   private adapterFor: MockBank | null = null;
+  private pending: PendingLaunch | null = null;
   private adapterFn!: (id: string, input: Record<string, any>) => Promise<any>;
 
   constructor(private deps: BankAppDeps) {
@@ -124,16 +128,34 @@ export class BankApp {
   resolveSlug(want: string) { return this.state.catalog.entries.find((e) => slugIs(e.slug, want))?.slug ?? want; }
   /** Loads a journey (from Studio, else the bundled copy) without changing the screen. For apps where the address decides the screen. */
   fetchJourney(want: string) { return this.deps.live.loadJourney(this.state.studioUrl, this.resolveSlug(want)); }
-  /** Opens a journey by name. Fails with a notice, never an exception. */
-  async openJourney(want: string, initial?: Record<string, any>) {
+  /**
+   * Opens a journey by name. `initial` answers are filled in after its first screen opens; `launch` values are there before it
+   * runs, so its entry can branch on them. Fails with a notice, never an exception.
+   */
+  async openJourney(want: string, initial?: Record<string, any>, launch?: Record<string, any>) {
     const slug = this.resolveSlug(want);
     this.set({ sheet: null, opening: slug });
     const l = await this.deps.live.loadJourney(this.state.studioUrl, slug);
-    if (l) this.set({ opening: null, active: { ...l, initial }, screen: "journey" });
+    if (l) this.set({ opening: null, active: { ...l, initial, launch }, screen: "journey" });
     else { this.set({ opening: null }); this.say("That journey is not available right now.", false); }
   }
+  /**
+   * A journey asked to open another one (navigate.toJourney): the target takes its place with the values it was given.
+   * When the target cannot be loaded the calling journey (which has nothing left to show) is closed with a notice.
+   */
+  async openChained(want: string, launch: Record<string, any>) {
+    const slug = this.resolveSlug(want);
+    const l = await this.deps.live.loadJourney(this.state.studioUrl, slug);
+    if (l) this.set({ active: { ...l, launch }, screen: "journey" });
+    else { this.closeJourney(); this.say("That journey is not available right now.", false); }
+  }
+  /** For apps where the address decides the journey: values to start the journey at `want` with, picked up by `launchFor` when it opens. */
+  setLaunch(want: string, values: Record<string, any>) { this.pending = { slug: this.resolveSlug(want), values }; }
+  launchFor(want: string): Record<string, any> | undefined { return this.pending && this.pending.slug === this.resolveSlug(want) ? this.pending.values : undefined; }
+  clearLaunch() { this.pending = null; }
   /** The journey finished or was closed: back to the app, and everything redraws because balances may have changed. */
   closeJourney() {
+    this.pending = null;
     this.set({ screen: "app", active: null, tick: this.state.tick + 1 });
     void this.refreshCatalog();
   }

@@ -133,7 +133,7 @@ What the runs found, and what changed because of it:
 - Runs need a logged-in Claude Code session. There are no unattended server-side agents.
 - Heavy use is bounded by your subscription's usage limits.
 - Only sandbox integrations exist (accounts, beneficiaries, limits, OTP, transfers, bills, top-up). Real core connectors, such as Temenos Fabric, come later behind the same contract.
-- Some block options are declarative only for now: OTP `maxAttempts` and `resendAfterSeconds`, `navigation.default`, `share`, and `navigate.toJourney`. The catalog says which.
+- Some block options are declarative only for now: OTP `maxAttempts` and `resendAfterSeconds`, `navigation.default`, `share`, and `navigate.returnTo`. The catalog says which.
 
 ## Troubleshooting
 

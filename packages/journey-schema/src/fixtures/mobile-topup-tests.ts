@@ -1,6 +1,6 @@
 import type { Journey } from "../schema";
 
-/** What must be true for "Mobile top-up" to be right. Each is proved by at least one scenario below. AC-9 of the spec (a deep link that skips the operator step) needs launch values, which the engine does not have. */
+/** What must be true for "Mobile top-up" to be right. Each is proved by at least one scenario below. */
 export const mobileTopupAcceptance: NonNullable<Journey["acceptance"]> = [
   { id: "AC-1", text: "Only the operator's own amounts can be chosen: each operator offers its fixed amounts, and the bank refuses any other amount." },
   { id: "AC-2", text: "The number must match the home market's rule, with the market's message; spaces, brackets and hyphens are ignored." },
@@ -10,6 +10,7 @@ export const mobileTopupAcceptance: NonNullable<Journey["acceptance"]> = [
   { id: "AC-6", text: "A wrong code takes no money; three wrong codes stop the journey; the right code takes the amount once, adds it to the activity list and shows \"Top-up sent\"." },
   { id: "AC-7", text: "With saveNumbers on, \"Save this number\" appears for a new number and saves it under the name given (2 to 20 characters); with it off, or for a number already saved, the switch is absent and nothing is saved." },
   { id: "AC-8", text: "A number ending 0000 or 1111 is refused with the messages \"We can’t top up this number. Check it and try again.\" and \"The operator isn’t available right now. Try again later.\"" },
+  { id: "AC-9", text: "Opened with an operator (the launch value launch.operatorId, as from a deep link) that the bank has, it goes straight to the number step with that operator chosen; an operator the bank does not have is ignored and the operator step shows. The operator is used once: Top up again asks again." },
   { id: "AC-10", text: "On timeout the person is told to check Activity first; when the bank is unavailable, or a slow or unavailable service is met on the way, nothing is taken." },
 ];
 
@@ -319,5 +320,18 @@ export const mobileTopupScenarios: NonNullable<Journey["scenarios"]> = [
   {
     id: "T-33", name: "The code cannot be sent: standard message, nothing taken, and Try again returns to the review", covers: ["AC-10"], ...base, conditions: { unavailable: ["bank.otp.send"] },
     steps: [...walk("Aster Mobile", "My phone", "$20.00"), ...review, ...confirm, screen("unavailable"), press("Try again"), screen("review"), ...unchanged],
+  },
+  {
+    id: "T-34", name: "Opened with an operator: the operator step is skipped, that operator's amounts are offered, and the top-up goes through", covers: ["AC-9"], ...base, launch: { "launch.operatorId": "bright" },
+    steps: [
+      screen("num"), text("Brightline"), noText("Aster Mobile"), press("Lena"), screen("amt"), text("$30.00"), noText("$5.00"), press("$30.00"), screen("from"),
+      ...review, text("Brightline"), ...confirm, ...code(), press("Top up"), screen("success"), text("Top-up sent"), balance("acc_main", 8690.76),
+      // the operator was used once: Top up again asks for the operator
+      press("Top up again"), screen("op"), text("Aster Mobile"),
+    ],
+  },
+  {
+    id: "T-35", name: "Opened with an operator the bank does not have: ignored, the operator step shows and nothing is chosen", covers: ["AC-9"], ...base, launch: { "launch.operatorId": "nobody" },
+    steps: [screen("op"), text("Aster Mobile"), text("Brightline"), text("Cobalt Wireless"), press("Cobalt Wireless"), screen("num"), text("Cobalt Wireless"), ...unchanged],
   },
 ];

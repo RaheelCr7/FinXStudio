@@ -23,6 +23,8 @@ function tokenize(src: string): Tok[] {
 const FUNCS: Record<string, (...a: any[]) => any> = {
   min: Math.min, max: Math.max, abs: Math.abs, round: Math.round, floor: Math.floor, ceil: Math.ceil,
   len: (x: any) => (x == null ? 0 : x.length ?? Object.keys(x).length),
+  /** An entry of a map by a key that is itself data, for example get(ctx.carriers, deep.operatorId). Own entries only; missing is undefined. */
+  get: (o: any, k: any) => (o != null && typeof o === "object" && Object.prototype.hasOwnProperty.call(o, String(k)) ? o[String(k)] : undefined),
   isEmpty: (x: any) => x == null || x === "" || (Array.isArray(x) && x.length === 0),
 };
 

@@ -1,4 +1,4 @@
-import type { Journey } from "@finx/journey-schema";
+import { bankworkxJourneys, chainTargets, type Journey } from "@finx/journey-schema";
 import type { Flaws, ProviderId } from "@finx/mock-bank-api";
 import { simulate, type SimOptions, type Step } from "./simulate";
 
@@ -14,7 +14,7 @@ export type ScenarioReport = {
   coverage: CoverageRow[]; uncovered: string[];
 };
 
-type Overrides = { flaws?: Flaws; provider?: ProviderId };
+type Overrides = { flaws?: Flaws; provider?: ProviderId; /** Journeys that a scenario may be sent to by navigate.toJourney. Default: the shipped BankWorkx journeys. */ journeys?: Journey[] };
 
 export async function runScenarios(journey: Journey, over: Overrides = {}): Promise<ScenarioReport> {
   const results: ScenarioResult[] = [];
@@ -22,7 +22,7 @@ export async function runScenarios(journey: Journey, over: Overrides = {}): Prom
     const opts: SimOptions = {
       journey, persona: t.persona, lang: t.lang ?? journey.locale.default, steps: t.steps as unknown as Step[],
       provider: (over.provider ?? (t.provider as ProviderId | undefined)), now: t.now ? Date.parse(t.now) : undefined,
-      setup: t.setup as SimOptions["setup"], flaws: over.flaws, conditions: t.conditions,
+      setup: t.setup as SimOptions["setup"], flaws: over.flaws, conditions: t.conditions, launch: t.launch, journeys: over.journeys,
     };
     try {
       const r = await simulate(opts);
@@ -75,6 +75,10 @@ export function journeyMutants(journey: Journey): Mutant[] {
     const nth = (j: any) => { let c = 0, hit: any = null; eachAction(j, (l, ix) => { if (++c === k) hit = { l, ix }; }); return hit; };
     if (a.type === "validate") add(`no-validate-${k}`, `Remove the validation step on ${where}`, (j) => { const h = nth(j); if (!h || h.l[h.ix].type !== "validate") return false; h.l.splice(h.ix, 1); return true; });
     if (a.type === "callApi" && /otp\.verify|otpVerify/.test(a.integration)) add(`no-otp-check-${k}`, `Skip the one-time code check on ${where}`, (j) => { const h = nth(j); if (!h || h.l[h.ix].type !== "callApi") return false; h.l.splice(h.ix, 1); return true; });
+    if (a.type === "navigate" && a.toJourney) {
+      add(`no-chain-${k}`, `Do not open ${a.toJourney} from ${where}`, (j) => { const h = nth(j); if (!h || !h.l[h.ix].toJourney) return false; h.l.splice(h.ix, 1); return true; });
+      for (const key of Object.keys(a.with ?? {})) add(`no-launch-value-${k}-${key}`, `Open ${a.toJourney} from ${where} without the value ${key}`, (j) => { const h = nth(j); if (!h || !h.l[h.ix].with || !(key in h.l[h.ix].with)) return false; delete h.l[h.ix].with[key]; return true; });
+    }
     if (a.type === "callApi" && a.onError) add(`no-error-path-${k}`, `Remove the error path of ${a.integration} on ${where}`, (j) => { const h = nth(j); if (!h || !h.l[h.ix].onError) return false; delete h.l[h.ix].onError; return true; });
   });
 
@@ -160,15 +164,17 @@ export function bankMutants(journey: Journey): Mutant[] {
  * `accepted` lists mutants the tests do not catch on purpose, each with the reason (for example another layer already stops it,
  * so the screen can never reach the broken rule). A survivor that is not accepted fails the check.
  */
-export async function mutationCheck(journey: Journey, accepted: Record<string, string> = {}): Promise<MutationReport> {
-  const mutants = [...journeyMutants(journey), ...bankMutants(journey)];
+export async function mutationCheck(journey: Journey, accepted: Record<string, string> = {}, journeys: Journey[] = bankworkxJourneys): Promise<MutationReport> {
+  // a journey that opens others meets the bank rules of the journeys it opens, so those rules are mutated too
+  const opened = chainTargets(journey).flatMap((t) => journeys.find((x) => x.slug === t || x.slug.startsWith(`${t}-`))?.integrations ?? []);
+  const mutants = [...journeyMutants(journey), ...bankMutants(opened.length ? { ...journey, integrations: [...journey.integrations, ...opened] } : journey)];
   const results: MutantResult[] = [];
   for (const m of mutants) {
     let target: Journey | null = journey;
     if (m.journey) target = m.journey(journey);
     if (!target) continue;
     let report;
-    try { report = await runScenarios(target, { flaws: m.flaws }); } catch { results.push({ id: m.id, what: m.what, kind: m.kind, killed: true, caughtBy: ["(the broken journey could not run)"] }); continue; }
+    try { report = await runScenarios(target, { flaws: m.flaws, journeys }); } catch { results.push({ id: m.id, what: m.what, kind: m.kind, killed: true, caughtBy: ["(the broken journey could not run)"] }); continue; }
     const caught = report.results.filter((r) => !r.ok).map((r) => r.id);
     results.push({ id: m.id, what: m.what, kind: m.kind, killed: caught.length > 0, caughtBy: caught });
   }
