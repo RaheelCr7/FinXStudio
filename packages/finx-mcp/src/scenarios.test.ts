@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { bankworkxJourneys, chainTargets, chainWarnings, bulkPayment, catalog, corporateApproval, corporatePayment, Journey, withdrawPayment, payrollRun, ownTransfer, manageBeneficiary, personalTransfer, internalTransfer, internationalTransfer, payBillBankworkx, mobileTopup, schedulePayment, cancelStandingOrder, supplierPayment, approvePayments, signIn, forgotUsername, resetPassword, forgotPassword, unlockAccount, changePassword, trustedDevices, setupQuickLogin, changeQuickPin, accounts, accountDetails, statement, accountNickname, openAnotherAccount, budgets, createBudget, transferTypes, singleTransfer } from "@finx/journey-schema";
+import { bankworkxJourneys, chainTargets, chainWarnings, bulkPayment, catalog, corporateApproval, corporatePayment, Journey, withdrawPayment, payrollRun, ownTransfer, manageBeneficiary, personalTransfer, internalTransfer, internationalTransfer, payBillBankworkx, mobileTopup, schedulePayment, cancelStandingOrder, supplierPayment, approvePayments, signIn, forgotUsername, resetPassword, forgotPassword, unlockAccount, changePassword, trustedDevices, setupQuickLogin, changeQuickPin, accounts, accountDetails, statement, accountNickname, openAnotherAccount, budgets, createBudget, transferTypes, singleTransfer, cardPin } from "@finx/journey-schema";
 import { lintAll } from "@finx/renderer-core";
 import { mutationCheck, runScenarios } from "./scenarios";
 import { simulate } from "./simulate";
@@ -1090,4 +1090,47 @@ describe("single-transfer: Quick transfer (opens Send money)", () => {
     expect([m.total, m.killed, m.accepted.length]).toEqual([26, 10, 16]);
     expect(m.results.filter((x) => x.kind === "journey" && !x.killed)).toEqual([]);
   }, 240_000);
+});
+
+/**
+ * The Cards journeys (Personal: Cards). They run for Alex Morgan, whose cards are the sandbox's (Everyday debit ••9021, Aurora credit ••3318, Spare debit ••7745 not
+ * yet activated, a virtual card ••6150) on Tuesday 3 November 2026. A rule of the bank that a journey only meets through another one it opens is proved where it
+ * lives: each such survivor says where. The numbers of the other home markets are set by a scenario with `config: { homeMarket }`.
+ */
+describe("card-pin: Set or change a card PIN", () => {
+  const j = Journey.parse(cardPin);
+  const ACC: Record<string, string> = {
+    "no-error-path-20": RESEND,
+    "no-rule-fail-4": "The bank asks for the code again only if the code it accepted was used in between, which one session cannot arrange; the bank's own refusal is proved by T-23",
+  };
+  it("is lint clean, every scenario passes and every acceptance criterion is proved", async () => {
+    expect(lintAll(j)).toEqual([]);
+    const r = await runScenarios(j);
+    expect(r.results.filter((x) => !x.ok).map((x) => `${x.id} ${x.name}: ${x.failures.join(" | ")}`)).toEqual([]);
+    expect(r.coverage.map((c) => [c.id, c.status])).toEqual((j.acceptance ?? []).map((a) => [a.id, "proved"]));
+    expect([r.passed, r.total, r.coverage.length]).toEqual([24, 24, 9]);
+  });
+  it("the tests notice when the journey or the bank's rules are broken (mutation check)", async () => {
+    const m = await mutationCheck(j, ACC);
+    expect(m.survived.map((s) => `${s.id}: ${s.what}`)).toEqual([]);
+    expect([m.total, m.killed, m.accepted.length]).toEqual([23, 21, 2]);
+    for (const id of ["bank-pinCode", "bank-pinStrength", "bank-cardState"]) expect(m.results.find((x) => x.id === id)?.killed, id).toBe(true);
+  }, 240_000);
+  it("is for BankWorkx only, asks for a code before the PIN and never keeps the PIN or the code after the bank has them", async () => {
+    expect([cardPin.apps, cardPin.channels]).toEqual([["bankworkx"], ["web", "mobile"]]);
+    expect(catalog.filter((c) => c.id === "card-pin").map((c) => [c.madeFor, c.category])).toEqual([["bankworkx", "Cards"]]);
+    expect(bankworkxJourneys.map((x) => x.slug)).toContain("card-pin");
+    const save = cardPin.screens.find((s) => s.id === "save")!;
+    expect(JSON.stringify(save.onEnter)).toContain('"path":"pin.new","value":""');
+    const verify = cardPin.screens.find((s) => s.id === "code")!.blocks.flatMap((b: any) => (b.type === "button" ? b.actions : [])).filter((a: any) => a.type === "callApi").map((a: any) => a.integration);
+    expect(verify[0]).toBe("otpVerify");
+    // a run to the end leaves no PIN and no code in what the journey holds, in any screen it showed, nor in the bank's own dump
+    const r = await simulate({
+      journey: j, persona: "alex", lang: "en", now: Date.parse("2026-11-03T10:00:00Z"), launch: { "launch.cardId": "card_9021" },
+      steps: [{ set: { "otp.code": "482100" } }, { press: "Continue" }, { set: { "pin.new": "2580", "pin.confirm": "2580" } }, { press: "Save PIN" }],
+    });
+    expect(r.finalScreen).toBe("done");
+    expect(JSON.stringify([r.data, r.frames])).not.toContain("2580");
+    expect(JSON.stringify(r.data)).not.toContain("482100");
+  });
 });

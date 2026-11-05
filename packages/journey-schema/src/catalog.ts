@@ -36,6 +36,14 @@ import { openAnotherAccount } from "./fixtures/open-another-account";
 import { budgets } from "./fixtures/budgets";
 import { transferTypes } from "./fixtures/transfer-types";
 import { singleTransfer } from "./fixtures/single-transfer";
+import { disputeTransaction } from "./fixtures/dispute-transaction";
+import { replaceCard } from "./fixtures/replace-card";
+import { virtualCard } from "./fixtures/virtual-card";
+import { freezeCard } from "./fixtures/freeze-card";
+import { cardControls } from "./fixtures/card-controls";
+import { activateCard } from "./fixtures/activate-card";
+import { cardsView } from "./fixtures/cards";
+import { cardPin } from "./fixtures/card-pin";
 
 /**
  * The journey catalog: ready-made journeys a project can add to its own app.
@@ -212,6 +220,46 @@ export const catalog: CatalogEntry[] = [
     id: singleTransfer.slug, category: "Payments", madeFor: "bankworkx", journey: singleTransfer,
     summary: "Quick transfer: pay a saved payee at another bank or in another country. An alias that opens Send money with the type chosen, with the bank's Instant, Later and new-payee options passed on.",
     highlights: ["Alias of Send money", "Instant, Later and new-payee options reach Send money", "Nothing to send with when both ways are off"],
+  },
+  {
+    id: cardPin.slug, category: "Cards", madeFor: "bankworkx", journey: cardPin,
+    summary: "Set or change the PIN of a card after a one-time code: choose the card, the code, a new 4-digit PIN typed twice. The PIN is never shown or kept; easy PINs are refused.",
+    highlights: ["One-time code first", "PIN typed twice, never shown", "Easy PINs refused (blockWeak)", "Three wrong codes end it", "Virtual and inactive cards refused"],
+  },
+  {
+    id: cardsView.slug, category: "Cards", madeFor: "bankworkx", journey: cardsView,
+    summary: "The person's cards (debit, credit and virtual) as faces with their status, the money available, quick actions for the chosen card (Freeze, Controls, PIN, Activate, Replace) and its recent transactions.",
+    highlights: ["Card faces with status pills", "One status line per card state", "Quick actions follow the card's state", "Freeze at once; unfreeze asks for a code", "Recent transactions", "No cards and unavailable states"],
+  },
+  {
+    id: activateCard.slug, category: "Cards", madeFor: "bankworkx", journey: activateCard,
+    summary: "Turn on a new card with its last 4 digits, expiry and security code, then set its PIN now or later. Three wrong tries lock activation.",
+    highlights: ["Last 4 digits, expiry and security code", "Three wrong tries lock the card", "PIN rules at activation", "Set the PIN now or later", "Bank-side checks and no code kept"],
+  },
+  {
+    id: cardControls.slug, category: "Cards", madeFor: "bankworkx", journey: cardControls,
+    summary: "Freeze or unfreeze a card, set its spending limits, choose where it works (with an optional trip) and set alerts. Tightening is instant; loosening asks for a one-time code.",
+    highlights: ["Freeze at once, unfreeze with a code", "Limits against the bank's ceilings and their order", "Where it works with a trip up to 90 days", "Alerts never ask for a code", "Review lists each change before and after"],
+  },
+  {
+    id: freezeCard.slug, category: "Cards", madeFor: "bankworkx", journey: freezeCard,
+    summary: "An alias of Card limits and controls: opens it on the freeze change (or the unfreeze change, which asks for a code).",
+    highlights: ["Alias of Card limits and controls", "Freeze needs no code", "Unfreeze asks for a one-time code"],
+  },
+  {
+    id: virtualCard.slug, category: "Cards", madeFor: "bankworkx", journey: virtualCard,
+    summary: "Create a virtual card for online shopping, subscriptions or one payment, with its own limit. Confirmed with a one-time code; the details are shown once.",
+    highlights: ["Linked to an active card", "Limit from 1.00 to 5,000.00", "Single use or 3 years", "At most 5 per card", "Details shown once"],
+  },
+  {
+    id: replaceCard.slug, category: "Cards", madeFor: "bankworkx", journey: replaceCard,
+    summary: "Order a replacement for a lost, stolen, damaged or expired card. A lost or stolen card is blocked at once; the order needs a one-time code.",
+    highlights: ["Lost and stolen block the card at once", "Damaged keeps working until the new card is used", "Express delivery has a fee", "Home or another address", "One-time code before the order"],
+  },
+  {
+    id: disputeTransaction.slug, category: "Cards", madeFor: "bankworkx", journey: disputeTransaction,
+    summary: "Report a card payment the person does not recognise or that went wrong: only a posted payment out, at most 120 days old, once. Moves no money; the bank decides after review.",
+    highlights: ["Posted card payments out, within 120 days", "Details by reason", "Optional receipt or screenshot", "Declaration", "Block the card when not recognised"],
   },
   {
     id: invest.slug, category: "Investing", madeFor: "bankworkx", journey: invest,

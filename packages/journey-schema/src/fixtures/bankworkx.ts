@@ -28,6 +28,14 @@ import { budgets } from "./budgets";
 import { transferTypes } from "./transfer-types";
 import { accountNickname } from "./account-nickname";
 import { singleTransfer } from "./single-transfer";
+import { disputeTransaction } from "./dispute-transaction";
+import { replaceCard } from "./replace-card";
+import { virtualCard } from "./virtual-card";
+import { freezeCard } from "./freeze-card";
+import { cardControls } from "./card-controls";
+import { activateCard } from "./activate-card";
+import { cardsView } from "./cards";
+import { cardPin } from "./card-pin";
 
 // Create a budget is its own file (accounts and budgets belong together); it is still exported from here, where it always was
 export { createBudget };
@@ -320,4 +328,4 @@ export const sellInvestment: Journey = {
   ],
 };
 
-export const bankworkxJourneys: Journey[] = [addMoney, addCard, connectAccount, createBudget, invest, sellInvestment, ownTransfer, manageBeneficiary, personalTransfer, internalTransfer, internationalTransfer, payBillBankworkx, mobileTopup, schedulePayment, cancelStandingOrder, supplierPayment, approvePayments, signIn, forgotUsername, resetPassword, forgotPassword, unlockAccount, changePassword, trustedDevices, changeQuickPin, setupQuickLogin, accounts, accountDetails, statement, openAnotherAccount, budgets, accountNickname, transferTypes, singleTransfer];
+export const bankworkxJourneys: Journey[] = [addMoney, addCard, connectAccount, createBudget, invest, sellInvestment, ownTransfer, manageBeneficiary, personalTransfer, internalTransfer, internationalTransfer, payBillBankworkx, mobileTopup, schedulePayment, cancelStandingOrder, supplierPayment, approvePayments, signIn, forgotUsername, resetPassword, forgotPassword, unlockAccount, changePassword, trustedDevices, changeQuickPin, setupQuickLogin, accounts, accountDetails, statement, openAnotherAccount, budgets, accountNickname, transferTypes, singleTransfer, cardPin];

@@ -1,5 +1,6 @@
 import { BankError } from "./errors";
 import { alexFinance, type Category, type Finance } from "./retail/finance";
+import { alexCards, emptyCards, type CardsSeed } from "./retail/cards";
 import { ACME, type CorpCompany, type Flaws } from "./business/corporate";
 import { ALPHA, BETA, BETA_CAST, seedPayments } from "./business/alpha-beta";
 import { createCorporateProvider, type CorporateProvider, type ProviderId } from "./business/corporate-provider";
@@ -86,8 +87,10 @@ export type Persona = {
   limits: { daily: number; usedToday: number };
   /** Daily limits for accounts in other currencies, by currency code. `limits` applies to the currency of the first account. */
   limitsByCurrency?: Record<string, { daily: number; usedToday: number }>;
-  /** Spending, budgets and cards, for the BankWorkx app. */
+  /** Spending, budgets and saved cards, for the BankWorkx app. */
   finance?: Finance;
+  /** The cards the bank issued (retail/cards.ts): their state, controls, limits, transactions and the cases opened on them. */
+  cards?: CardsSeed;
   /** Everything else a retail customer has: transactions, cards, deposits, goals, loans, messages, applications. */
   retail?: RetailData;
   /** One login, several places to bank from: the companies this person acts for. Absent for a persona with a single place. */
@@ -199,6 +202,7 @@ export const personas: Record<string, Persona> = {
     limitsByCurrency: { EUR: { daily: 20000, usedToday: 0 }, AED: { daily: 100000, usedToday: 0 } },
     finance: alexFinance(),
     retail: alexRetail(),
+    cards: alexCards(),
     identity: { id: "alex", name: "Alex Morgan", password: "Bwx!Demo2026", business: [{ id: "alpha", company: ALPHA, userId: "alex" }, { id: "beta", company: BETA, userId: "alex" }] },
     behaviour: { otpCode: "482100", kyc: "verified" },
   },
@@ -284,6 +288,7 @@ export const personas: Record<string, Persona> = {
     id: "sam", brand: "bankworkx", name: "Sam Rivera (new customer)", phone: "+1 415 555 0199",
     accounts: [], beneficiaries: [], limits: { daily: 50000, usedToday: 0 },
     finance: { ...alexFinance(), income: 0, expense: 0, savings: 0, balanceSeries: [], ranges: { "1W": [], "1M": [], "3M": [], "1Y": [] }, spendingByCategory: [], transactions: [], budgets: [], subscriptions: [], linked: [], cards: [], invest: { holdings: [], watchlist: [] } },
+    cards: emptyCards(),
     behaviour: { otpCode: "123456", kyc: "verified" },
   },
   zara: {

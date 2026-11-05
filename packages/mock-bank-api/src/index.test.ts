@@ -85,14 +85,17 @@ describe("BankWorkx sandbox", () => {
     await expect(b.call("bank.deposit.create", { toAccountId: "acc_main", fromCardId: "c_5832", amount: 50001 })).rejects.toMatchObject({ code: "INVALID_AMOUNT" });
     await expect(b.call("bank.deposit.create", { toAccountId: "acc_main", fromCardId: "nope", amount: 5 })).rejects.toMatchObject({ code: "CARD_NOT_FOUND" });
   });
-  it("adds a card only when the number passes the Luhn check and the dates make sense", async () => {
-    const b = new MockBank("alex");
-    const ok = await b.call("bank.cards.add", { number: "4242 4242 4242 4242", holder: "Alex Morgan", expiry: "12/29", cvv: "123", nickname: "Travel" });
-    expect(ok).toMatchObject({ last4: "4242", network: "visa" });
-    await expect(b.call("bank.cards.add", { number: "4242 4242 4242 4241", expiry: "12/29", cvv: "123" })).rejects.toMatchObject({ code: "CARD_INVALID" });
-    await expect(b.call("bank.cards.add", { number: "5555 5555 5555 4444", expiry: "01/20", cvv: "123" })).rejects.toMatchObject({ code: "CARD_EXPIRED" });
-    await expect(b.call("bank.cards.add", { number: "5555 5555 5555 4444", expiry: "13/29", cvv: "123" })).rejects.toMatchObject({ code: "EXPIRY_INVALID" });
-    await expect(b.call("bank.cards.add", { number: "4242 4242 4242 4242", expiry: "12/29", cvv: "123" })).rejects.toMatchObject({ code: "CARD_EXISTS" });
+  it("saves a card only when the details check out and the person proved it is theirs (the Add a card rules are in cards.test.ts)", async () => {
+    const b = new MockBank("alex", { now: Date.parse("2026-11-03T10:00:00Z") });
+    const card = { number: "4242 4242 4242 4242", holder: "Alex Morgan", expiry: "12/29", cvv: "123", postcode: "62704", nickname: "Travel" };
+    await expect(b.call("bank.cards.add", card)).rejects.toMatchObject({ code: "VERIFY_REQUIRED" });
+    await b.call("bank.cards.check", card);
+    await b.call("bank.cards.verify", { method: "sms", code: "482100" });
+    expect(await b.call("bank.cards.add", card)).toMatchObject({ last4: "4242", network: "visa", usedFor: "Adding money and Paying" });
+    await expect(b.call("bank.cards.check", { ...card, number: "4242 4242 4242 4241" })).rejects.toMatchObject({ code: "CARD_INVALID" });
+    await expect(b.call("bank.cards.check", { ...card, number: "5555 5555 5555 4444", expiry: "01/20" })).rejects.toMatchObject({ code: "CARD_EXPIRED" });
+    await expect(b.call("bank.cards.check", { ...card, number: "5555 5555 5555 4444", expiry: "13/29" })).rejects.toMatchObject({ code: "EXPIRY_INVALID" });
+    await expect(b.call("bank.cards.check", card)).rejects.toMatchObject({ code: "CARD_DUPLICATE" });
   });
   it("connects a bank, refuses a bad login, and does not connect twice", async () => {
     const b = new MockBank("alex");

@@ -7,7 +7,7 @@ export type Txn = { id: string; title: string; category: Category; /** negative 
 export type Budget = { id: string; name: string; category: Category; limit: number; spent: number; /** Tell the customer at 80% and at 100% of the limit; on unless said otherwise. */ alert80?: boolean; alert100?: boolean };
 export type Subscription = { id: string; name: string; amount: number; nextInDays: number; color: string };
 export type LinkedBank = { id: string; bank: string; kind: "Savings" | "Current" | "Credit"; maskedNumber: string; balance: number };
-export type SavedCard = { id: string; network: "mastercard" | "visa"; last4: string; holder: string; expiry: string; nickname: string; isDefault: boolean };
+export type SavedCard = { id: string; network: "mastercard" | "visa" | "amex"; last4: string; holder: string; expiry: string; nickname: string; isDefault: boolean; /** what the customer uses it for (set when it was saved with the Add a card journey) */ uses?: { addMoney: boolean; pay: boolean } };
 export type Finance = {
   currency: string;
   income: number; expense: number; savings: number;
