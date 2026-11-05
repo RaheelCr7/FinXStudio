@@ -119,7 +119,7 @@ describe("topping up", () => {
   it("takes the amount once, moves the daily limit and writes it to Activity as a bill", async () => {
     const b = await verified();
     const r = await b.call("bank.topup.create", top());
-    expect(r).toMatchObject({ reference: expect.stringMatching(/^TOP-20261102-09\d\d$/), newBalance: 8700.76, operatorName: "Aster Mobile", last4: "3456", amount: 20, date: "3 Nov 2026", saved: false });
+    expect(r).toMatchObject({ reference: expect.stringMatching(/^TOP-\d{8}-09\d\d$/), newBalance: 8700.76, operatorName: "Aster Mobile", last4: "3456", amount: 20, date: "3 Nov 2026", saved: false });
     expect(await balance(b, "acc_main")).toBe(8700.76);
     expect((await b.call("bank.limits.get")).usedToday).toBe(20);
     const first: any = Object.values(await b.call("bank.activity.list"))[0];

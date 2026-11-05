@@ -77,6 +77,8 @@ export class RetailSandbox {
   private get conditions(): SandboxConditions { return this.host.conditions(); }
   /** The clock the bank runs on (tests move it). */
   private now = () => this.host.now();
+  /** Today by the sandbox clock as yyyymmdd, for the date part of a reference (TRX-20261103-0931). */
+  private day = () => new Date(this.now()).toISOString().slice(0, 10).replace(/-/g, "");
 
   /** The daily limit that applies to an account in this currency. The first account's currency uses `limits`; another needs its own entry. */
   private limitFor(currency: string) {
@@ -362,7 +364,7 @@ export class RetailSandbox {
         // the payment shows in Activity under the biller's name, as a bill
         this.p.finance?.transactions.unshift({ id: `t_bill${this.seq}`, title: q.biller.name, category: "bills", amount: -(q.cents + q.feeCents) / 100, daysAgo: 0, time: "Now" });
         return {
-          reference: `BILL-20261102-${String(930 + this.seq).padStart(4, "0")}`, paid: q.cents / 100, left: Math.max(0, (q.bill?.dueCents ?? q.cents) - q.cents) / 100, fee: q.biller.fee, rate: q.rate, youPay: q.youPay, currency: cur,
+          reference: `BILL-${this.day()}-${String(930 + this.seq).padStart(4, "0")}`, paid: q.cents / 100, left: Math.max(0, (q.bill?.dueCents ?? q.cents) - q.cents) / 100, fee: q.biller.fee, rate: q.rate, youPay: q.youPay, currency: cur,
           newBalance: q.from.balance, saved, nextAutopay: next?.firstText ?? null,
         };
       }
@@ -437,7 +439,7 @@ export class RetailSandbox {
         if (input.save === true && !this.isSavedNumber(q.op.id, q.number)) { this.savedNumbers.push({ id: `sn_new${++this.numSeq}`, name: String(input.name ?? "").trim() || q.op.name, operatorId: q.op.id, number: q.number }); saved = true; }
         // the payment shows in Activity as a bill, under the operator's name
         this.p.finance?.transactions.unshift({ id: `t_topup${this.seq}`, title: `${q.op.name} top-up`, category: "bills", amount: -q.amount, daysAgo: 0, time: "Now" });
-        return { reference: `TOP-20261102-${String(930 + this.seq).padStart(4, "0")}`, newBalance: q.from.balance, operatorName: q.op.name, last4: q.number.slice(-4), amount: q.amount, currency: cur, date: receiptDate(this.now()), saved };
+        return { reference: `TOP-${this.day()}-${String(930 + this.seq).padStart(4, "0")}`, newBalance: q.from.balance, operatorName: q.op.name, last4: q.number.slice(-4), amount: q.amount, currency: cur, date: receiptDate(this.now()), saved };
       }
       default: return undefined;
     }
@@ -778,7 +780,7 @@ export class RetailSandbox {
         let payeeId = q.payee.id, details: PayeeDetails | undefined;
         if (input.save === true && !payeeId && !held) details = this.examinePayee(input).d;
         this.seq += 1;
-        const reference = `TRX-20261102-${String(930 + this.seq).padStart(4, "0")}`, railReference = `RR-${String(7100 + this.seq)}`;
+        const reference = `TRX-${this.day()}-${String(930 + this.seq).padStart(4, "0")}`, railReference = `RR-${String(7100 + this.seq)}`;
         q.used = true; this.otp.verified = false;
         if (details) {
           const b: Beneficiary = { ...details, id: `ben_new${++this.benSeq}`, addedAt: this.now(), verified: false, nameCheck: "na" };
@@ -902,7 +904,7 @@ export class RetailSandbox {
         debit(from, q.total);
         credit(to, q.to.amount);
         q.used = true; this.otp.verified = false; this.seq += 1;
-        return { reference: `FX-20261102-${String(930 + this.seq).padStart(4, "0")}`, from: { currency: from.currency, newBalance: from.balance }, to: { currency: to.currency, newBalance: to.balance }, quoteId: q.quoteId };
+        return { reference: `FX-${this.day()}-${String(930 + this.seq).padStart(4, "0")}`, from: { currency: from.currency, newBalance: from.balance }, to: { currency: to.currency, newBalance: to.balance }, quoteId: q.quoteId };
       }
       case "bank.transfers.own": {
         // money between a person's own accounts in the same currency: instant, free, and not counted against the daily limit
@@ -919,7 +921,7 @@ export class RetailSandbox {
         debit(from, amount);
         credit(to, amount);
         this.otp.verified = false; this.seq += 1;
-        return { reference: `TRX-20261102-${String(930 + this.seq).padStart(4, "0")}`, from: { currency: from.currency, newBalance: from.balance }, to: { currency: to.currency, newBalance: to.balance } };
+        return { reference: `TRX-${this.day()}-${String(930 + this.seq).padStart(4, "0")}`, from: { currency: from.currency, newBalance: from.balance }, to: { currency: to.currency, newBalance: to.balance } };
       }
       case "bank.accounts.totals": {
         // balances added up per currency, never across currencies; a record keyed by currency so it can feed a list
@@ -948,7 +950,7 @@ export class RetailSandbox {
         if (payee && this.isNew(payee)) this.sent.set(payee.id, [...(this.sent.get(payee.id) ?? []), { at: this.now(), usd }]);
         this.otp.verified = false;
         this.seq += 1;
-        return { reference: `TRX-20261102-${String(930 + this.seq).padStart(4, "0")}`, newBalance: from.balance, currency: from.currency };
+        return { reference: `TRX-${this.day()}-${String(930 + this.seq).padStart(4, "0")}`, newBalance: from.balance, currency: from.currency };
       }
       case "bank.billers.list":
         return Object.fromEntries(BILLERS.map((b) => [b.id, b]));
@@ -989,7 +991,7 @@ export class RetailSandbox {
         limit.usedToday += amount;
         this.otp.verified = false;
         this.seq += 1;
-        return { reference: `${isBill ? "BILL" : "TOP"}-20261102-${String(930 + this.seq).padStart(4, "0")}`, newBalance: from.balance };
+        return { reference: `${isBill ? "BILL" : "TOP"}-${this.day()}-${String(930 + this.seq).padStart(4, "0")}`, newBalance: from.balance };
       }
       case "bank.banks.list":
         return Object.fromEntries(BANKS.map((b) => [b.id, { id: b.id, name: b.name, color: b.color }]));
@@ -1008,7 +1010,7 @@ export class RetailSandbox {
         if (!fin.cards.some((c) => c.id === input.fromCardId)) throw new BankError("CARD_NOT_FOUND", "Choose a card to add money from");
         credit(to, amount);
         fin.transactions.unshift({ id: `t_dep${++this.seq}`, title: "Added money", category: "income", amount, daysAgo: 0, time: "Now" });
-        return { reference: `ADD-20261102-${String(930 + this.seq).padStart(4, "0")}`, newBalance: to.balance };
+        return { reference: `ADD-${this.day()}-${String(930 + this.seq).padStart(4, "0")}`, newBalance: to.balance };
       }
       case "bank.cards.add": {
         const fin = this.p.finance; if (!fin) throw new BankError("NOT_SUPPORTED", "Not available for this customer");
@@ -1059,7 +1061,7 @@ export class RetailSandbox {
         debit(from, sub.amount);
         sub.nextInDays += 30;
         fin.transactions.unshift({ id: `t_sub${++this.seq}`, title: sub.name, category: "entertainment", amount: -sub.amount, daysAgo: 0, time: "Now" });
-        return { reference: `SUB-20261102-${String(930 + this.seq).padStart(4, "0")}`, newBalance: from.balance };
+        return { reference: `SUB-${this.day()}-${String(930 + this.seq).padStart(4, "0")}`, newBalance: from.balance };
       }
       case "bank.invest.instruments":
         return Object.fromEntries(INSTRUMENTS.map((i) => [i.symbol, { id: i.symbol, symbol: i.symbol, kind: i.kind, sector: i.sector, price: i.price, changePct: dayChange(i).pct, name: `${i.name} (${i.symbol}) · $${i.price.toFixed(2)}` }]));
@@ -1078,7 +1080,7 @@ export class RetailSandbox {
         else fin.invest.holdings.push({ symbol: inst.symbol, shares, avgCost: inst.price });
         debit(from, amount);
         fin.transactions.unshift({ id: `t_inv${++this.seq}`, title: `Bought ${inst.symbol}`, category: "investing", amount: -amount, daysAgo: 0, time: "Now" });
-        return { reference: `INV-20261102-${String(930 + this.seq).padStart(4, "0")}`, symbol: inst.symbol, name: inst.name, shares, price: inst.price, newBalance: from.balance };
+        return { reference: `INV-${this.day()}-${String(930 + this.seq).padStart(4, "0")}`, symbol: inst.symbol, name: inst.name, shares, price: inst.price, newBalance: from.balance };
       }
       case "bank.invest.holdings": {
         const fin = this.p.finance; if (!fin) throw new BankError("NOT_SUPPORTED", "Not available for this customer");
@@ -1106,7 +1108,7 @@ export class RetailSandbox {
         else held.shares = Math.round((held.shares - shares) * 10000) / 10000;
         credit(to, proceeds);
         fin.transactions.unshift({ id: `t_sell${++this.seq}`, title: `Sold ${inst.symbol}`, category: "investing", amount: proceeds, daysAgo: 0, time: "Now" });
-        return { reference: `SEL-20261102-${String(930 + this.seq).padStart(4, "0")}`, symbol: inst.symbol, name: inst.name, shares, price: inst.price, proceeds, newBalance: to.balance };
+        return { reference: `SEL-${this.day()}-${String(930 + this.seq).padStart(4, "0")}`, symbol: inst.symbol, name: inst.name, shares, price: inst.price, proceeds, newBalance: to.balance };
       }
       case "bank.invest.watch": {
         const fin = this.p.finance; if (!fin) throw new BankError("NOT_SUPPORTED", "Not available for this customer");

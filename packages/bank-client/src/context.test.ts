@@ -50,7 +50,7 @@ describe("switching places", () => {
     expect(a.getState().workspace).toBe("personal");
     await a.beginStepUp({ secret: PASSWORD });
     expect(a.getState().stepUp).toMatchObject({ phase: "code", busy: false });
-    expect(a.getState().stepUp!.phone).toBe("+• ••• ••• 0142");
+    expect(a.getState().stepUp!.phone).toBe("+1 ••• ••• 0142");
     await a.confirmStepUp("000000");
     expect(a.getState()).toMatchObject({ stepUp: null, workspace: "business", switching: null });
     expect(a.getState().session.info!.activeContextId).toBe("alpha");
@@ -349,5 +349,27 @@ describe("notifications", () => {
     expect(n.filter((x) => !x.read).map((x) => x.id)).toEqual(["n_1"]);
     a.markRead("n_1");
     expect(a.notices().every((x) => x.read)).toBe(true);
+  });
+});
+
+
+describe("after a journey ends", () => {
+  it("reads the approvals count again at once, so the badge does not wait for the journey to close", async () => {
+    const a = await alex();
+    await a.switchContext("beta"); await confirm(a);
+    await a.loadShell("approvals", true);
+    const before = a.approvalsBadge;
+    expect(before).toBeGreaterThan(0);
+    // the payment is approved inside a journey (here straight at the bank), and the journey reaches its result screen
+    await (a as any).current.call("bank.otp.verify", { code: "000000" });
+    const pending = Object.values(await (a as any).current.call("corp.payments.pending")) as any[];
+    await (a as any).current.call("corp.payments.approve", { paymentId: pending.find((p) => p.amount < 25000).id });
+    a.journeyFinished();
+    await vi.waitFor(() => expect(a.approvalsBadge).toBe(before - 1));
+  });
+  it("does nothing in Personal", async () => {
+    const a = await alex();
+    a.journeyFinished();
+    expect(a.getState().views).toEqual({});
   });
 });

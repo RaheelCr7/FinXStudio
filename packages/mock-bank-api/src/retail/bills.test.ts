@@ -182,7 +182,7 @@ describe("paying a bill", () => {
     const b = await verified();
     const r = await b.call("bank.bills.pay", payload({ amount: 100 }));
     expect(r).toMatchObject({ paid: 100, left: 222.8, fee: 0, youPay: 100, currency: "USD", newBalance: 8620.76, saved: false, nextAutopay: null });
-    expect(r.reference).toMatch(/^BILL-20261102-\d{4}$/);
+    expect(r.reference).toMatch(/^BILL-\d{8}-\d{4}$/);
     expect(await balance(b, "acc_main")).toBe(8620.76);
     expect((await b.call("bank.limits.get")).usedToday).toBe(100);
     expect((await b.call("bank.bills.lookup", power)).due).toBe(222.8);

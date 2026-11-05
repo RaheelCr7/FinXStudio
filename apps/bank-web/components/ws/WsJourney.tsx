@@ -27,7 +27,7 @@ export function WsJourney({ slug, values }: { slug: string; values: Record<strin
   const launch = { ...launchFromValues(slug, values), ...(app.launchFor(slug) ?? {}) };
   return (
     <div className="ws-journey">
-      <JourneyPlayer key={live.journey.slug} journey={live.journey} session={ctx ? { permissions: ctx.permissions } : undefined} adapter={app.adapter} lang={s.lang} launch={Object.keys(launch).length ? launch : undefined} onOpenJourney={openOther} onClose={leave} onExit={leave} look={project.look} brandName={project.name} />
+      <JourneyPlayer key={live.journey.slug} journey={live.journey} session={ctx ? { permissions: ctx.permissions } : undefined} adapter={app.adapter} lang={s.lang} launch={Object.keys(launch).length ? launch : undefined} onOpenJourney={openOther} onEvent={(e) => { if (e.type === "screen" && e.kind === "terminal") app.journeyFinished(); }} onClose={leave} onExit={leave} look={project.look} brandName={project.name} />
     </div>
   );
 }

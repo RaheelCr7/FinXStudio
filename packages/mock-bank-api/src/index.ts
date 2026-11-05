@@ -17,6 +17,8 @@ import { hoursSince, MAX_PAYEES, type NameCheck, type PayeeKind, type PayeeRegio
 export { RAILS, PURPOSES, RELATIONSHIPS, type SendType, type SpeedClass } from "./retail/payments";
 export { CUSTOMERS, DIRECTORY, COOLING_OFF_HOURS, COOLING_OFF_USD, MAX_PAYEES, type PayeeKind, type PayeeRegion } from "./retail/payees";
 export * from "./retail/finance";
+export { maskPhone } from "./retail/phone";
+import { maskPhone } from "./retail/phone";
 export { SANDBOX_MARKER, SandboxNotAllowedError, assertSandboxAllowed, sandboxAllowed, sandboxAllowedFor, setSandboxPolicy } from "./policy";
 export { CAB_PROFILES, CAB_CURRENCY, PASSWORD_RULES, passwordProblems, type CabProfile } from "./retail/cab";
 export { BankError } from "./errors";
@@ -467,7 +469,7 @@ export class MockBank {
       case "bank.otp.send":
         this.otp.attempts = 0;
         this.otp.verified = false;
-        return { sent: true, maskedPhone: this.p.phone.replace(/\d(?=\d{4})/g, "•"), channel: input.channel ?? "sms" };
+        return { sent: true, maskedPhone: maskPhone(this.p.phone), channel: input.channel ?? "sms" };
       case "bank.otp.verify": {
         this.otp.attempts += 1;
         if (String(input.code) !== this.p.behaviour.otpCode && String(input.code) !== "000000") throw new BankError("OTP_INVALID", "Incorrect code", this.otp.attempts);
