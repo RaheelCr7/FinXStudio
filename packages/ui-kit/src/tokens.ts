@@ -135,6 +135,8 @@ export type BrandLook = {
   hero?: { from: string; to: string };
   /** The dark panel colour (budget cards, toasts), when it should not be the preset's near-black. */
   ink?: string;
+  /** "stage": the web sign-in page frames the sign-in journey with a dark stage (a globe in the accent, a glass panel). Unset: the plain page. */
+  signIn?: "stage";
 };
 
 /** The two workspaces a bank can theme apart: the customer's own banking, and a company they act for. */

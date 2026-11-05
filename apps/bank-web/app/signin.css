@@ -1,0 +1,117 @@
+/* ===== Sign-in stage ===================================================================================================
+   The frame around a bank's real sign-in journey: deep navy, the bank's accent (--c-accent from the theme) for light and
+   lines, a glass panel for the journey. Logical properties only, so Arabic and Urdu mirror it. The journey inside keeps
+   the bank's own look. Depth comes from --px/--py (the pointer's offset on desktop) and from the canvas. */
+.wb-signin {
+  --si-bg: #070a14; --si-ink: #eef1ff; --si-ink-2: rgba(210,218,255,.78); --si-ink-3: rgba(176,186,228,.62); --si-line: rgba(150,165,255,.16);
+  --px: 0; --py: 0;
+  position: relative; min-block-size: 100dvh; display: grid; grid-template-columns: 3fr 2fr; align-items: start;
+  background: var(--si-bg); color: var(--si-ink); color-scheme: dark;
+}
+/* the stage stays in view while a long journey on the other side scrolls */
+.wb-signin-stage { position: sticky; inset-block-start: 0; isolation: isolate; overflow: hidden; display: flex; align-items: flex-end; padding: clamp(32px, 6vw, 84px); block-size: 100dvh; }
+.wb-signin-canvas { position: absolute; inset: 0; inline-size: 100%; block-size: 100%; z-index: 1; }
+.wb-signin-mesh {
+  position: absolute; inset: -20%; z-index: 0; filter: blur(48px);
+  background:
+    radial-gradient(42% 52% at 28% 28%, color-mix(in srgb, var(--c-accent, #4f7dff) 34%, transparent), transparent 62%),
+    radial-gradient(36% 46% at 76% 72%, color-mix(in srgb, var(--c-accent, #4f7dff) 22%, #8f6cff 12%), transparent 62%),
+    radial-gradient(30% 36% at 62% 18%, rgba(56,214,255,.12), transparent 60%);
+  transform: translate(calc(var(--px) * -14px), calc(var(--py) * -10px));
+  animation: wb-si-drift 22s ease-in-out infinite alternate;
+}
+.wb-signin-grid {
+  position: absolute; inset: 0; z-index: 0; opacity: .26;
+  background-image: linear-gradient(rgba(150,165,255,.14) 1px, transparent 1px), linear-gradient(90deg, rgba(150,165,255,.14) 1px, transparent 1px);
+  background-size: 56px 56px;
+  mask-image: radial-gradient(70% 70% at 50% 45%, #000 20%, transparent 100%); -webkit-mask-image: radial-gradient(70% 70% at 50% 45%, #000 20%, transparent 100%);
+}
+.wb-signin-stage::after { content: ""; position: absolute; inset: 0; z-index: 2; pointer-events: none; background: linear-gradient(180deg, rgba(7,10,20,0) 40%, rgba(7,10,20,.78) 100%); }
+.wb-signin-copy { position: relative; z-index: 3; max-inline-size: 600px; transform: translate(calc(var(--px) * 8px), calc(var(--py) * 6px)); }
+.wb-signin-copy > * { margin: 0; animation: wb-si-rise .9s cubic-bezier(.2,.7,.2,1) both; animation-delay: calc(120ms + var(--i, 0) * 110ms); }
+.wb-signin-eyebrow { display: inline-flex; align-items: center; gap: 10px; font-size: 12.5px; font-weight: 600; letter-spacing: .14em; text-transform: uppercase; color: var(--si-ink-3); margin-block-end: 22px; }
+.wb-signin-dot { inline-size: 8px; block-size: 8px; border-radius: 50%; background: color-mix(in srgb, var(--c-accent, #4f7dff) 60%, #fff); box-shadow: 0 0 0 4px color-mix(in srgb, var(--c-accent, #4f7dff) 20%, transparent), 0 0 18px var(--c-accent, #4f7dff); animation: wb-si-pulse 2.6s ease-in-out infinite; }
+.wb-signin-headline { font-size: clamp(42px, 5.4vw, 76px); line-height: 1.02; letter-spacing: -.035em; font-weight: 650; text-wrap: balance; }
+.wb-signin-headline em { font-style: normal; background: linear-gradient(92deg, #a9c6ff 0%, color-mix(in srgb, var(--c-accent, #4f7dff) 55%, #fff) 48%, #c3b2ff 100%); -webkit-background-clip: text; background-clip: text; color: transparent; }
+.wb-signin-tagline { margin-block-start: 18px; font-size: clamp(16px, 1.35vw, 19px); line-height: 1.5; color: var(--si-ink-2); max-inline-size: 44ch; }
+
+.wb-signin-side { position: relative; display: grid; place-items: center; padding: clamp(24px, 4vw, 56px); border-inline-start: 1px solid rgba(120,140,255,.08); background: linear-gradient(180deg, rgba(10,14,28,.55), rgba(7,10,20,.92)); }
+.wb-signin-side::before { content: ""; position: absolute; inset: 0; pointer-events: none; background: radial-gradient(60% 40% at 50% 0%, color-mix(in srgb, var(--c-accent, #4f7dff) 16%, transparent), transparent 70%); }
+.wb-signin-panel {
+  position: relative; inline-size: 100%; max-inline-size: 440px; padding: 18px 22px 22px; border-radius: 22px;
+  background: linear-gradient(160deg, rgba(22,28,54,.72), rgba(10,14,28,.62));
+  -webkit-backdrop-filter: blur(24px) saturate(140%); backdrop-filter: blur(24px) saturate(140%);
+  border: 1px solid var(--si-line);
+  box-shadow: 0 30px 90px rgba(0,0,0,.6), 0 0 0 1px rgba(0,0,0,.2), inset 0 1px 0 rgba(255,255,255,.06);
+  animation: wb-si-rise .8s cubic-bezier(.2,.7,.2,1) both; animation-delay: 200ms;
+}
+@property --wb-si-angle { syntax: "<angle>"; inherits: false; initial-value: 0deg; }
+.wb-signin-panel::before {
+  content: ""; position: absolute; inset: -1px; border-radius: inherit; padding: 1px; pointer-events: none;
+  background: conic-gradient(from var(--wb-si-angle), transparent 0 62%, color-mix(in srgb, var(--c-accent, #4f7dff) 60%, #fff) 76%, rgba(143,108,255,.75) 88%, transparent 100%);
+  -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0); mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+  -webkit-mask-composite: xor; mask-composite: exclude;
+  animation: wb-si-orbit 9s linear infinite; opacity: .9;
+}
+@keyframes wb-si-orbit { to { --wb-si-angle: 360deg; } }
+.wb-signin-panel .wb-journey-card { max-inline-size: none; border: 0; border-radius: 0; background: transparent; color: var(--si-ink); }
+
+/* ----- The journey, in the stage's clothes: the bank's own screens, but dark glass, no banner, no close ----- */
+.wb-signin-panel .fx-player { background: transparent; color: var(--si-ink); }
+.wb-signin-panel .fx-player-head, .wb-signin-panel .fx-player-bar { background: transparent; border: 0; padding-inline: 0; }
+.wb-signin-panel .fx-player-title h1 { font-size: 26px; line-height: 1.15; letter-spacing: -.025em; font-weight: 600; color: var(--si-ink); }
+.wb-signin-panel .wb-journey-card:not([data-handover]) .fx-icon-btn[aria-label="Close"] { display: none; }
+.wb-signin-panel .fx-icon-btn { color: var(--si-ink-2); background: transparent; }
+.wb-signin-panel .fx-icon-btn:hover { background: rgba(140,160,255,.12); color: var(--si-ink); }
+.wb-signin-panel .fxc-hero { display: none; }
+.wb-signin-panel .fx-player-body, .wb-signin-panel .fx-player-foot { padding-inline: 0; background: transparent; border: 0; }
+.wb-signin-panel .fx-text-title { color: var(--si-ink); }
+.wb-signin-panel .fx-text, .wb-signin-panel .fxc-text, .wb-signin-panel .fxc-title, .wb-signin-panel p { color: var(--si-ink-2); }
+.wb-signin-panel .fxc-label { color: var(--si-ink-2); font-size: 12.5px; font-weight: 500; }
+.wb-signin-panel .fxc-input, .wb-signin-panel input[type="text"], .wb-signin-panel input[type="password"], .wb-signin-panel input[type="email"], .wb-signin-panel input[type="tel"], .wb-signin-panel select, .wb-signin-panel textarea {
+  background: rgba(8,12,24,.72); border: 1px solid var(--si-line); border-radius: 13px; color: var(--si-ink); min-block-size: 48px;
+  transition: border-color .18s, box-shadow .22s, background .18s;
+}
+.wb-signin-panel .fxc-input::placeholder { color: rgba(176,186,228,.45); }
+.wb-signin-panel .fxc-input:hover { border-color: rgba(140,160,255,.34); }
+.wb-signin-panel .fxc-input:focus, .wb-signin-panel .fxc-input:focus-visible { outline: none; border-color: color-mix(in srgb, var(--c-accent, #4f7dff) 70%, #fff); background: rgba(10,16,34,.92); box-shadow: 0 0 0 4px color-mix(in srgb, var(--c-accent, #4f7dff) 22%, transparent), 0 0 28px color-mix(in srgb, var(--c-accent, #4f7dff) 20%, transparent); }
+.wb-signin-panel .fxc-input[aria-invalid="true"] { border-color: rgba(255,120,140,.75); }
+.wb-signin-panel .fxc-input-action { color: #9ec1ff; background: transparent; }
+.wb-signin-panel .fxc-error, .wb-signin-panel [role="alert"] { color: #ffb4bf; }
+.wb-signin-panel .fxc-switch { background: rgba(140,160,255,.22); }
+.wb-signin-panel .fxc-switch-input:checked + .fxc-switch { background: var(--c-accent, #4f7dff); }
+.wb-signin-panel .fxc-btn-primary {
+  min-block-size: 50px; border: 0; border-radius: 13px; color: #fff; font-weight: 600; font-size: 15px;
+  background: linear-gradient(135deg, var(--c-accent, #4f7dff) 0%, color-mix(in srgb, var(--c-accent, #4f7dff) 55%, #8f6cff) 100%);
+  box-shadow: 0 10px 30px color-mix(in srgb, var(--c-accent, #4f7dff) 30%, transparent), inset 0 1px 0 rgba(255,255,255,.2);
+  transition: transform .18s cubic-bezier(.2,.7,.2,1), box-shadow .3s;
+}
+.wb-signin-panel .fxc-btn-primary:hover:not(:disabled) { transform: translateY(-1px); box-shadow: 0 16px 40px color-mix(in srgb, var(--c-accent, #4f7dff) 42%, transparent), inset 0 1px 0 rgba(255,255,255,.25); }
+.wb-signin-panel .fxc-btn-secondary { background: transparent; border: 0; color: #9ec1ff; min-block-size: 36px; font-weight: 500; }
+.wb-signin-panel .fxc-btn-secondary:hover { text-decoration: underline; text-underline-offset: 3px; background: transparent; }
+.wb-signin-panel .fx-note, .wb-signin-panel .wb-note { background: rgba(255,110,130,.1); border: 1px solid rgba(255,110,130,.3); color: #ffb4bf; border-radius: 12px; }
+.wb-signin-panel :focus-visible { outline: 2px solid #c3d4ff; outline-offset: 3px; }
+.wb-signin-side { grid-auto-rows: max-content; align-content: center; }
+.wb-signin-fine { margin-block-start: 14px; text-align: center; color: var(--si-ink-3); }
+.wb-signin-fine .wb-link { color: var(--si-ink-2); }
+
+@keyframes wb-si-rise { from { opacity: 0; transform: translateY(18px); } to { opacity: 1; transform: translateY(0); } }
+@keyframes wb-si-drift { from { transform: translate(calc(var(--px) * -14px - 2%), calc(var(--py) * -10px + 1%)) scale(1); } to { transform: translate(calc(var(--px) * -14px + 2%), calc(var(--py) * -10px - 2%)) scale(1.06); } }
+@keyframes wb-si-pulse { 0%, 100% { opacity: 1; } 50% { opacity: .55; } }
+@media (prefers-reduced-motion: reduce) {
+  .wb-signin-mesh, .wb-signin-grid, .wb-signin-copy { transform: none; animation: none; }
+  .wb-signin-copy > *, .wb-signin-panel, .wb-signin-dot { animation: none; }
+  .wb-signin-panel::before { animation: none; background: linear-gradient(135deg, rgba(56,214,255,.45), rgba(143,108,255,.45)); }
+}
+@media (max-width: 960px) {
+  .wb-signin { grid-template-columns: 1fr; }
+  .wb-signin-stage { position: relative; block-size: auto; min-block-size: 42dvh; padding: 36px 24px 28px; }
+  .wb-signin-headline { font-size: clamp(36px, 8.6vw, 56px); }
+  .wb-signin-side { border-inline-start: 0; border-block-start: 1px solid rgba(120,140,255,.1); padding: 20px 16px 48px; align-content: start; }
+}
+@media (max-width: 600px) {
+  .wb-signin-stage { min-block-size: 34dvh; padding: 28px 16px 22px; }
+  .wb-signin-canvas { display: none; }
+  .wb-signin-side { padding: 12px 10px 48px; }
+  .wb-signin-panel { padding: 6px; border-radius: 18px; }
+}

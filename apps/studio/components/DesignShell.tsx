@@ -4,6 +4,7 @@ import { ColoursTab } from "./DesignView";
 import { TokensTab } from "./design/TokensTab";
 import { ComponentsTab } from "./design/ComponentsTab";
 import { WorkspaceTab } from "./design/WorkspaceTab";
+import { SignInStyle } from "./design/SignInStyle";
 import { useProjects } from "./Projects";
 
 const TABS = [
@@ -31,7 +32,7 @@ export function DesignShell() {
         </div>
       </div>
       <div role="tabpanel" className="stack" style={{ gap: 18 }}>
-        {tab === "colours" ? <ColoursTab /> : tab === "tokens" ? <TokensTab /> : tab === "components" ? <ComponentsTab /> : <WorkspaceTab key={`${current.id}-${tab}`} workspace={tab} />}
+        {tab === "colours" ? <><ColoursTab />{current.preset === "bankworkx" ? <SignInStyle /> : null}</> : tab === "tokens" ? <TokensTab /> : tab === "components" ? <ComponentsTab /> : <WorkspaceTab key={`${current.id}-${tab}`} workspace={tab} />}
       </div>
     </div>
   );

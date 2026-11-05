@@ -8,6 +8,7 @@ import "@finx/renderer-web/src/styles/renderer.css";
 import "../globals.css";
 import "../bankworkx.css";
 import "../workspace.css";
+import "../signin.css";
 import { AppProvider } from "@/components/AppProvider";
 import { RegisterSW } from "@/components/RegisterSW";
 import { WorkspaceScope } from "@/components/WorkspaceScope";

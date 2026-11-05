@@ -2,7 +2,7 @@ import { describe, expect, it, vi } from "vitest";
 import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import * as matchers from "vitest-axe/matchers";
-import { cabJourneys, internalTransfer, localTransfer, mobileTopup, payBill } from "@finx/journey-schema";
+import { cabJourneys, internalTransfer, localTransfer, mobileTopup, payBill, resetPassword } from "@finx/journey-schema";
 import { MockBank } from "@finx/mock-bank-api";
 import { JourneyPlayer } from "./JourneyPlayer";
 import { axeCheck } from "./test-utils";
@@ -23,6 +23,13 @@ describe("JourneyPlayer", () => {
     expect(screen.getByRole("button", { name: "Find my bill" })).toBeTruthy();
     expect(screen.queryByRole("button", { name: "Back" })).toBeNull();
     expect(await axeCheck(container)).toHaveNoViolations();
+  });
+
+  it("does not say the screen's title twice when the first block only repeats it", async () => {
+    player(resetPassword, {}, "alex");
+    expect((await screen.findByRole("heading", { level: 1 })).textContent).toBe("Reset your password");
+    expect(screen.queryByRole("heading", { level: 2, name: "Reset your password" })).toBeNull();
+    expect(screen.getByLabelText("Username or email")).toBeTruthy();
   });
 
   it("explains what is missing and moves focus to the first field with a mistake", async () => {

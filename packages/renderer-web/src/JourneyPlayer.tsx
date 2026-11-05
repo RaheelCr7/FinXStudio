@@ -88,7 +88,9 @@ export function JourneyPlayer({ journey, adapter, lang, initial, launch, onOpenJ
   const buttonRow = buttons.map((b, i) => <Button key={`${v.screenId}-b${i}`} b={b} set={() => {}} press={(a) => controller.press(a)} {...common} submit={b === primary} />);
   // on the bank's banner screen the shortcuts sit last, below the buttons; everywhere else buttons are pinned under the body
   const shortcuts = hero ? body.filter((b) => b.type === "shortcuts") : [];
-  const main = hero ? body.slice(1).filter((b) => b.type !== "shortcuts") : body;
+  // the header already says the screen's title: a title block that only repeats it is not drawn twice (the bar look shows it as a band instead)
+  const repeatsTitle = (b: any) => b?.type === "text" && b.variant === "title" && b.text === v.title;
+  const main = hero ? body.slice(1).filter((b) => b.type !== "shortcuts") : !bar && repeatsTitle(body[0]) ? body.slice(1) : body;
 
   return (
     <LookContext.Provider value={{ look, name: brandName }}>

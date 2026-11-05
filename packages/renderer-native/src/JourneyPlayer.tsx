@@ -122,7 +122,8 @@ export function JourneyPlayer({ journey, adapter, lang, onExit, onClose, initial
       {v.toast ? <View accessibilityRole="alert" style={{ marginHorizontal: 20, marginTop: 4, padding: 12, borderRadius: radius.md, backgroundColor: c.negativeBg }}><Text style={{ color: c.negative, fontSize: 14, fontWeight: "500" }}>{v.toast}</Text></View> : null}
 
       <ScrollView ref={scroller} contentContainerStyle={{ padding: 20, paddingBottom: 32, gap: 22 }} keyboardShouldPersistTaps="handled">
-        {body.map((b, i) => {
+        {/* the header already says the screen's title: a title block that only repeats it is not drawn twice */}
+        {(body[0]?.type === "text" && body[0].variant === "title" && body[0].text === v.title ? body.slice(1) : body).map((b, i) => {
           const C = registry[b.type as BlockType];
           return C ? <View key={`${v.screenId}-${i}`} testID={mark(b)}><C b={b} set={(p, val) => controller.set(p, val)} press={(a) => controller.press(a)} busy={v.busy} lang={layout.lang} strings={v.strings} /></View> : null;
         })}

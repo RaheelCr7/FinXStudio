@@ -271,6 +271,26 @@ export async function updateProjectBankApi(id: string, input: unknown): Promise<
   return { project: toProject(id, updated), previous: previous ?? "reference" };
 }
 
+export const SIGN_IN_STYLES = ["standard", "stage"] as const;
+export type SignInStyle = (typeof SIGN_IN_STYLES)[number];
+/** How the web app's sign-in page frames the sign-in journey: "standard" (stored as nothing) or the dark "stage". */
+export async function updateProjectSignIn(id: string, input: unknown): Promise<{ project: Project; previous: SignInStyle }> {
+  const all = await read();
+  const def = all[id];
+  if (!def) throw new StoreError(404, `No project called ${id}`);
+  const value = (input as { signIn?: unknown } | null)?.signIn;
+  if (value !== "standard" && value !== "stage") throw new StoreError(400, `Choose one of: ${SIGN_IN_STYLES.join(", ")}`);
+  const { signIn: previous, ...look } = def.look ?? {};
+  const nextLook = value === "stage" ? { ...look, signIn: "stage" as const } : look;
+  const { look: _dropped, ...rest } = def;
+  const updated: BrandDef = Object.keys(nextLook).length ? { ...rest, look: nextLook } : rest;
+  const file = brandsFile();
+  const tmp = `${file}.${process.pid}.tmp`;
+  await fs.writeFile(tmp, JSON.stringify({ ...all, [id]: updated }, null, 2) + "\n");
+  await fs.rename(tmp, file);
+  return { project: toProject(id, updated), previous: previous === "stage" ? "stage" : "standard" };
+}
+
 /** The app icons come from the accent colour. If Python or Pillow is missing, the build script makes them later. */
 function makeIcons(id: string, accent: string): { ok: boolean; warning?: string } {
   if (process.env.FINX_SKIP_ICONS === "1") return { ok: false, warning: "Icons are made the first time the app is built." };
