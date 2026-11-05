@@ -1,0 +1,11 @@
+# Gitleaks configuration: the default rules stay on. The only exception is the sandbox bank's own unit test, which
+# calls the password and recovery adapters with made-up test passwords (for example "Bwx!Demo2026" style strings);
+# none of them is a real secret and the sandbox keeps only hashes.
+[extend]
+useDefault = true
+
+[[allowlists]]
+description = "Made-up test passwords in the sandbox bank's access (sign-in and recovery) unit test"
+condition = "AND"
+paths = ['''packages/mock-bank-api/src/access\.test\.ts''']
+rules = ["generic-api-key"]
