@@ -6,6 +6,7 @@ import { personaSummary, type Live } from "@finx/bank-client";
 import { formatMoney } from "@finx/ui-kit";
 import { safeNext } from "@/lib/safe-next";
 import { useApp, useAppState } from "./AppProvider";
+import { SignInStage } from "./login/SignInStage";
 
 /**
  * Sign in. A bank with a real sign-in (BankWorkx) runs the sign-in journey here: the journey signs the customer in at the sandbox bank and
@@ -50,7 +51,7 @@ function SignInJourney({ onSignedIn }: { onSignedIn: () => void }) {
 
   if (live === "loading") return <main className="wb-loading" aria-busy="true"><span className="wb-sr">Opening</span></main>;
   return (
-    <main className="wb-journey">
+    <SignInStage bank={project.name} after={<p className="wb-fine wb-signin-fine"><button type="button" className="wb-link" onClick={() => app.showPicker(true)}>Use the sandbox customer picker</button></p>}>
       <div className="wb-journey-card">
         {s.notice === "locked" ? <p className="wb-note" role="alert">Sign-in is locked to protect your account. Unlock it to continue.</p> : null}
         {live ? (
@@ -59,8 +60,7 @@ function SignInJourney({ onSignedIn }: { onSignedIn: () => void }) {
           <div className="wb-pad"><h1>Sign in is not available right now</h1><p className="wb-muted">The sign-in journey could not be loaded. You can still use the sandbox customer picker.</p></div>
         )}
       </div>
-      <p className="wb-fine"><button type="button" className="wb-link" onClick={() => app.showPicker(true)}>Use the sandbox customer picker</button></p>
-    </main>
+    </SignInStage>
   );
 }
 

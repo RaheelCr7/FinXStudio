@@ -82,6 +82,17 @@ describe("sign in with the real sign-in journey (BankWorkx)", () => {
     await userEvent.click(screen.getByRole("button", { name: "Log in" }));
     expect(nav.push).toHaveBeenCalledWith("/bankworkx/personal/home");
   });
+  it("frames the sign-in in the stage: the bank's words beside the journey, the scene hidden from assistive technology, and forgot password opens inside it", async () => {
+    const { container } = renderPage(<Login />, BANKWORKX_SIGNIN, { signedIn: false });
+    expect(await screen.findByLabelText("Username")).toBeTruthy();
+    expect(screen.getByRole("region", { name: "Welcome to BankWorkx" })).toBeTruthy();
+    expect(screen.getByText("Starts Here.")).toBeTruthy();
+    expect(container.querySelector("canvas.wb-signin-canvas")?.getAttribute("aria-hidden")).toBe("true");
+    expect(await axeCheck(container)).toHaveNoViolations();
+    await userEvent.click(screen.getByRole("button", { name: "Forgot password?" }));
+    await waitFor(() => expect(screen.queryByLabelText("Password")).toBeNull());
+    expect(screen.getByText("Starts Here.")).toBeTruthy();
+  });
   it("a wrong password says so and the field is empty again; the right one, the code from a new browser and the end of the journey open Personal", async () => {
     renderPage(<Login />, BANKWORKX_SIGNIN, { signedIn: false });
     await userEvent.type(await screen.findByLabelText("Username"), "alex.morgan");

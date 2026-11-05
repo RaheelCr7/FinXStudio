@@ -24,6 +24,8 @@ Open `http://127.0.0.1:3200/` and choose a bank, or go straight to `/meezan/logi
 | Classic (Meezan) | `/<project>/login`, `/home` (balance, daily limit, services, English and Urdu), `/j/<journey>` |
 | Money management (BankWorkx) | `/dashboard`, `/accounts`, `/budgets`, `/budgets/<id>`, `/wallet`, `/invest`, `/invest/<symbol>`, `/j/<journey>` |
 
+A bank with a real sign-in (the BankWorkx shell) signs in through the sign-in journey, framed by a dark stage (`components/login/`, `app/signin.css`): a wire globe drawn on a canvas in the bank's accent and the bank's words on one side, the journey in a glass panel on the other. The journeys it hands over to (forgot password, forgot username, unlock) open in the same panel. The scene is hidden from assistive technology, draws one still frame under *reduce motion*, stops while the tab is hidden, and is left out on phones. BankWorkx has these journeys bundled; another project with the *Fintech* look gets them once they are added to it in Studio (Catalog, *Sign in* and the journeys it hands over to), and until then its sign-in page says so and offers the sandbox customer picker.
+
 On wide screens the BankWorkx pages sit in a side menu and two columns; on narrow ones the menu becomes a bottom bar. Quick actions, notifications, the account menu and paying a subscription are dialogs. Buy and Sell open the journey with the stock already chosen (`/j/invest?symbol=LMRB`), and finishing returns to the dashboard.
 
 ## Which banks it serves
