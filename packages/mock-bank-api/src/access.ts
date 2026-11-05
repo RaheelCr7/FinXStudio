@@ -34,8 +34,10 @@ export const ACCESS = {
   idleSeconds: 300,
   /** Wrong quick PINs that turn quick sign-in off for a device. */
   maxWrongPins: 3,
-  /** The step-up of the shell is valid for this long after a sign-in. */
   usedPasswordsKept: 12,
+  /** Settings > Security: wrong codes that end one attempt, and how long a checked current password or PIN counts as proof. */
+  maxSecurityCodes: 3,
+  proofSeconds: 300,
 } as const;
 export const FIXED_CODE = "482100";
 /** The code that is always expired, the way 000000 is always wrong. */
@@ -83,7 +85,7 @@ export const PASSWORD_RULES_BWX = { minLength: 12, maxLength: 64 };
 /** A short sandbox sample of what a bank would check against. The common words are matched inside the password; the breached ones whole. */
 const COMMON_WORDS = ["password", "qwerty", "letmein", "welcome", "iloveyou", "admin", "123456"];
 const BREACHED = ["winter2024!winter", "sunshine!2020abc", "spring2023!spring", "football!2019abc"];
-export type PasswordProblem = "MIN_LENGTH" | "MAX_LENGTH" | "PASSWORD_CONTAINS_USERNAME" | "PASSWORD_COMMON" | "PASSWORD_BREACHED" | "PASSWORD_REUSED";
+export type PasswordProblem = "PASSWORD_SAME" | "MIN_LENGTH" | "MAX_LENGTH" | "PASSWORD_CONTAINS_USERNAME" | "PASSWORD_COMMON" | "PASSWORD_BREACHED" | "PASSWORD_REUSED";
 
 /** The problems of a new password, in the order the screen reports them (the first is the one it shows). `used` says whether the person had it before. */
 export function bwxPasswordProblems(password: string, username: string, used: boolean, flaws: Flaws = {}): PasswordProblem[] {
@@ -181,7 +183,7 @@ export class AccessDirectory {
 export type AccessHost = {
   now: () => number; flaws: () => Flaws; config: () => BankConfig;
   /** What a scenario says about this device, if anything ("known", "new", "unusual"). */
-  deviceKind: () => "known" | "new" | "unusual" | undefined;
+  deviceKind: () => "known" | "new" | "unusual" | "browser" | undefined;
   /** The device the apps told the sandbox they are, if they did. */
   appDevice: () => DeviceInfo | undefined;
   /** Whether a call asked a customer who is already signed in (the persona's own one-time code is then in force). */
@@ -207,6 +209,9 @@ export class AccessSandbox {
   private seq = 0;
   /** The persona to load once `completeSignIn` has answered; the bank takes it. */
   private persona?: string;
+  /** Settings > Security: the one-time code of a signed-in customer's own changes (asked for with `strict`), and the current password or PIN once checked. */
+  private sec: Otp = { sends: 0, sentAt: 0, verified: false, wrong: 0 };
+  private proof: { password?: number; pin?: number } = {};
 
   constructor(readonly dir: AccessDirectory, private host: AccessHost) {}
 
@@ -218,6 +223,7 @@ export class AccessSandbox {
   thisDevice(): DeviceInfo {
     const k = this.host.deviceKind();
     if (k === "known" || k === "unusual") return KNOWN_DEVICE;
+    if (k === "browser") return { id: "dev_laptop", name: "Work laptop, Chrome", kind: "laptop" };
     if (k === "new") return NEW_DEVICE;
     const own = this.host.appDevice(); if (own) return own;
     const u = this.me(); return u?.devices[0] ? { id: u.devices[0].id, name: u.devices[0].name, kind: u.devices[0].kind } : NEW_DEVICE;
@@ -419,6 +425,8 @@ export class AccessSandbox {
     } else if (method === "biometric") {
       if (!dev.biometricAvailable) return { ok: false as const, code: "BIOMETRIC_UNAVAILABLE" };
     } else if (method !== "passkey") return { ok: false as const, code: "INVALID_MODE" };
+    // one method per device: turning another on replaces the PIN
+    if (method !== "pin") { dev.pinHash = undefined; dev.pinFails = 0; }
     dev.quick = method as QuickMethod; dev.default = method as QuickMethod;
     return { ok: true as const, method: method as QuickMethod, device: dev.name };
   }
@@ -534,12 +542,57 @@ export class AccessSandbox {
     let u = this.me();
     if (!u && input.recoveryToken !== undefined && this.recover && String(input.recoveryToken) === this.recover.token) u = this.dir.find(this.recover.username);
     const username = u?.username ?? String(input.username ?? ""), pw = String(input.password ?? "");
-    const problems = bwxPasswordProblems(pw, username, !!u && u.usedHashes.includes(hashOf(pw, u.username)), this.flaws());
+    let problems: PasswordProblem[] = bwxPasswordProblems(pw, username, !!u && u.usedHashes.includes(hashOf(pw, u.username)), this.flaws());
+    // a signed-in customer who types the password they have now is told to choose a different one (a recovery token holder is told it was used before)
+    const same = !!this.me() && !!u && this.flaws().passwordSame !== false && hashOf(pw, u.username) === u.passwordHash;
+    if (same) problems = ["PASSWORD_SAME", ...problems.filter((p) => p !== "PASSWORD_REUSED")];
     const rules = [["length", "MIN_LENGTH", "MAX_LENGTH"], ["username", "PASSWORD_CONTAINS_USERNAME"], ["common", "PASSWORD_COMMON"], ["breach", "PASSWORD_BREACHED"], ["used", "PASSWORD_REUSED"]] as const;
-    return { ...PASSWORD_RULES_BWX, ok: problems.length === 0, problems, rules: rules.map(([id, ...codes]) => ({ id, ok: !codes.some((c) => (problems as string[]).includes(c)), checked: id !== "used" || !!u })) };
+    return { ...PASSWORD_RULES_BWX, ok: problems.length === 0, problems, code: problems[0] ?? null, rules: rules.map(([id, ...codes]) => ({ id, ok: !codes.some((c) => (problems as string[]).includes(c)) && !(id === "used" && same), checked: id !== "used" || !!u })) };
   }
 
   /* ------------------------------------------------------------------------ what a signed-in customer manages */
+
+  /** Whether the current password (`kind` password) or quick PIN was checked in the last five minutes: the proof the next change builds on, so a journey need not keep the secret. */
+  private proven(kind: "password" | "pin") { const t = this.proof[kind]; return t !== undefined && this.now - t <= ACCESS.proofSeconds * 1000; }
+
+  /**
+   * The one-time code of a signed-in customer's own change (`bank.otp.send` / `verify` with `strict: true`): 000000 is wrong, 999999 is expired, a code
+   * runs out after five minutes, a new one makes the old one useless, and the third wrong code ends the attempt (the person asks for a new one).
+   * Without `strict` the persona's code keeps working as it always has (000000 is accepted).
+   */
+  securityCode(adapter: "bank.otp.send" | "bank.otp.verify", input: Record<string, any>, otp: { attempts: number; verified: boolean }) {
+    const f = this.flaws(), u = this.requireMe();
+    if (adapter === "bank.otp.send") {
+      // a code asked for again (`resend`) replaces the last and counts toward the limit; a new attempt starts from the first code
+      const again = input.resend === true;
+      if (again && this.sec.sends >= 1 + ACCESS.maxResends && f.resendLimit !== false) throw new BankError("OTP_RESEND_LIMIT", "You have asked for the maximum number of codes. Try again later.");
+      this.sec = { sends: again ? this.sec.sends + 1 : 1, sentAt: this.now, verified: false, wrong: 0 };
+      otp.verified = false; otp.attempts = 0;
+      return { sent: true, maskedPhone: maskPhone(u.phone), last4: digits(u.phone).slice(-4), channel: input.channel ?? "sms" };
+    }
+    if (this.sec.sends === 0) throw new BankError("OTP_REQUIRED", "Ask for a code first.");
+    if (this.sec.wrong >= ACCESS.maxSecurityCodes && f.codeLock !== false) throw new BankError("OTP_LOCKED", "Too many wrong codes.", this.sec.wrong);
+    const code = String(input.code ?? "");
+    if (f.codeExpiry !== false && (code === EXPIRED_CODE || this.now - this.sec.sentAt > ACCESS.codeSeconds * 1000)) throw new BankError("OTP_EXPIRED", "That code has expired. Ask for a new one.");
+    if (code !== String(Number(FIXED_CODE) + this.sec.sends - 1)) {
+      this.sec.wrong += 1; otp.verified = false;
+      if (this.sec.wrong >= ACCESS.maxSecurityCodes && f.codeLock !== false) throw new BankError("OTP_LOCKED", "Too many wrong codes.", this.sec.wrong);
+      throw new BankError("OTP_INVALID", "That code isn't right.", this.sec.wrong);
+    }
+    // the code is used: the next change asks for a new one, and counts its resends from the start
+    this.sec = { sends: 0, sentAt: 0, verified: false, wrong: 0 }; otp.verified = true;
+    return { verified: true };
+  }
+
+  private dayText(at: number) { const d = new Date(at); return `${d.getUTCDate()} ${["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"][d.getUTCMonth()]} ${d.getUTCFullYear()}`; }
+  private whenText(at: number, current: boolean) {
+    if (current) return "Now";
+    const today = Math.floor(this.now / DAY), day = Math.floor(at / DAY), hm = new Date(at).toISOString().slice(11, 16);
+    if (day === today) return `Today, ${hm}`;
+    if (day === today - 1) return `Yesterday, ${hm}`;
+    return this.dayText(at);
+  }
+  private turnQuickOff(dev: AccessDevice) { dev.quick = undefined; dev.default = "password"; dev.pinHash = undefined; dev.pinFails = 0; }
 
   /** The signed-in adapters: devices, quick sign-in and the PIN, the password, the login history. Part of "Settings > Security". */
   security(adapter: string, input: Record<string, any>, ctx: { codeVerified: () => boolean; clearCode: () => void }): any {
@@ -547,8 +600,9 @@ export class AccessSandbox {
     switch (adapter) {
       case "bank.devices.list": {
         const u = this.requireMe(), me = this.thisDevice().id;
-        const list = u.devices.filter((d) => d.trusted && d.trustedUntil > this.now).sort((a, b) => (a.id === me ? -1 : b.id === me ? 1 : b.lastUsed - a.lastUsed));
-        return { max: ACCESS.maxTrustedDevices, items: list.map((d) => ({ id: d.id, name: d.name, kind: d.kind, lastUsed: new Date(d.lastUsed).toISOString(), current: d.id === me, quick: d.quick ?? "off" })) };
+        const list = u.devices.filter((d) => d.trusted && d.trustedUntil > this.now && (input.scope === "current" ? d.id === me : input.scope === "others" ? d.id !== me : true)).sort((a, b) => (a.id === me ? -1 : b.id === me ? 1 : b.lastUsed - a.lastUsed));
+        const count = u.devices.filter((d) => d.trusted && d.trustedUntil > this.now).length;
+        return { max: ACCESS.maxTrustedDevices, count, others: u.devices.filter((d) => d.trusted && d.trustedUntil > this.now && d.id !== me).length, items: list.map((d) => ({ id: d.id, name: d.name, kind: d.kind, lastUsed: new Date(d.lastUsed).toISOString(), lastUsedText: this.whenText(d.lastUsed, d.id === me), current: d.id === me, quick: d.quick ?? "off" })) };
       }
       case "bank.devices.rename": {
         const u = this.requireMe(), d = u.devices.find((x) => x.id === input.deviceId), name = String(input.name ?? "").trim();
@@ -558,17 +612,17 @@ export class AccessSandbox {
       }
       case "bank.devices.remove": {
         const u = this.requireMe(), me = this.thisDevice().id;
-        if (!ctx.codeVerified()) throw new BankError("OTP_REQUIRED", "OTP not verified");
+        if (f.removeNeedsCode !== false && !ctx.codeVerified()) throw new BankError("OTP_REQUIRED", "OTP not verified");
         if (input.all === true) { const gone = u.devices.filter((d) => d.id !== me && d.trusted); for (const d of gone) { d.trusted = false; d.quick = undefined; d.remembered = false; } ctx.clearCode(); return { removed: gone.length }; }
         const d = u.devices.find((x) => x.id === input.deviceId && x.trusted);
         if (!d) throw new BankError("DEVICE_NOT_FOUND", "That device is already gone.");
-        if (d.id === me) throw new BankError("CURRENT_DEVICE", "This is the device you are using.");
+        if (d.id === me && f.currentDeviceKept !== false) throw new BankError("CURRENT_DEVICE", "This is the device you are using.");
         d.trusted = false; d.quick = undefined; d.remembered = false; ctx.clearCode();
         return { removed: 1 };
       }
       case "bank.devices.setQuickSignIn": {
         const u = this.requireMe();
-        if (input.method !== "off" && !ctx.codeVerified()) throw new BankError("OTP_REQUIRED", "OTP not verified");
+        if (input.method !== "off" && f.quickNeedsCode !== false && !ctx.codeVerified()) throw new BankError("OTP_REQUIRED", "OTP not verified");
         const out = this.setQuick(u, input);
         if (out.ok && input.method !== "off") ctx.clearCode();
         return out;
@@ -582,42 +636,52 @@ export class AccessSandbox {
         dev.default = mode as AccessDevice["default"]; if (mode !== "password") dev.quick = mode as QuickMethod;
         return { ok: true as const, default: mode };
       }
+      case "bank.devices.checkPin": {
+        // the rules a new PIN has to meet, before the code is asked for (nothing is changed)
+        const u = this.requireMe(), problem = pinProblem(String(input.pin ?? ""), u.phone, f);
+        return problem ? { ok: false as const, code: problem } : { ok: true as const };
+      }
       case "bank.devices.verifyPin": {
         const u = this.requireMe(), dev = u.devices.find((x) => x.id === this.thisDevice().id);
         if (!dev?.pinHash) return { ok: false as const, code: "PIN_NOT_SET" };
-        if (String(input.pin ?? "") && hashPin(String(input.pin), dev.id) === dev.pinHash) { dev.pinFails = 0; return { ok: true as const }; }
-        dev.pinFails += 1;
-        if (dev.pinFails >= ACCESS.maxWrongPins) { dev.quick = undefined; dev.default = "password"; dev.pinHash = undefined; dev.pinFails = 0; throw new BankError("PIN_LOCKED", "Too many wrong PINs. Quick sign-in is off. Set it up again."); }
-        throw new BankError("PIN_WRONG", "That PIN isn't right.", dev.pinFails);
+        if (String(input.pin ?? "") && hashPin(String(input.pin), dev.id) === dev.pinHash) { dev.pinFails = 0; this.proof.pin = this.now; return { ok: true as const }; }
+        this.proof.pin = undefined; dev.pinFails += 1;
+        if (dev.pinFails >= ACCESS.maxWrongPins && f.pinLockOff !== false) { this.turnQuickOff(dev); return { ok: false as const, code: "PIN_LOCKED" }; }
+        return { ok: false as const, code: "PIN_WRONG", triesLeft: Math.max(0, ACCESS.maxWrongPins - dev.pinFails) };
       }
       case "bank.devices.changePin": {
         const u = this.requireMe(), dev = u.devices.find((x) => x.id === this.thisDevice().id);
         if (!dev?.pinHash) return { ok: false as const, code: "PIN_NOT_SET" };
-        if (hashPin(String(input.current ?? ""), dev.id) !== dev.pinHash) throw new BankError("PIN_WRONG", "That PIN isn't right.");
-        if (String(input.new ?? "") === String(input.current)) return { ok: false as const, code: "PIN_SAME" };
+        // the current PIN comes with the call, or was checked just before (so a journey need not keep it)
+        if (input.current !== undefined) { if (hashPin(String(input.current), dev.id) !== dev.pinHash) throw new BankError("PIN_WRONG", "That PIN isn't right."); }
+        else if (f.currentPin !== false && !this.proven("pin")) throw new BankError("PIN_NOT_VERIFIED", "Confirm your current PIN first.");
+        if (f.pinSame !== false && hashPin(String(input.new ?? ""), dev.id) === dev.pinHash) return { ok: false as const, code: "PIN_SAME" };
         const problem = pinProblem(String(input.new ?? ""), u.phone, f);
         if (problem) return { ok: false as const, code: problem };
-        dev.pinHash = hashPin(String(input.new), dev.id); dev.pinFails = 0;
-        return { ok: true as const, changedAt: new Date(this.now).toISOString() };
+        dev.pinHash = hashPin(String(input.new), dev.id); dev.pinFails = 0; this.proof.pin = undefined;
+        return { ok: true as const, changedAt: new Date(this.now).toISOString(), device: dev.name };
       }
       case "bank.password.check": {
         const u = this.requireMe();
-        if (this.isLocked(u)) throw new BankError("ACCOUNT_LOCKED", "Too many wrong passwords. For your safety this is locked.");
+        if (this.isLocked(u)) return { ok: false as const, code: "ACCOUNT_LOCKED" };
         if (hashOf(String(input.current ?? ""), u.username) !== u.passwordHash) {
-          u.failedSignIns += 1;
-          if (u.failedSignIns >= ACCESS.maxFailedSignIns && f.signInLock !== false) { this.lock(u); throw new BankError("ACCOUNT_LOCKED", "Too many wrong passwords. For your safety this is locked."); }
-          throw new BankError("INVALID_PASSWORD", "That isn't your current password.", u.failedSignIns);
+          this.proof.password = undefined; u.failedSignIns += 1;
+          if (u.failedSignIns >= ACCESS.maxFailedSignIns && f.signInLock !== false) { this.lock(u); return { ok: false as const, code: "ACCOUNT_LOCKED" }; }
+          return { ok: false as const, code: "INVALID_PASSWORD", attemptsLeft: Math.max(0, ACCESS.maxFailedSignIns - u.failedSignIns) };
         }
-        u.failedSignIns = 0; return { ok: true as const };
+        u.failedSignIns = 0; this.proof.password = this.now; return { ok: true as const };
       }
       case "bank.password.change": {
         const u = this.requireMe();
-        if (!ctx.codeVerified()) throw new BankError("OTP_REQUIRED", "OTP not verified");
-        if (hashOf(String(input.current ?? ""), u.username) !== u.passwordHash) throw new BankError("INVALID_PASSWORD", "That isn't your current password.");
-        if (String(input.new ?? "") === String(input.current)) return { ok: false as const, code: "PASSWORD_SAME" };
+        if (f.changeNeedsCode !== false && !ctx.codeVerified()) throw new BankError("OTP_REQUIRED", "OTP not verified");
+        // the current password comes with the call, or was checked just before (so a journey need not keep it)
+        if (input.current !== undefined) { if (hashOf(String(input.current), u.username) !== u.passwordHash) throw new BankError("INVALID_PASSWORD", "That isn't your current password."); }
+        else if (f.currentPassword !== false && !this.proven("password")) throw new BankError("PASSWORD_NOT_VERIFIED", "Confirm your current password first.");
+        if (f.passwordSame !== false && hashOf(String(input.new ?? ""), u.username) === u.passwordHash) return { ok: false as const, code: "PASSWORD_SAME" };
         const out = this.setPassword(u, { newPassword: input.new, confirm: input.confirm });
-        if (out.ok) ctx.clearCode();
-        return out.ok ? { ...out, otherDevicesSignedOut: input.signOutOthers !== false } : out;
+        if (!out.ok) return out;
+        this.proof.password = undefined; ctx.clearCode();
+        return { ...out, changedText: this.dayText(this.now), otherDevicesSignedOut: input.signOutOthers !== false };
       }
       case "bank.loginHistory.list": {
         const u = this.requireMe(), page = Math.max(1, Number(input.page) || 1), size = Math.min(50, Math.max(1, Number(input.pageSize) || 20));

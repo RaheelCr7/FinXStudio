@@ -396,8 +396,8 @@ export type SandboxConditions = {
   limitUsed?: number;
   /** Dates (YYYY-MM-DD) the bank is closed on top of Saturdays and Sundays: no scheduled payment is made, or can start, on them. */
   closedDays?: string[];
-  /** The device a sign-in comes from: one the customer trusts (known), a new one, or a trusted one that looks unusual (it asks for a code when the bank's option riskStepUp is on). */
-  device?: "known" | "new" | "unusual";
+  /** The device a sign-in comes from: one the customer trusts (known), a new one, or a trusted one that looks unusual (it asks for a code when the bank's option riskStepUp is on); browser is Alex's trusted Work laptop, which has no fingerprint or face sign-in. */
+  device?: "known" | "new" | "unusual" | "browser";
   /** A session with no call for this many seconds ends: the next call answers SESSION_EXPIRED (the shell's timeout is 300). Off unless set. */
   idleTimeoutSeconds?: number;
 };
@@ -410,6 +410,12 @@ const SIGNED_OUT_ADAPTERS = /^(bank\.(auth|recover)\.|bank\.device\.options$|ban
 const ACCESS_ADAPTERS = /^(bank\.(auth|recover)\.|bank\.device\.options$|bank\.password\.policy$|sandbox\.access\.inspect$)/;
 /** What a signed-in customer manages about their own access: devices, quick sign-in and PIN, the password, the login history. */
 const SECURITY_ADAPTERS = /^bank\.(devices\.|device\.setDefault$|password\.(check|change)$|loginHistory\.)/;
+
+/** Which Settings > Security calls change how the customer signs in (turning things off, which only makes sign-in stricter, and reading, need no step-up). */
+const needsStepUp = (adapter: string, input: Record<string, any>) =>
+  /^bank\.(password\.(check|change)|devices\.(remove|changePin))$/.test(adapter)
+  || (adapter === "bank.devices.setQuickSignIn" && input.method !== "off")
+  || (adapter === "bank.device.setDefault" && input.mode === "biometric");
 
 export class MockBank {
   private p!: Persona;
@@ -530,11 +536,14 @@ export class MockBank {
       case "bank.app.config": return { homeMarket: this.config.homeMarket, disabled: [...this.config.disabled], options: structuredClone(this.config.options) };
       case "bank.otp.send":
         if (this.access.ownsCodes) return this.access.codeCall(adapter, input);
+        // a signed-in customer's own change (Settings > Security) asks for the strict code: 000000 is wrong, 999999 expired, three wrong end the attempt
+        if (input.strict === true && this.access.me()) return this.access.securityCode(adapter, input, this.otp);
         this.otp.attempts = 0;
         this.otp.verified = false;
         return { sent: true, maskedPhone: maskPhone(this.p.phone), channel: input.channel ?? "sms" };
       case "bank.otp.verify": {
         if (this.access.ownsCodes) return this.access.codeCall(adapter, input);
+        if (input.strict === true && this.access.me()) return this.access.securityCode(adapter, input, this.otp);
         this.otp.attempts += 1;
         if (String(input.code) !== this.p.behaviour.otpCode && String(input.code) !== "000000") throw new BankError("OTP_INVALID", "Incorrect code", this.otp.attempts);
         this.otp.verified = true;
@@ -550,6 +559,8 @@ export class MockBank {
       if (business && !inCompany) throw new BankError("WRONG_CONTEXT", "This belongs to your business banking. Switch to your business to continue.");
       if (!business && inCompany) throw new BankError("WRONG_CONTEXT", "This belongs to your personal banking. Switch to Personal to continue.");
     }
+    // a change to how the customer signs in needs a step-up in the last five minutes (a customer with a session; the shell asks for it before it opens the journey)
+    if (SECURITY_ADAPTERS.test(adapter) && this.p.identity && this.opts.corpFlaws?.stepUpGate !== false && needsStepUp(adapter, input) && !(this.session.stepUpUntil !== undefined && now <= this.session.stepUpUntil)) throw new BankError("STEP_UP_REQUIRED", "For your security, confirm it's you first.");
     if (SECURITY_ADAPTERS.test(adapter)) return this.access.security(adapter, input, { codeVerified: () => this.otp.verified, clearCode: () => { this.otp.verified = false; } });
     if (business) {
       const out = this.business.call(adapter, input);
