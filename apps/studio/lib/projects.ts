@@ -1,7 +1,7 @@
 import { promises as fs } from "node:fs";
 import path from "node:path";
 import { spawnSync } from "node:child_process";
-import { PRESETS, accentProblem, applyLook, countryByCode, knownCurrency, lookById, projectShape, resolveBrand, resolveComponentTokens, validateShape, type ProjectShape, type Brand, type BrandDef, type ComponentTokenOverrides } from "@finx/ui-kit";
+import { PRESETS, accentProblem, applyLook, countryByCode, knownCurrency, lookById, checkWorkspaceTheme, projectShape, resolveBrand, resolveComponentTokens, validateShape, WORKSPACES, type ProjectShape, type Brand, type BrandDef, type ComponentTokenOverrides, type WorkspaceId, type WorkspaceTheme } from "@finx/ui-kit";
 import { PROVIDERS, isProviderId } from "@finx/mock-bank-api";
 import { StoreError } from "./store";
 import { brandsFile } from "./brand-ids";
@@ -226,6 +226,33 @@ export async function updateProjectComponents(id: string, input: unknown): Promi
   await fs.writeFile(tmp, JSON.stringify({ ...all, [id]: updated }, null, 2) + "\n");
   await fs.rename(tmp, file);
   return { project: toProject(id, updated), previous };
+}
+
+/**
+ * Sets the look of one workspace (Personal or Business) of a project, as WorkspaceTheme. Pass null to give the workspace back to the bank's own
+ * look. Every problem found is reported at once. The answer includes the previous theme, to undo.
+ */
+export async function updateProjectWorkspace(id: string, workspace: unknown, input: unknown): Promise<{ project: Project; previous?: WorkspaceTheme }> {
+  const all = await read();
+  const def = all[id];
+  if (!def) throw new StoreError(404, `No project called ${id}`);
+  if (typeof workspace !== "string" || !WORKSPACES.includes(workspace as WorkspaceId)) throw new StoreError(400, `Choose a workspace: ${WORKSPACES.join(" or ")}`);
+  const w = workspace as WorkspaceId;
+  let theme: WorkspaceTheme | undefined;
+  if (input !== null) {
+    const checked = checkWorkspaceTheme(input);
+    if (!checked.ok) throw new StoreError(400, checked.errors.join(". "));
+    theme = checked.theme;
+  }
+  const { workspaces: before, ...rest } = def;
+  const next = { ...(before ?? {}) };
+  if (theme) next[w] = theme; else delete next[w];
+  const updated: BrandDef = Object.keys(next).length ? { ...rest, workspaces: next } : rest;
+  const file = brandsFile();
+  const tmp = `${file}.${process.pid}.tmp`;
+  await fs.writeFile(tmp, JSON.stringify({ ...all, [id]: updated }, null, 2) + "\n");
+  await fs.rename(tmp, file);
+  return { project: toProject(id, updated), previous: before?.[w] };
 }
 
 /** Sets which bank API a project runs against. "reference" (the default) is stored as nothing, so brands.json stays small. */

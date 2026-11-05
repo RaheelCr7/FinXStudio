@@ -137,7 +137,7 @@ Charts, the gradient card, the donut, icons and pills are shared widgets in `pac
 
 ## How a bank is defined
 
-A bank is a **project**: see [PROJECTS.md](PROJECTS.md). In short, `packages/ui-kit/src/brands.json` holds each bank's name, ids, look ("preset"), accent colour and currency; the design system turns that into a full light and dark theme, and Studio can add new ones. The sandbox customers are in `packages/mock-bank-api`, tagged by look. Build with `--brand <id>`. Icons come from `scripts/generate-brand-assets.py` (the build makes them if missing).
+A bank is a **project**: see [PROJECTS.md](PROJECTS.md). In short, `packages/ui-kit/src/brands.json` holds each bank's name, ids, look ("preset"), accent colour and currency; the design system turns that into a full light and dark theme, and Studio can add new ones. The sandbox customers are in `packages/mock-bank-api`, tagged by look. Banks with a Personal and a Business side can theme each apart (BankWorkx has Aurora and Graphite); see [WORKSPACE-THEMES.md](WORKSPACE-THEMES.md). Build with `--brand <id>`. Icons come from `scripts/generate-brand-assets.py` (the build makes them if missing).
 
 ## Not built yet
 

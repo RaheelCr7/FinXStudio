@@ -125,12 +125,34 @@ export type BrandLook = {
   fields?: "outlined";
   /** The exact colour of the app bar and banner, when it must match the bank's design to the pixel (the theme's accent may be nudged for contrast). */
   bar?: string;
-  /** Page colour behind the screens (the standard look uses the theme's). */
+  /** Page colour behind the screens (the standard look uses the theme's). In a workspace look it is also the page canvas in light mode. */
   pageBg?: string;
   /** The bank's logo (white on transparent) as a data: address, drawn by the hero block. */
   logo?: string;
   /** Font name, when the bank's font is installed or loaded; the standard font is used otherwise. */
   font?: string;
+  /** The balance card's gradient, when it should not follow the accent (for example charcoal under a green accent). White text must read on both ends. */
+  hero?: { from: string; to: string };
+  /** The dark panel colour (budget cards, toasts), when it should not be the preset's near-black. */
+  ink?: string;
+};
+
+/** The two workspaces a bank can theme apart: the customer's own banking, and a company they act for. */
+export type WorkspaceId = "personal" | "business";
+export const WORKSPACES: readonly WorkspaceId[] = ["personal", "business"];
+/**
+ * How one workspace looks, set by the bank. Anything left out follows the bank's own look; anything set replaces it
+ * (a workspace look is chosen as a whole, so `look`, `radius` and `components` are not merged with the bank's).
+ */
+export type WorkspaceTheme = {
+  /** A display name for the look, for example "Aurora". */
+  name?: string;
+  accent?: string; preset?: Preset;
+  look?: BrandLook;
+  radius?: Partial<Record<"sm" | "md" | "lg" | "xl", number>>;
+  components?: ComponentTokenOverrides;
+  /** The appearance the workspace opens in until the customer chooses light or dark themselves. */
+  mode?: "light" | "dark";
 };
 
 /** What a bank is, as stored in brands.json (and edited in Studio). Everything else about its look is derived from this. */
@@ -144,6 +166,8 @@ export type BrandDef = {
   radius?: Partial<Record<"sm" | "md" | "lg" | "xl", number>>;
   /** Sizes of the shared components (field, button, bar, row, keypad) when the bank's design differs from the defaults. */
   components?: ComponentTokenOverrides;
+  /** A look per workspace, for banks with a Personal and a Business side. Resolved with resolveBrand(id, def, workspace). */
+  workspaces?: Partial<Record<WorkspaceId, WorkspaceTheme>>;
   /** Where the project runs, the languages it offers and the legal entities it covers. Anything unset follows the bank's currency and locale (see projectShape). */
   channels?: Channel[];
   languages?: string[];
@@ -156,7 +180,8 @@ export type BrandDef = {
   bankApi?: string;
 };
 export type BrandId = string;
-export type Brand = { id: BrandId; name: string; preset: Preset; light: Theme; dark: Theme; radius: Record<keyof typeof radius, number>; currency: string; locale: string; look?: BrandLook; components?: ComponentTokenOverrides; /** The bank API this project runs against (unset: the reference sandbox). */ bankApi?: string };
+export type Brand = { id: BrandId; name: string; preset: Preset; light: Theme; dark: Theme; radius: Record<keyof typeof radius, number>; currency: string; locale: string; look?: BrandLook; components?: ComponentTokenOverrides; /** The bank API this project runs against (unset: the reference sandbox). */ bankApi?: string;
+  /** Set when this brand is one workspace's look (see resolveBrand). */ workspace?: WorkspaceId; /** The appearance this look opens in, when the bank set one for the workspace. */ mode?: "light" | "dark" };
 
 // ---- colour helpers ---------------------------------------------------------------------------------------------------
 const toRgb = (hex: string): [number, number, number] => { const n = parseInt(hex.slice(1), 16); return [(n >> 16) & 255, (n >> 8) & 255, n & 255]; };
@@ -192,8 +217,25 @@ const PRESET_BASE: Record<Preset, { light: Record<string, string>; dark: Record<
 };
 const PRESET_ACCENT: Record<Preset, string> = { meezan: "#0F6E56", bankworkx: "#3155CE" };
 
-/** A full light and dark theme for a bank: the preset's palette with the bank's own accent colour applied. */
-export function resolveBrand(id: BrandId, def: BrandDef): Brand {
+/** The bank's definition with one workspace's look laid over it (the bank's own look where the workspace sets nothing). */
+export function workspaceDef(def: BrandDef, workspace: WorkspaceId): BrandDef {
+  const t = def.workspaces?.[workspace];
+  if (!t) return def;
+  const { workspaces: _unused, ...rest } = def;
+  return {
+    ...rest,
+    ...(t.preset ? { preset: t.preset } : {}), ...(t.accent ? { accent: t.accent } : {}),
+    ...(t.look ? { look: t.look } : {}), ...(t.radius ? { radius: t.radius } : {}), ...(t.components ? { components: t.components } : {}),
+  };
+}
+
+/**
+ * A full light and dark theme for a bank: the preset's palette with the bank's own accent colour applied.
+ * With a workspace, the look the bank set for it (see WorkspaceTheme) is used in place of the bank's own.
+ */
+export function resolveBrand(id: BrandId, bankDef: BrandDef, workspace?: WorkspaceId): Brand {
+  const def = workspace ? workspaceDef(bankDef, workspace) : bankDef;
+  const mode0 = workspace ? bankDef.workspaces?.[workspace]?.mode : undefined;
   const base = PRESET_BASE[def.preset];
   const make = (mode: "light" | "dark"): Theme => {
     const c: Record<string, string> = { ...base[mode] };
@@ -209,14 +251,32 @@ export function resolveBrand(id: BrandId, def: BrandDef): Brand {
       c.accentSoft = soft(accent);
       if (def.preset === "bankworkx") { c.heroFrom = mix(def.accent, WHITE, 0.16); c.heroTo = mix(def.accent, BLACK, 0.42); c.info = accent; c.infoBg = c.accentSoft; c.chart1 = accent; }
     }
-    return { name: `${id}-${mode}`, colors: c };
+    if (def.look?.hero) { c.heroFrom = def.look.hero.from; c.heroTo = def.look.hero.to; }
+    if (def.look?.ink) c.ink = def.look.ink;
+    // a workspace look sets the page canvas itself (light mode), with the muted fill and borders drawn from it so they sit on it
+    if (workspace && mode === "light" && def.look?.pageBg) {
+      const page = def.look.pageBg, text = c.text!;
+      Object.assign(c, { bg: page, surfaceMuted: mix(page, text, 0.03), border: mix(page, text, 0.1), borderStrong: mix(page, text, 0.18) });
+    }
+    return { name: `${id}${workspace ? `-${workspace}` : ""}-${mode}`, colors: c };
   };
-  return { id, name: def.name, preset: def.preset, light: make("light"), dark: make("dark"), radius: { ...base.radius, ...(def.radius ?? {}) }, currency: def.currency, locale: def.locale, ...(def.look ? { look: def.look } : {}), ...(def.bankApi ? { bankApi: def.bankApi } : {}), ...(def.components ? { components: def.components } : {}) };
+  return { id, name: def.name, preset: def.preset, light: make("light"), dark: make("dark"), radius: { ...base.radius, ...(def.radius ?? {}) }, currency: def.currency, locale: def.locale, ...(def.look ? { look: def.look } : {}), ...(def.bankApi ? { bankApi: def.bankApi } : {}), ...(def.components ? { components: def.components } : {}), ...(workspace ? { workspace } : {}), ...(mode0 ? { mode: mode0 } : {}) };
+}
+
+/** The look of each workspace a bank has themed. Workspaces it has not themed are left out (they use the bank's own brand). */
+export function resolveWorkspaces(id: BrandId, def: BrandDef): Partial<Record<WorkspaceId, Brand>> {
+  return Object.fromEntries(WORKSPACES.filter((w) => def.workspaces?.[w]).map((w) => [w, resolveBrand(id, def, w)]));
 }
 
 /** Every bank in brands.json. Journeys and the engine never change per bank; only this does. */
 export const brandDefs = brandData as Record<BrandId, BrandDef>;
 export const brands: Record<BrandId, Brand> = Object.fromEntries(Object.entries(brandDefs).map(([id, def]) => [id, resolveBrand(id, def)]));
+export const workspaceBrands: Record<BrandId, Partial<Record<WorkspaceId, Brand>>> = Object.fromEntries(Object.entries(brandDefs).map(([id, def]) => [id, resolveWorkspaces(id, def)]));
+
+/** The brand to draw: the workspace's own look when the bank themed it, otherwise the bank's brand. Unknown banks fall back to Meezan. */
+export function brandFor(id: BrandId, workspace?: WorkspaceId): Brand {
+  return (workspace && workspaceBrands[id]?.[workspace]) || brands[id] || brands.meezan!;
+}
 
 /** Every colour a component may use. Brands that do not define an extra one fall back through completeColors. */
 export type ColorKey =

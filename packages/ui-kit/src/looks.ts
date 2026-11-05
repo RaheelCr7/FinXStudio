@@ -1,4 +1,4 @@
-import { contrast, readableOn, resolveBrand, type BrandDef, type BrandLook, type Preset } from "./tokens";
+import { contrast, readableOn, resolveBrand, workspaceDef, type BrandDef, type BrandLook, type Preset, type WorkspaceId } from "./tokens";
 import { defaultComponentTokens, resolveComponentTokens, type ComponentTokenOverrides } from "./components";
 
 /** A ready-made look a new project can start from, then tweak. */
@@ -49,6 +49,9 @@ export function moodTokens(roundness: number, density: number): { radius: NonNul
   };
 }
 
+/** The same checks for one workspace's look (what the bank set for it, over the bank's own). */
+export const workspaceLookReport = (def: BrandDef, workspace: WorkspaceId): LookCheck[] => lookReport(workspaceDef(def, workspace));
+
 export type LookCheck = { id: string; label: string; ok: boolean; value: string; fix?: string };
 
 /** Reads a bank's look the way an accessibility reviewer would: contrast of the things people must read, and the size of what they must tap. */
@@ -64,6 +67,7 @@ export function lookReport(def: BrandDef): LookCheck[] {
   add("text", "Body text on the page (light)", ratio(light.text!, light.bg!), 4.5, "Use darker text.");
   add("textDark", "Body text on the page (dark)", ratio(dark.text!, dark.bg!), 4.5, "Use lighter text in dark mode.");
   add("muted", "Secondary text on cards", ratio(light.textMuted!, light.surface!), 4.5, "Use darker secondary text.");
+  if (def.look?.hero) add("hero", "White text on the balance card", Math.min(ratio("#FFFFFF", def.look.hero.from), ratio("#FFFFFF", def.look.hero.to)), 4.5, "Use darker colours for the balance card.");
   const t = resolveComponentTokens(def.components, brand.radius);
   const smallest = Math.min(t.field.height, t.button.height, t.row.height);
   checks.push({ id: "target", label: "Smallest tap target", ok: smallest >= 44, value: `${smallest}px (needs 44)`, ...(smallest >= 44 ? {} : { fix: "Make fields, buttons and rows at least 44px tall." }) });

@@ -1,6 +1,6 @@
-import { PRESETS, accentProblem, brandDefs, resolveBrand, type Brand, type BrandDef } from "@finx/ui-kit";
+import { PRESETS, accentProblem, brandDefs, readWorkspaces, resolveBrand, resolveWorkspaces, type Brand, type BrandDef, type WorkspaceId } from "@finx/ui-kit";
 
-export type Project = { id: string; brand: Brand; def: BrandDef; /** Which set of screens the project uses. */ shell: "meezan" | "bankworkx" };
+export type Project = { id: string; brand: Brand; def: BrandDef; /** The look of each workspace the bank themed (empty for a bank with one look). */ workspaces: Partial<Record<WorkspaceId, Brand>>; /** Which set of screens the project uses. */ shell: "meezan" | "bankworkx" };
 
 /** Names that cannot be project ids because they are used by the app's own addresses. */
 export const RESERVED = new Set(["api", "assets", "_next", "theme", "favicon.ico", "manifest.webmanifest", "sw.js"]);
@@ -10,7 +10,7 @@ const TTL = () => Number(process.env.FINX_WEB_PROJECTS_TTL_MS ?? 30_000);
 
 const toProject = (id: string, def: BrandDef): Project => {
   const brand = resolveBrand(id, def);
-  return { id, brand, def, shell: brand.preset === "bankworkx" ? "bankworkx" : "meezan" };
+  return { id, brand, def, workspaces: resolveWorkspaces(id, def), shell: brand.preset === "bankworkx" ? "bankworkx" : "meezan" };
 };
 const bundled = (): Project[] => Object.entries(brandDefs).filter(([id]) => !RESERVED.has(id)).map(([id, def]) => toProject(id, def));
 
@@ -29,6 +29,8 @@ export function readProject(raw: any): Project | null {
     const def: BrandDef = {
       name, shortName: str(raw.shortName, 30) ?? name, slug: id, bundleId: str(raw.bundleId, 120) ?? `com.${id.replace(/-/g, "")}.app`, scheme: str(raw.scheme, 40) ?? id.replace(/-/g, ""),
       preset: raw.preset, accent: String(raw.accent).toUpperCase(), currency, locale, assets: `./assets/${id}`, background: hex(raw.background, "#F6F7F9"), splashDark: hex(raw.splashDark, "#0A0D12"),
+      // each workspace look is rebuilt from checked fields, like the rest of the theme
+      ...(readWorkspaces(raw.workspaces) ? { workspaces: readWorkspaces(raw.workspaces) } : {}),
     };
     return toProject(id, def);
   } catch { return null; }

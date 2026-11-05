@@ -7,3 +7,4 @@ export * from "./languages";
 export * from "./countries";
 export * from "./project";
 export * from "./looks";
+export * from "./workspaces";

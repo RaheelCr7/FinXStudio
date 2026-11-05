@@ -25,7 +25,77 @@
     "locale": "en-US",
     "assets": "./assets/bankworkx",
     "background": "#F6F4FC",
-    "splashDark": "#0D1022"
+    "splashDark": "#0D1022",
+    "workspaces": {
+      "personal": {
+        "name": "Aurora",
+        "preset": "bankworkx",
+        "accent": "#2F5BFF",
+        "mode": "light",
+        "look": {
+          "pageBg": "#F3F6FF",
+          "hero": {
+            "from": "#2F5BFF",
+            "to": "#6A4DF0"
+          }
+        },
+        "radius": {
+          "sm": 12,
+          "md": 16,
+          "lg": 24,
+          "xl": 28
+        },
+        "components": {
+          "field": {
+            "height": 54
+          },
+          "button": {
+            "height": 54
+          },
+          "row": {
+            "height": 62
+          },
+          "bar": {
+            "height": 58
+          }
+        }
+      },
+      "business": {
+        "name": "Graphite",
+        "preset": "meezan",
+        "accent": "#0B7350",
+        "mode": "light",
+        "look": {
+          "fields": "outlined",
+          "pageBg": "#EDF0EE",
+          "ink": "#18211E",
+          "hero": {
+            "from": "#18211E",
+            "to": "#2A3A33"
+          }
+        },
+        "radius": {
+          "sm": 4,
+          "md": 6,
+          "lg": 8,
+          "xl": 10
+        },
+        "components": {
+          "field": {
+            "height": 46
+          },
+          "button": {
+            "height": 46
+          },
+          "row": {
+            "height": 48
+          },
+          "bar": {
+            "height": 52
+          }
+        }
+      }
+    }
   },
   "cab": {
     "name": "CAB",

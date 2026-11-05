@@ -9,6 +9,7 @@ import "../globals.css";
 import "../bankworkx.css";
 import { AppProvider } from "@/components/AppProvider";
 import { RegisterSW } from "@/components/RegisterSW";
+import { WorkspaceScope } from "@/components/WorkspaceScope";
 import { getProject } from "@/lib/projects";
 
 export async function generateMetadata({ params }: { params: Promise<{ project: string }> }): Promise<Metadata> {
@@ -29,6 +30,7 @@ export default async function ProjectLayout({ children, params }: { children: Re
       </head>
       <body>
         <RegisterSW />
+        <WorkspaceScope />
         <AppProvider project={{ id: project.id, preset: project.brand.preset, name: project.def.name, shell: project.shell, currency: project.def.currency, bankApi: project.def.bankApi, look: project.brand.look }}>{children}</AppProvider>
       </body>
     </html>

@@ -8,7 +8,7 @@ import { JourneyPlayer, ThemeProvider, useTheme } from "@finx/renderer-native";
 import { formatMoney } from "@finx/ui-kit";
 import { ServerSetting } from "./src/ServerSetting";
 import { DEFAULT_STUDIO_URL, SERVER_CHANGE_ALLOWED, loadStudioUrl } from "./src/studio-config";
-import { BRAND, BRAND_INFO } from "./src/brand";
+import { BRAND, BRAND_INFO, brandOf } from "./src/brand";
 import { live } from "./src/live";
 import { useBankApp } from "./src/useBankApp";
 import { BankWorkxShell } from "./src/bankworkx/Shell";
@@ -139,10 +139,12 @@ function MeezanShell() {
 
 export default function App() {
   const scheme = useColorScheme();
-  const mode = scheme === "dark" ? "dark" : "light";
+  const brand = brandOf();
+  // the workspace's own appearance applies until the device says otherwise
+  const mode = scheme ? (scheme === "dark" ? "dark" : "light") : brand.mode ?? "light";
   return (
     <SafeAreaProvider>
-      <ThemeProvider mode={mode} brand={BRAND}>
+      <ThemeProvider mode={mode} brand={brand}>
         <Root mode={mode} />
       </ThemeProvider>
     </SafeAreaProvider>

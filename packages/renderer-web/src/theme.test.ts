@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { readFileSync, readdirSync } from "node:fs";
 import path from "node:path";
-import { brands } from "@finx/ui-kit";
+import { brands, workspaceBrands } from "@finx/ui-kit";
 import { themeCss } from "./theme";
 
 describe("theme stylesheet", () => {
@@ -27,6 +27,27 @@ describe("theme stylesheet", () => {
     expect(themeCss(brands.cab!)).toContain("--fxc-button-radius:12px;");
     expect(themeCss(brands.bankworkx!)).toContain("--fxc-field-radius:14px;");
     expect(themeCss(brands.meezan!)).toContain("--fxc-field-height:52px;");
+  });
+  it("scopes each workspace's look by data-workspace, after the bank's own, in light and dark", () => {
+    const css = themeCss(brands.bankworkx!, workspaceBrands.bankworkx);
+    const personal = ':root[data-brand="bankworkx"][data-workspace="personal"]', business = ':root[data-brand="bankworkx"][data-workspace="business"]';
+    for (const root of [personal, business]) {
+      expect(css).toContain(`${root}{`);
+      expect(css).toContain(`${root}[data-mode="dark"]{`);
+      expect(css).toContain(`${root}:not([data-mode="light"]){`);
+    }
+    // the same variables, with each workspace's own values
+    const block = (root: string) => css.split("\n").find((l) => l.startsWith(`${root}{`))!;
+    expect(block(personal)).toContain("--r-lg:24px;");
+    expect(block(business)).toContain("--r-lg:8px;");
+    expect(block(business)).toContain("--c-ink:#18211E;");
+    expect(block(business)).toContain("--fxc-button-height:46px;");
+    expect(block(personal)).toContain("--fxc-row-height:62px;");
+    expect(css.indexOf(personal)).toBeGreaterThan(css.indexOf(':root[data-brand="bankworkx"]{'));
+  });
+  it("is unchanged for a bank without workspace looks", () => {
+    expect(themeCss(brands.meezan!, workspaceBrands.meezan)).toBe(themeCss(brands.meezan!));
+    expect(themeCss(brands.bankworkx!)).not.toContain("data-workspace");
   });
   it("refuses an unsafe brand id", () => {
     expect(() => themeCss({ ...brands.meezan!, id: 'x"]{}*{' })).toThrow(/Unsafe/);

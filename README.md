@@ -4,7 +4,7 @@ A digital banking platform: ready-made banking journeys, a visual journey builde
 
 Full plan: [docs/PROJECT-PLAN.md](docs/PROJECT-PLAN.md) · Branching: [docs/BRANCHING.md](docs/BRANCHING.md) · Demo: [docs/DEMO.md](docs/DEMO.md) · AI layer: [docs/AI-LAYER.md](docs/AI-LAYER.md)
 
-Studio features: [Projects](docs/PROJECTS.md) · [Catalog](docs/CATALOG.md) · [Rules](docs/RULES.md) · [People and roles](docs/ROLES.md) · [Code tab](docs/CODE.md) · [Web app](docs/WEB.md) · Second bank app: [BankWorkx](docs/BANKWORKX.md) · [Sandbox bank](docs/SANDBOX.md) · Devices: [iOS](docs/IOS.md), [Android](docs/ANDROID.md)
+Studio features: [Projects](docs/PROJECTS.md) · [Catalog](docs/CATALOG.md) · [Rules](docs/RULES.md) · [People and roles](docs/ROLES.md) · [Code tab](docs/CODE.md) · [Web app](docs/WEB.md) · Second bank app: [BankWorkx](docs/BANKWORKX.md) · [Workspace themes](docs/WORKSPACE-THEMES.md) · [Sandbox bank](docs/SANDBOX.md) · Devices: [iOS](docs/IOS.md), [Android](docs/ANDROID.md)
 
 ## Repo layout (as it grows)
 ```
