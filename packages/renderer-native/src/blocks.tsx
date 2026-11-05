@@ -1,10 +1,10 @@
-import { Alert as KitAlert, AmountField, Button as KitButton, Accordion as KitAccordion, Dialog as KitDialog, DateField as KitDateField, Dropdown as KitDropdown, Avatar as KitAvatar, MapPins as KitMapPins, BalanceList as KitBalanceList, Checkbox, ChoiceGroup, CodeInput, Divider as KitDivider, Hero as KitHero, Keypad as KitKeypad, ListRow as KitListRow, PinDots as KitPinDots, Result as KitResult, SectionHeader as KitSectionHeader, Shortcuts as KitShortcuts, SummaryList, Switch, TextField as KitTextField } from "@finx/components/native";
+import { Alert as KitAlert, AmountField, Button as KitButton, Accordion as KitAccordion, Dialog as KitDialog, DateField as KitDateField, Dropdown as KitDropdown, Avatar as KitAvatar, MapPins as KitMapPins, BalanceList as KitBalanceList, Checkbox, ChoiceGroup, CodeInput, Divider as KitDivider, Hero as KitHero, Keypad as KitKeypad, ListRow as KitListRow, PinDots as KitPinDots, Result as KitResult, SectionHeader as KitSectionHeader, Shortcuts as KitShortcuts, SummaryList, Switch, TextField as KitTextField, StatusChip as KitStatusChip, Timeline as KitTimeline, DataTable as KitDataTable } from "@finx/components/native";
 import React from "react";
-import { Image, Pressable, Text, TextInput, View, StyleSheet, Platform } from "react-native";
+import { Image, Pressable, Text, TextInput, View, StyleSheet, Platform, useWindowDimensions } from "react-native";
 import { mix, space } from "@finx/ui-kit";
-import { accountRows, amountText, typedAmount, applyKey, beneficiaryRows, cardFields, cardNetwork, cleanOtp, keyboardKind, KEYPAD_ROWS, otpCells, otpLabel, parseAmountText, prefixOf, quickAmounts, selectChoices, symbolOf, ui, type BlockProps, type BlockType } from "@finx/renderer-core";
+import { accountRows, amountText, typedAmount, applyKey, beneficiaryRows, cardFields, cardNetwork, cleanOtp, keyboardKind, KEYPAD_ROWS, otpCells, otpLabel, parseAmountText, prefixOf, quickAmounts, selectChoices, symbolOf, ui, CARDS_BELOW, dataTableProps, initialTableFor, tableStrings, type BlockProps, type BlockType, type ChartView, type TableState } from "@finx/renderer-core";
 import { useTheme } from "./theme";
-import { CardVisual, Icon, IconTile } from "./widgets";
+import { CardVisual, Donut, Icon, IconTile, LineChart, Segmented } from "./widgets";
 
 type P = BlockProps;
 const tab = { fontVariant: ["tabular-nums" as const] };
@@ -179,11 +179,60 @@ export function Menu({ b, press }: P) {
   );
 }
 
+export const StatusChipBlock = ({ b }: P) => <KitStatusChip {...b.chip} />;
+
+export function TimelineBlock({ b, lang }: P) {
+  return <KitTimeline label={b.label || undefined} items={b.entries} strings={{ done: ui(lang, "timelineDone"), current: ui(lang, "timelineCurrent"), upcoming: ui(lang, "timelineUpcoming"), failed: ui(lang, "timelineFailed") }} />;
+}
+
+/** A table on a wide screen, a list of cards on a phone. Sort, search, filters and page live here; ticked rows are saved in the journey. */
+export function DataTableBlock({ b, set, press, lang }: P) {
+  const [width, setWidth] = React.useState(0);
+  const { width: screen } = useWindowDimensions();
+  const [state, setState] = React.useState<TableState>(() => initialTableFor(b));
+  const narrow = (width || screen) < CARDS_BELOW;
+  return <View onLayout={(e) => setWidth(e.nativeEvent.layout.width)}><KitDataTable {...dataTableProps(b, lang, state, setState, set, press, narrow ? "cards" : "table")} /></View>;
+}
+
+/** A line or a ring over a saved list, with the same numbers available as a table. */
+export function ChartBlock({ b, lang }: P) {
+  const { c } = useTheme();
+  const v: ChartView = b.chart;
+  const [series, setSeries] = React.useState(0);
+  const [ring, setRing] = React.useState<number | null>(null);
+  const [asTable, setAsTable] = React.useState(false);
+  const s = v.series[Math.min(series, v.series.length - 1)];
+  const tones = [c.chart1, c.chart2, c.chart3, c.chart4, c.chart5, c.chart6];
+  const total = v.slices.reduce((n, x) => n + x.value, 0);
+  return (
+    <View accessibilityLabel={b.label} style={{ gap: 12 }}>
+      <Label>{b.label}</Label>
+      {v.series.length > 1 && b.kind === "line" && !asTable ? <Segmented options={v.series.map((x, i) => ({ id: String(i), label: x.label }))} value={String(series)} onChange={(i) => setSeries(Number(i))} /> : null}
+      {asTable ? (
+        <KitDataTable label={b.label} columns={v.table.columns.map((x) => ({ key: x.key, label: x.label, align: x.align }))} rows={v.table.rows} layout="table" strings={tableStrings(lang)} />
+      ) : b.kind === "donut" ? (
+        <>
+          <Donut segments={v.slices.map((x) => ({ label: x.label, value: x.value, color: tones[x.tone - 1]! }))} centerTop={ring != null ? v.slices[ring]!.text : v.totalText} centerSub={ring != null ? v.slices[ring]!.label : undefined} selected={ring} onSelect={setRing} size={b.height} />
+          {v.slices.map((x, i) => (
+            <Pressable key={i} accessibilityRole="button" accessibilityState={{ selected: ring === i }} onPress={() => setRing(ring === i ? null : i)} style={{ flexDirection: "row", alignItems: "center", gap: 8, minHeight: 36, paddingHorizontal: 8, borderRadius: 10, backgroundColor: ring === i ? c.surfaceMuted : "transparent" }}>
+              <View style={{ width: 10, height: 10, borderRadius: 5, backgroundColor: tones[x.tone - 1] }} />
+              <Text style={{ flex: 1, color: c.text, fontSize: 14 }}>{x.label}</Text>
+              <Text style={[{ color: c.text, fontSize: 14, fontWeight: "700" }, tab]}>{x.text}</Text>
+              {total ? <Text style={[{ color: c.textMuted, fontSize: 12 }, tab]}>{Math.round((x.value / total) * 100)}%</Text> : null}
+            </Pressable>
+          ))}
+        </>
+      ) : s ? <LineChart data={s.points} format={(p) => (p as any).text} height={b.height} /> : null}
+      {b.table ? <Pressable accessibilityRole="button" accessibilityState={{ selected: asTable }} onPress={() => setAsTable(!asTable)} style={{ alignSelf: "flex-start", paddingHorizontal: 12, minHeight: 36, justifyContent: "center", borderRadius: 999, borderWidth: 1, borderColor: c.borderStrong, backgroundColor: c.surface }}><Text style={{ color: c.text, fontSize: 13 }}>{ui(lang, asTable ? "chartAsChart" : "chartAsTable")}</Text></Pressable> : null}
+    </View>
+  );
+}
+
 const s = StyleSheet.create({
   row: { flexDirection: "row", alignItems: "center", padding: 14, marginBottom: 10 },
 });
 export const registry: Record<BlockType, (p: P) => React.ReactElement | null> = {
   accountPicker: AccountPicker, beneficiaryPicker: BeneficiaryPicker, amountInput: AmountInput, select: SelectChips, textInput: TextField,
-  alert: Alert, toggle: Toggle, cardForm: CardForm, reviewSummary: ReviewSummary, consent: Consent, otp: Otp, result: Result, text: TextBlock, button: Button, stepper: () => null, hero: Hero, sectionHeader: SectionHeader, shortcuts: Shortcuts, menu: Menu, divider: Divider, accordion: AccordionBlock, dialog: DialogBlock, dateInput: DateInputBlock, avatar: AvatarBlock, map: MapBlock, balanceList: BalanceListBlock,
+  alert: Alert, toggle: Toggle, cardForm: CardForm, reviewSummary: ReviewSummary, consent: Consent, otp: Otp, result: Result, text: TextBlock, button: Button, stepper: () => null, hero: Hero, sectionHeader: SectionHeader, shortcuts: Shortcuts, menu: Menu, divider: Divider, accordion: AccordionBlock, dialog: DialogBlock, dateInput: DateInputBlock, avatar: AvatarBlock, map: MapBlock, balanceList: BalanceListBlock, statusChip: StatusChipBlock, timeline: TimelineBlock, dataTable: DataTableBlock, chart: ChartBlock,
 };
 export { space };

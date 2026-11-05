@@ -108,7 +108,7 @@ export const BLOCKS: BlockDoc[] = [
   },
   {
     type: "dateInput", purpose: "A date with a calendar under the field. Saved as YYYY-MM-DD, shown as DD / MM / YYYY. Use it instead of a typed date; show it with {{x | date}}.",
-    fields: { bind: "path", label: "Loc", placeholder: "Loc?", helper: "Loc?", min: "date or \"today\"?", max: "date or \"today\"? (birth date: today)", messages: "{ min, max } Loc?" },
+    fields: { bind: "path", label: "Loc", placeholder: "Loc?", helper: "Loc?", min: "date, \"today\" or a {{path}} to another date?", max: "date, \"today\" or a {{path}}? (birth date: today; the end of a range: min is the start)", messages: "{ min, max } Loc?" },
     example: { type: "dateInput", bind: "enroll.dob", label: { en: "Date of birth" }, max: "today" },
   },
   {
@@ -137,6 +137,29 @@ export const BLOCKS: BlockDoc[] = [
     type: "menu", purpose: "A list of rows that each run actions when tapped, with an optional icon and a line of help.", fields: { items: "[{ id, label: Loc, text?: Loc, icon?, actions }] for fixed rows", source: "or a path to a saved list (e.g. loc.found) to get one row per entry", item: "with source: { label: Loc, text?: Loc, icon?, actions } where {{item.name}} etc. read that entry, in the texts and in the actions" },
     notes: ["A row built from a list: { type: \"menu\", source: \"loc.found\", item: { label: \"{{item.name}}\", actions: [{ type: \"callApi\", integration: \"detail\", input: { id: \"{{item.id}}\" }, saveAs: \"loc.detail\" }, { type: \"navigate\", to: \"details\" }] } }. On a screen with navigation.rules, a navigate action with a target is overridden by a matching rule: guard the rules with a flag if another button must navigate freely."],
     example: { type: "menu", items: [{ id: "chat", label: { en: "Chat with us" }, text: { en: "Mon to Fri, 9 to 5" }, icon: "help", actions: [{ type: "navigate", to: "chat" }] }] },
+  },
+  {
+    type: "statusChip", purpose: "A status word with an icon and a tone (never the colour alone): where a payment, application or request stands.",
+    fields: { status: "the value or a template, e.g. \"{{payment.status}}\"", label: "Loc?, replaces the readable default", tone: "positive | warning | negative | info | neutral?", statuses: "{ <value>: { label?: Loc, tone? } }? translations and tones per value" },
+    notes: ["Known words get a tone and a label: paid, released, settled, approved, active (positive); pending, pending_approval, waiting (warning); rejected, failed, declined, overdue (negative); processing, scheduled, submitted (info); withdrawn, cancelled, draft (neutral). Unknown words are neutral. Give statuses translations for a second language."],
+    example: { type: "statusChip", status: "{{payment.status}}", statuses: { pending_approval: { label: { en: "Waiting for approval" }, tone: "warning" } } },
+  },
+  {
+    type: "timeline", purpose: "What happened and what is still to come, top to bottom (payment or application history).",
+    fields: { label: "Loc? names the list", items: "[{ id, title: Loc, text?: Loc, time?: Loc, state?: done | current | upcoming | failed (or a template), visibleWhen? }]", source: "or a path to a saved list: one step per row", item: "with source: { title, text?, time?, state? } where {{item.x}} reads that row" },
+    notes: ["state defaults to done; upcoming steps are dashed, failed ones red. A state may be a template: \"{{payment.status == 'released' ? 'done' : 'upcoming'}}\". Write times with {{x | datetime}}."],
+    example: { type: "timeline", label: { en: "Payment history" }, items: [{ id: "started", title: { en: "Started by {{pay.startedBy}}" }, time: "{{pay.startedAt | datetime}}" }, { id: "released", title: { en: "Released" }, state: "{{pay.status == 'released' ? 'done' : 'upcoming'}}" }] },
+  },
+  {
+    type: "dataTable", purpose: "A list of records as a table: sort, search, filter chips, pages and ticked rows. On a phone it becomes cards.",
+    fields: { source: "path to a list or record of rows", label: "Loc names the table", columns: "[{ key, label: Loc, type?: text | number | money | date | status, currency? or currencyKey? (money), sortable? (default true), filter? (chips of its values), align?, statuses? (as statusChip) }], at least one; the first column is the card title on a phone", rowKey: "row id key (default id)", search: "boolean, a search box over all columns", pageSize: "rows per page (default 25)", sort: "{ key, dir?: asc | desc } the order to start with", bind: "path that receives the ticked row ids (adds tick boxes)", maxSelected: "limit of ticks", total: "{ key, currency } with bind: the sum of a money column shown as '3 selected · total $1,200.00'; one currency", onRowPress: "actions when a row is opened; {{item.x}} reads that row", empty: "Loc, shown when there are no rows" },
+    notes: ["Money cells always show the currency's own digits (two decimals for dollars). Sorting, search and filters are the table's own and are not saved; only the ticked ids are, as a list. Declare the bind in dataModel. A date filter is two dateInput fields, the second with min \"{{form.from}}\"."],
+    example: { type: "dataTable", source: "ctx.payments", label: { en: "Payments" }, columns: [{ key: "payee", label: { en: "Payee" } }, { key: "amount", label: { en: "Amount" }, type: "money", currency: "USD" }, { key: "status", label: { en: "Status" }, type: "status", filter: true }], search: true, pageSize: 10, bind: "approve.paymentIds", total: { key: "amount", currency: "USD" } },
+  },
+  {
+    type: "chart", purpose: "A line or ring over a saved list, readable by pointer, keys or as a table.",
+    fields: { kind: "line | donut", source: "path to a list of rows", label: "Loc names the chart", x: "row key of each point's label", xLabel: "Loc? heading of that column in the table", xFormat: "text | date (date writes 9 Nov)", series: "[{ key, label: Loc }], at least one; a line shows one at a time (a switch when several), a ring uses the first", currency: "code or {{path}}; makes the numbers money", table: "boolean, adds a Show as table switch", height: "80-400?" },
+    example: { type: "chart", kind: "line", source: "ctx.cashflow", label: { en: "13-week cash flow" }, x: "weekStart", xFormat: "date", series: [{ key: "inflow", label: { en: "Money in" } }, { key: "outflow", label: { en: "Money out" } }, { key: "closing", label: { en: "Closing balance" } }], currency: "USD", table: true },
   },
   {
     type: "result", purpose: "The outcome on a terminal screen.", fields: { tone: "success | error", title: "Loc", text: "Loc", meta: "Loc, e.g. \"Ref {{result.reference}}\"" },

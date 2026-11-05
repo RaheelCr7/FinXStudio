@@ -5,3 +5,8 @@ export * from "./card-form";
 export * from "./otp";
 export * from "./text-field";
 export * from "./caret";
+export * from "./status";
+export * from "./table";
+export * from "./timeline";
+export * from "./chart";
+export * from "./table-block";

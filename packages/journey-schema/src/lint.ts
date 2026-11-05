@@ -14,6 +14,7 @@ export const blockActions = (b: any): any[] => {
     case "toggle": return b.link?.actions ?? [];
     case "dialog": return [...(b.buttons ?? []).flatMap((x: any) => x.actions ?? []), ...(b.dismiss ?? [])];
     case "map": return b.onSelect ?? [];
+    case "dataTable": return b.onRowPress ?? [];
     default: return [];
   }
 };

@@ -23,6 +23,9 @@ import { Avatar } from "./web/Avatar";
 import { MapPins } from "./web/MapPins";
 import { Accordion } from "./web/Accordion";
 import { BalanceList } from "./web/BalanceList";
+import { StatusChip } from "./web/StatusChip";
+import { Timeline } from "./web/Timeline";
+import { DataTable } from "./web/DataTable";
 
 const LONG = "A very long label that has to wrap onto a second line without breaking the layout";
 
@@ -370,4 +373,76 @@ catalog.push({
     ] } },
   ],
   a11y: ["A list; each row reads as one sentence (name, type, balance, note).", "A negative balance carries a minus sign, not only a colour."],
+});
+
+catalog.push({
+  name: "StatusChip", group: "Feedback", Component: StatusChip, purpose: "A status word with an icon and a tone: where a payment, an application or a request stands.",
+  props: [
+    { name: "label", type: "string", description: "The status in words." },
+    { name: "tone", type: "positive | warning | negative | info | neutral", default: "neutral", description: "The colour and the default icon." },
+    { name: "icon", type: "string", description: "An icon from the shared drawings, instead of the one that goes with the tone." },
+  ],
+  states: [
+    { name: "Paid", props: { label: "Paid", tone: "positive" } },
+    { name: "Waiting", props: { label: "Waiting for approval", tone: "warning" } },
+    { name: "Rejected", props: { label: "Rejected", tone: "negative" } },
+    { name: "Processing", props: { label: "Processing", tone: "info" } },
+    { name: "Withdrawn", props: { label: "Withdrawn" } },
+  ],
+  a11y: ["The words and the icon carry the meaning; the colour only reinforces it.", "Text and background pairs come from the bank's own status colours, which the contrast check covers."],
+  tokens: ["radius.pill"],
+});
+
+const STEPS = [
+  { id: "a", title: "Started by Priya Nair", time: "12 Nov 2026 08:41" },
+  { id: "b", title: "Approved by Alex Morgan", time: "12 Nov 2026 09:14", state: "done" as const },
+  { id: "c", title: "Waiting for one more approver", text: "Value date 13 Nov 2026", state: "current" as const },
+  { id: "d", title: "Released", state: "upcoming" as const },
+];
+catalog.push({
+  name: "Timeline", group: "Lists", Component: Timeline, purpose: "What happened and what is still to come, top to bottom: a payment's or an application's history.",
+  props: [
+    { name: "items", type: "{ id, title, text?, time?, state? }[]", description: "The steps. state is done (default), current, upcoming (dashed) or failed." },
+    { name: "label", type: "string", description: "Names the list for a screen reader." },
+    { name: "strings", type: "{ done, current, upcoming, failed }", description: "What a screen reader says for each state, in the screen's language." },
+  ],
+  states: [
+    { name: "In progress", props: { label: "Payment history", items: STEPS, strings: { done: "Done", current: "In progress", upcoming: "Not yet", failed: "Did not happen" } } },
+    { name: "Rejected", props: { label: "Payment history", items: [STEPS[0]!, { id: "x", title: "Rejected by Dana Haddad", text: "Reason: amount does not match the invoice", state: "failed" as const }] } },
+    { name: "One step", props: { items: [STEPS[0]!] } },
+  ],
+  a11y: ["An ordered list, so a screen reader announces the position of each step.", "The current step has aria-current=step; every state also has a spoken word, so it never relies on the dot's colour or shape.", "Long titles and notes wrap."],
+});
+
+const PEOPLE = [
+  { id: "p1", cells: { payee: { text: "Zeta Supplies" }, amount: { text: "$1,200.50" }, status: { text: "Waiting for approval", chip: { label: "Waiting for approval", tone: "warning" as const, icon: "clock" } } } },
+  { id: "p2", cells: { payee: { text: "Alpha Freight" }, amount: { text: "$80.00" }, status: { text: "Paid", chip: { label: "Paid", tone: "positive" as const, icon: "check" } } } },
+];
+const COLS = [
+  { key: "payee", label: "Payee", sortable: true },
+  { key: "amount", label: "Amount", align: "end" as const, sortable: true, sort: "desc" as const },
+  { key: "status", label: "Status" },
+];
+const TABLE_STRINGS = { search: "Search", all: "All", clear: "Clear search and filters", prev: "Previous page", next: "Next page", selectRow: "Select {name}", selectAll: "Select all rows on this page", sortBy: "Sort by", asc: "ascending", desc: "descending", open: "Open" };
+catalog.push({
+  name: "DataTable", group: "Lists", Component: DataTable, purpose: "A list of records with search, filter chips, sortable headings, ticked rows and pages. On a phone each row is a card.",
+  props: [
+    { name: "label", type: "string", description: "Names the table for a screen reader." },
+    { name: "layout", type: "table | cards", default: "table", description: "cards is one card per row, for a phone." },
+    { name: "columns", type: "{ key, label, align?, sortable?, sort? }[]", description: "The headings; sort is the order the column is in now." },
+    { name: "rows", type: "{ id, cells, selected?, onPress? }[]", description: "One entry per row; a cell is { text, chip? }. A row with onPress opens from its first cell." },
+    { name: "onSort", type: "(key, dir?) => void", description: "A heading was pressed (no dir), or an order was chosen from the list on cards." },
+    { name: "selectable / all / onToggleRow / onToggleAll / selection", type: "boolean / all | some | none / fns / string", description: "Tick boxes, the header box (which can be half-ticked) and the line that says how many are ticked." },
+    { name: "search / filters / page", type: "objects", description: "The search box, the filter chips (an All chip first) and the pager with its summary line." },
+    { name: "empty / onClear", type: "string / () => void", description: "What shows when there are no rows; onClear offers to undo the search and filters." },
+    { name: "strings", type: "object", description: "The words around the table, in the screen's language." },
+  ],
+  states: [
+    { name: "Table", props: { label: "Payments", columns: COLS, rows: PEOPLE, onSort: () => {}, strings: TABLE_STRINGS } },
+    { name: "Ticked rows, search and filter", props: { label: "Payments", columns: COLS, rows: [{ ...PEOPLE[0]!, selected: true }, PEOPLE[1]!], selectable: true, all: "some", selection: "1 selected · total $1,200.50", search: { value: "", onChange: () => {} }, filters: [{ key: "status", label: "Status", value: "Paid", options: [{ value: "Paid", label: "Paid" }, { value: "Waiting for approval", label: "Waiting for approval" }], onChange: () => {} }], page: { summary: "1–2 of 40", index: 0, pages: 20, onPrev: () => {}, onNext: () => {} }, strings: TABLE_STRINGS } },
+    { name: "Cards (phone)", props: { label: "Payments", layout: "cards", columns: COLS, rows: PEOPLE.map((r) => ({ ...r, onPress: () => {} })), selectable: true, onSort: () => {}, strings: TABLE_STRINGS } },
+    { name: "Nothing found", props: { label: "Payments", columns: COLS, rows: [], empty: "No rows match your search or filters.", onClear: () => {}, search: { value: "zzz", onChange: () => {} }, strings: TABLE_STRINGS } },
+  ],
+  a11y: ["A real table with column headings (scope=col); a sorted heading says aria-sort, and sorting is a button in the heading.", "Every tick box is named by its row, and the header box is half-ticked when only some rows are.", "Search is a labelled field; filter chips are buttons with aria-pressed; the count of ticked rows and the page summary are announced politely.", "On a phone the same rows become cards with the same names, ticks and actions; the sort list replaces the headings."],
+  tokens: ["field.height", "field.radius", "radius.lg"],
 });

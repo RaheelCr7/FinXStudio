@@ -1,6 +1,6 @@
 # Component library (`@finx/components`)
 
-One place that owns how things look. Every shared visual (button, text field, app bar, list row, keypad, PIN boxes, amount field, choice group, switch, checkbox, code boxes, alert, result, summary list, section header, shortcuts, hero, divider, accordion, balance list) is a component here, with a web version and a phone-app (React Native) version that take exactly the same props (`src/props.ts`).
+One place that owns how things look. Every shared visual (button, text field, app bar, list row, keypad, PIN boxes, amount field, choice group, switch, checkbox, code boxes, alert, result, summary list, section header, shortcuts, hero, divider, accordion, balance list, status chip, timeline, data table) is a component here, with a web version and a phone-app (React Native) version that take exactly the same props (`src/props.ts`).
 
 | | |
 |---|---|
@@ -26,4 +26,4 @@ One place that owns how things look. Every shared visual (button, text field, ap
 The journey renderers draw nearly every block with these components: button, text field, amount, accounts and beneficiaries (ChoiceGroup "cards"), select (chips, tiles, rows), switch, consent, review rows, code boxes, keypad and PIN boxes, alert, result, hero, section header, shortcuts, menu rows and the bank-bar header (web: `renderer-web`, phone: `renderer-native`). A change here changes every journey screen. CAB's differences from the standard look (a 48px button with 8px corners, a 50px field with 10px corners, a 58px bar) are size tokens in `brands.json`, not code. Field and button corners follow each bank's own corner radii unless the bank overrides them.
 
 ## Not done yet
-Still drawn by the renderers themselves: the card form (its number and expiry inputs reformat as you type and keep the caret), the card picture, charts, the segmented control, and the standard (non-bar) header with its step list. Quick-amount chips keep their square, accent-2 look as a `.fxc-quick` rule. Next: the pixel comparison against the Figma frames (needs the frames exported as SVG and the bank's font), the Import tab, and more components (toast, tags, bottom navigation, date picker, map, captcha, modal).
+Still drawn by the renderers themselves: the card form (its number and expiry inputs reformat as you type and keep the caret), the card picture, charts (the `chart` block wraps the renderers' `LineChart` and `Donut`), the segmented control, and the standard (non-bar) header with its step list. Quick-amount chips keep their square, accent-2 look as a `.fxc-quick` rule. Next: the pixel comparison against the Figma frames (needs the frames exported as SVG and the bank's font), the Import tab, and more components (toast, bottom navigation, captcha, modal).
