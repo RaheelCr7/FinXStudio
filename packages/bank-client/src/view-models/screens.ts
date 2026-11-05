@@ -24,7 +24,7 @@ const money = (n: number, currency: string) => formatMoney(n, currency);
 export async function loadPersonal(call: Call, tab: ShellTab): Promise<Screen> {
   switch (tab) {
     case "home": {
-      const [accounts, budgets, schedules, activity] = await Promise.all([call("bank.accounts.list"), call("bank.budgets.list"), call("bank.schedules.list"), call("bank.activity.list")]);
+      const [accounts, budgets, schedules, activity] = await Promise.all([call("bank.accounts.list"), call("bank.budgets.list"), call("bank.schedules.list", { status: "live" }), call("bank.activity.list")]);
       const h = personalHome({ accounts: list<RawAccount>(accounts), budgets: list<RawBudget>(budgets), schedules: list<RawSchedule>(schedules), activity: list<RawActivity>(activity) });
       return { tab, hero: { label: h.hero.label, value: h.hero.total, lines: h.hero.others }, sections: [
         { id: "accounts", title: "Accounts", empty: "No accounts yet", rows: h.accounts.map((a) => ({ id: a.id, title: a.name, subtitle: a.masked, value: a.balance, place: "accounts.detail", passes: { accountId: a.id } })) },
@@ -45,11 +45,11 @@ export async function loadPersonal(call: Call, tab: ShellTab): Promise<Screen> {
       ] };
     }
     case "payments": {
-      const [bens, scheds] = await Promise.all([call("bank.beneficiaries.list"), call("bank.schedules.list")]);
+      const [bens, scheds] = await Promise.all([call("bank.beneficiaries.list"), call("bank.schedules.list", { status: "live" })]);
       return { tab, sections: [
         { id: "beneficiaries", title: "Beneficiaries", empty: "No beneficiaries yet", place: "payments.beneficiaries", rows: list<any>(bens).map((b) => ({ id: b.id, title: b.displayName, subtitle: `${b.maskedNumber} · ${b.country}`, // the bank's own wording for the account (scheme names) stays off the screen
  place: "payments.beneficiary", passes: { beneficiaryId: b.id } })) },
-        { id: "scheduled", title: "Scheduled", empty: "Nothing scheduled", place: "payments.scheduled", rows: list<RawSchedule>(scheds).map((s) => ({ id: s.id, title: s.name ?? "Payment", subtitle: s.nextRunOn ?? s.text, value: s.amount !== undefined ? money(s.amount, s.currency ?? "USD") : undefined, place: "payments.scheduled", passes: { scheduleId: s.id } })) },
+        { id: "scheduled", title: "Scheduled", empty: "Nothing scheduled", place: "payments.scheduled", rows: [...list<RawSchedule>(scheds)].sort((a, b) => (a.nextRunOn ?? "9999").localeCompare(b.nextRunOn ?? "9999")).map((s) => ({ id: s.id, title: s.name ?? "Payment", subtitle: s.nextRunOn ?? s.text, value: s.amount !== undefined ? money(s.amount, s.currency ?? "USD") : undefined, place: "payments.scheduled", passes: { scheduleId: s.id } })) },
       ] };
     }
     case "cards": {

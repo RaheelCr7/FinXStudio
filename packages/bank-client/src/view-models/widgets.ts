@@ -31,7 +31,7 @@ export function personalHome(input: { accounts: RawAccount[]; budgets?: RawBudge
     hero: { currency: main, total: formatMoney(totalIn(main), main), label: "Total balance", others: currencies.filter((c) => c !== main).map((c) => ({ label: c, value: formatMoney(totalIn(c), c) })) },
     accounts: accounts.map((a) => ({ id: a.id, name: a.name, masked: a.maskedNumber, balance: formatMoney(a.balance, a.currency), kind: a.kind ?? "current", currency: a.currency })),
     insights: (input.budgets ?? []).map((b) => ({ id: b.id, name: b.name, spent: formatMoney(b.spent, main), limit: formatMoney(b.limit, main), pct: b.limit > 0 ? Math.min(100, Math.round((b.spent / b.limit) * 100)) : 0, over: b.spent > b.limit })),
-    upcoming: (input.schedules ?? []).filter((s) => s.status !== "cancelled" && s.amount !== undefined).slice(0, 3).map((s) => ({ id: s.id, title: s.name ?? "Payment", amount: formatMoney(s.amount!, s.currency ?? main), when: s.nextRunOn ?? s.text ?? "" })),
+    upcoming: (input.schedules ?? []).filter((s) => (s.status === undefined || s.status === "active") && s.amount !== undefined).sort((a, b) => (a.nextRunOn ?? "9999").localeCompare(b.nextRunOn ?? "9999")).slice(0, 3).map((s) => ({ id: s.id, title: s.name ?? "Payment", amount: formatMoney(s.amount!, s.currency ?? main), when: s.nextRunOn ?? s.text ?? "" })),
     recent: (input.activity ?? []).slice(0, 5).map((t) => ({ id: t.id, title: t.title, amount: formatMoney(Math.abs(t.amount), main), incoming: t.amount > 0, daysAgo: t.daysAgo })),
   };
 }

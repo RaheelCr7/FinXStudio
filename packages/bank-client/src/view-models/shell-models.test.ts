@@ -100,7 +100,7 @@ describe("widgets", () => {
 describe("the tab screens, from the sandbox", () => {
   const sandbox = async (company?: "alpha" | "beta") => {
     const b = new MockBank("alex");
-    if (company) { await b.call("bank.otp.send"); await b.call("bank.session.stepUp", { method: "password", secret: "Bwx!Demo2026" }).catch(() => undefined); await b.call("bank.otp.verify", { code: "000000" }); await b.call("bank.session.stepUp", { method: "password" }); await b.call("bank.session.switch", { contextId: company }); }
+    if (company) { await b.call("bank.otp.send"); await b.call("bank.session.stepUp", { method: "password", secret: "Bwx!Demo2026" }).catch(() => undefined); await b.call("bank.otp.verify", { code: "000000" }); await b.call("bank.session.stepUp", { method: "password", secret: "Bwx!Demo2026" }); await b.call("bank.session.switch", { contextId: company }); }
     const contexts = (await b.call("bank.session.get")).contexts as ContextInfo[];
     const call = (id: string, input?: Record<string, any>) => b.call(id, input);
     return { call, ctx: (id: string) => contexts.find((c) => c.id === id)!, b };
@@ -152,5 +152,16 @@ describe("the tab screens, from the sandbox", () => {
     expect(admin.sections.find((s) => s.id === "users")!.rows).toEqual([]);
     expect(admin.sections.find((s) => s.id === "groups")!.rows).toEqual([]);
     expect(admin.sections.find((s) => s.id === "audit")!.rows.length).toBeGreaterThan(0);
+  });
+});
+
+describe("the Home 'Upcoming' list", () => {
+  const home = (schedules: any[]) => personalHome({ accounts: [], budgets: [], schedules, activity: [] }).upcoming;
+  it("shows the three that come next by date, and leaves out ended and paused ones", () => {
+    const s = (id: string, nextRunOn: string, status = "active") => ({ id, name: id, amount: 10, currency: "USD", nextRunOn, status });
+    expect(home([s("rent", "2026-12-01"), s("gym", "2026-11-03"), s("insurance", "2026-11-04"), s("old", "2026-08-03", "completed"), s("paused", "2026-11-01", "paused"), s("later", "2027-01-01")]).map((u) => u.id)).toEqual(["gym", "insurance", "rent"]);
+  });
+  it("keeps an older entry that has no status", () => {
+    expect(home([{ id: "sch_rent", name: "Rent", amount: 1450, currency: "USD", nextRunOn: "2026-12-01" }]).map((u) => u.id)).toEqual(["sch_rent"]);
   });
 });

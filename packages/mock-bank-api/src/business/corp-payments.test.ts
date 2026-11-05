@@ -7,7 +7,7 @@ const NOW = Date.parse("2026-11-04T10:00:00Z");
 const make = (opts: ConstructorParameters<typeof MockBank>[1] = {}) => { const b = new MockBank("alex", opts); let t = NOW; b.now = () => t; return { b, tick: (ms: number) => { t += ms; } }; };
 const code = async (p: Promise<unknown>) => p.then(() => "no error", (e) => e.code as string);
 const verify = async (b: MockBank) => { await b.call("bank.otp.send"); await b.call("bank.otp.verify", { code: "482100" }); };
-const enter = async (b: MockBank, id: string) => { await b.call("bank.session.stepUp", { method: "password", secret: "Bwx!Demo2026" }).catch(() => undefined); await verify(b); await b.call("bank.session.stepUp", { method: "password" }); await b.call("bank.session.switch", { contextId: id }); };
+const enter = async (b: MockBank, id: string) => { await b.call("bank.session.stepUp", { method: "password", secret: "Bwx!Demo2026" }).catch(() => undefined); await verify(b); await b.call("bank.session.stepUp", { method: "password", secret: "Bwx!Demo2026" }); await b.call("bank.session.switch", { contextId: id }); };
 const pay = { fromAccountId: "alpha_ops", beneficiaryId: "harb", purpose: "Goods or services", reference: "INV-1042" };
 
 describe("corp.payments.quote and corp.payments.create", () => {
