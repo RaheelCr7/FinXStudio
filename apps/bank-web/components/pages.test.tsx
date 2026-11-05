@@ -3,7 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { cleanup, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import * as matchers from "vitest-axe/matchers";
-import { axeCheck, BANKWORKX, BANKWORKX_SIGNIN, MEEZAN, nav, renderPage } from "./test-utils";
+import { axeCheck, BANKWORKX, BANKWORKX_SIGNIN, BANKWORKX_STAGE, MEEZAN, nav, renderPage } from "./test-utils";
 import { Login } from "./Login";
 import { MeezanHome } from "./MeezanHome";
 import { Guard } from "./Guard";
@@ -82,8 +82,14 @@ describe("sign in with the real sign-in journey (BankWorkx)", () => {
     await userEvent.click(screen.getByRole("button", { name: "Log in" }));
     expect(nav.push).toHaveBeenCalledWith("/bankworkx/personal/home");
   });
-  it("frames the sign-in in the stage: the bank's words beside the journey, the scene hidden from assistive technology, and forgot password opens inside it", async () => {
-    const { container } = renderPage(<Login />, BANKWORKX_SIGNIN, { signedIn: false });
+  it("keeps the plain page unless the bank chose the stage in its look", async () => {
+    renderPage(<Login />, BANKWORKX_SIGNIN, { signedIn: false });
+    expect(await screen.findByLabelText("Username")).toBeTruthy();
+    expect(screen.queryByRole("region", { name: /Welcome to/ })).toBeNull();
+    expect(screen.queryByText("Starts Here.")).toBeNull();
+  });
+  it("frames the sign-in in the stage when the bank chose it: the bank's words beside the journey, the scene hidden from assistive technology, and forgot password opens inside it", async () => {
+    const { container } = renderPage(<Login />, BANKWORKX_STAGE, { signedIn: false });
     expect(await screen.findByLabelText("Username")).toBeTruthy();
     expect(screen.getByRole("region", { name: "Welcome to BankWorkx" })).toBeTruthy();
     expect(screen.getByText("Starts Here.")).toBeTruthy();

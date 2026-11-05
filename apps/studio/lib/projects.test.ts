@@ -218,6 +218,17 @@ describe("projects", () => {
     expect(back.previous).toBe("bank-b");
     expect("bankApi" in JSON.parse(readFileSync(file, "utf8")).meezan).toBe(false); // the default is stored as nothing
   });
+  it("sets the web sign-in page's style in the bank's look, stores nothing for the standard page, and can go back", async () => {
+    expect((await projects.getProject("meezan"))!.look?.signIn).toBeUndefined();
+    const r = await projects.updateProjectSignIn("meezan", { signIn: "stage" });
+    expect(r.previous).toBe("standard"); expect(r.project.look?.signIn).toBe("stage");
+    expect(JSON.parse(readFileSync(file, "utf8")).meezan.look.signIn).toBe("stage");
+    const back = await projects.updateProjectSignIn("meezan", { signIn: "standard" });
+    expect(back.previous).toBe("stage");
+    expect(JSON.parse(readFileSync(file, "utf8")).meezan.look?.signIn).toBeUndefined();
+    await expect(projects.updateProjectSignIn("meezan", { signIn: "neon" })).rejects.toThrow(/Choose one of: standard, stage/);
+    await expect(projects.updateProjectSignIn("nope", { signIn: "stage" })).rejects.toThrow(/No project/);
+  });
   it("refuses a bank API it does not know, and a project that does not exist", async () => {
     await expect(projects.updateProjectBankApi("meezan", { bankApi: "bank-z" })).rejects.toThrow(/Choose one of: reference, bank-b/);
     await expect(projects.updateProjectBankApi("meezan", null)).rejects.toThrow(/Choose one of/);

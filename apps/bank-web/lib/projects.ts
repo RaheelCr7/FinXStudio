@@ -31,6 +31,8 @@ export function readProject(raw: any): Project | null {
       preset: raw.preset, accent: String(raw.accent).toUpperCase(), currency, locale, assets: `./assets/${id}`, background: hex(raw.background, "#F6F7F9"), splashDark: hex(raw.splashDark, "#0A0D12"),
       // each workspace look is rebuilt from checked fields, like the rest of the theme
       ...(readWorkspaces(raw.workspaces) ? { workspaces: readWorkspaces(raw.workspaces) } : {}),
+      // the bank's own look is not taken (the web app has its own layouts), except the sign-in page's style, which is one known word
+      ...(raw.look?.signIn === "stage" ? { look: { signIn: "stage" as const } } : {}),
     };
     return toProject(id, def);
   } catch { return null; }

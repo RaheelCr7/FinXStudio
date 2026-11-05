@@ -50,19 +50,21 @@ function SignInJourney({ onSignedIn }: { onSignedIn: () => void }) {
   const ended = () => { if (app.finishSignIn()) onSignedIn(); else setRun((cur) => ({ slug: "sign-in", n: cur.n + 1 })); };
 
   if (live === "loading") return <main className="wb-loading" aria-busy="true"><span className="wb-sr">Opening</span></main>;
-  return (
-    <SignInStage bank={project.name} after={<p className="wb-fine wb-signin-fine"><button type="button" className="wb-link" onClick={() => app.showPicker(true)}>Use the sandbox customer picker</button></p>}>
-      {/* a journey the sign-in handed over to (forgot password, unlock…) keeps its close button: that is the way back to the sign-in */}
-      <div className="wb-journey-card" data-handover={slugIs(run.slug, "sign-in") ? undefined : "true"}>
-        {s.notice === "locked" ? <p className="wb-note" role="alert">Sign-in is locked to protect your account. Unlock it to continue.</p> : null}
-        {live ? (
-          <JourneyPlayer key={`${run.slug}:${run.n}`} journey={live.journey} adapter={app.adapter} lang={s.lang} launch={run.launch ?? reason} onOpenJourney={open} onClose={ended} onExit={ended} look={project.look} brandName={project.name} />
-        ) : (
-          <div className="wb-pad"><h1>Sign in is not available right now</h1><p className="wb-muted">The sign-in journey could not be loaded. You can still use the sandbox customer picker.</p></div>
-        )}
-      </div>
-    </SignInStage>
+  // a journey the sign-in handed over to (forgot password, unlock…) keeps its close button: that is the way back to the sign-in
+  const card = (
+    <div className="wb-journey-card" data-handover={slugIs(run.slug, "sign-in") ? undefined : "true"}>
+      {s.notice === "locked" ? <p className="wb-note" role="alert">Sign-in is locked to protect your account. Unlock it to continue.</p> : null}
+      {live ? (
+        <JourneyPlayer key={`${run.slug}:${run.n}`} journey={live.journey} adapter={app.adapter} lang={s.lang} launch={run.launch ?? reason} onOpenJourney={open} onClose={ended} onExit={ended} look={project.look} brandName={project.name} />
+      ) : (
+        <div className="wb-pad"><h1>Sign in is not available right now</h1><p className="wb-muted">The sign-in journey could not be loaded. You can still use the sandbox customer picker.</p></div>
+      )}
+    </div>
   );
+  const picker = <p className="wb-fine wb-signin-fine"><button type="button" className="wb-link" onClick={() => app.showPicker(true)}>Use the sandbox customer picker</button></p>;
+  // the bank chooses on Studio's Design page: the plain page, or the dark stage around the journey
+  if (project.look?.signIn === "stage") return <SignInStage bank={project.name} after={picker}>{card}</SignInStage>;
+  return <main className="wb-journey">{card}{picker}</main>;
 }
 
 function Picker({ onLogin }: { onLogin: () => void }) {
