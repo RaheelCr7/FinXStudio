@@ -10,7 +10,8 @@
     "test": "vitest run",
     "typecheck": "tsc -p .",
     "sync-skills": "tsx scripts/sync-skills.ts",
-    "smoke": "tsx scripts/smoke.ts"
+    "smoke": "tsx scripts/smoke.ts",
+    "catalog-size": "tsx scripts/catalog-size.ts"
   },
   "dependencies": {
     "@finx/journey-schema": "workspace:*",
