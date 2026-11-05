@@ -422,6 +422,62 @@ export const ADAPTER_CATALOG: AdapterInfo[] = [
   },
   { adapter: "cab.locations.search", suggestedId: "locations", description: "Branches and ATMs.", input: { kind: "'branch' | 'atm' | 'all'", rangeMiles: "5, 10, 25, 50 or 100", query: "optional text" }, returns: "Object map keyed by location id: { id, name, sub }. Save as loc.found; use len(loc.found) for the count and select source to list them." },
   { adapter: "cab.locations.details", suggestedId: "locationDetail", description: "One branch or ATM.", input: { id: "location id" }, returns: "{ id, name, type, status, address, hours, phone, distanceKm, services }", errors: ["LOCATION_NOT_FOUND"] },
+  // ---- Signing in (BankWorkx). Outcomes come back as data. A journey that runs before sign-in uses persona "signed-out". The adapters of Security (devices, PIN, password change, login history) are in docs/BANKWORKX.md ----
+  {
+    adapter: "bank.auth.signIn", suggestedId: "checkCredentials", description: "Checks a username and password; opens no session (finish with bank.auth.completeSignIn). Seed: alex.morgan, sam.rivera, demo.locked, demo.expired, demo.inactive, new.user, device.limit. 5 wrong tries lock for 30 minutes.",
+    input: { username: "text", password: "text" }, returns: "{ ok: true, status: 'ok'|'otp'|'change-password', firstName, maskedPhone, reason } or { ok: false, code: INVALID_CREDENTIALS (attemptsLeft) | LOCKED | INACTIVE }",
+  },
+  {
+    adapter: "bank.auth.quickSignIn", suggestedId: "quickSignIn", description: "A quick PIN or biometric on a device that remembers the person: no password, no code.",
+    input: { method: "pin | biometric", pin: "6 digits" }, returns: "{ ok: true, status: 'ok', firstName } or { ok: false, code: QUICK_PIN_INVALID (attemptsLeft) | QUICK_OFF | LOCKED | PASSWORD_EXPIRED }",
+  },
+  {
+    adapter: "bank.auth.changePassword", suggestedId: "changePassword", description: "The forced new password of a sign-in (expired or temporary): 12 to 64 characters, not the username, common, breached or used before.",
+    input: { newPassword: "text", confirm: "text" }, returns: "{ ok: true, changedAt } or { ok: false, code: MISMATCH | MIN_LENGTH | MAX_LENGTH | PASSWORD_CONTAINS_USERNAME | PASSWORD_COMMON | PASSWORD_BREACHED | PASSWORD_REUSED }", errors: ["OTP_REQUIRED"],
+  },
+  {
+    adapter: "bank.auth.trustDevice", suggestedId: "trustDevice", description: "Trusts this device for 90 days under a name (at most 5).", input: { name: "1 to 30 characters" },
+    returns: "{ ok: true, deviceId, expiresInDays } or { ok: false, code: NAME_REQUIRED | DEVICE_LIMIT }", errors: ["OTP_REQUIRED"],
+  },
+  {
+    adapter: "bank.auth.setQuickSignIn", suggestedId: "setQuickSignIn", description: "Turns quick sign-in on for this trusted device, or off. A PIN is 6 digits, no repeat or run, nothing of the phone number.",
+    input: { method: "pin | biometric | passkey | off", pin: "6 digits" }, returns: "{ ok: true, method, device } or { ok: false, code: PIN_INVALID | PIN_WEAK | PIN_PHONE | DEVICE_NOT_TRUSTED }", errors: ["OTP_REQUIRED"],
+  },
+  {
+    adapter: "bank.auth.completeSignIn", suggestedId: "completeSignIn", description: "Opens the session once every step is done; the bank then serves the customer. remember keeps the username on this device.",
+    input: { remember: "boolean" }, returns: "{ ok, username, firstName, how: password | password+code | quick-pin | quick-biometric, deviceTrusted, quick, passwordChanged, lastSignIn }", errors: ["OTP_REQUIRED", "PASSWORD_REQUIRED"],
+  },
+  {
+    adapter: "bank.auth.signOut", suggestedId: "signOut", description: "Ends the session: later calls answer SESSION_EXPIRED.", input: {}, returns: "{ ok: true }",
+  },
+  {
+    adapter: "bank.device.options", suggestedId: "signInDevice", description: "What this device remembers: whom to greet, the remembered username, the default sign-in.", input: {},
+    returns: "{ default: password | pin | biometric | passkey, pinSet, biometricAvailable, firstName, username, trusted }",
+  },
+  {
+    adapter: "bank.recover.verifyUser", suggestedId: "findProfile", description: "Finds a profile: a username or email (reset, unlock), or a mobile or email with a date of birth (forgot username). A miss never says which part failed; the 3rd locks for 30 minutes. The token lives 10 minutes.",
+    input: { usernameOrEmail: "text", mobile: "text", email: "text", dateOfBirth: "YYYY-MM-DD" }, returns: "{ ok: true, recoveryToken, maskedContact, maskedMobile } or { ok: false, code: NOT_FOUND (attemptsLeft) | ID_LOCKED }",
+  },
+  {
+    adapter: "bank.recover.sendUsername", suggestedId: "sendUsername", description: "Sends the username to the contact on file after the code; the answer never holds it.", input: { recoveryToken: "from findProfile" },
+    returns: "{ sent, maskedContact }", requiresOtp: true, errors: ["OTP_REQUIRED", "TOKEN_INVALID", "TOKEN_EXPIRED"],
+  },
+  {
+    adapter: "bank.recover.resetPassword", suggestedId: "resetForgottenPassword", description: "Sets a new password after the code; clears the lock and the wrong-try count.", input: { recoveryToken: "from findProfile", password: "text", confirm: "text" },
+    returns: "{ ok: true, changedAt, username } or { ok: false, code: as changePassword }", requiresOtp: true, errors: ["OTP_REQUIRED", "TOKEN_INVALID", "TOKEN_EXPIRED"],
+  },
+  {
+    adapter: "bank.recover.unlock", suggestedId: "unlockProfile", description: "Unlocks a profile after the code and keeps its password.", input: { recoveryToken: "from findProfile" },
+    returns: "{ ok: true, wasLocked, username }", requiresOtp: true, errors: ["OTP_REQUIRED", "TOKEN_INVALID", "TOKEN_EXPIRED"],
+  },
+  {
+    adapter: "bank.password.policy", suggestedId: "passwordPolicy", description: "The rules for a new password as a list to tick off (used-before only for a signed-in customer or a recovery token).",
+    input: { password: "text", username: "text", recoveryToken: "optional" }, returns: "{ minLength, maxLength, ok, problems, rules: [{ id, ok, checked }] }",
+  },
+  {
+    adapter: "sandbox.access.inspect", suggestedId: "inspectAccess", description: "For scenarios only (expectBank), never a journey: what the bank holds about a username. No secrets.", input: { username: "text" },
+    returns: "{ found, status, locked, failedSignIns, trustedDevices, remembered, quick, outbox: [{ to, kind }], sessionOpen }",
+  },
 ];
 
 /** Sandbox customers for testing. The OTP codes are sandbox-only test values. */
@@ -435,7 +491,9 @@ export function describePersonas() {
     return { ...describe(p), accounts: twin ? [`Same accounts as ${twin.id}`] : accounts };
   });
 }
+const SIGN_IN_CAST = ["demolocked", "demoexpired", "demoinactive", "demonew", "demolimit"];
 function describe(p: (typeof personas)[string]) {
+  if (SIGN_IN_CAST.includes(p.id)) return { id: p.id, brand: p.brand, name: p.name, otpCode: p.behaviour.otpCode, note: "Sign-in cast: no accounts. Signs in as demo.locked, demo.expired, demo.inactive, new.user or device.limit (see bank.auth.signIn)." };
   // the approvals cast is Alex again with more waiting at Beta: said in a line
   if (p.identity?.cast) return { id: p.id, brand: p.brand, name: p.name, otpCode: p.behaviour.otpCode, note: "As alex; Beta also holds PAY-2043 to PAY-2048 (name checks, an order, two approvals) and PAY-2036 rejected." };
   return {

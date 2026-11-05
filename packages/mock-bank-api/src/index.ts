@@ -345,7 +345,7 @@ personas.alexbiz = {
 
 // The customers behind the sign-in cast (access.ts): people who can sign in with a username and password. They have no accounts of their own
 // (what a screen shows after signing in is the new-customer start), so they are not offered at the sign-in picker; scenarios and the demo use them.
-for (const [id, name, phone] of [["demolocked", "Jamie Locke (locked profile)", "+1 415 555 0177"], ["demoexpired", "Omar Nassar (password expired)", "+1 415 555 0150"], ["demoinactive", "Yasmin Khoury (not active)", "+1 415 555 0163"], ["demonew", "Noor Hayes (temporary password)", "+1 415 555 0121"]] as const) {
+for (const [id, name, phone] of [["demolocked", "Jamie Locke (locked profile)", "+1 415 555 0177"], ["demoexpired", "Omar Nassar (password expired)", "+1 415 555 0150"], ["demoinactive", "Yasmin Khoury (not active)", "+1 415 555 0163"], ["demonew", "Noor Hayes (temporary password)", "+1 415 555 0121"], ["demolimit", "Riley Park (five trusted devices)", "+1 415 555 0188"]] as const) {
   personas[id] = { ...structuredClone(personas.sam!), id, testCast: true, name, phone, behaviour: { otpCode: "482100", kyc: "verified" } };
 }
 

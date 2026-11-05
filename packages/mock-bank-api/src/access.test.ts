@@ -37,7 +37,7 @@ describe("a bank nobody is signed in to", () => {
   });
   it("is not one of the customers the apps offer, and the new sign-in cast stays out of the picker", () => {
     expect(Object.keys(personas)).not.toContain(SIGNED_OUT);
-    for (const id of ["demolocked", "demoexpired", "demoinactive", "demonew"]) expect(personas[id]!.testCast).toBe(true);
+    for (const id of ["demolocked", "demoexpired", "demoinactive", "demonew", "demolimit"]) expect(personas[id]!.testCast).toBe(true);
   });
 });
 

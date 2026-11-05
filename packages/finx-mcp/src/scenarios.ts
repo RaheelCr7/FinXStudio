@@ -22,7 +22,7 @@ export async function runScenarios(journey: Journey, over: Overrides = {}): Prom
     const opts: SimOptions = {
       journey, persona: t.persona, lang: t.lang ?? journey.locale.default, steps: t.steps as unknown as Step[],
       provider: (over.provider ?? (t.provider as ProviderId | undefined)), now: t.now ? Date.parse(t.now) : undefined,
-      setup: t.setup as SimOptions["setup"], context: t.context, flaws: over.flaws, conditions: t.conditions, launch: t.launch, journeys: over.journeys,
+      setup: t.setup as SimOptions["setup"], context: t.context, flaws: over.flaws, conditions: t.conditions, config: t.config as SimOptions["config"], launch: t.launch, journeys: over.journeys,
     };
     try {
       const r = await simulate(opts);
@@ -164,6 +164,26 @@ export function bankMutants(journey: Journey): Mutant[] {
     ["verifiedOnMatch", "The bank marks a payee Verified whether or not the name matched", uses(/^bank\.payees\.(save|update)$/)],
     ["clockOnDetails", "Changing the bank details of a payee does not start its 24 hours again", uses(/^bank\.payees\.update$/)],
     ["nameKeepsClock", "Changing only the name of a payee starts its 24 hours again", uses(/^bank\.payees\.update$/)],
+    // signing in: the password, the lock, the code on a new device, the expired password, the one-time codes and the recovery
+    ["credentials", "The bank accepts any password", uses(/^bank\.auth\.signIn$/)],
+    ["signInLock", "The bank never locks a profile after wrong passwords", uses(/^bank\.auth\.signIn$/)],
+    ["usernameHiding", "The bank answers differently for a username it does not know", uses(/^bank\.auth\.signIn$/)],
+    ["newDeviceCode", "The bank signs in from a new device without a code", uses(/^bank\.auth\.signIn$/)],
+    ["expiredPassword", "The bank lets an expired password sign in without a new one", uses(/^bank\.auth\.signIn$/)],
+    ["codeExpiry", "The bank accepts a one-time code that has run out", uses(/^bank\.(auth\.signIn|recover\.verifyUser)$/)],
+    ["codeLock", "The bank never locks a sign-in after wrong codes", uses(/^bank\.auth\.signIn$/)],
+    ["resendLimit", "The bank sends as many codes as are asked for", uses(/^bank\.(auth\.signIn|recover\.verifyUser)$/)],
+    ["recoveryLock", "The bank never locks a recovery after wrong tries", uses(/^bank\.recover\.verifyUser$/)],
+    ["tokenExpiry", "The bank accepts a recovery token that has run out", uses(/^bank\.recover\.(sendUsername|resetPassword|unlock)$/)],
+    ["resetNeedsCode", "The bank acts on a recovery without the one-time code", uses(/^bank\.recover\.(sendUsername|resetPassword|unlock)$/)],
+    ["resetClearsLock", "A reset leaves the profile locked", uses(/^bank\.recover\.resetPassword$/)],
+    ["passwordLength", "The bank takes a new password that is too short or too long", uses(/^bank\.(auth\.changePassword|recover\.resetPassword)$/)],
+    ["passwordUsername", "The bank takes a new password that contains the username", uses(/^bank\.(auth\.changePassword|recover\.resetPassword)$/)],
+    ["passwordCommon", "The bank takes a new password with a common word in it", uses(/^bank\.(auth\.changePassword|recover\.resetPassword)$/)],
+    ["passwordBreach", "The bank takes a new password that is in a known breach", uses(/^bank\.(auth\.changePassword|recover\.resetPassword)$/)],
+    ["passwordReuse", "The bank takes a new password the person used before", uses(/^bank\.(auth\.changePassword|recover\.resetPassword)$/)],
+    ["deviceLimit", "The bank trusts more than five devices", uses(/^bank\.auth\.trustDevice$/)],
+    ["pinRules", "The bank takes a quick PIN that is easy to guess or part of the phone number", uses(/^bank\.auth\.setQuickSignIn$/)],
   ];
   const rules = all.filter(([, , reachable]) => reachable).map(([k, what]) => [k, what] as [keyof Flaws, string]);
   return rules.map(([k, what]) => ({ id: `bank-${k}`, what, kind: "bank" as const, flaws: { [k]: false } as Flaws }));

@@ -155,6 +155,8 @@ const SEEDS: Seed[] = [
   { username: "demo.locked", personaId: "demolocked", firstName: "Jamie", lastName: "Locke", email: "jamie.locke@example.com", phone: "+1 415 555 0177", dob: "1990-03-02", status: "locked", changed: "2026-06-01T00:00:00Z" },
   { username: "demo.expired", personaId: "demoexpired", firstName: "Omar", lastName: "Nassar", email: "omar.nassar@example.com", phone: "+1 415 555 0150", dob: "1995-11-20", status: "expired", changed: "2025-09-01T00:00:00Z" },
   { username: "demo.inactive", personaId: "demoinactive", firstName: "Yasmin", lastName: "Khoury", email: "yasmin.khoury@example.com", phone: "+1 415 555 0163", dob: "1997-08-09", status: "inactive", changed: "2026-10-30T00:00:00Z" },
+  /** A customer who already trusts five devices: the sixth is refused. */
+  { username: "device.limit", personaId: "demolimit", firstName: "Riley", lastName: "Park", email: "riley.park@example.com", phone: "+1 415 555 0188", dob: "1991-05-30", status: "active", changed: "2026-07-01T00:00:00Z", devices: [1, 2, 3, 4, 5].map((n) => device(`dev_d${n}`, `Device ${n}`, "phone", "2026-10-01T09:00:00Z")) },
   /** A customer who has just been given a temporary password: the first sign-in must choose a new one. */
   { username: "new.user", personaId: "demonew", firstName: "Noor", lastName: "Hayes", email: "noor.hayes@example.com", phone: "+1 415 555 0121", dob: "1999-01-09", status: "active", mustChange: true, changed: "2026-11-02T00:00:00Z" },
 ];
@@ -314,7 +316,8 @@ export class AccessSandbox {
     if (u?.status === "inactive") return { ok: false as const, code: "INACTIVE" };
     const right = !!u && typeof input.password === "string" && (f.credentials === false || hashOf(input.password, u.username) === u.passwordHash);
     if (!right) {
-      const n = (this.failed.get(key) ?? 0) + 1; this.failed.set(key, n);
+      // wrong passwords and wrong quick PINs share one count on a profile; a name nobody has is counted here so it looks the same
+      const n = (u ? u.failedSignIns : this.failed.get(key) ?? 0) + 1; this.failed.set(key, n);
       if (u) { u.failedSignIns = n; this.log(u, "wrong-password"); }
       if (n >= ACCESS.maxFailedSignIns && f.signInLock !== false) { if (u) { this.lock(u); this.log(u, "locked"); } return this.locked(); }
       if (f.usernameHiding === false && !u) return { ok: false as const, code: "USERNAME_UNKNOWN" };
@@ -378,7 +381,8 @@ export class AccessSandbox {
     u.passwordHash = h; u.usedHashes = [...u.usedHashes, h].slice(-ACCESS.usedPasswordsKept); u.passwordChangedAt = this.now;
     if (u.status === "expired") u.status = "active";
     u.mustChange = undefined;
-    return { ok: true as const, changedAt: new Date(this.now).toISOString() };
+    const at = new Date(this.now).toISOString();
+    return { ok: true as const, changedAt: at, changedOn: at.slice(0, 10) };
   }
 
   private trustDevice(input: Record<string, any>) {
@@ -509,7 +513,7 @@ export class AccessSandbox {
     if (!out.ok) return out;
     if (this.flaws().resetClearsLock !== false) { r.user.failedSignIns = 0; r.user.lockedUntil = undefined; if (r.user.status === "locked") r.user.status = "active"; this.failed.delete(r.user.username); }
     this.done();
-    return { ok: true as const, changedAt: out.changedAt, username: r.user.username };
+    return { ok: true as const, changedAt: out.changedAt, changedOn: out.changedOn, username: r.user.username };
   }
   private unlock(input: Record<string, any>) {
     const r = this.recoveryToken(input.recoveryToken, true);
