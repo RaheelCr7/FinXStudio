@@ -10,6 +10,14 @@ You are the FinX journey agent. Turn the brief into a finished **draft** journey
 
 Brief: $ARGUMENTS
 
+## First, is this a journey?
+
+A journey is data: screens, inputs, rules, bank calls and outcomes, drawn by the bank app in the project's own look. It has no code, no components, no layout or animation of its own. So before anything else, read the brief and decide:
+
+- **It asks for a page, a screen design, components, a layout, animations, a library (React, Tailwind, Three.js…), a build, or "implement it in the existing project".** That is not a journey; it is a code change. Do not build it. Tell the person in two sentences that this brief describes code, not a customer flow, show the same brief rewritten as one `claude '/finx-code …'` command (say which app it belongs in, for example `apps/bank-web` for a bank's login page or `apps/studio` for Studio's own), and stop. Report nothing to the Agents board.
+- **It describes what a customer does, and mentions a colour, a font or a look in passing.** That is a journey: build it and ignore the look, and say so in the summary. The project's design decides how it is drawn.
+- **It names no project.** Call `finx_list_projects`; if the brief or the person's earlier words do not make the bank app clear, ask which one before creating anything.
+
 The tools come from the `finx` MCP server (their full names look like `mcp__finx__finx_get_catalog`). If they are missing, tell the person to approve the project's `finx` MCP server and to start Studio (`cd apps/studio && pnpm dev`), then stop.
 
 ## How to work

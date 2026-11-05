@@ -2,6 +2,7 @@
 import { useState } from "react";
 
 import { commandFor, type Agent } from "@/lib/ai-command";
+import { useProjects } from "./Projects";
 
 const AGENTS: Record<Agent, { label: string; skill: string; blurb: string; placeholder: string; ctxPlaceholder?: string }> = {
   journey: {
@@ -31,9 +32,10 @@ export function NewAiTask({ journey, compact }: { journey?: { slug: string; name
   const [agent, setAgent] = useState<Agent>("journey");
   const [brief, setBrief] = useState("");
   const [copied, setCopied] = useState(false);
+  const { current } = useProjects();
   const a = AGENTS[agent];
   const withJourney = !!journey && agent !== "code";
-  const command = commandFor(agent, brief, journey);
+  const command = commandFor(agent, brief, journey, { id: current.id, name: current.name });
 
   async function copy() {
     try { await navigator.clipboard.writeText(command); setCopied(true); setTimeout(() => setCopied(false), 2000); } catch { setCopied(false); }
@@ -45,7 +47,7 @@ export function NewAiTask({ journey, compact }: { journey?: { slug: string; name
       <div className="seg" role="group" aria-label="What should Claude do?">
         {(Object.keys(AGENTS) as Agent[]).filter((k) => !(journey && k === "code")).map((k) => <button key={k} aria-pressed={agent === k} onClick={() => setAgent(k)}>{AGENTS[k].label}</button>)}
       </div>
-      <p className="muted" style={{ margin: 0 }}>{a.blurb} It runs on your own Claude subscription.</p>
+      <p className="muted" style={{ margin: 0 }}>{a.blurb} It runs on your own Claude subscription.{agent === "journey" && !journey ? <> A new journey goes to <b>{current.name}</b>; switch project in the sidebar for another bank.</> : null}</p>
       <label className="field">{agent === "review" ? "What should it look at?" : "What should it do?"}
         <textarea className="textarea" rows={3} value={brief} onChange={(e) => setBrief(e.target.value)} placeholder={withJourney ? a.ctxPlaceholder : a.placeholder} />
       </label>
