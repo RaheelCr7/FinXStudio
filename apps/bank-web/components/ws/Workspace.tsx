@@ -4,6 +4,7 @@ import { useEffect, useRef } from "react";
 import { needsSwitch, parseLink, tabAllowed, tabLabel } from "@finx/bank-client";
 import { Notice, ScreenView } from "./ScreenView";
 import { WsJourney } from "./WsJourney";
+import { SecurityView } from "./SecurityView";
 import { useWs } from "./use-ws";
 
 /** The page inside the frame: the link in the address, drawn once the app is in the place the link belongs to. */
@@ -34,6 +35,7 @@ export function Workspace() {
   }
   if (link.journey !== undefined) return <WsJourney key={link.journey} slug={link.journey} values={link.values} />;
   const tab = link.tab;
+  if (link.sub === "security" && ctx && ctx.workspace === "personal") return <SecurityView />;
   if (!tabAllowed(ctx, tab) && ctx) return <ScreenView tab={tab} allowed={false} title={tabLabel(link.workspace, tab)} />;
   return <ScreenView key={`${active}:${tab}`} tab={tab} allowed title={tabLabel(link.workspace, tab)} />;
 }

@@ -6,7 +6,7 @@ import { isTab, type ShellTab } from "./view-models/menus";
  * address (/personal/cards, /business/alpha/j/supplier-payment?paymentId=...) and from a mobile deep link (bankworkx://business/alpha/approvals).
  * Everything in a link is untrusted: only known tabs, safe slugs and short plain values get through.
  */
-export type Link = { workspace: WorkspaceId; companyId?: string } & ({ tab: ShellTab; journey?: undefined; values?: undefined } | { journey: string; values: Record<string, string>; tab?: undefined });
+export type Link = { workspace: WorkspaceId; companyId?: string } & ({ tab: ShellTab; /** A page inside the tab: Settings > Security (personal/more/settings/security). */ sub?: "security"; journey?: undefined; values?: undefined } | { journey: string; values: Record<string, string>; tab?: undefined; sub?: undefined });
 
 const SLUG = /^[a-z0-9][a-z0-9-]{0,62}$/;
 const COMPANY = /^[a-z0-9][a-z0-9_-]{0,30}$/;
@@ -39,6 +39,8 @@ export function parseLink(input: string, scheme?: string): Link | null {
     if (!slug || !SLUG.test(slug) || parts.length > 2) return null;
     return { ...base, journey: slug, values: cleanValues(new URLSearchParams(query)) } as Link;
   }
+  // Settings > Security: only for Personal
+  if (workspace === "personal" && parts.length === 3 && parts[0] === "more" && parts[1] === "settings" && parts[2] === "security") return { ...base, tab: "more", sub: "security" } as Link;
   if (parts.length !== 1 || !isTab(workspace, parts[0]!)) return null;
   return { ...base, tab: parts[0] as ShellTab } as Link;
 }
@@ -51,7 +53,7 @@ export function linkPath(link: Link): string {
     const q = new URLSearchParams(Object.entries(link.values).filter(([k, v]) => KEY.test(k) && v !== "")).toString();
     return `${root}/j/${enc(link.journey)}${q ? `?${q}` : ""}`;
   }
-  return `${root}/${link.tab}`;
+  return link.sub === "security" ? `${root}/more/settings/security` : `${root}/${link.tab}`;
 }
 export const deepLink = (scheme: string, link: Link) => `${scheme}://${linkPath(link).slice(1)}`;
 

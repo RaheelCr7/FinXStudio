@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { bankworkxJourneys, chainTargets, chainWarnings, bulkPayment, catalog, corporateApproval, corporatePayment, Journey, withdrawPayment, payrollRun, ownTransfer, manageBeneficiary, personalTransfer, internalTransfer, internationalTransfer, payBillBankworkx, mobileTopup, schedulePayment, cancelStandingOrder, supplierPayment, approvePayments, signIn, forgotUsername, resetPassword, forgotPassword, unlockAccount } from "@finx/journey-schema";
+import { bankworkxJourneys, chainTargets, chainWarnings, bulkPayment, catalog, corporateApproval, corporatePayment, Journey, withdrawPayment, payrollRun, ownTransfer, manageBeneficiary, personalTransfer, internalTransfer, internationalTransfer, payBillBankworkx, mobileTopup, schedulePayment, cancelStandingOrder, supplierPayment, approvePayments, signIn, forgotUsername, resetPassword, forgotPassword, unlockAccount, changePassword, trustedDevices, setupQuickLogin, changeQuickPin } from "@finx/journey-schema";
 import { lintAll } from "@finx/renderer-core";
 import { mutationCheck, runScenarios } from "./scenarios";
 import { simulate } from "./simulate";
@@ -728,4 +728,112 @@ describe.each([
     expect([m.total, m.killed, m.accepted.length]).toEqual(mutants);
     expect(m.results.filter((x) => x.kind === "journey" && !x.killed)).toEqual([]);
   }, 240_000);
+});
+
+/**
+ * The Security journeys (Settings > Security): Change password, Trusted devices, Set up quick sign-in and Change quick PIN. They run for a signed-in customer
+ * (Alex Morgan) who has stepped up (the shell does that before it opens one: `context: "personal"`), against the credential model of the sandbox bank. The
+ * sandbox clock is pinned. A rule of the bank that a journey only meets through another one it opens is proved where it lives: each such survivor says where.
+ */
+const NO_RESEND = "This journey never asks for a second code in one attempt (a new attempt starts again from the first code); the resend limit is caught by Change password, which has a Resend code button";
+
+describe("change-password: Change password", () => {
+  const j = Journey.parse(changePassword);
+  const ACC: Record<string, string> = {};
+  it("is lint clean, every scenario passes and every acceptance criterion is proved", async () => {
+    expect(lintAll(j)).toEqual([]);
+    const r = await runScenarios(j);
+    expect(r.results.filter((x) => !x.ok).map((x) => `${x.id} ${x.name}: ${x.failures.join(" | ")}`)).toEqual([]);
+    expect(r.coverage.map((c) => [c.id, c.status])).toEqual((j.acceptance ?? []).map((a) => [a.id, "proved"]));
+    expect([r.passed, r.total, r.coverage.length]).toEqual([25, 25, 9]);
+  });
+  it("the tests notice when the journey or the bank's rules are broken (mutation check)", async () => {
+    const m = await mutationCheck(j, ACC);
+    expect(m.survived.map((s) => `${s.id}: ${s.what}`)).toEqual([]);
+    expect([m.total, m.killed, m.accepted.length]).toEqual([33, 33, 0]);
+    expect(m.results.filter((x) => x.kind === "journey" && !x.killed)).toEqual([]);
+    for (const id of ["bank-stepUpGate", "bank-changeNeedsCode", "bank-currentPassword", "bank-passwordSame", "bank-signInLock", "bank-passwordLength", "bank-passwordReuse", "bank-codeLock", "bank-codeExpiry", "bank-resendLimit"]) expect(m.results.find((x) => x.id === id)?.killed, id).toBe(true);
+  }, 240_000);
+  it("is for BankWorkx only, for the web and the phone, and opens the reset", () => {
+    expect([changePassword.apps, changePassword.channels]).toEqual([["bankworkx"], ["web", "mobile"]]);
+    expect(catalog.filter((c) => c.id === "change-password").map((c) => [c.madeFor, c.category])).toEqual([["bankworkx", "Access"]]);
+    expect(bankworkxJourneys.map((x) => x.slug)).toEqual(expect.arrayContaining(["change-password", "trusted-devices", "setup-quick-login", "change-quick-pin"]));
+    expect(chainTargets(changePassword)).toEqual(["forgot-password"]);
+  });
+});
+
+describe("trusted-devices: Trusted devices", () => {
+  const j = Journey.parse(trustedDevices);
+  const ACC: Record<string, string> = { "bank-resendLimit": NO_RESEND };
+  it("is lint clean, every scenario passes and every acceptance criterion is proved", async () => {
+    expect(lintAll(j)).toEqual([]);
+    const r = await runScenarios(j);
+    expect(r.results.filter((x) => !x.ok).map((x) => `${x.id} ${x.name}: ${x.failures.join(" | ")}`)).toEqual([]);
+    expect(r.coverage.map((c) => [c.id, c.status])).toEqual((j.acceptance ?? []).map((a) => [a.id, "proved"]));
+    expect([r.passed, r.total, r.coverage.length]).toEqual([21, 21, 8]);
+  });
+  it("the tests notice when the journey or the bank's rules are broken (mutation check)", async () => {
+    const m = await mutationCheck(j, ACC);
+    expect(m.survived.map((s) => `${s.id}: ${s.what}`)).toEqual([]);
+    expect([m.total, m.killed, m.accepted.length]).toEqual([22, 21, 1]);
+    expect(m.results.filter((x) => x.kind === "journey" && !x.killed)).toEqual([]);
+    for (const id of ["bank-stepUpGate", "bank-removeNeedsCode", "bank-currentDeviceKept", "bank-codeLock", "bank-codeExpiry"]) expect(m.results.find((x) => x.id === id)?.killed, id).toBe(true);
+  }, 240_000);
+  it("is for BankWorkx only, for the web and the phone", () => {
+    expect([trustedDevices.apps, trustedDevices.channels]).toEqual([["bankworkx"], ["web", "mobile"]]);
+    expect(catalog.filter((c) => c.id === "trusted-devices").map((c) => c.madeFor)).toEqual(["bankworkx"]);
+  });
+});
+
+describe("setup-quick-login: Set up quick sign-in", () => {
+  const j = Journey.parse(setupQuickLogin);
+  const ACC: Record<string, string> = {
+    ...linked(["bank-pinLockOff", "bank-currentPin", "bank-pinSame"], "change-quick-pin"),
+    "bank-resendLimit": NO_RESEND,
+    "no-error-path-25": "Turning off is the one call a scenario cannot fail on its own: it would have to turn a method on first with the same adapter down. The error path of turning on is caught (T-14, T-15)",
+  };
+  it("is lint clean, every scenario passes and every acceptance criterion is proved", async () => {
+    expect(lintAll(j)).toEqual([]);
+    const r = await runScenarios(j);
+    expect(r.results.filter((x) => !x.ok).map((x) => `${x.id} ${x.name}: ${x.failures.join(" | ")}`)).toEqual([]);
+    expect(r.coverage.map((c) => [c.id, c.status])).toEqual((j.acceptance ?? []).map((a) => [a.id, "proved"]));
+    expect([r.passed, r.total, r.coverage.length]).toEqual([25, 25, 10]);
+  });
+  it("the tests notice when the journey or the bank's rules are broken (mutation check)", async () => {
+    const m = await mutationCheck(j, ACC);
+    expect(m.survived.map((s) => `${s.id}: ${s.what}`)).toEqual([]);
+    expect([m.total, m.killed, m.accepted.length]).toEqual([31, 26, 5]);
+    expect(m.results.filter((x) => x.kind === "journey" && !x.killed).map((x) => x.id)).toEqual(["no-error-path-25"]);
+    for (const id of ["bank-stepUpGate", "bank-quickNeedsCode", "bank-pinRules", "bank-codeLock", "bank-codeExpiry"]) expect(m.results.find((x) => x.id === id)?.killed, id).toBe(true);
+  }, 240_000);
+  it("is for BankWorkx only, for the web and the phone, and opens Change quick PIN", () => {
+    expect([setupQuickLogin.apps, setupQuickLogin.channels]).toEqual([["bankworkx"], ["web", "mobile"]]);
+    expect(catalog.filter((c) => c.id === "setup-quick-login").map((c) => c.madeFor)).toEqual(["bankworkx"]);
+    expect(chainTargets(setupQuickLogin)).toEqual(["change-quick-pin"]);
+  });
+});
+
+describe("change-quick-pin: Change quick PIN", () => {
+  const j = Journey.parse(changeQuickPin);
+  const ACC: Record<string, string> = linked(["bank-codeExpiry", "bank-codeLock", "bank-resendLimit", "bank-quickNeedsCode"], "setup-quick-login");
+  it("is lint clean, every scenario passes and every acceptance criterion is proved", async () => {
+    expect(lintAll(j)).toEqual([]);
+    const r = await runScenarios(j);
+    expect(r.results.filter((x) => !x.ok).map((x) => `${x.id} ${x.name}: ${x.failures.join(" | ")}`)).toEqual([]);
+    expect(r.coverage.map((c) => [c.id, c.status])).toEqual((j.acceptance ?? []).map((a) => [a.id, "proved"]));
+    expect([r.passed, r.total, r.coverage.length]).toEqual([17, 17, 7]);
+  });
+  it("the tests notice when the journey or the bank's rules are broken (mutation check)", async () => {
+    const m = await mutationCheck(j, ACC);
+    expect(m.survived.map((s) => `${s.id}: ${s.what}`)).toEqual([]);
+    expect([m.total, m.killed, m.accepted.length]).toEqual([24, 20, 4]);
+    expect(m.results.filter((x) => x.kind === "journey" && !x.killed)).toEqual([]);
+    for (const id of ["bank-stepUpGate", "bank-pinLockOff", "bank-currentPin", "bank-pinSame", "bank-pinRules"]) expect(m.results.find((x) => x.id === id)?.killed, id).toBe(true);
+  }, 240_000);
+  it("is for BankWorkx only, for the web and the phone, and opens the set-up", () => {
+    expect([changeQuickPin.apps, changeQuickPin.channels]).toEqual([["bankworkx"], ["web", "mobile"]]);
+    expect(catalog.filter((c) => c.id === "change-quick-pin").map((c) => c.madeFor)).toEqual(["bankworkx"]);
+    expect(chainTargets(changeQuickPin)).toEqual(["setup-quick-login"]);
+    expect(chainWarnings(changeQuickPin, bankworkxJourneys.map((x) => x.slug))).toEqual([]);
+  });
 });

@@ -2,6 +2,7 @@ import React, { useEffect, useState } from "react";
 import { Pressable, Text, View } from "react-native";
 import type { BankApp, Live } from "@finx/bank-client";
 import { JourneyPlayer, useTheme } from "@finx/renderer-native";
+import { useBankApp } from "../useBankApp";
 
 /**
  * Sign in on the phone: the sign-in journey signs the customer in at the sandbox bank, and the app then asks the bank who is signed in
@@ -10,6 +11,9 @@ import { JourneyPlayer, useTheme } from "@finx/renderer-native";
  */
 export function SignIn({ app, lang }: { app: BankApp; lang?: string }) {
   const { c } = useTheme();
+  const st = useBankApp(app);
+  // signed out for their security (a timeout): the sign-in journey says so; a lock says it here
+  const reason = st.notice === "expired" ? { "launch.reason": "expired" } : undefined;
   // which journey is on screen and the values it was opened with; n makes a journey that is opened again start again
   const [run, setRun] = useState<{ slug: string; launch?: Record<string, any>; n: number }>({ slug: "sign-in", n: 0 });
   const [live, setLive] = useState<Live | null | "loading">("loading");
@@ -27,8 +31,9 @@ export function SignIn({ app, lang }: { app: BankApp; lang?: string }) {
   return (
     <View style={{ flex: 1, backgroundColor: c.bg }}>
       <View style={{ flex: 1 }}>
+        {st.notice === "locked" ? <Text accessibilityRole="alert" style={{ color: c.warning, fontWeight: "600", padding: 16 }}>Sign-in is locked to protect your account. Unlock it to continue.</Text> : null}
         {live === "loading" ? null : live ? (
-          <JourneyPlayer key={`${run.slug}:${run.n}`} journey={live.journey} adapter={app.adapter} lang={lang} launch={run.launch} onOpenJourney={open} onClose={ended} onExit={ended} />
+          <JourneyPlayer key={`${run.slug}:${run.n}`} journey={live.journey} adapter={app.adapter} lang={lang} launch={run.launch ?? reason} onOpenJourney={open} onClose={ended} onExit={ended} />
         ) : (
           <View style={{ padding: 24, gap: 8 }}>
             <Text accessibilityRole="header" style={{ color: c.text, fontSize: 20, fontWeight: "700" }}>Sign in is not available right now</Text>

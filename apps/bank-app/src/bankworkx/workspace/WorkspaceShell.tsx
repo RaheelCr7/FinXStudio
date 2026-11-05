@@ -1,10 +1,12 @@
 import React, { useEffect, useRef, useState } from "react";
-import { AccessibilityInfo, Animated, Pressable, Text, TextInput, View } from "react-native";
+import { AccessibilityInfo, Animated, AppState, Pressable, Text, TextInput, View } from "react-native";
 import { businessContexts, contextInitials, menuFor, roleBadge, tabLabel, tabAllowed, unreadCount, type BankApp, type ShellTab } from "@finx/bank-client";
 import { Icon, useTheme } from "@finx/renderer-native";
 import { Sheet } from "../ui";
 import { useBankApp } from "../../useBankApp";
 import { Notice, ScreenView } from "./ScreenView";
+import { SecurityScreen } from "./SecurityScreen";
+import { openLaunch } from "./open";
 
 const SCHEMES = [["system", "Auto"], ["light", "Light"], ["dark", "Dark"]] as const;
 
@@ -22,6 +24,8 @@ export function WorkspaceShell({ app }: { app: BankApp }) {
 
   useEffect(() => { if (s.session.status === "idle") void app.loadSession(); }, [app, s.session.status]);
   useEffect(() => { if (s.session.status === "ready") void app.loadNotices(); }, [app, s.session.status, info?.activeContextId, s.tick]);
+  // the session timeout: the phone going to the background and coming back (more than five minutes away signs out with no warning), and a tick of the clock
+  useEffect(() => { const sub = AppState.addEventListener("change", (st) => app.setBackground(st !== "active")); return () => sub.remove(); }, [app]);
   // a link whose switch is done (a deep link or notification into another place)
   useEffect(() => { if (s.arrived) { const link = s.arrived; app.clearArrived(); void app.applyLink(link); } }, [s.arrived, app]);
 
@@ -34,7 +38,8 @@ export function WorkspaceShell({ app }: { app: BankApp }) {
   const allowed = tabAllowed(ctx, tab);
 
   return (
-    <View style={{ flex: 1, backgroundColor: c.bg }}>
+    // any touch is activity for the timeout (the responder callback returns false: it never takes the touch)
+    <View style={{ flex: 1, backgroundColor: c.bg }} onStartShouldSetResponderCapture={() => { app.activity(); return false; }}>
       <View style={{ flexDirection: "row", alignItems: "center", gap: 8, paddingHorizontal: 16, paddingTop: 8 }}>
         <Pressable accessibilityRole="button" accessibilityLabel={`Workspace: ${business ? ctx.label : "Personal"}. Switch`} onPress={() => setSwitcher(true)}
           style={{ flex: 1, flexDirection: "row", alignItems: "center", gap: 10, padding: 4, paddingRight: 12, borderRadius: r.pill, borderWidth: 1, borderColor: c.border, backgroundColor: c.surface }}>
@@ -52,7 +57,7 @@ export function WorkspaceShell({ app }: { app: BankApp }) {
       </View>
 
       <View style={{ flex: 1, width: "100%", maxWidth: 560, alignSelf: "center" }}>
-        <ScreenView key={`${info.activeContextId}:${tab}`} app={app} tab={tab} allowed={allowed} title={tabLabel(s.workspace, tab)} />
+        {s.sub === "security" && !business ? <SecurityScreen app={app} open={(lp) => openLaunch(app, lp)} /> : <ScreenView key={`${info.activeContextId}:${tab}`} app={app} tab={tab} allowed={allowed} title={tabLabel(s.workspace, tab)} />}
       </View>
 
       <TabBar menu={menu} tab={tab} onTab={(t) => app.setShellTab(t)} floating={!business} />
@@ -87,11 +92,13 @@ export function WorkspaceShell({ app }: { app: BankApp }) {
               </Pressable>
             ))}
           </View>
-          <Pressable accessibilityRole="button" onPress={() => app.logout()} style={({ pressed }) => ({ minHeight: 48, borderRadius: r.md, borderWidth: 1, borderColor: c.borderStrong, alignItems: "center", justifyContent: "center", opacity: pressed ? 0.85 : 1 })}><Text style={{ color: c.negative, fontWeight: "700", fontSize: 15 }}>Log out</Text></Pressable>
+          <Pressable accessibilityRole="button" onPress={() => app.askSignOut()} style={({ pressed }) => ({ minHeight: 48, borderRadius: r.md, borderWidth: 1, borderColor: c.borderStrong, alignItems: "center", justifyContent: "center", opacity: pressed ? 0.85 : 1 })}><Text style={{ color: c.negative, fontWeight: "700", fontSize: 15 }}>Log out</Text></Pressable>
         </View>
       </Sheet>
 
       <StepUp app={app} />
+      <StillThere app={app} />
+      <SignOut app={app} />
       <Offer app={app} />
       <Switching text={s.switching} />
 
@@ -153,26 +160,29 @@ function Notices({ app, onClose }: { app: BankApp; onClose: () => void }) {
   );
 }
 
-/** "Confirm it's you": the password, then the code the bank sent. */
+/** "Confirm it's you": the password, the quick PIN or the phone's own check (a flag: the sandbox cannot show the prompt), then the code the bank sent. */
 function StepUp({ app }: { app: BankApp }) {
   const { c, r } = useTheme();
   const s = useBankApp(app);
   const su = s.stepUp;
   const [secret, setSecret] = useState("");
   const [code, setCode] = useState("");
-  useEffect(() => { if (!su) { setSecret(""); setCode(""); } }, [su]);
+  const [password, setPassword] = useState(false);
+  useEffect(() => { if (!su) { setSecret(""); setCode(""); setPassword(false); } }, [su]);
   const target = s.session.info?.contexts.find((x) => x.id === su?.contextId);
+  const pin = su?.method === "pin" && !password;
   const field = { minHeight: 48, paddingHorizontal: 12, borderRadius: r.md, borderWidth: 1, borderColor: su?.error ? c.negative : c.borderStrong, backgroundColor: c.surface, color: c.text, fontSize: 16 };
   return (
     <Sheet visible={!!su} onClose={() => app.cancelStepUp()} title="Confirm it's you">
       {su ? (
         <View style={{ gap: 12 }}>
-          {target ? <Text style={{ color: c.textMuted }}>To open {target.label}.</Text> : null}
+          <Text style={{ color: c.textMuted }}>For your security, confirm it’s you first. {su.reason ?? (target && !su.then ? `To open ${target.label}.` : "")}</Text>
           {su.phase === "password" ? (
             <>
-              <Text style={{ color: c.text, fontWeight: "600" }}>Password</Text>
-              <TextInput accessibilityLabel="Password" secureTextEntry autoCapitalize="none" autoCorrect={false} value={secret} onChangeText={setSecret} onSubmitEditing={(e) => void app.beginStepUp({ secret: e.nativeEvent.text })} style={field} />
-              <Pressable accessibilityRole="button" onPress={() => void app.beginStepUp({ method: "biometric" })}><Text style={{ color: c.accent, fontWeight: "700" }}>Use biometrics</Text></Pressable>
+              <Text style={{ color: c.text, fontWeight: "600" }}>{pin ? "Quick PIN" : "Password"}</Text>
+              <TextInput accessibilityLabel={pin ? "Quick PIN" : "Password"} secureTextEntry keyboardType={pin ? "number-pad" : "default"} maxLength={pin ? 6 : undefined} autoCapitalize="none" autoCorrect={false} value={secret} onChangeText={(t) => setSecret(pin ? t.replace(/\D/g, "") : t)} onSubmitEditing={(e) => void app.beginStepUp({ method: pin ? "pin" : "password", secret: e.nativeEvent.text })} style={field} />
+              {pin ? <Pressable accessibilityRole="button" onPress={() => { setPassword(true); setSecret(""); }}><Text style={{ color: c.accent, fontWeight: "700" }}>Use password instead</Text></Pressable> : null}
+              {su.biometric ? <Pressable accessibilityRole="button" onPress={() => void app.beginStepUp({ method: "biometric" })}><Text style={{ color: c.accent, fontWeight: "700" }}>Use biometrics</Text></Pressable> : null}
             </>
           ) : (
             <>
@@ -183,13 +193,50 @@ function StepUp({ app }: { app: BankApp }) {
           {su.error ? <Text accessibilityRole="alert" style={{ color: c.negative }}>{su.error}</Text> : null}
           <View style={{ flexDirection: "row", justifyContent: "flex-end", gap: 8 }}>
             <Pressable accessibilityRole="button" onPress={() => app.cancelStepUp()} style={{ minHeight: 44, paddingHorizontal: 18, borderRadius: r.lg, borderWidth: 1, borderColor: c.border, alignItems: "center", justifyContent: "center" }}><Text style={{ color: c.text, fontWeight: "600" }}>Cancel</Text></Pressable>
-            <Pressable accessibilityRole="button" accessibilityState={{ disabled: su.busy }} disabled={su.busy || (su.phase === "password" ? secret === "" : code.length < 6)} onPress={() => void (su.phase === "password" ? app.beginStepUp({ secret }) : app.confirmStepUp(code))}
+            <Pressable accessibilityRole="button" accessibilityState={{ disabled: su.busy }} disabled={su.busy || (su.phase === "password" ? secret === "" : code.length < 6)} onPress={() => void (su.phase === "password" ? app.beginStepUp({ method: pin ? "pin" : "password", secret }) : app.confirmStepUp(code))}
               style={{ minHeight: 44, paddingHorizontal: 18, borderRadius: r.lg, backgroundColor: c.accent, alignItems: "center", justifyContent: "center", opacity: su.busy || (su.phase === "password" ? secret === "" : code.length < 6) ? 0.5 : 1 }}>
               <Text style={{ color: c.accentOn, fontWeight: "700" }}>{su.busy ? "Checking..." : "Continue"}</Text>
             </Pressable>
           </View>
         </View>
       ) : null}
+    </Sheet>
+  );
+}
+
+/** "Still there?": the warning before the timeout, with the seconds left. Blocks the screen behind it. */
+function StillThere({ app }: { app: BankApp }) {
+  const { c, r } = useTheme();
+  const s = useBankApp(app);
+  const w = s.idle.phase === "warning" ? s.idle : null;
+  return (
+    <Sheet visible={!!w} onClose={() => void app.keepAlive()} title="Still there?">
+      {w ? (
+        <View style={{ gap: 14 }}>
+          <Text accessibilityLiveRegion="polite" style={{ color: c.text }}>For your security we’ll sign you out in {w.left} seconds. Anything you haven’t finished won’t be saved.</Text>
+          <View style={{ flexDirection: "row", justifyContent: "flex-end", gap: 8 }}>
+            <Pressable accessibilityRole="button" onPress={() => app.logout()} style={{ minHeight: 44, paddingHorizontal: 18, borderRadius: r.lg, borderWidth: 1, borderColor: c.border, alignItems: "center", justifyContent: "center" }}><Text style={{ color: c.text, fontWeight: "600" }}>Sign out now</Text></Pressable>
+            <Pressable accessibilityRole="button" onPress={() => void app.keepAlive()} style={{ minHeight: 44, paddingHorizontal: 18, borderRadius: r.lg, backgroundColor: c.accent, alignItems: "center", justifyContent: "center" }}><Text style={{ color: c.accentOn, fontWeight: "700" }}>Stay signed in</Text></Pressable>
+          </View>
+        </View>
+      ) : null}
+    </Sheet>
+  );
+}
+
+/** "Sign out?": asked once (the timeout and a lock do not ask). */
+function SignOut({ app }: { app: BankApp }) {
+  const { c, r } = useTheme();
+  const s = useBankApp(app);
+  return (
+    <Sheet visible={s.sheet === "signout"} onClose={() => app.closeSheet()} title="Sign out?">
+      <View style={{ gap: 14 }}>
+        <Text style={{ color: c.textMuted }}>You’ll need to sign in again.</Text>
+        <View style={{ flexDirection: "row", justifyContent: "flex-end", gap: 8 }}>
+          <Pressable accessibilityRole="button" onPress={() => app.closeSheet()} style={{ minHeight: 44, paddingHorizontal: 18, borderRadius: r.lg, borderWidth: 1, borderColor: c.border, alignItems: "center", justifyContent: "center" }}><Text style={{ color: c.text, fontWeight: "600" }}>Cancel</Text></Pressable>
+          <Pressable accessibilityRole="button" onPress={() => app.logout()} style={{ minHeight: 44, paddingHorizontal: 18, borderRadius: r.lg, backgroundColor: c.negative, alignItems: "center", justifyContent: "center" }}><Text style={{ color: "#fff", fontWeight: "700" }}>Sign out</Text></Pressable>
+        </View>
+      </View>
     </Sheet>
   );
 }

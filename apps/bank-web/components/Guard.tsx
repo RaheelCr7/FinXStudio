@@ -1,6 +1,7 @@
 "use client";
 import { usePathname, useRouter } from "next/navigation";
 import { useEffect } from "react";
+import { SessionWatch } from "./ws/SessionWatch";
 import { useApp, useAppState } from "./AppProvider";
 
 /**
@@ -13,7 +14,9 @@ export function Guard({ children }: { children: React.ReactNode }) {
   const router = useRouter();
   const path = usePathname();
   const signedIn = state.screen !== "login";
-  useEffect(() => { if (ready && !signedIn) router.replace(`/${project.id}/login?next=${encodeURIComponent(path)}`); }, [ready, signedIn, router, project.id, path]);
+  // the sign-in returns to the page the customer was on, but never into a journey: after a timeout its entries were lost
+  const back = path.replace(/\/j\/.*$/, "");
+  useEffect(() => { if (ready && !signedIn) router.replace(`/${project.id}/login?next=${encodeURIComponent(back)}`); }, [ready, signedIn, router, project.id, back]);
   if (!ready || !signedIn) return <main className="wb-loading" aria-busy="true"><span className="wb-sr">Loading</span></main>;
-  return <>{children}</>;
+  return <>{children}{project.shell === "bankworkx" ? <SessionWatch /> : null}</>;
 }

@@ -17,4 +17,6 @@ export * from "./view-models/notices";
 export * from "./view-models/widgets";
 export * from "./view-models/screens";
 export * from "./view-models/commands";
+export * from "./view-models/security";
+export * from "./idle";
 export * from "./app";

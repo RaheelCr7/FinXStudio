@@ -21,7 +21,10 @@ export function useWs() {
   const launch = useCallback((lp: LaunchPoint, passed: Record<string, unknown> = {}) => {
     const { slug, values } = app.launchTarget(lp, passed);
     const strings = Object.fromEntries(Object.entries(values).filter(([, v]) => v !== undefined && v !== null).map(([k, v]) => [k, String(v)]));
-    router.push(wsHref(project.id, here({ journey: slug, values: strings })));
+    const link = here({ journey: slug, values: strings });
+    // Change password, Trusted devices ...: confirm it is the person first (the password or PIN, then a code), unless that was done in the last five minutes
+    if (lp.stepUp && app.needsStepUp(slug)) { void app.askStepUp(link, `To ${lp.label.toLowerCase()}.`); return; }
+    router.push(wsHref(project.id, link));
   }, [app, router, project.id, here]);
   return { app, project, s, ctx, router, here, go, launch };
 }

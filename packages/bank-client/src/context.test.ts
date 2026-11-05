@@ -60,10 +60,10 @@ describe("switching places", () => {
     const a = await alex();
     await a.switchContext("beta");
     await a.beginStepUp({ secret: "nope" });
-    expect(a.getState().stepUp).toMatchObject({ phase: "password", error: "That password isn't right." });
+    expect(a.getState().stepUp).toMatchObject({ phase: "password", error: "That password isn't right. 4 tries left." });
     await a.beginStepUp({ secret: PASSWORD });
     await a.confirmStepUp("111111");
-    expect(a.getState().stepUp).toMatchObject({ phase: "code", error: "Incorrect code" });
+    expect(a.getState().stepUp).toMatchObject({ phase: "code", error: "That code isn't right. 2 tries left." });
     expect(a.getState().workspace).toBe("personal");
     a.cancelStepUp();
     expect(a.getState().stepUp).toBeNull();

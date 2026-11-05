@@ -23,6 +23,8 @@ export type LaunchPoint = {
   many?: boolean;
   /** Shown in the + quick actions. */
   quick?: boolean;
+  /** Asks the person to confirm it is them again first (docs/journeys/README.md 4.3), unless a step-up from the last five minutes is still valid. */
+  stepUp?: boolean;
   icon?: string;
 };
 
@@ -89,10 +91,11 @@ const PERSONAL: Def[] = [
   ["more.requests", "New request", "service-request", "messages.send", ["type"]],
   ["more.help", "Send a secure message", "new-message", "messages.send", ["topic"]],
   ["more.settings", "Connect a bank", "connect-account", "accounts.manage"],
-  ["more.security", "Change password", "change-password", "security.manage"],
-  ["more.security", "Trusted devices", "trusted-devices", "security.manage", ["deviceId"]],
-  ["more.security", "Change quick PIN", "change-quick-pin", "security.manage"],
-  ["more.security", "Biometrics", "setup-quick-login", "security.manage"],
+  ["more.security", "Change password", "change-password", "security.manage", [], { stepUp: true }],
+  ["more.security", "Trusted devices", "trusted-devices", "security.manage", ["deviceId"], { stepUp: true }],
+  ["more.security", "Change quick PIN", "change-quick-pin", "security.manage", [], { stepUp: true }],
+  ["more.security", "Quick sign-in", "setup-quick-login", "security.manage", [], { stepUp: true }],
+  ["more.security", "Biometrics", "setup-quick-login", "security.manage", [], { stepUp: true }],
   ["more.security", "This wasn't me", "new-message", "messages.send", ["topic"], { fixed: { topic: "security" } }],
 ];
 
@@ -222,6 +225,9 @@ export function launchFromValues(journey: string, values: Record<string, unknown
   for (const [k, v] of Object.entries(values ?? {})) if (allowed.has(k) && v !== undefined && v !== "") out[`${LAUNCH_PREFIX}${k}`] = v;
   return out;
 }
+
+/** Whether opening this journey asks for a step-up (any launch point of it is marked so): the shell asks before it opens, and the bank refuses the change without one. */
+export const journeyNeedsStepUp = (journey: string) => LAUNCH_POINTS.some((lp) => lp.stepUp && (slugIs(journey, lp.journey) || (JOURNEY_ALIASES[lp.journey] ?? []).some((a) => slugIs(journey, a))));
 
 /** Whether a button belongs to one row (it needs a value the row passes in) rather than to the section or the tab. */
 export const isRowLevel = (lp: LaunchPoint) => !lp.many && lp.passes.some((p) => !(lp.fixed && p in lp.fixed));

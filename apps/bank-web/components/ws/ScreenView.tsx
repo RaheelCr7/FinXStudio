@@ -1,5 +1,6 @@
 "use client";
 import { useEffect, useState } from "react";
+import Link from "next/link";
 import { Icon, ProgressBar } from "@finx/renderer-web";
 import { isRowLevel, isSectionLevel, screenIsEmpty, type LaunchPoint, type Row, type Screen, type Section, type ShellTab } from "@finx/bank-client";
 import { useWs } from "./use-ws";
@@ -29,17 +30,18 @@ function RowView({ row }: { row: Row }) {
   const { app } = useWs();
   const [open, setOpen] = useState(false);
   const points = row.place ? app.launchPoints({ place: row.place }).filter(isRowLevel) : [];
+  const { project } = useWs();
   const body = (
     <>
       <span className="ws-row-text"><b>{row.title}</b>{row.subtitle ? <small>{row.subtitle}</small> : null}{row.progress !== undefined ? <ProgressBar value={row.progress} max={100} label={row.title} tone={row.tone === "negative" ? "negative" : "positive"} /> : null}</span>
       {row.tag ? <span className={`ws-tag ws-tag-${row.tone ?? "neutral"}`}>{row.tag}</span> : null}
       {row.value ? <span className={`ws-value ${row.tone === "positive" ? "wb-pos" : ""}`}>{row.value}</span> : null}
-      {points.length ? <Icon name={open ? "chevronDown" : "chevronRight"} size={16} /> : null}
+      {points.length || row.go ? <Icon name={open ? "chevronDown" : "chevronRight"} size={16} /> : null}
     </>
   );
   return (
     <li className="ws-row">
-      {points.length ? <button type="button" className="ws-row-main" aria-expanded={open} onClick={() => setOpen(!open)}>{body}</button> : <div className="ws-row-main">{body}</div>}
+      {row.go === "security" ? <Link className="ws-row-main" href={`/${project.id}/personal/more/settings/security`}>{body}</Link> : points.length ? <button type="button" className="ws-row-main" aria-expanded={open} onClick={() => setOpen(!open)}>{body}</button> : <div className="ws-row-main">{body}</div>}
       {open ? <Buttons points={points} passed={row.passes} small /> : null}
     </li>
   );
@@ -69,8 +71,10 @@ export function ScreenView({ tab, allowed, title }: { tab: ShellTab; allowed: bo
   if (!allowed) body = <Notice icon="lock" title="No access" text="Your role here doesn't include this." />;
   else if (view?.status === "error" && (!screen || view.code === "SESSION_EXPIRED")) {
     body = view.code === "SESSION_EXPIRED"
-      ? <Notice role="alert" icon="clock" title="You were signed out" text="For your security. Sign in again to continue." action="Sign in" onAction={() => { app.logout(); router.push(`/${project.id}/login`); }} />
-      : <Notice role="alert" icon="warn" title="Could not load" text={view.error} action="Try again" onAction={() => void app.loadShell(tab, true)} />;
+      ? <Notice role="alert" icon="clock" title="You were signed out" text="For your security. Sign in again to continue." action="Sign in" onAction={() => { app.expire(); router.push(`/${project.id}/login`); }} />
+      : view.code === "SERVICE_UNAVAILABLE" || view.code === "TIMEOUT"
+        ? <Notice role="alert" icon="warn" title={view.code === "TIMEOUT" ? "This is taking longer than expected" : "This service is not available right now"} text={view.code === "TIMEOUT" ? "Nothing was changed." : "Nothing was changed. Please try again in a few minutes."} action="Try again" onAction={() => void app.loadShell(tab, true)} />
+        : <Notice role="alert" icon="warn" title="Could not load" text={view.error} action="Try again" onAction={() => void app.loadShell(tab, true)} />;
   } else if (!screen) body = <Skeleton />;
   else if (screenIsEmpty(screen)) body = <Notice icon="info" title="Nothing here yet" />;
   else {

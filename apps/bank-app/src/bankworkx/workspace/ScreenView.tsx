@@ -3,6 +3,7 @@ import { Pressable, ScrollView, Text, View } from "react-native";
 import { isRowLevel, isSectionLevel, screenIsEmpty, type BankApp, type LaunchPoint, type Row, type Screen, type Section, type ShellTab } from "@finx/bank-client";
 import { Gradient, Icon, ProgressBar, useTheme } from "@finx/renderer-native";
 import { Card, tab as tabular } from "../ui";
+import { openLaunch } from "./open";
 import { useBankApp } from "../../useBankApp";
 
 function Skeleton() {
@@ -52,12 +53,12 @@ function RowView({ app, row, open }: { app: BankApp; row: Row; open: (lp: Launch
       </View>
       {row.tag ? <View style={{ paddingHorizontal: 8, paddingVertical: 2, borderRadius: 10, backgroundColor: row.tone === "warning" ? c.warningBg : c.surfaceMuted }}><Text style={{ color: row.tone === "warning" ? c.warning : c.textMuted, fontSize: 11, fontWeight: "700" }}>{row.tag}</Text></View> : null}
       {row.value ? <Text style={[{ color: tone, fontWeight: "700", fontSize: 15 }, tabular]}>{row.value}</Text> : null}
-      {points.length ? <Icon name={on ? "chevronDown" : "chevronRight"} size={16} color={c.textFaint} /> : null}
+      {points.length || row.go ? <Icon name={on ? "chevronDown" : "chevronRight"} size={16} color={c.textFaint} /> : null}
     </View>
   );
   return (
     <View style={{ borderTopWidth: 1, borderTopColor: c.border }}>
-      {points.length ? <Pressable accessibilityRole="button" accessibilityState={{ expanded: on }} accessibilityLabel={row.title} onPress={() => setOn(!on)}>{body}</Pressable> : body}
+      {row.go === "security" ? <Pressable accessibilityRole="button" accessibilityLabel={row.title} onPress={() => app.openSub("security")}>{body}</Pressable> : points.length ? <Pressable accessibilityRole="button" accessibilityState={{ expanded: on }} accessibilityLabel={row.title} onPress={() => setOn(!on)}>{body}</Pressable> : body}
       {on ? <View style={{ paddingBottom: 12 }}><Buttons small points={points} onPress={(lp) => open(lp, row.passes)} /></View> : null}
     </View>
   );
@@ -85,15 +86,17 @@ export function ScreenView({ app, tab, allowed, title }: { app: BankApp; tab: Sh
   useEffect(() => { if (allowed) void app.loadShell(tab); }, [app, tab, allowed, active, s.tick]);
   const view = allowed ? s.views[app.viewKey(tab)] : undefined;
   const screen = view?.data as Screen | undefined;
-  const open = (lp: LaunchPoint, passed?: Record<string, string>) => { const t = app.launchTarget(lp, passed); void app.openJourney(t.slug, undefined, t.launch); };
+  const open = (lp: LaunchPoint, passed?: Record<string, string>) => openLaunch(app, lp, passed);
   const head = app.launchPoints({ place: tab }).filter(isSectionLevel);
   const hub = app.launchPoints({ place: `${tab}.hub` });
   let body: React.ReactNode;
   if (!allowed) body = <Notice icon="lock" title="No access" text="Your role here doesn't include this." />;
   else if (view?.status === "error" && (!screen || view.code === "SESSION_EXPIRED")) {
     body = view.code === "SESSION_EXPIRED"
-      ? <Notice icon="clock" title="You were signed out" text="For your security. Sign in again to continue." action="Sign in" onAction={() => app.logout()} />
-      : <Notice icon="warn" title="Could not load" text={view.error} action="Try again" onAction={() => void app.loadShell(tab, true)} />;
+      ? <Notice icon="clock" title="You were signed out" text="For your security. Sign in again to continue." action="Sign in" onAction={() => app.expire()} />
+      : view.code === "SERVICE_UNAVAILABLE" || view.code === "TIMEOUT"
+        ? <Notice icon="warn" title={view.code === "TIMEOUT" ? "This is taking longer than expected" : "This service is not available right now"} text={view.code === "TIMEOUT" ? "Nothing was changed." : "Nothing was changed. Please try again in a few minutes."} action="Try again" onAction={() => void app.loadShell(tab, true)} />
+        : <Notice icon="warn" title="Could not load" text={view.error} action="Try again" onAction={() => void app.loadShell(tab, true)} />;
   } else if (!screen) body = <Skeleton />;
   else if (screenIsEmpty(screen)) body = <Notice icon="info" title="Nothing here yet" />;
   else body = (

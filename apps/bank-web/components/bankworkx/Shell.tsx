@@ -82,9 +82,9 @@ export function BankworkxShell({ children }: { children: React.ReactNode }) {
         </ul>
       </Modal>
 
-      <Modal open={s.sheet === "menu"} onClose={() => app.closeSheet()} title={displayName(persona) || "Menu"}>
+      <Modal open={s.sheet === "menu"} onClose={() => { if (app.getState().sheet === "menu") app.closeSheet(); }} title={displayName(persona) || "Menu"}>
         <p className="wb-muted">Signed in as a sandbox customer. No real money moves.</p>
-        <button type="button" className="wb-btn wb-btn-danger" onClick={() => { app.logout(); router.push(`/${project.id}/login`); }}>Log out</button>
+        <button type="button" className="wb-btn wb-btn-danger" onClick={() => app.askSignOut()}>Log out</button>
       </Modal>
 
       <Modal open={!!sub} onClose={() => app.cancelPayment()} title="Pay subscription">

@@ -8,7 +8,7 @@ import { can, type ContextInfo } from "../session";
  * A row may name a launch-point place and the values it passes ("cards.card", { cardId }); the apps draw that place's buttons next to it.
  */
 export type RowTone = "positive" | "negative" | "warning" | "neutral";
-export type Row = { id: string; title: string; subtitle?: string; value?: string; tag?: string; tone?: RowTone; /** 0 to 100, drawn as a bar. */ progress?: number; /** The launch-point place of this row's buttons. */ place?: string; passes?: Record<string, string> };
+export type Row = { id: string; title: string; subtitle?: string; value?: string; tag?: string; tone?: RowTone; /** 0 to 100, drawn as a bar. */ progress?: number; /** The launch-point place of this row's buttons. */ place?: string; passes?: Record<string, string>; /** The row opens a page of the app instead of showing buttons (Settings > Security). */ go?: "security" };
 export type Section = { id: string; title: string; rows: Row[]; /** Shown instead of rows when there are none. */ empty: string; /** The launch-point place whose buttons sit in the section header. */ place?: string };
 export type Screen = { tab: ShellTab; hero?: { label: string; value: string; lines: MoneyLine[] }; sections: Section[]; /** Open items, drawn as the badge on Approvals. */ approvals?: number };
 
@@ -70,6 +70,7 @@ export async function loadPersonal(call: Call, tab: ShellTab): Promise<Screen> {
         { id: "profile", title: "Profile", empty: "", place: "more.profile", rows: [{ id: "name", title: profile.name, subtitle: profile.email }, { id: "phone", title: profile.phone, subtitle: "Mobile" }] },
         { id: "messages", title: "Messages", empty: "No messages", place: "more.messages", rows: list<any>(messages).map((m) => ({ id: m.id, title: m.subject, subtitle: date(m.at), tag: m.read ? undefined : "New" })) },
         { id: "requests", title: "Requests", empty: "No open requests", place: "more.requests", rows: list<any>(requests).map((r) => ({ id: r.id, title: r.summary, subtitle: r.type, tag: r.status })) },
+        { id: "settings", title: "Settings", empty: "", rows: [{ id: "security", title: "Security", subtitle: "Password, quick sign-in, devices and your recent sign-ins", go: "security" }] },
       ] };
     }
   }

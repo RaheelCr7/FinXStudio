@@ -333,11 +333,18 @@ describe("recovering a username or a password", () => {
 
 describe("what a signed-in customer manages", () => {
   const alex = () => make({ persona: "alex" });
-  it("lists the trusted devices, this one first, and removes one after a code", async () => {
+  /** What the shell does before it opens a security journey: the password, then the code. A step-up lasts five minutes. */
+  const up = async (b: MockBank, pw = PW) => { await code(b); await b.call("bank.session.stepUp", { method: "password", secret: pw }); };
+  it("lists the trusted devices, this one first, and removes one after a step-up and a code", async () => {
     const { b } = alex();
     const list = await b.call("bank.devices.list");
     expect(list.max).toBe(5);
-    expect(list.items.map((d: any) => [d.name, d.current])).toEqual([["iPhone 15", true], ["Work laptop, Chrome", false], ["Android tablet", false]]);
+    expect(list.count).toBe(3);
+    expect(list.items.map((d: any) => [d.name, d.current, d.lastUsedText])).toEqual([["iPhone 15", true, "Now"], ["Work laptop, Chrome", false, "Yesterday, 18:20"], ["Android tablet", false, "12 Oct 2026"]]);
+    expect((await b.call("bank.devices.list", { scope: "others" })).items.map((d: any) => d.id)).toEqual(["dev_laptop", "dev_tablet"]);
+    expect((await b.call("bank.devices.list", { scope: "current" })).items.map((d: any) => d.id)).toEqual(["dev_iphone15"]);
+    expect(await err(b.call("bank.devices.remove", { deviceId: "dev_laptop" }))).toBe("STEP_UP_REQUIRED");
+    await up(b);
     expect(await err(b.call("bank.devices.remove", { deviceId: "dev_laptop" }))).toBe("OTP_REQUIRED");
     await code(b);
     expect(await b.call("bank.devices.remove", { deviceId: "dev_laptop" })).toEqual({ removed: 1 });
@@ -349,13 +356,61 @@ describe("what a signed-in customer manages", () => {
   });
   it("signs every other device out, and renames one", async () => {
     const { b } = alex();
-    await code(b);
+    await up(b); await code(b);
     expect(await b.call("bank.devices.remove", { all: true })).toEqual({ removed: 2 });
     expect((await b.call("bank.devices.list")).items.map((d: any) => d.id)).toEqual(["dev_iphone15"]);
     expect(await b.call("bank.devices.rename", { deviceId: "dev_iphone15", name: "Alex's phone" })).toEqual({ ok: true });
   });
+  it("a step-up lasts five minutes on the sandbox clock; looking and turning sign-in stricter need none", async () => {
+    const { b, tick } = alex();
+    await up(b);
+    tick(299); await code(b);
+    expect(await b.call("bank.devices.remove", { deviceId: "dev_laptop" })).toEqual({ removed: 1 });
+    tick(2); await code(b);
+    expect(await err(b.call("bank.devices.remove", { deviceId: "dev_tablet" }))).toBe("STEP_UP_REQUIRED");
+    expect(await err(b.call("bank.password.check", { current: PW }))).toBe("STEP_UP_REQUIRED");
+    expect(await err(b.call("bank.devices.setQuickSignIn", { method: "pin", pin: "504719" }))).toBe("STEP_UP_REQUIRED");
+    expect(await err(b.call("bank.device.setDefault", { mode: "biometric" }))).toBe("STEP_UP_REQUIRED");
+    expect(await err(b.call("bank.devices.changePin", { new: "504719" }))).toBe("STEP_UP_REQUIRED");
+    // no step-up for these
+    expect((await b.call("bank.devices.list")).count).toBe(2);
+    expect(await b.call("bank.devices.setQuickSignIn", { method: "off" })).toMatchObject({ ok: true });
+    expect(await b.call("bank.device.setDefault", { mode: "password" })).toEqual({ ok: true, default: "password" });
+    expect((await b.call("bank.loginHistory.list")).total).toBe(12);
+    // the rule can be switched off for a mutation check, and only then
+    const off = new MockBank("alex", { corpFlaws: { stepUpGate: false } });
+    await code(off);
+    expect(await off.call("bank.devices.remove", { deviceId: "dev_laptop" })).toEqual({ removed: 1 });
+  });
+  it("a code for a signed-in customer's own change is strict: 000000 is wrong, 999999 expired, a new code replaces the old, the third wrong ends the attempt", async () => {
+    const { b, tick } = alex();
+    const send = () => b.call("bank.otp.send", { channel: "sms", strict: true });
+    const resend = () => b.call("bank.otp.send", { channel: "sms", strict: true, resend: true });
+    const verify = (c: string) => err(b.call("bank.otp.verify", { code: c, strict: true }));
+    expect(await verify("482100")).toBe("OTP_REQUIRED");
+    expect(await send()).toMatchObject({ sent: true, last4: "0142", maskedPhone: "+1 ••• ••• 0142" });
+    expect(await verify("000000")).toBe("OTP_INVALID");
+    expect(await verify("999999")).toBe("OTP_EXPIRED");
+    expect(await verify("111111")).toBe("OTP_INVALID");
+    expect(await verify("111111")).toBe("OTP_LOCKED"); // the third wrong code
+    expect(await verify("482100")).toBe("OTP_LOCKED"); // even the right one, until a new code is asked for
+    await resend();
+    expect(await verify("482100")).toBe("OTP_INVALID"); // the first code is useless now
+    expect(await verify("482101")).toBe("no error");
+    await send(); tick(301);
+    expect(await verify("482100")).toBe("OTP_EXPIRED"); // a code runs out after five minutes
+    await send(); // a new attempt starts from the first code again
+    await resend(); await resend(); await resend();
+    expect(await err(resend())).toBe("OTP_RESEND_LIMIT"); // four codes in all, then none until one is used
+    // the code the persona has always had is untouched without strict
+    const plain = alex();
+    await plain.b.call("bank.otp.send");
+    expect(await plain.b.call("bank.otp.verify", { code: "000000" })).toEqual({ verified: true });
+  });
   it("turns a quick PIN on with a code and off without, and changes it with the current one; three wrong PINs turn it off", async () => {
     const { b } = alex();
+    expect(await err(b.call("bank.devices.setQuickSignIn", { method: "pin", pin: "504719" }))).toBe("STEP_UP_REQUIRED");
+    await up(b);
     expect(await err(b.call("bank.devices.setQuickSignIn", { method: "pin", pin: "504719" }))).toBe("OTP_REQUIRED");
     await code(b);
     expect(await b.call("bank.devices.setQuickSignIn", { method: "pin", pin: "504719" })).toMatchObject({ ok: true, method: "pin", device: "iPhone 15" });
@@ -364,33 +419,96 @@ describe("what a signed-in customer manages", () => {
     expect(await b.call("bank.devices.changePin", { current: "504719", new: "504719" })).toEqual({ ok: false, code: "PIN_SAME" });
     expect(await b.call("bank.devices.changePin", { current: "504719", new: "111111" })).toEqual({ ok: false, code: "PIN_WEAK" });
     expect(await b.call("bank.devices.changePin", { current: "504719", new: "837215" })).toMatchObject({ ok: true });
-    expect(await b.call("bank.devices.verifyPin", { pin: "504719" }).catch((e) => e.code)).toBe("PIN_WRONG");
-    expect(await b.call("bank.devices.verifyPin", { pin: "504719" }).catch((e) => e.code)).toBe("PIN_WRONG");
-    expect(await b.call("bank.devices.verifyPin", { pin: "504719" }).catch((e) => e.code)).toBe("PIN_LOCKED");
+    // wrong PINs answer as data with the tries left; the third turns quick sign-in off
+    expect(await b.call("bank.devices.verifyPin", { pin: "504719" })).toEqual({ ok: false, code: "PIN_WRONG", triesLeft: 2 });
+    expect(await b.call("bank.devices.verifyPin", { pin: "504719" })).toEqual({ ok: false, code: "PIN_WRONG", triesLeft: 1 });
+    expect(await b.call("bank.devices.verifyPin", { pin: "504719" })).toEqual({ ok: false, code: "PIN_LOCKED" });
     expect(await b.call("bank.device.options")).toMatchObject({ default: "password", pinSet: false });
     await code(b);
     await b.call("bank.devices.setQuickSignIn", { method: "pin", pin: "504719" });
     expect(await b.call("bank.devices.setQuickSignIn", { method: "off" })).toMatchObject({ ok: true, method: "off" }); // off needs no code
   });
+  it("a PIN that was checked is the proof for the change that follows, once and for five minutes, so a journey need not keep it", async () => {
+    const { b, tick } = alex();
+    await up(b); await code(b);
+    await b.call("bank.devices.setQuickSignIn", { method: "pin", pin: "837215" });
+    expect(await err(b.call("bank.devices.changePin", { new: "504719" }))).toBe("PIN_NOT_VERIFIED");
+    expect(await b.call("bank.devices.verifyPin", { pin: "837215" })).toEqual({ ok: true });
+    expect(await b.call("bank.devices.changePin", { new: "837215" })).toEqual({ ok: false, code: "PIN_SAME" });
+    expect(await b.call("bank.devices.changePin", { new: "504719" })).toMatchObject({ ok: true });
+    expect(await err(b.call("bank.devices.changePin", { new: "735192" }))).toBe("PIN_NOT_VERIFIED"); // used once
+    await b.call("bank.devices.verifyPin", { pin: "504719" }); tick(301); await up(b);
+    expect(await err(b.call("bank.devices.changePin", { new: "735192" }))).toBe("PIN_NOT_VERIFIED"); // and it runs out
+    // a wrong PIN takes the proof away
+    await b.call("bank.devices.verifyPin", { pin: "504719" }); await b.call("bank.devices.verifyPin", { pin: "000000" });
+    expect(await err(b.call("bank.devices.changePin", { new: "735192" }))).toBe("PIN_NOT_VERIFIED");
+  });
   it("sets the default sign-in and refuses a PIN that is not set", async () => {
     const { b } = alex();
+    await up(b);
     expect(await b.call("bank.device.setDefault", { mode: "pin" })).toEqual({ ok: false, code: "PIN_NOT_SET" });
     expect(await b.call("bank.device.setDefault", { mode: "biometric" })).toEqual({ ok: true, default: "biometric" });
     expect(await err(b.call("bank.device.setDefault", { mode: "face" }))).toBe("INVALID_MODE");
   });
-  it("checks the current password with the shared count, and changes it after a code", async () => {
+  it("checks the current password with the shared count and the attempts left, and changes it after a code", async () => {
     const { b } = alex();
+    await up(b);
     expect(await b.call("bank.password.check", { current: PW })).toEqual({ ok: true });
-    for (let i = 1; i <= 4; i++) expect(await err(b.call("bank.password.check", { current: "wrong-wrong-12" }))).toBe("INVALID_PASSWORD");
-    expect(await err(b.call("bank.password.check", { current: "wrong-wrong-12" }))).toBe("ACCOUNT_LOCKED");
+    for (let i = 1; i <= 4; i++) expect(await b.call("bank.password.check", { current: "wrong-wrong-12" })).toEqual({ ok: false, code: "INVALID_PASSWORD", attemptsLeft: 5 - i });
+    expect(await b.call("bank.password.check", { current: "wrong-wrong-12" })).toEqual({ ok: false, code: "ACCOUNT_LOCKED" });
+    expect(await b.call("bank.password.check", { current: PW })).toEqual({ ok: false, code: "ACCOUNT_LOCKED" });
     const c = alex();
+    await up(c.b);
     expect(await err(c.b.call("bank.password.change", { current: PW, new: "Harbour-Maple-47-Tide" }))).toBe("OTP_REQUIRED");
     await code(c.b);
     expect(await c.b.call("bank.password.change", { current: PW, new: PW })).toEqual({ ok: false, code: "PASSWORD_SAME" });
-    expect(await c.b.call("bank.password.change", { current: PW, new: "Harbour-Maple-47-Tide", confirm: "Harbour-Maple-47-Tide", signOutOthers: true })).toMatchObject({ ok: true, otherDevicesSignedOut: true });
+    expect(await err(c.b.call("bank.password.change", { current: "wrong-wrong-12", new: "Harbour-Maple-47-Tide" }))).toBe("INVALID_PASSWORD");
+    expect(await c.b.call("bank.password.change", { current: PW, new: "Harbour-Maple-47-Tide", confirm: "Harbour-Maple-47-Tide", signOutOthers: true })).toMatchObject({ ok: true, otherDevicesSignedOut: true, changedText: "3 Nov 2026" });
     // the step-up of the shell now asks for the new password
     expect(await err(c.b.call("bank.session.stepUp", { method: "password", secret: PW }))).toBe("STEP_UP_FAILED");
     expect(await err(c.b.call("bank.session.stepUp", { method: "password", secret: "Harbour-Maple-47-Tide" }))).toBe("OTP_REQUIRED");
+  });
+  it("the step-up of the shell takes the password, the quick PIN or the device's check; a wrong password or PIN counts with the sign-in's tries and the last one locks and ends the session", async () => {
+    const { b } = alex();
+    await up(b); await code(b); await b.call("bank.devices.setQuickSignIn", { method: "pin", pin: "504719" });
+    const wrong = (method: string, secret: string) => b.call("bank.session.stepUp", { method, secret }).catch((e) => ({ code: e.code, attempt: e.attempt, message: e.message }));
+    expect(await wrong("pin", "000000")).toMatchObject({ code: "STEP_UP_FAILED", attempt: 1, message: "That PIN isn't right." });
+    expect(await wrong("password", "wrong-wrong-12")).toMatchObject({ code: "STEP_UP_FAILED", attempt: 2 });
+    await b.call("bank.otp.send"); await b.call("bank.otp.verify", { code: "482100" });
+    expect(await b.call("bank.session.stepUp", { method: "pin", secret: "504719" })).toHaveProperty("stepUpUntil");
+    expect((await b.call("sandbox.access.inspect", { username: "alex.morgan" })).failedSignIns).toBe(0); // a right one sets the count back
+    for (let i = 1; i <= 4; i++) expect(await wrong("password", "wrong-wrong-12")).toMatchObject({ code: "STEP_UP_FAILED", attempt: i });
+    expect(await wrong("pin", "000000")).toMatchObject({ code: "LOCKED" });
+    expect((b as any).access.dir.find("alex.morgan").status).toBe("locked");
+    expect(await err(b.call("bank.devices.list"))).toBe("SESSION_EXPIRED");
+    // a PIN that is not set cannot be a step-up
+    const n = alex();
+    expect(await n.b.call("bank.session.stepUp", { method: "pin", secret: "504719" }).catch((e) => e.code)).toBe("STEP_UP_FAILED");
+  });
+  it("a password that was checked is the proof for the change that follows, once and for five minutes; the new password is judged against the rules and what was used", async () => {
+    const { b, tick } = alex();
+    await up(b); await code(b);
+    expect(await err(b.call("bank.password.change", { new: "Harbour-Maple-47-Tide" }))).toBe("PASSWORD_NOT_VERIFIED");
+    await b.call("bank.password.check", { current: PW });
+    expect(await b.call("bank.password.change", { new: PW })).toEqual({ ok: false, code: "PASSWORD_SAME" });
+    expect(await b.call("bank.password.change", { new: "short", confirm: "short" })).toMatchObject({ ok: false, code: "MIN_LENGTH" });
+    expect(await b.call("bank.password.change", { new: "Harbour-Maple-47-Tide", confirm: "something else" })).toMatchObject({ ok: false, code: "MISMATCH" });
+    expect(await b.call("bank.password.change", { new: "Harbour-Maple-47-Tide", confirm: "Harbour-Maple-47-Tide" })).toMatchObject({ ok: true, otherDevicesSignedOut: true });
+    expect(await err(b.call("bank.password.change", { new: "Another-Phrase-77-Meadow" }))).toBe("OTP_REQUIRED"); // the code was used
+    await code(b);
+    expect(await err(b.call("bank.password.change", { new: "Another-Phrase-77-Meadow" }))).toBe("PASSWORD_NOT_VERIFIED"); // and so was the proof
+    expect(await b.call("bank.password.check", { current: "Harbour-Maple-47-Tide" })).toEqual({ ok: true });
+    tick(301); await up(b, "Harbour-Maple-47-Tide"); await code(b);
+    expect(await err(b.call("bank.password.change", { new: "Another-Phrase-77-Meadow" }))).toBe("PASSWORD_NOT_VERIFIED"); // it runs out
+    expect(await signIn(b, "alex.morgan", "Harbour-Maple-47-Tide")).toMatchObject({ ok: true }); // the new password signs in
+    expect(await signIn(b, "alex.morgan", PW)).toMatchObject({ ok: false, code: "INVALID_CREDENTIALS" });
+  });
+  it("the password rules as a list tell a signed-in customer that the one they have is the same, not one used before", async () => {
+    const { b } = alex();
+    const same = await b.call("bank.password.policy", { password: PW });
+    expect(same).toMatchObject({ ok: false, problems: ["PASSWORD_SAME"] });
+    expect(same.rules.find((r: any) => r.id === "used")).toMatchObject({ ok: false, checked: true });
+    expect(await b.call("bank.password.policy", { password: "Harbour-Maple-47-Tide" })).toMatchObject({ ok: true, problems: [] });
   });
   it("the login history: twelve rows over the last 30 days with a wrong password from London and a new-device code; filters and pages", async () => {
     const { b } = alex();
@@ -404,6 +522,16 @@ describe("what a signed-in customer manages", () => {
   });
   it("a customer without a username has none of it", async () => {
     expect(await err(make({ persona: "ayesha" }).b.call("bank.devices.list"))).toBe("NOT_SUPPORTED");
+  });
+  it("no answer carries a password, a PIN, a hash or a code", async () => {
+    const { b } = alex();
+    await up(b);
+    const seen: string[] = [];
+    const rec = async (p: Promise<unknown>) => { seen.push(JSON.stringify(await p.catch((e) => ({ code: e.code, message: e.message })))); };
+    await rec(b.call("bank.otp.send", { strict: true })); await rec(b.call("bank.password.check", { current: PW })); await rec(b.call("bank.otp.verify", { code: "482100", strict: true }));
+    await rec(b.call("bank.password.change", { new: "Harbour-Maple-47-Tide", confirm: "Harbour-Maple-47-Tide" })); await rec(b.call("bank.devices.list"));
+    const all = seen.join("");
+    for (const secret of [PW, "Harbour-Maple-47-Tide", "482100", secretHash(PW, "bwx:alex.morgan")]) expect(all).not.toContain(secret);
   });
 });
 

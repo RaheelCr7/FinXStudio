@@ -108,7 +108,7 @@ export const ADAPTER_CATALOG: AdapterInfo[] = [
     input: {}, returns: "Object keyed by currency code: { id, currency, total, count }. Save as ctx.totals and use it as a list source (a balance per currency).",
   },
   {
-    adapter: "bank.transfers.own", suggestedId: "transferOwn", description: "Moves money between two of the customer's own accounts in the same currency: instant, no fee, and not counted against the daily limit. Needs the one-time code first. For accounts in different currencies use bank.fx.quote and bank.fx.convert.",
+    adapter: "bank.transfers.own", suggestedId: "transferOwn", description: "Moves money between two of the customer's own accounts in the same currency: instant, no fee, not counted against the daily limit. Needs the one-time code first. Other currencies: bank.fx.quote and bank.fx.convert.",
     input: { fromAccountId: "account to debit", toAccountId: "account to credit", amount: "in the accounts' currency", note: "optional text" },
     returns: "{ reference, from: { currency, newBalance }, to: { currency, newBalance } }", moneyMoving: true, requiresOtp: true,
     errors: ["OTP_REQUIRED", "CORE_UNAVAILABLE", "ACCOUNT_NOT_FOUND", "SAME_ACCOUNT", "ACCOUNT_CANNOT_DEBIT", "CURRENCY_MISMATCH", "INVALID_AMOUNT", "INSUFFICIENT_FUNDS"],
@@ -140,22 +140,22 @@ export const ADAPTER_CATALOG: AdapterInfo[] = [
     returns: "The payment: { id, status 'pending_approval', required (1 or 2 approvers), valueDate, afterCutoff, … }. Errors: OTP_REQUIRED, NOT_AUTHORISED, BENEFICIARY_NOT_WHITELISTED, INVALID_AMOUNT, CURRENCY_NOT_SUPPORTED, INSUFFICIENT_FUNDS, LIMIT_USER_EXCEEDED, LIMIT_COMPANY_EXCEEDED.",
   },
   {
-    adapter: "corp.bulk.check", suggestedId: "checkBulk", description: "Checks a bulk payment file (rows of `beneficiary,amount,reference`, an optional header row) without starting anything: which rows would be paid and which not, and why. Each row is checked for the approved list, a valid amount and duplicates.",
+    adapter: "corp.bulk.check", suggestedId: "checkBulk", description: "Checks a bulk file (rows `beneficiary,amount,reference`, optional header) without starting anything: which rows would be paid, and why not (approved list, amount, duplicates).",
     input: { userId: "the initiator", fromAccountId: "the company account to pay from", file: "the text of the file, as the person pasted it" },
     returns: "{ lines (object keyed by row number: n, payee, amount, reference, ok, code, message), problems (only the rows that fail, same shape; use as a list source), validCount, invalidCount, total (of the rows that pass), requiredApprovers (1 or 2), currency }. Errors: NOT_AUTHORISED, ACCOUNT_NOT_FOUND, EMPTY_BATCH, BATCH_TOO_LARGE (over 50 rows).",
   },
   {
-    adapter: "corp.bulk.submit", suggestedId: "submitBulk", description: "Starts ONE bulk payment of the rows that pass the checks (the failing rows are left out) and sends it for approval as one. The total counts against the person's and the company's daily limits. Moves no money until it is approved. Needs the one-time code first.",
+    adapter: "corp.bulk.submit", suggestedId: "submitBulk", description: "Starts ONE bulk payment of the rows that pass the checks (failing rows are left out) and sends it for approval as one. The total counts against the daily limits; moves no money until approved. Needs the one-time code first.",
     input: { userId: "the initiator", fromAccountId: "the account to pay from", file: "the same file text that was checked", reference: "optional label for the whole file" },
-    returns: "The payment (payee shows '3 payments'; lines lists what it pays), 'pending_approval'. Errors: OTP_REQUIRED, NOT_AUTHORISED, NO_VALID_LINES, EMPTY_BATCH, BATCH_TOO_LARGE, INSUFFICIENT_FUNDS, LIMIT_USER_EXCEEDED, LIMIT_COMPANY_EXCEEDED, CURRENCY_NOT_SUPPORTED. Approve, reject and withdraw it with the corp.payments.* adapters like any payment.",
+    returns: "The payment (payee shows '3 payments'; lines lists what it pays), 'pending_approval'. Errors: OTP_REQUIRED, NOT_AUTHORISED, NO_VALID_LINES, EMPTY_BATCH, BATCH_TOO_LARGE, INSUFFICIENT_FUNDS, LIMIT_USER_EXCEEDED, LIMIT_COMPANY_EXCEEDED, CURRENCY_NOT_SUPPORTED.",
   },
   {
-    adapter: "corp.payroll.check", suggestedId: "checkPayroll", description: "Checks a payroll file for one pay period (rows of `employee,amount,reference`, an optional header row) without starting anything. Each row must be an employee on the payroll register, paid once, with a valid amount of at most 1.5 times their monthly salary. The whole run fails when the period is not a month (YYYY-MM, not later than this month) or payroll for it has already been started.",
+    adapter: "corp.payroll.check", suggestedId: "checkPayroll", description: "Checks a payroll file for one pay period (rows `employee,amount,reference`, optional header) without starting anything. Each row: an employee on the register, paid once, at most 1.5 times their monthly salary. The run fails when the period is not a past or current month (YYYY-MM) or was already run.",
     input: { userId: "the initiator", fromAccountId: "the company account to pay from", period: "the pay period, YYYY-MM", file: "the text of the file, as the person pasted it" },
     returns: "{ lines (object keyed by row number: n, payee, amount, reference, ok, code, message), problems (only the rows that fail), validCount, invalidCount, total, requiredApprovers (always 2), period, currency }. Errors: NOT_AUTHORISED, ACCOUNT_NOT_FOUND, INVALID_PERIOD, PAYROLL_ALREADY_RUN, EMPTY_BATCH, BATCH_TOO_LARGE. Row codes: NOT_AN_EMPLOYEE, INVALID_AMOUNT, ABOVE_SALARY_CAP, DUPLICATE_LINE.",
   },
   {
-    adapter: "corp.payroll.submit", suggestedId: "submitPayroll", description: "Starts ONE payroll run of the rows that pass the checks and sends it for approval. A payroll run always needs two different approvers. Counts against the person's and the company's daily limits. Moves no money until approved. Needs the one-time code first. Withdraw, reject and approve it with corp.payments.*; withdrawing or rejecting frees the period for a new run.",
+    adapter: "corp.payroll.submit", suggestedId: "submitPayroll", description: "Starts ONE payroll run of the rows that pass the checks and sends it for approval by two different approvers. Counts against the daily limits; moves no money until approved. Needs the one-time code first. Withdrawing or rejecting it frees the period.",
     input: { userId: "the initiator", fromAccountId: "the account to pay from", period: "the pay period, YYYY-MM", file: "the same file text that was checked" },
     returns: "The payment (payee shows 'Payroll 2026-10 · 3 employees'; period; lines lists the employees), 'pending_approval' with required 2. Errors: OTP_REQUIRED, NOT_AUTHORISED, INVALID_PERIOD, PAYROLL_ALREADY_RUN, NO_VALID_LINES, INSUFFICIENT_FUNDS, LIMIT_USER_EXCEEDED, LIMIT_COMPANY_EXCEEDED, CURRENCY_NOT_SUPPORTED.",
   },
@@ -185,7 +185,7 @@ export const ADAPTER_CATALOG: AdapterInfo[] = [
     input: { channel: "optional, 'sms'" }, returns: "{ sent, maskedPhone, channel }. Save as ctx.otp to show {{ctx.otp.maskedPhone}}.",
   },
   {
-    adapter: "bank.otp.verify", suggestedId: "otpVerify", description: "Checks the code. Must succeed before any money-moving call.",
+    adapter: "bank.otp.verify", suggestedId: "otpVerify", description: "Checks the code. Must succeed before any money-moving call. strict: true (also on send) for a signed-in customer's own change: 000000 wrong, 999999 expired, 3 wrong end it.",
     input: { code: "the digits the customer typed, e.g. \"{{otp.code}}\"" }, returns: "{ verified: true }",
     errors: ["OTP_INVALID"],
   },
@@ -321,7 +321,7 @@ export const ADAPTER_CATALOG: AdapterInfo[] = [
   },
   {
     adapter: "bank.session.stepUp", suggestedId: "stepUp", description: "Confirms it is the customer: password (or biometric), then the one-time code; valid 5 minutes. A right password is remembered while the code is entered, so call again without the secret.",
-    input: { method: "'password' or 'biometric'", secret: "the password" }, returns: "{ stepUpUntil }", requiresOtp: true, errors: ["STEP_UP_FAILED", "OTP_REQUIRED", "SESSION_EXPIRED"],
+    input: { method: "'password', 'pin' or 'biometric'", secret: "the password or PIN" }, returns: "{ stepUpUntil }", requiresOtp: true, errors: ["STEP_UP_FAILED", "OTP_REQUIRED", "SESSION_EXPIRED"],
   },
   {
     adapter: "bank.app.config", suggestedId: "appConfig", description: "How the bank is set up: home market (decides the rails behind Standard, Same day, Instant), journeys it switched off (a call made for one is JOURNEY_DISABLED), options per journey.",
@@ -470,6 +470,35 @@ export const ADAPTER_CATALOG: AdapterInfo[] = [
   {
     adapter: "bank.password.policy", suggestedId: "passwordPolicy", description: "The password rules as a list to tick off.", input: { password: "text", username: "text" },
     returns: "{ ok, problems, rules: [{ id, ok }] }",
+  },
+  {
+    adapter: "bank.password.check", suggestedId: "checkPassword", description: "Checks the current password; 5 wrong lock (shared with sign-in). Needs a step-up.", input: { current: "text" },
+    returns: "{ ok } | { ok: false, code: INVALID_PASSWORD (attemptsLeft) | ACCOUNT_LOCKED }",
+  },
+  {
+    adapter: "bank.password.change", suggestedId: "changeOwnPassword", description: "Changes the password after bank.password.check, a step-up and a strict code.", input: { new: "text", confirm: "text", signOutOthers: "boolean" },
+    returns: "{ ok, changedText, otherDevicesSignedOut } | { ok: false, code: PASSWORD_SAME | rules as sign-in }", requiresOtp: true,
+  },
+  {
+    adapter: "bank.devices.list", suggestedId: "devices", description: "The trusted devices, this one first.", input: { scope: "optional: current | others" },
+    returns: "{ max, count, others, items: [{ id, name, lastUsedText, current }] }",
+  },
+  {
+    adapter: "bank.devices.remove", suggestedId: "removeDevice", description: "Removes a device, or every other one, after a step-up and a strict code; never this one.", input: { deviceId: "text", all: "true" },
+    returns: "{ removed } | error DEVICE_NOT_FOUND | CURRENT_DEVICE", requiresOtp: true,
+  },
+  {
+    adapter: "bank.devices.setQuickSignIn", suggestedId: "setDeviceQuickSignIn", description: "Quick sign-in on (step-up, strict code) or off (neither).", input: { method: "pin | biometric | passkey | off", pin: "6 digits" },
+    returns: "{ ok, method, device } | { ok: false, code: PIN_* | DEVICE_NOT_TRUSTED }",
+  },
+  {
+    adapter: "bank.devices.checkPin", suggestedId: "checkPin", description: "Would this PIN do? Changes nothing.", input: { pin: "6 digits" }, returns: "{ ok } | { ok: false, code: PIN_INVALID | PIN_WEAK | PIN_PHONE }",
+  },
+  {
+    adapter: "bank.devices.verifyPin", suggestedId: "verifyQuickPin", description: "Checks the quick PIN; the 3rd wrong turns quick sign-in off.", input: { pin: "6 digits" }, returns: "{ ok } | { ok: false, code: PIN_WRONG (triesLeft) | PIN_LOCKED }",
+  },
+  {
+    adapter: "bank.devices.changePin", suggestedId: "changePin", description: "A new PIN after bank.devices.verifyPin and a step-up.", input: { new: "6 digits" }, returns: "{ ok, device } | { ok: false, code: PIN_SAME | PIN_WEAK | PIN_PHONE }",
   },
   {
     adapter: "sandbox.access.inspect", suggestedId: "inspectAccess", description: "For scenarios only (expectBank), never a journey: what the bank holds about a username.", input: { username: "text" },

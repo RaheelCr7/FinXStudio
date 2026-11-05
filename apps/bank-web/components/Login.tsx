@@ -35,6 +35,8 @@ function SignInJourney({ onSignedIn }: { onSignedIn: () => void }) {
   // which journey is on screen and the values it was opened with; n makes a journey that is opened again start again
   const [run, setRun] = useState<{ slug: string; launch?: Record<string, any>; n: number }>({ slug: "sign-in", n: 0 });
   const [live, setLive] = useState<Live | null | "loading">("loading");
+  // signed out for their security: the sign-in journey says so (expired); a lock says it here
+  const reason = s.notice === "expired" ? { "launch.reason": "expired" } : undefined;
   useEffect(() => {
     let alive = true;
     setLive("loading");
@@ -50,8 +52,9 @@ function SignInJourney({ onSignedIn }: { onSignedIn: () => void }) {
   return (
     <main className="wb-journey">
       <div className="wb-journey-card">
+        {s.notice === "locked" ? <p className="wb-note" role="alert">Sign-in is locked to protect your account. Unlock it to continue.</p> : null}
         {live ? (
-          <JourneyPlayer key={`${run.slug}:${run.n}`} journey={live.journey} adapter={app.adapter} lang={s.lang} launch={run.launch} onOpenJourney={open} onClose={ended} onExit={ended} look={project.look} brandName={project.name} />
+          <JourneyPlayer key={`${run.slug}:${run.n}`} journey={live.journey} adapter={app.adapter} lang={s.lang} launch={run.launch ?? reason} onOpenJourney={open} onClose={ended} onExit={ended} look={project.look} brandName={project.name} />
         ) : (
           <div className="wb-pad"><h1>Sign in is not available right now</h1><p className="wb-muted">The sign-in journey could not be loaded. You can still use the sandbox customer picker.</p></div>
         )}

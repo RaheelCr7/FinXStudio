@@ -1,9 +1,13 @@
-# Gitleaks configuration: the default rules stay on. The only exception is the sandbox bank's own unit test, which
-# calls the password and recovery adapters with made-up test passwords; none of them is a real secret and the
-# sandbox keeps only hashes. (The older single [allowlist] table is used because the scan action's gitleaks may predate [[allowlists]].)
+# Gitleaks configuration: the default rules stay on. The only exception is the unit tests of the sandbox bank's access and of what is built on it
+# (the Security journeys and screens): they call the password, PIN and recovery adapters with made-up test values; none of them is a real secret and
+# the sandbox keeps only hashes. (The older single [allowlist] table is used because the scan action's gitleaks may predate [[allowlists]].)
 [extend]
 useDefault = true
 
 [allowlist]
-description = "Made-up test passwords in the sandbox bank's access (sign-in and recovery) unit test"
-paths = ['''packages/mock-bank-api/src/access\.test\.ts''']
+description = "Made-up test passwords and PINs in the unit tests of the sandbox bank's access (sign-in, recovery) and of the Security journeys and screens built on it"
+paths = [
+  '''packages/mock-bank-api/src/access\.test\.ts''',
+  '''packages/finx-mcp/src/security-journeys\.test\.ts''',
+  '''packages/bank-client/src/security\.test\.ts''',
+]
