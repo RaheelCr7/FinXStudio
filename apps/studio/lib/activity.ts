@@ -26,7 +26,8 @@ let chain: Promise<unknown> = Promise.resolve();
 
 /** Adds an entry. It never throws: a log that fails must not stop the work it describes. */
 export function record(entry: Omit<Activity, "id" | "at"> & { at?: string }): Promise<void> {
-  if (isProduction()) void appendAudit({ actor: entry.actor.id, action: entry.action, target: entry.target, detail: entry.detail, at: entry.at });
+  // production: the audit log gets the entry too, and the caller waits for both (the audit write is never dropped or reordered behind the answer)
+  const audited = isProduction() ? appendAudit({ actor: entry.actor.id, action: entry.action, target: entry.target, detail: entry.detail, at: entry.at }) : Promise.resolve();
   chain = chain.then(async () => {
     try {
       const all = await read();
@@ -41,7 +42,7 @@ export function record(entry: Omit<Activity, "id" | "at"> & { at?: string }): Pr
       await fs.writeFile(file(), JSON.stringify(all.slice(-CAP), null, 1));
     } catch { /* logging is best effort */ }
   });
-  return chain as Promise<void>;
+  return Promise.all([chain, audited]).then(() => undefined);
 }
 
 export type ActivityFilter = { person?: string; project?: string; kind?: string; before?: string; limit?: number };

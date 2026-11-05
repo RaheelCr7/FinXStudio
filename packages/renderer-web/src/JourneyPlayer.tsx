@@ -65,7 +65,15 @@ export function JourneyPlayer({ journey, adapter, lang, initial, launch, onOpenJ
   useEffect(() => { title.current?.focus({ preventScroll: false }); window.scrollTo?.({ top: 0 }); }, [v.screenId]);
   // a failed check: move focus to the first field with a mistake
   const errorKey = body.map((b) => b.error ?? Object.values(b.errors ?? {}).filter(Boolean).join(",")).join("|").replace(/\|/g, "");
-  useEffect(() => { if (errorKey) bodyRef.current?.querySelector<HTMLElement>('[aria-invalid="true"]')?.focus(); }, [errorKey]);
+  useEffect(() => {
+    if (!errorKey) return;
+    const first = bodyRef.current?.querySelector<HTMLElement>('[aria-invalid="true"]') ?? bodyRef.current?.querySelector<HTMLElement>(".fxc-error, [role=\"alert\"]");
+    if (!first) return;
+    first.focus?.({ preventScroll: true });
+    // a tick box or a long review can have its mistake below the fold: bring the field (with its message) into view
+    const reduce = typeof window !== "undefined" && window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
+    (first.closest<HTMLElement>(".fxc-field") ?? first).scrollIntoView?.({ block: "center", behavior: reduce ? "auto" : "smooth" });
+  }, [errorKey]);
 
   const primary = buttons.find((b) => (b.variant ?? "primary") === "primary");
   const common = { busy: v.busy, lang: layout.lang, strings: v.strings };

@@ -6,7 +6,7 @@ export const initialsOf = (name: string) => { const w = name.trim().split(/\s+/)
 /** A circle with a person's initials, and their name under it. */
 export function Avatar({ name, text }: AvatarProps) {
   return (
-    <div className="fxc-avatar">
+    <div className="fxc-avatar-block">
       <span className="fxc-avatar-disc" aria-hidden>{initialsOf(name)}</span>
       <span className="fxc-avatar-name">{name}</span>
       {text ? <span className="fxc-avatar-text">{text}</span> : null}
