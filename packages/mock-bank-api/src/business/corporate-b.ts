@@ -62,10 +62,11 @@ export class BankBApi {
   /** The number of a payment is the last number in its id (pay_7 and PAY-2041 are 7 and 2041), and the same number on this side. */
   private txnId(id: string) { return `TXN-${id.replace(/\D/g, "").padStart(6, "0")}`; }
   private innerId(txnId: string) {
-    const m = /^TXN-0*([0-9]+)$/.exec(txnId);
+    const m = /^TXN-([0-9]+)$/.exec(txnId);
     if (!m) throw new ApiError("ERR-4042", 404, `Transaction ${txnId} does not exist`, { txnId });
+    const n = m[1]!.replace(/^0+/, "") || "0"; // the leading zeros are stripped apart from the match, so the pattern stays linear
     const seq = this.inner.summary.paymentSeq;
-    return seq ? `${seq.prefix}-${m[1]}` : `pay_${m[1]}`;
+    return seq ? `${seq.prefix}-${n}` : `pay_${n}`;
   }
   /** Puts a transaction that already happened (or waits) into the bank's books, for the sandbox's seed data. It is not a call a client of the API can make. */
   seedPayment(p: CorpPayment) { this.inner.seedPayment(p); }
