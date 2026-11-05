@@ -39,6 +39,9 @@ export const Action: z.ZodType<any> = z.lazy(() =>
 );
 
 const base = { id: z.string().optional(), visibleWhen: z.string().optional() };
+const StatusTone = z.enum(["positive", "warning", "negative", "info", "neutral"]);
+/** Per status value: the words and the tone to show instead of the defaults. */
+const StatusMap = z.record(z.string(), z.object({ label: LocalizedText.optional(), tone: StatusTone.optional() }));
 
 export const Block = z.discriminatedUnion("type", [
   z.object({ ...base, type: z.literal("text"), text: LocalizedText, variant: z.enum(["title", "body", "caption"]).optional() }),
@@ -124,6 +127,53 @@ export const Block = z.discriminatedUnion("type", [
     /** Or one row per entry of a saved list (a path such as loc.found), drawn from the `item` template: {{item.name}} in its texts and actions reads that entry. */
     source: z.string().optional(),
     item: z.object({ label: LocalizedText, text: LocalizedText.optional(), icon: z.string().optional(), actions: z.array(Action) }).optional(),
+  }),
+  /**
+   * A word for where something stands, with a colour and an icon (never the colour alone). `status` is a value or a {{template}} such as
+   * {{payment.status}}; known words (paid, pending_approval, rejected…) get a tone and a readable label, `statuses` replaces either per value.
+   */
+  z.object({ ...base, type: z.literal("statusChip"), status: z.string(), label: LocalizedText.optional(), tone: StatusTone.optional(), statuses: StatusMap.optional() }),
+  /**
+   * What happened and what is still to come, top to bottom. Fixed `items`, or one entry per row of a saved list (`source`, drawn from the
+   * `item` template where {{item.x}} reads that row). `state` is done (default), current, upcoming or failed; it may be a {{template}}.
+   */
+  z.object({
+    ...base, type: z.literal("timeline"), label: LocalizedText.optional(),
+    items: z.array(z.object({ id: z.string(), title: LocalizedText, text: LocalizedText.optional(), time: LocalizedText.optional(), state: z.string().optional(), visibleWhen: z.string().optional() })).optional(),
+    source: z.string().optional(),
+    item: z.object({ title: LocalizedText, text: LocalizedText.optional(), time: LocalizedText.optional(), state: z.string().optional() }).optional(),
+  }),
+  /**
+   * A list of records as a table: sort by a heading, search, filter chips, pages and (with `bind`) ticked rows saved as a list of ids.
+   * On a phone it is a list of cards. `source` is a list or record of rows; a row's id is its `rowKey` (default id).
+   * A column reads one key of the row; `type` decides how it is written and ordered (money needs `currency` or `currencyKey`).
+   */
+  z.object({
+    ...base, type: z.literal("dataTable"), source: z.string(), label: LocalizedText,
+    columns: z.array(z.object({
+      key: z.string(), label: LocalizedText, type: z.enum(["text", "number", "money", "date", "status"]).optional(),
+      currency: z.string().optional(), currencyKey: z.string().optional(), sortable: z.boolean().optional(), filter: z.boolean().optional(), align: z.enum(["start", "end"]).optional(),
+      statuses: StatusMap.optional(),
+    })).min(1),
+    rowKey: z.string().optional(), search: z.boolean().optional(), pageSize: z.number().int().min(1).max(200).optional(),
+    sort: z.object({ key: z.string(), dir: z.enum(["asc", "desc"]).optional() }).optional(),
+    /** Ticking rows: the ids of the ticked rows are saved here. `maxSelected` stops further ticks. */
+    bind: z.string().optional(), maxSelected: z.number().int().min(1).optional(),
+    /** With ticking: "3 selected · total $1,200.00", the sum of one money column in one currency (a code or a {{path}}). */
+    total: z.object({ key: z.string(), currency: z.string() }).optional(),
+    /** Run when a row is opened (click or tap); {{item.x}} reads that row. */
+    onRowPress: z.array(Action).optional(),
+    empty: LocalizedText.optional(),
+  }),
+  /**
+   * A drawing of a saved list: a smooth line (one `series` shown at a time, or all as a table) or a ring (the first series as shares).
+   * `x` is the key of each row's label, `xFormat: "date"` writes it as 9 Nov. `currency` makes the numbers money. `table` adds a "Show as table" switch.
+   */
+  z.object({
+    ...base, type: z.literal("chart"), kind: z.enum(["line", "donut"]), source: z.string(), label: LocalizedText,
+    x: z.string().optional(), xLabel: LocalizedText.optional(), xFormat: z.enum(["text", "date"]).optional(),
+    series: z.array(z.object({ key: z.string(), label: LocalizedText })).min(1),
+    currency: z.string().optional(), table: z.boolean().optional(), height: z.number().int().min(80).max(400).optional(),
   }),
   z.object({ ...base, type: z.literal("button"), label: LocalizedText, variant: z.enum(["primary", "secondary", "ghost"]).optional(), actions: z.array(Action) }),
 ]);

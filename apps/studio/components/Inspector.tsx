@@ -115,6 +115,56 @@ function BlockEditor({ b, journey, onChange }: { b: any; journey: Journey; onCha
             <button className="btn sm danger" onClick={() => onChange({ rows: b.rows.filter((_: any, k: number) => k !== i) })}>Remove row</button>
           </div>))}
         <button className="btn sm" onClick={() => onChange({ rows: [...b.rows, { label: "Label", value: "Value" }] })}>+ Add row</button></div>) : null}
+      {b.type === "statusChip" ? (<>
+        <Field label="Status (a value or {{template}})" hint="Known words such as paid, pending_approval or rejected get a colour and an icon."><input className="input mono" value={b.status} onChange={(e) => onChange({ status: e.target.value })} /></Field>
+        <Loc label="Words (optional)" journey={journey} value={b.label ?? ""} onChange={(label) => onChange({ label: label || undefined })} />
+        <Field label="Tone"><select className="select" value={b.tone ?? ""} onChange={(e) => onChange({ tone: e.target.value || undefined })}><option value="">From the status</option>{["positive", "warning", "negative", "info", "neutral"].map((t) => <option key={t}>{t}</option>)}</select></Field></>) : null}
+      {b.type === "timeline" ? (<>
+        <Loc label="Name (for screen readers)" journey={journey} value={b.label ?? ""} onChange={(label) => onChange({ label: label || undefined })} />
+        <Field label="List to draw (optional)" hint="A path such as ctx.events. Leave empty to use the fixed steps below."><input className="input mono" value={b.source ?? ""} onChange={(e) => onChange({ source: e.target.value || undefined, item: e.target.value ? (b.item ?? { title: "{{item.title}}", time: "{{item.at}}" }) : undefined })} /></Field>
+        {(b.items ?? []).map((it: any, i: number) => (
+          <div key={i} className="card" style={{ padding: 10, gap: 8, borderRadius: 10 }}>
+            <Loc label="Step" journey={journey} value={it.title} onChange={(title) => onChange({ items: b.items.map((x: any, k: number) => (k === i ? { ...x, title } : x)) })} />
+            <Loc label="Note" journey={journey} value={it.text ?? ""} onChange={(text) => onChange({ items: b.items.map((x: any, k: number) => (k === i ? { ...x, text: text || undefined } : x)) })} />
+            <Field label="Time (can use {{data}})"><input className="input mono" value={typeof it.time === "string" ? it.time : textOf(it.time)} onChange={(e) => onChange({ items: b.items.map((x: any, k: number) => (k === i ? { ...x, time: e.target.value || undefined } : x)) })} /></Field>
+            <Field label="State"><input className="input mono" list="tl-states" value={it.state ?? ""} onChange={(e) => onChange({ items: b.items.map((x: any, k: number) => (k === i ? { ...x, state: e.target.value || undefined } : x)) })} placeholder="done" /><datalist id="tl-states">{["done", "current", "upcoming", "failed"].map((t) => <option key={t} value={t} />)}</datalist></Field>
+            <button className="btn sm danger" onClick={() => onChange({ items: b.items.filter((_: any, k: number) => k !== i) })}>Remove step</button>
+          </div>))}
+        <button className="btn sm" onClick={() => onChange({ items: [...(b.items ?? []), { id: `step${(b.items ?? []).length + 1}`, title: "Step" }] })}>+ Add step</button></>) : null}
+      {b.type === "dataTable" ? (<>
+        <Loc label="Name" journey={journey} value={b.label} onChange={(label) => onChange({ label })} />
+        <Field label="List to show"><input className="input mono" value={b.source} onChange={(e) => onChange({ source: e.target.value })} placeholder="ctx.payments" /></Field>
+        {(b.columns ?? []).map((c: any, i: number) => (
+          <div key={i} className="card" style={{ padding: 10, gap: 8, borderRadius: 10 }}>
+            <Loc label="Heading" journey={journey} value={c.label} onChange={(label) => onChange({ columns: b.columns.map((x: any, k: number) => (k === i ? { ...x, label } : x)) })} />
+            <div className="row"><Field label="Key"><input className="input mono" value={c.key} onChange={(e) => onChange({ columns: b.columns.map((x: any, k: number) => (k === i ? { ...x, key: e.target.value } : x)) })} /></Field>
+              <Field label="Kind"><select className="select" value={c.type ?? "text"} onChange={(e) => onChange({ columns: b.columns.map((x: any, k: number) => (k === i ? { ...x, type: e.target.value === "text" ? undefined : e.target.value } : x)) })}>{["text", "number", "money", "date", "status"].map((t) => <option key={t}>{t}</option>)}</select></Field></div>
+            {c.type === "money" ? <Field label="Currency (code)"><input className="input" value={c.currency ?? ""} onChange={(e) => onChange({ columns: b.columns.map((x: any, k: number) => (k === i ? { ...x, currency: e.target.value.toUpperCase().slice(0, 3) || undefined } : x)) })} /></Field> : null}
+            <label className="row" style={{ gap: 8, fontSize: 13 }}><input type="checkbox" checked={c.filter === true} onChange={(e) => onChange({ columns: b.columns.map((x: any, k: number) => (k === i ? { ...x, filter: e.target.checked || undefined } : x)) })} />Offer its values as filter chips</label>
+            <button className="btn sm danger" disabled={b.columns.length <= 1} onClick={() => onChange({ columns: b.columns.filter((_: any, k: number) => k !== i) })}>Remove column</button>
+          </div>))}
+        <button className="btn sm" onClick={() => onChange({ columns: [...b.columns, { key: "field", label: "Column" }] })}>+ Add column</button>
+        <label className="row" style={{ gap: 8, fontSize: 13 }}><input type="checkbox" checked={b.search === true} onChange={(e) => onChange({ search: e.target.checked || undefined })} />Search box</label>
+        <Field label="Rows per page"><input className="input" type="number" min={1} max={200} value={b.pageSize ?? ""} placeholder="25" onChange={(e) => onChange({ pageSize: e.target.value ? Math.min(200, Math.max(1, Number(e.target.value))) : undefined })} /></Field>
+        <Field label="Save ticked rows in (optional)" hint="A data path such as approve.paymentIds. Adds tick boxes."><input className="input mono" list="dt-binds" value={b.bind ?? ""} onChange={(e) => onChange({ bind: e.target.value || undefined })} /><datalist id="dt-binds">{Object.keys(journey.dataModel ?? {}).map((k) => <option key={k} value={k} />)}</datalist></Field>
+        {b.bind ? <Field label="Most rows that can be ticked"><input className="input" type="number" min={1} value={b.maxSelected ?? ""} onChange={(e) => onChange({ maxSelected: e.target.value ? Math.max(1, Number(e.target.value)) : undefined })} /></Field> : null}
+        <Loc label="When there are no rows" journey={journey} value={b.empty ?? ""} onChange={(empty) => onChange({ empty: empty || undefined })} />
+        <div className="faint">Row actions and a total of the ticked amounts are set in the journey file or with Claude Code.</div></>) : null}
+      {b.type === "chart" ? (<>
+        <Loc label="Name" journey={journey} value={b.label} onChange={(label) => onChange({ label })} />
+        <Field label="Drawing"><select className="select" value={b.kind} onChange={(e) => onChange({ kind: e.target.value })}><option value="line">Line</option><option value="donut">Ring</option></select></Field>
+        <Field label="List to draw"><input className="input mono" value={b.source} onChange={(e) => onChange({ source: e.target.value })} placeholder="ctx.cashflow" /></Field>
+        <div className="row"><Field label="Label key"><input className="input mono" value={b.x ?? ""} onChange={(e) => onChange({ x: e.target.value || undefined })} /></Field>
+          <Field label="Labels are"><select className="select" value={b.xFormat ?? "text"} onChange={(e) => onChange({ xFormat: e.target.value === "text" ? undefined : e.target.value })}><option value="text">Text</option><option value="date">Dates</option></select></Field></div>
+        {b.series.map((x: any, i: number) => (
+          <div key={i} className="card" style={{ padding: 10, gap: 8, borderRadius: 10 }}>
+            <Loc label="Series" journey={journey} value={x.label} onChange={(label) => onChange({ series: b.series.map((y: any, k: number) => (k === i ? { ...y, label } : y)) })} />
+            <Field label="Key"><input className="input mono" value={x.key} onChange={(e) => onChange({ series: b.series.map((y: any, k: number) => (k === i ? { ...y, key: e.target.value } : y)) })} /></Field>
+            <button className="btn sm danger" disabled={b.series.length <= 1} onClick={() => onChange({ series: b.series.filter((_: any, k: number) => k !== i) })}>Remove series</button>
+          </div>))}
+        <button className="btn sm" onClick={() => onChange({ series: [...b.series, { key: "value", label: "Series" }] })}>+ Add series</button>
+        <Field label="Currency (code or {{path}})"><input className="input mono" value={b.currency ?? ""} onChange={(e) => onChange({ currency: e.target.value || undefined })} /></Field>
+        <label className="row" style={{ gap: 8, fontSize: 13 }}><input type="checkbox" checked={b.table === true} onChange={(e) => onChange({ table: e.target.checked || undefined })} />Offer “Show as table”</label></>) : null}
       <RuleField journey={journey} label="Show this block when" none="Always shown" value={b.visibleWhen} onChange={(visibleWhen) => onChange({ visibleWhen })} />
     </div>
   );

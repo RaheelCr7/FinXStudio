@@ -216,3 +216,49 @@ export type AvatarProps = {
   /** A line under the name, such as a username. */
   text?: string;
 };
+
+export type StatusTone = "positive" | "warning" | "negative" | "info" | "neutral";
+
+export type StatusChipProps = {
+  /** The status in words. A colour alone never says it: the icon and the words do. */
+  label: string;
+  tone?: StatusTone;
+  /** An icon from the shared drawings; by default the one that goes with the tone. */
+  icon?: string;
+};
+
+export type TimelineProps = {
+  /** Names the list for a screen reader ("Payment history"). */
+  label?: string;
+  /** Top to bottom. `done` is the default; `upcoming` is drawn dashed, `failed` in the negative colour. */
+  items: { id: string; title: string; text?: string; /** When it happened or is due, already written for a person. */ time?: string; state?: "done" | "current" | "upcoming" | "failed" }[];
+  /** What a screen reader says for each state, in the screen's language (the drawing alone cannot be read). */
+  strings?: { done: string; current: string; upcoming: string; failed: string };
+};
+
+export type DataTableCell = { text: string; chip?: { label: string; tone: StatusTone; icon: string } };
+export type DataTableProps = {
+  /** Names the table for a screen reader. */
+  label: string;
+  /** table on a wide screen; cards on a phone, one card per row. */
+  layout?: "table" | "cards";
+  columns: { key: string; label: string; align?: "start" | "end"; sortable?: boolean; /** The order this column is in now. */ sort?: "asc" | "desc" }[];
+  rows: { id: string; cells: Record<string, DataTableCell>; selected?: boolean; /** Present when the row can be opened. */ onPress?: () => void }[];
+  /** A heading was pressed (no `dir`: go to its next order), or an order was chosen from the list on cards. */
+  onSort?: (key: string, dir?: "asc" | "desc" | "none") => void;
+  /** Tick boxes. `all` says whether every row on this page is ticked. */
+  selectable?: boolean;
+  all?: "all" | "some" | "none";
+  onToggleRow?: (id: string) => void;
+  onToggleAll?: () => void;
+  /** The line above the table while rows are ticked, such as "3 selected · total $1,200.00". */
+  selection?: string;
+  search?: { value: string; onChange: (v: string) => void };
+  filters?: { key: string; label: string; value: string; options: { value: string; label: string }[]; onChange: (v: string) => void }[];
+  page?: { summary: string; index: number; pages: number; onPrev: () => void; onNext: () => void };
+  /** Shown instead of the rows when there are none. `clear` appears with it when a search or filter hides every row. */
+  empty?: string;
+  onClear?: () => void;
+  /** The words around the table, in the screen's language. */
+  strings: { search: string; all: string; clear: string; prev: string; next: string; selectRow: string; selectAll: string; sortBy: string; asc: string; desc: string; open: string };
+};

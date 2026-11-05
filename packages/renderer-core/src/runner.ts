@@ -5,6 +5,7 @@ import { interpolate, localize, wholeExpression } from "./template";
 import { ui } from "./strings";
 import { cardExpiryValid, luhnValid } from "./card";
 import { balanceRows } from "./blocks/pickers";
+import { statusChip, timelineState, tableColumns, tableRow, liveSelection, chartView, selectionTotal } from "./blocks/index";
 
 /** The actions of a list row with every {{item.…}} filled in from that row, so pressing it acts on the right entry. */
 function bindItem(node: any, scope: any): any {
@@ -112,7 +113,7 @@ export class JourneyRunner {
       if (b.type === "cardForm") { this.validateCard(b.bind); continue; }
       const v = this.get(b.bind);
       const def = this.journey.dataModel?.[b.bind];
-      const empty = v == null || v === "" || v === false && b.type !== "consent";
+      const empty = v == null || v === "" || (Array.isArray(v) && v.length === 0) || v === false && b.type !== "consent";
       if (b.type === "consent") {
         if (b.validation?.mustBeTrue && v !== true) this.errors[b.bind] = this.tx(b.validation.messages?.mustBeTrue ?? ui(this.lang, "required"));
         continue;
@@ -130,7 +131,8 @@ export class JourneyRunner {
       }
       if (b.type === "dateInput" && v != null && v !== "") {
         const t = String(v), today = new Date(), now = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, "0")}-${String(today.getDate()).padStart(2, "0")}`;
-        const lim = (x?: string) => (x === "today" ? now : x);
+        // a limit is a date, "today", or a {{path}} to another answer (the end of a range cannot be before its start)
+        const lim = (x?: string) => (x === "today" ? now : x && x.includes("{{") ? (this.tx(x) || undefined) : x);
         const real = /^(\d{4})-(\d{2})-(\d{2})$/.exec(t) && !Number.isNaN(Date.parse(t)) && new Date(t).toISOString().slice(0, 10) === t;
         if (!real) this.errors[b.bind] = ui(this.lang, "dateInvalid");
         else if (lim(b.min) && t < lim(b.min)!) this.errors[b.bind] = b.messages?.min ? this.tx(b.messages.min) : ui(this.lang, "dateTooEarly");
@@ -310,6 +312,39 @@ export class JourneyRunner {
         return { id: String(x?.id ?? n), label: String(x?.name ?? x?.id ?? n), lat: Number(x.lat), lng: Number(x.lng), actions: [...(b.bind ? [{ type: "setData", path: b.bind, value: String(x?.id ?? n) }] : []), ...bindItem(b.onSelect ?? [], scope)] };
       });
       out.selected = b.bind ? this.get(b.bind) : undefined;
+    }
+    if (b.type === "dateInput") for (const k of ["min", "max"]) if (typeof b[k] === "string" && b[k].includes("{{")) out[k] = this.tx(b[k]) || undefined;
+    if (b.type === "statusChip") {
+      const value = this.tx(b.status);
+      const o = b.statuses?.[value];
+      out.chip = statusChip(value, { label: o?.label != null ? this.tx(o.label) : b.label != null ? this.tx(b.label) : undefined, tone: b.tone ?? o?.tone });
+    }
+    if (b.type === "timeline") {
+      const entries = (b.items ?? []).filter((i: any) => !i.visibleWhen || this.safeEval(i.visibleWhen)).map((i: any) => ({
+        id: i.id, title: this.tx(i.title), ...(i.text ? { text: this.tx(i.text) } : {}), ...(i.time ? { time: this.tx(i.time) } : {}), state: timelineState(i.state == null ? undefined : this.tx(i.state)),
+      }));
+      if (b.source && b.item) {
+        const rows = Object.values(this.get(b.source) ?? {}).map((x: any, n) => {
+          const say = (t: any) => interpolate(localize(t, this.lang, this.journey.locale.default), { ...this.scope(), item: x });
+          return { id: String(x?.id ?? n), title: say(b.item.title), ...(b.item.text ? { text: say(b.item.text) } : {}), ...(b.item.time ? { time: say(b.item.time) } : {}), state: timelineState(b.item.state == null ? undefined : say(b.item.state)) };
+        });
+        entries.push(...rows);
+      }
+      out.entries = entries;
+    }
+    if (b.type === "dataTable") {
+      const say = (t: any) => this.tx(t);
+      const list = Object.values(this.get(b.source) ?? {});
+      out.columns = tableColumns(b.columns, say);
+      out.rows = list.map((x: any, n) => tableRow(x, String(x?.[b.rowKey ?? "id"] ?? n), b.columns, say, b.onRowPress ? bindItem(b.onRowPress, { ...this.scope(), item: x }) : undefined));
+      out.selected = b.bind ? liveSelection(this.get(b.bind), out.rows) : [];
+      out.selectable = !!b.bind;
+      if (b.total) out.selectionTotal = selectionTotal(out.rows, out.selected, b.total.key, this.tx(b.total.currency));
+      if (b.empty) out.empty = say(b.empty);
+    }
+    if (b.type === "chart") {
+      const say = (t: any) => this.tx(t);
+      out.chart = chartView(Object.values(this.get(b.source) ?? {}), { ...b, xLabel: b.xLabel ? say(b.xLabel) : undefined }, say, b.currency ? this.tx(b.currency) : "");
     }
     if (b.type === "sectionHeader" && b.action) out.action = { ...b.action, label: this.tx(b.action.label) };
     return out;

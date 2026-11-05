@@ -2,10 +2,13 @@
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import {
   accountRows, amountText, typedAmount, applyKey, beneficiaryRows, caretAfterFormat, cardFields, cardNetwork, cleanOtp, keyboardKind, otpCells, otpLabel, parseAmountText,
-  quickAmounts, selectChoices, symbolOf, ui, type BlockProps, type BlockType, type PickerRow,
+  quickAmounts, selectChoices, symbolOf, ui, CARDS_BELOW, dataTableProps, initialTableFor, tableStrings, type BlockProps, type BlockType, type ChartView, type PickerRow, type TableState,
 } from "@finx/renderer-core";
-import { Alert as KitAlert, AmountField, Button as KitButton, Accordion as KitAccordion, Dialog as KitDialog, DateField as KitDateField, Dropdown as KitDropdown, Avatar as KitAvatar, MapPins as KitMapPins, BalanceList as KitBalanceList, Checkbox, ChoiceGroup, CodeInput, Divider as KitDivider, Hero as KitHero, Keypad, ListRow, PinDots, Result as KitResult, SectionHeader as KitSectionHeader, Shortcuts as KitShortcuts, SummaryList, Switch, TextField as KitTextField, type ChoiceOption } from "@finx/components";
+import { Alert as KitAlert, AmountField, Button as KitButton, Accordion as KitAccordion, Dialog as KitDialog, DateField as KitDateField, Dropdown as KitDropdown, Avatar as KitAvatar, MapPins as KitMapPins, BalanceList as KitBalanceList, Checkbox, ChoiceGroup, CodeInput, Divider as KitDivider, Hero as KitHero, Keypad, ListRow, PinDots, Result as KitResult, SectionHeader as KitSectionHeader, Shortcuts as KitShortcuts, SummaryList, Switch, TextField as KitTextField, StatusChip as KitStatusChip, Timeline as KitTimeline, DataTable as KitDataTable, type ChoiceOption } from "@finx/components";
 import { CardVisual } from "../widgets/CardVisual";
+import { Donut } from "../widgets/Donut";
+import { LineChart } from "../widgets/LineChart";
+import { Segmented } from "../widgets/Segmented";
 import { FieldError, FieldLabel, useFieldIds } from "./field";
 import { useLook } from "../look";
 
@@ -195,8 +198,63 @@ export function Menu({ b, press }: P) {
   );
 }
 
+/** True while the element is narrower than `px` (a phone, or a phone-sized frame in a wide page): measured, not guessed from the window. */
+function useNarrow(ref: React.RefObject<HTMLElement | null>, px: number): boolean {
+  const [narrow, setNarrow] = useState(false);
+  useEffect(() => {
+    const el = ref.current;
+    if (!el || typeof ResizeObserver === "undefined") return;
+    const ro = new ResizeObserver(() => setNarrow(el.clientWidth > 0 && el.clientWidth < px));
+    ro.observe(el); setNarrow(el.clientWidth > 0 && el.clientWidth < px);
+    return () => ro.disconnect();
+  }, [ref, px]);
+  return narrow;
+}
+
+export const StatusChipBlock = ({ b }: P) => <KitStatusChip {...b.chip} />;
+
+export function TimelineBlock({ b, lang }: P) {
+  return <KitTimeline label={b.label || undefined} items={b.entries} strings={{ done: ui(lang, "timelineDone"), current: ui(lang, "timelineCurrent"), upcoming: ui(lang, "timelineUpcoming"), failed: ui(lang, "timelineFailed") }} />;
+}
+
+/** A table that turns into cards when its column is narrow. Sort, search, filters and page live here; ticked rows are saved in the journey. */
+export function DataTableBlock({ b, set, press, lang }: P) {
+  const box = useRef<HTMLDivElement>(null);
+  const narrow = useNarrow(box, CARDS_BELOW);
+  const [state, setState] = useState<TableState>(() => initialTableFor(b));
+  return <div ref={box}><KitDataTable {...dataTableProps(b, lang, state, setState, set, press, narrow ? "cards" : "table")} /></div>;
+}
+
+const TONE_VAR = ["var(--c-chart1)", "var(--c-chart2)", "var(--c-chart3)", "var(--c-chart4)", "var(--c-chart5)", "var(--c-chart6)"];
+
+/** A line or a ring over a saved list, with the same numbers available as a table. */
+export function ChartBlock({ b, lang }: P) {
+  const v: ChartView = b.chart;
+  const [series, setSeries] = useState(0);
+  const [ring, setRing] = useState<number | null>(null);
+  const [asTable, setAsTable] = useState(false);
+  const s = v.series[Math.min(series, v.series.length - 1)];
+  const text = (p: { text?: string }) => p.text ?? "";
+  const total = v.slices.reduce((n, x) => n + x.value, 0);
+  return (
+    <figure className="fx-chart-block">
+      <figcaption className="fx-chart-caption">{b.label}</figcaption>
+      {v.series.length > 1 && b.kind === "line" && !asTable ? <Segmented label={ui(lang, "chartSeries")} options={v.series.map((x, i) => ({ id: String(i), label: x.label }))} value={String(series)} onChange={(i) => setSeries(Number(i))} /> : null}
+      {asTable ? (
+        <KitDataTable label={b.label} columns={v.table.columns.map((c) => ({ key: c.key, label: c.label, align: c.align }))} rows={v.table.rows} strings={tableStrings(lang)} />
+      ) : b.kind === "donut" ? (
+        <>
+          <Donut segments={v.slices.map((x) => ({ label: x.label, value: x.value, color: TONE_VAR[x.tone - 1]! }))} centerTop={ring != null ? v.slices[ring]!.text : v.totalText} centerSub={ring != null ? v.slices[ring]!.label : undefined} selected={ring} onSelect={setRing} label={b.label} size={b.height} />
+          <ul className="fx-legend">{v.slices.map((x, i) => <li key={i}><button type="button" aria-pressed={ring === i} className="fx-legend-item" onClick={() => setRing(ring === i ? null : i)}><span className="fx-legend-dot" style={{ background: TONE_VAR[x.tone - 1] }} aria-hidden />{x.label}<b>{x.text}</b>{total ? <small> {Math.round((x.value / total) * 100)}%</small> : null}</button></li>)}</ul>
+        </>
+      ) : s ? <LineChart data={s.points} format={(p) => text(p as any)} label={`${b.label}, ${s.label}`} height={b.height} /> : null}
+      {b.table ? <button type="button" className="fx-chart-toggle" aria-pressed={asTable} onClick={() => setAsTable(!asTable)}>{ui(lang, asTable ? "chartAsChart" : "chartAsTable")}</button> : null}
+    </figure>
+  );
+}
+
 /** One component for every kind of block a journey can contain. Typed against the schema, so a new block kind must be added here. */
 export const registry: Record<BlockType, (p: P) => React.ReactElement | null> = {
   accountPicker: AccountPicker, beneficiaryPicker: BeneficiaryPicker, amountInput: AmountInput, select: SelectChips, textInput: TextField,
-  alert: Alert, toggle: Toggle, cardForm: CardForm, reviewSummary: ReviewSummary, consent: Consent, otp: Otp, result: Result, text: TextBlock, button: Button, stepper: () => null, hero: Hero, sectionHeader: SectionHeader, shortcuts: Shortcuts, menu: Menu, divider: Divider, accordion: AccordionBlock, dialog: DialogBlock, dateInput: DateInputBlock, avatar: AvatarBlock, map: MapBlock, balanceList: BalanceListBlock,
+  alert: Alert, toggle: Toggle, cardForm: CardForm, reviewSummary: ReviewSummary, consent: Consent, otp: Otp, result: Result, text: TextBlock, button: Button, stepper: () => null, hero: Hero, sectionHeader: SectionHeader, shortcuts: Shortcuts, menu: Menu, divider: Divider, accordion: AccordionBlock, dialog: DialogBlock, dateInput: DateInputBlock, avatar: AvatarBlock, map: MapBlock, balanceList: BalanceListBlock, statusChip: StatusChipBlock, timeline: TimelineBlock, dataTable: DataTableBlock, chart: ChartBlock,
 };

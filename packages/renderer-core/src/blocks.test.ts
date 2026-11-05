@@ -6,7 +6,7 @@ import {
 
 describe("block contract", () => {
   it("lists every block type of the schema", () => {
-    expect([...BLOCK_TYPES].sort()).toEqual(["accordion", "accountPicker", "alert", "amountInput", "avatar", "balanceList", "beneficiaryPicker", "button", "cardForm", "consent", "dateInput", "dialog", "divider", "hero", "map", "menu", "otp", "result", "reviewSummary", "sectionHeader", "select", "shortcuts", "stepper", "text", "textInput", "toggle"]);
+    expect([...BLOCK_TYPES].sort()).toEqual(["accordion", "accountPicker", "alert", "amountInput", "avatar", "balanceList", "beneficiaryPicker", "button", "cardForm", "chart", "consent", "dataTable", "dateInput", "dialog", "divider", "hero", "map", "menu", "otp", "result", "reviewSummary", "sectionHeader", "select", "shortcuts", "statusChip", "stepper", "text", "textInput", "timeline", "toggle"]);
   });
 });
 

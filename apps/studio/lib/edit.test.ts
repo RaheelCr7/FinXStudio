@@ -1,6 +1,7 @@
 import { describe, it, expect } from "vitest";
-import { Journey, lintJourney, localTransfer } from "@finx/journey-schema";
-import { addBlock, addScreen, deleteScreen, moveBlock, newBlock, removeBlock, setLoc } from "./edit";
+import { Block, Journey, lintJourney, localTransfer } from "@finx/journey-schema";
+import { BLOCK_GROUPS, BLOCK_LABELS, addBlock, addScreen, blockSummary, deleteScreen, moveBlock, newBlock, removeBlock, setLoc } from "./edit";
+import { BLOCK_HELP, BLOCK_ICONS } from "./blocks-ui";
 import { buildEdges, layout } from "./graph";
 
 const fresh = () => structuredClone(localTransfer);
@@ -96,5 +97,44 @@ describe("BankWorkx blocks in the Builder", () => {
   it("starts money fields in the journey's own currency", () => {
     expect((newBlock("amountInput", j(["bankworkx"])) as any).currency).toBe("USD");
     expect((newBlock("amountInput", j()) as any).currency).toBe("PKR");
+  });
+});
+
+describe("every block can be added in the Builder", () => {
+  const types = (Block as any).options.map((o: any) => o.shape.type.value as string);
+  const addable = types.filter((t: string) => t !== "stepper");
+  it("has a name, an icon, a line of help and a group for each block of the schema", () => {
+    const grouped = new Set(BLOCK_GROUPS.flatMap((g) => g.types));
+    for (const t of addable) {
+      expect(BLOCK_LABELS[t], `${t} label`).toBeTruthy();
+      expect(BLOCK_ICONS[t], `${t} icon`).toBeTruthy();
+      expect(BLOCK_HELP[t], `${t} help`).toBeTruthy();
+      expect(grouped.has(t), `${t} group`).toBe(true);
+    }
+  });
+  it("starts each one as a block the schema accepts", () => {
+    for (const t of addable) expect(() => Block.parse(newBlock(t, blank())), t).not.toThrow();
+  });
+  it("declares the ticked rows of a table as a list, so lint stays clean", () => {
+    const j = blank();
+    const out = addBlock(j, "a", "dataTable").journey;
+    const table: any = out.screens[0]!.blocks.find((b) => b.type === "dataTable");
+    out.screens[0]!.blocks.splice(out.screens[0]!.blocks.indexOf(table), 1, { ...table, bind: "pick" });
+    const again = addBlock(out, "a", "statusChip").journey;
+    expect(again.dataModel!.pick).toEqual({ type: "array" });
+    expect(lintJourney(again).filter((i) => i.code === "unbound_input")).toEqual([]);
+  });
+  it("summarises the new blocks in the block list", () => {
+    expect(blockSummary(newBlock("dataTable", blank()))).toBe("ctx.items · 2 columns");
+    expect(blockSummary(newBlock("chart", blank()))).toBe("line · ctx.series");
+    expect(blockSummary(newBlock("timeline", blank()))).toBe("2 steps");
+    expect(blockSummary(newBlock("statusChip", blank()))).toBe("{{payment.status}}");
+  });
+  it("keeps a table's row action working when its target screen is deleted", () => {
+    const j = blank();
+    j.screens.splice(1, 0, { id: "detail", title: "Detail", blocks: [{ type: "button", label: "Next", actions: [{ type: "navigate", to: "end" }] }] });
+    j.screens[0]!.blocks.unshift({ type: "dataTable", source: "ctx.items", label: "Items", columns: [{ key: "name", label: "Name" }], onRowPress: [{ type: "navigate", to: "detail" }] });
+    const out = deleteScreen(j, "detail")!;
+    expect((out.screens[0]!.blocks[0] as any).onRowPress[0].to).toBe("end");
   });
 });

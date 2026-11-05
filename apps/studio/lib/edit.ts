@@ -4,12 +4,13 @@ export const BLOCK_LABELS: Record<string, string> = {
   text: "Text", alert: "Alert", button: "Button", result: "Result", reviewSummary: "Review summary", consent: "Consent",
   otp: "OTP", stepper: "Progress steps", amountInput: "Amount", select: "Select", textInput: "Text input", accountPicker: "Account picker", beneficiaryPicker: "Beneficiary picker",
   toggle: "Switch", cardForm: "Card form",
-  hero: "Bank banner", sectionHeader: "Section heading", shortcuts: "Shortcuts", menu: "Menu", divider: "Divider", accordion: "Accordion", balanceList: "Balance list", dialog: "Pop-up", map: "Map", dateInput: "Date", avatar: "Avatar",
+  hero: "Bank banner", sectionHeader: "Section heading", shortcuts: "Shortcuts", menu: "Menu", divider: "Divider", accordion: "Accordion", balanceList: "Balance list", dialog: "Pop-up", map: "Map", dateInput: "Date", avatar: "Avatar", statusChip: "Status chip", timeline: "Timeline", dataTable: "Data table", chart: "Chart",
 };
 export const BLOCK_GROUPS: Array<{ name: string; types: string[] }> = [
-  { name: "Content", types: ["text", "alert", "result", "hero", "sectionHeader", "divider", "accordion", "dialog", "map", "avatar"] },
+  { name: "Content", types: ["text", "alert", "result", "hero", "sectionHeader", "divider", "accordion", "dialog", "map", "avatar", "timeline", "statusChip"] },
   { name: "Inputs", types: ["textInput", "amountInput", "dateInput", "select", "toggle", "consent"] },
   { name: "Banking", types: ["accountPicker", "beneficiaryPicker", "cardForm", "reviewSummary", "balanceList"] },
+  { name: "Data", types: ["dataTable", "chart"] },
   { name: "Verification", types: ["otp"] },
   { name: "Actions", types: ["button", "shortcuts", "menu"] },
 ];
@@ -33,6 +34,10 @@ export function newBlock(type: string, j: Journey): Block {
     case "accordion": return { type: "accordion", items: [{ id: "one", title: "A question", text: "Its answer" }] };
     case "shortcuts": return { type: "shortcuts", items: [{ id: "one", label: "Shortcut", icon: "help", actions: [{ type: "navigate", to: firstTerminal(j) ?? j.entryScreen }] }] };
     case "menu": return { type: "menu", items: [{ id: "one", label: "Menu item", actions: [{ type: "navigate", to: firstTerminal(j) ?? j.entryScreen }] }] };
+    case "statusChip": return { type: "statusChip", status: "{{payment.status}}" };
+    case "timeline": return { type: "timeline", label: "History", items: [{ id: "started", title: "Started", time: "{{item.at}}" }, { id: "done", title: "Done", state: "upcoming" }] };
+    case "dataTable": return { type: "dataTable", source: "ctx.items", label: "Items", columns: [{ key: "name", label: "Name" }, { key: "amount", label: "Amount", type: "money", currency: j.apps?.includes("bankworkx") ? "USD" : "PKR" }], search: true };
+    case "chart": return { type: "chart", kind: "line", source: "ctx.series", label: "Trend", x: "label", series: [{ key: "value", label: "Value" }] };
     case "toggle": return { type: "toggle", bind: "option", label: "Turn this on" };
     case "cardForm": return { type: "cardForm", bind: "card" };
     case "consent": return { type: "consent", bind: "consent", termsVersion: "v1", text: "I agree to the terms", validation: { mustBeTrue: true } };
@@ -55,7 +60,7 @@ export function ensureDataModel(j: Journey): Journey {
   for (const s of out.screens) for (const b of s.blocks as any[]) {
     if (b.type === "cardForm") for (const k of ["number", "holder", "expiry", "cvv"]) if (!(`${b.bind}.${k}` in out.dataModel)) out.dataModel[`${b.bind}.${k}`] = { type: "string" };
     if (b.bind && !(b.bind in out.dataModel)) {
-      out.dataModel[b.bind] = b.type === "amountInput" ? { type: "money", currency: b.currency, required: true } : b.type === "consent" ? { type: "boolean", required: true } : b.type === "toggle" ? { type: "boolean" } : b.type === "cardForm" ? { type: "object", required: true } : { type: "string", required: b.type !== "otp" };
+      out.dataModel[b.bind] = b.type === "amountInput" ? { type: "money", currency: b.currency, required: true } : b.type === "consent" ? { type: "boolean", required: true } : b.type === "toggle" ? { type: "boolean" } : b.type === "cardForm" ? { type: "object", required: true } : b.type === "dataTable" ? { type: "array" } : { type: "string", required: b.type !== "otp" };
     }
   }
   return out;
@@ -125,7 +130,7 @@ export function deleteScreen(j: Journey, id: string): Journey | null {
   };
   for (const s of out.screens) {
     s.onEnter?.forEach(fix);
-    s.blocks.forEach((b: any) => { if (b.type === "button") b.actions.forEach(fix); if (b.type === "otp") b.onResend?.forEach(fix); if (b.type === "dialog") { b.buttons.forEach((x: any) => x.actions.forEach(fix)); b.dismiss?.forEach(fix); } if (b.type === "map") b.onSelect?.forEach(fix); });
+    s.blocks.forEach((b: any) => { if (b.type === "button") b.actions.forEach(fix); if (b.type === "otp") b.onResend?.forEach(fix); if (b.type === "dialog") { b.buttons.forEach((x: any) => x.actions.forEach(fix)); b.dismiss?.forEach(fix); } if (b.type === "map") b.onSelect?.forEach(fix); if (b.type === "dataTable") b.onRowPress?.forEach(fix); });
     if (s.navigation) {
       s.navigation.rules = s.navigation.rules?.map((r) => (r.to === id ? { ...r, to: bypass ?? out.entryScreen } : r));
       if (s.navigation.default === id) s.navigation.default = bypass;
@@ -159,6 +164,10 @@ export function blockSummary(b: any): string {
     case "otp": return `${b.length} digits → ${b.bind}`;
     case "accountPicker": case "beneficiaryPicker": return b.bind;
     case "reviewSummary": return `${b.rows.length} rows`;
+    case "statusChip": return b.status;
+    case "timeline": return b.source ? b.source : `${(b.items ?? []).length} steps`;
+    case "dataTable": return `${b.source} · ${b.columns.length} columns`;
+    case "chart": return `${b.kind} · ${b.source}`;
     default: return "";
   }
 }

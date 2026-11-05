@@ -132,8 +132,17 @@ These are available to every journey, in Studio's block picker and in the AI too
 | `textInput.secure` | Hidden text with a Show button, for passwords |
 | `toggle` | An on/off switch for a yes-or-no choice |
 | `cardForm` | Card number, name, expiry and security code with a live card picture and per-field checks |
+| `dataTable` | Rows of records: sort by a heading, search, filter chips, pages, ticked rows saved as a list of ids, a total of the ticked amounts, a row that opens with actions; a list of cards on a phone |
+| `statusChip` | A status word with an icon and a tone (Paid, Waiting for approval, Rejected); known words get theirs, a journey can write its own words per value |
+| `timeline` | What happened and what is still to come, top to bottom; fixed steps or one per row of a saved list; a step is done, current, upcoming (dashed) or failed |
+| `chart` | A line (one series at a time, a switch for several) or a ring over a saved list, readable by pointer, keys or as a table (“Show as table”); money in the journey's currency |
+| `dateInput` `min` / `max` as `{{path}}` | A date range is two date fields, the second with `min: "{{form.from}}"`: the end cannot be before the start |
 
-Charts, the gradient card, the donut, icons and pills are shared widgets in `packages/renderer-native/src/widgets.tsx`.
+Charts, the gradient card, the donut, icons and pills are shared widgets in `packages/renderer-native/src/widgets.tsx` (and `renderer-web/src/widgets`). The `chart` block draws with the same `LineChart` and `Donut`.
+
+**How the data blocks work.** The runner (`renderer-core/src/runner.ts`) turns the saved list into display rows once (`blocks/table.ts`: money with the currency's own digits, `12 Nov 2026` dates, status chips); sorting, searching, filtering and paging are pure functions of the table's own state (`tableView`), which the renderer keeps, so they are never part of a journey's answers. Only the ticked row ids are saved, at the block's `bind`. A table shows as cards when its column is narrower than 520 px (web: measured on the block, so a phone frame inside a wide page works; phone app: the screen or block width). The shared presentational parts are `DataTable`, `StatusChip` and `Timeline` in `@finx/components`; a status word's tone and icon come from `renderer-core/src/blocks/status.ts`.
+
+**There is no `datePicker` block.** `dateInput` already covers one date with a calendar; ranges are two fields as above.
 
 ## How a bank is defined
 

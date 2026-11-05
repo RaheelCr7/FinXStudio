@@ -8,6 +8,9 @@ const STRINGS: Record<string, Record<string, string>> = {
     cardNumberLabel: "Card number", cardHolderLabel: "Name on card", cardHolderPlaceholder: "As shown on the card", cardExpiryLabel: "Expiry", cardCvvLabel: "Security code",
     dateInvalid: "Choose a real date", dateTooEarly: "That date is too early", dateTooLate: "That date is too late", pickDate: "Choose a date", prevMonth: "Previous month", nextMonth: "Next month", prevYear: "Previous year", nextYear: "Next year",
     show: "Show", hide: "Hide", otpLabel: "One-time code, {n} digits", quickAmounts: "Quick amounts", amountWhole: "Enter a whole amount, without decimals", amountDecimals: "Use at most {n} decimal places",
+    tableSearch: "Search", tableAll: "All", tableEmpty: "Nothing to show yet.", tableNoMatch: "No rows match your search or filters.", tableClear: "Clear search and filters", tableRange: "{from}–{to} of {total}", tablePrev: "Previous page", tableNext: "Next page",
+    tableSelectRow: "Select {name}", tableSelectAll: "Select all rows on this page", tableSelected: "{n} selected", tableTotal: "total {amount}", tableLimit: "You can select up to {n}.", tableSortBy: "Sort by", tableSortAsc: "ascending", tableSortDesc: "descending", tableOpen: "Open",
+    chartAsTable: "Show as table", chartAsChart: "Show as chart", chartSeries: "Show", timelineDone: "Done", timelineCurrent: "In progress", timelineUpcoming: "Not yet", timelineFailed: "Did not happen",
   },
   ur: {
     step: "مرحلہ {n} از {total}", required: "ضروری ہے", enterAmount: "رقم درج کریں", minimum: "کم از کم {n} ہے", maximum: "زیادہ سے زیادہ {n} ہے",
