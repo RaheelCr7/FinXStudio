@@ -26,8 +26,8 @@ const THEME_INIT = `try{var t=localStorage.getItem("finx.theme");document.docume
 
 export default async function RootLayout({ children }: { children: React.ReactNode }) {
   const production = isProduction();
-  // the sign-in page shows nothing about the workspace: no people, no projects
-  if (production && (await headers()).get("x-finx-bare") === "1") {
+  // the sign-in page shows nothing about the workspace: no people, no projects (in demo it only simulates signing in)
+  if ((await headers()).get("x-finx-bare") === "1") {
     return <html lang="en" suppressHydrationWarning><body><Script id="theme-init" strategy="beforeInteractive" dangerouslySetInnerHTML={{ __html: THEME_INIT }} />{children}</body></html>;
   }
   const sessionId = production ? verifySession((await cookies()).get(COOKIE_SESSION)?.value) : null;

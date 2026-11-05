@@ -10,8 +10,10 @@ import { anonymousMayCall, cookieValue, isServiceRequest, verifySession } from "
  * (people.ts actorOf and the layout); this only keeps anonymous visitors off the pages.
  */
 export function proxy(req: NextRequest) {
-  if (!isProduction()) return NextResponse.next();
   const { pathname } = req.nextUrl;
+  const headers = new Headers(req.headers);
+  if (pathname === "/login") headers.set("x-finx-bare", "1"); // the sign-in page is drawn without the workspace in both profiles
+  if (!isProduction()) return NextResponse.next({ request: { headers } });
   const isApi = pathname.startsWith("/api/");
   const ip = req.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ?? "local";
   const add = (res: NextResponse) => { for (const [k, v] of Object.entries(securityHeaders())) res.headers.set(k, v); return res; };
@@ -24,8 +26,6 @@ export function proxy(req: NextRequest) {
   } else if (pathname !== "/login" && !req.cookies.get("finx.session")) {
     return add(NextResponse.redirect(new URL("/login", req.url)));
   }
-  const headers = new Headers(req.headers);
-  if (pathname === "/login") headers.set("x-finx-bare", "1");
   return add(NextResponse.next({ request: { headers } }));
 }
 
