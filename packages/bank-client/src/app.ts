@@ -3,8 +3,8 @@ import type { Preset, WorkspaceId } from "@finx/ui-kit";
 import { slugIs, type CatalogResult, type Live, type createLive } from "./live";
 import { usd } from "./format";
 import { NO_SETTINGS, activeContext, findContext, workspaceOf, type BankSettings, type ContextInfo, type SessionInfo } from "./session";
-import { entryFor, launchPointsFor, launchValues, type LaunchPoint } from "./launch-points";
-import { linkContext, needsSwitch, type Link } from "./links";
+import { entryFor, journeyAllowed, launchPointsFor, launchValues, type LaunchPoint } from "./launch-points";
+import { linkContext, needsSwitch, parseLink, type Link } from "./links";
 import { FIRST_TAB, isTab, type ShellTab } from "./view-models/menus";
 import { noticesFor, type ContextNotice, type RawNotification } from "./view-models/notices";
 import { loadScreen, type Screen } from "./view-models/screens";
@@ -104,6 +104,8 @@ export class BankApp {
   private epoch = 0;
   private arriveAfter: Link | null = null;
   private inflight = new Map<string, Promise<void>>();
+  /** A link that arrived before the session was ready (a deep link that opened the app): followed once it is. */
+  private heldLink: Link | null = null;
 
   constructor(private deps: BankAppDeps) {
     const personaId = deps.defaultPersona ?? personasFor(deps.preset, deps.projectId)[0]?.id ?? "ayesha";
@@ -245,6 +247,7 @@ export class BankApp {
       const workspace = workspaceOf(ctx);
       this.set({ session: { status: "ready", info, settings: { homeMarket: settings.homeMarket, disabled: settings.disabled ?? [], options: settings.options ?? {} } }, workspace, shellTab: this.state.prefs.lastTab[workspace] });
       if (workspace === "business") void this.loadShell("approvals");
+      if (this.heldLink) { const link = this.heldLink; this.heldLink = null; if (this.followLink(link) === "go") void this.applyLink(link); }
     } catch (e: any) {
       if (epoch !== this.epoch) return;
       this.set({ session: { ...prev, status: e?.code === "NOT_SUPPORTED" ? "unavailable" : "error", error: e?.message ?? "Could not load your accounts" } });
@@ -303,7 +306,7 @@ export class BankApp {
       await this.call("bank.session.stepUp", { method: input.method ?? "password", ...(input.secret !== undefined ? { secret: input.secret } : {}) });
     } catch (e: any) {
       // the right password is answered "code needed": that is the way forward
-      if (e?.code === "OTP_REQUIRED") { this.set({ stepUp: { ...su, phase: "code", busy: false, phone: this.persona.phone.replace(/\d(?=(?:\D*\d){4})/g, "•") } }); return; }
+      if (e?.code === "OTP_REQUIRED") { this.set({ stepUp: { ...su, phase: "code", busy: false, error: undefined, phone: this.persona.phone.replace(/\d(?=(?:\D*\d){4})/g, "•") } }); return; }
       this.set({ stepUp: { ...su, busy: false, error: e?.message ?? "That didn't work. Try again." } });
     }
   }
@@ -335,6 +338,25 @@ export class BankApp {
     if (!needsSwitch(link, info.activeContextId)) return "go";
     this.set({ offer: link });
     return "offer";
+  }
+  /**
+   * A link as the device gives it (a deep link, a tapped notification). Anything that is not one of ours is ignored; one that arrives
+   * before the session is ready is held; otherwise it is followed as `followLink` says and, inside the place, opened.
+   */
+  receiveLink(input: string, scheme?: string): "ignored" | "held" | "go" | "offer" | "denied" {
+    const link = parseLink(input, scheme);
+    if (!link) return "ignored";
+    if (this.state.session.status !== "ready") { this.heldLink = link; return "held"; }
+    const r = this.followLink(link);
+    if (r === "go") void this.applyLink(link);
+    return r;
+  }
+  /** Opens what a link points at in the place the customer is in (for apps that keep the screen in this store). A journey the place may not use is refused here, as at every other way in. */
+  async applyLink(link: Link) {
+    if (link.journey === undefined) { this.setShellTab(link.tab); this.set({ screen: "app", active: null, opening: null }); return; }
+    const ctx = this.context;
+    if (!ctx || !journeyAllowed(link.journey, { context: ctx, entries: this.state.catalog.entries, settings: this.state.session.settings })) { this.say("This isn't available to you here.", false); return; }
+    await this.openJourney(link.journey, undefined, link.values);
   }
   declineOffer() { this.set({ offer: null }); }
   /** The customer accepted: switch (with a step-up if the bank wants one), then `arrived` carries the link. */

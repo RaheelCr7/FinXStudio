@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from "react";
-import { Image, KeyboardAvoidingView, Pressable, ScrollView, Text, View, useColorScheme } from "react-native";
+import { Image, KeyboardAvoidingView, Linking, Pressable, ScrollView, Text, View, useColorScheme } from "react-native";
 import { StatusBar } from "expo-status-bar";
 import { SafeAreaProvider, useSafeAreaInsets } from "react-native-safe-area-context";
 import { BankApp, isRtl } from "@finx/bank-client";
@@ -8,7 +8,7 @@ import { JourneyPlayer, ThemeProvider, useTheme } from "@finx/renderer-native";
 import { formatMoney } from "@finx/ui-kit";
 import { ServerSetting } from "./src/ServerSetting";
 import { DEFAULT_STUDIO_URL, SERVER_CHANGE_ALLOWED, loadStudioUrl } from "./src/studio-config";
-import { BRAND, BRAND_INFO, brandOf } from "./src/brand";
+import { BRAND, BRAND_INFO, LINK_SCHEME, brandOf } from "./src/brand";
 import { live } from "./src/live";
 import { useBankApp } from "./src/useBankApp";
 import { BankWorkxShell } from "./src/bankworkx/Shell";
@@ -138,6 +138,10 @@ function MeezanShell() {
 }
 
 export default function App() {
+  return BRAND_INFO.preset === "bankworkx" ? <BankworkxApp /> : <MeezanApp />;
+}
+
+function MeezanApp() {
   const scheme = useColorScheme();
   const brand = brandOf();
   // the workspace's own appearance applies until the device says otherwise
@@ -145,14 +149,40 @@ export default function App() {
   return (
     <SafeAreaProvider>
       <ThemeProvider mode={mode} brand={brand}>
-        <Root mode={mode} />
+        <Root mode={mode}><MeezanShell /></Root>
+      </ThemeProvider>
+    </SafeAreaProvider>
+  );
+}
+
+/**
+ * BankWorkx: the app store lives here, above the theme, because the place the customer is in (Personal or a company) decides the look.
+ * Switching place swaps the brand object ThemeProvider gets; light or dark follows the customer's choice, then the device.
+ */
+function BankworkxApp() {
+  const [app] = useState(() => new BankApp({ preset: BRAND_INFO.preset, bankApi: BRAND_INFO.bankApi, live, studioUrl: DEFAULT_STUDIO_URL, switchMs: 900 }));
+  const s = useBankApp(app);
+  const device = useColorScheme();
+  useEffect(() => { loadStudioUrl().then((u) => app.setStudioUrl(u)); return () => app.dispose(); }, [app]);
+  // deep links (bankworkx://personal/cards, bankworkx://business/<company>/j/<journey>?...): the store holds one that arrives before sign-in
+  useEffect(() => {
+    void Linking.getInitialURL().then((url) => { if (url) app.receiveLink(url, LINK_SCHEME); });
+    const sub = Linking.addEventListener("url", ({ url }) => { app.receiveLink(url, LINK_SCHEME); });
+    return () => sub.remove();
+  }, [app]);
+  const brand = brandOf(s.session.status === "ready" ? s.workspace : undefined);
+  const mode = s.prefs.scheme !== "system" ? s.prefs.scheme : device ? (device === "dark" ? "dark" : "light") : brand.mode ?? "light";
+  return (
+    <SafeAreaProvider>
+      <ThemeProvider mode={mode} brand={brand}>
+        <Root mode={mode}><BankWorkxShell app={app} /></Root>
       </ThemeProvider>
     </SafeAreaProvider>
   );
 }
 
 /** Android draws behind the status bar and the gesture bar, so leave room for both. */
-function Root({ mode }: { mode: "light" | "dark" }) {
+function Root({ mode, children }: { mode: "light" | "dark"; children: React.ReactNode }) {
   const { c } = useTheme();
   const insets = useSafeAreaInsets();
   return (
@@ -160,7 +190,7 @@ function Root({ mode }: { mode: "light" | "dark" }) {
       <StatusBar style={mode === "dark" ? "light" : "dark"} />
       {/* Drawing edge to edge, Android no longer shrinks the window for the keyboard, so lift the content here. */}
       <KeyboardAvoidingView style={{ flex: 1 }} behavior="padding">
-        {BRAND_INFO.preset === "bankworkx" ? <BankWorkxShell /> : <MeezanShell />}
+        {children}
       </KeyboardAvoidingView>
     </View>
   );

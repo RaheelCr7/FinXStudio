@@ -68,6 +68,14 @@ describe("switching places", () => {
     a.cancelStepUp();
     expect(a.getState().stepUp).toBeNull();
   });
+  it("clears the wrong-password message once the next step opens", async () => {
+    const a = await alex();
+    await a.switchContext("beta");
+    await a.beginStepUp({ secret: "nope" });
+    expect(a.getState().stepUp!.error).toBeDefined();
+    await a.beginStepUp({ method: "biometric" });
+    expect(a.getState().stepUp).toMatchObject({ phase: "code", error: undefined });
+  });
   it("accepts biometrics for the first step", async () => {
     const a = await alex();
     await a.switchContext("alpha");
@@ -239,6 +247,45 @@ describe("links into another place", () => {
     await a.acceptOffer();
     a.cancelStepUp();
     expect(a.getState()).toMatchObject({ arrived: null, workspace: "personal" });
+  });
+});
+
+describe("links from the device", () => {
+  const SCHEME = "bankworkx";
+  it("ignores what is not ours", async () => {
+    const a = await alex();
+    for (const bad of ["https://evil.example/personal/cards", "otherapp://personal/cards", "bankworkx://admin/everything", "bankworkx://personal/j/Bad_Slug"]) expect(a.receiveLink(bad, SCHEME), bad).toBe("ignored");
+  });
+  it("opens a tab of the place the customer is in", async () => {
+    const a = await alex();
+    expect(a.receiveLink("bankworkx://personal/cards", SCHEME)).toBe("go");
+    expect(a.getState().shellTab).toBe("cards");
+  });
+  it("opens a journey with the values in the link, when the place may use it", async () => {
+    const a = await alex();
+    expect(a.receiveLink("bankworkx://personal/j/manage-beneficiary?beneficiaryId=ben_taylor&mode=edit", SCHEME)).toBe("go");
+    await vi.waitFor(() => expect(a.getState().screen).toBe("journey"));
+    expect(a.getState().active!.launch).toEqual({ beneficiaryId: "ben_taylor", mode: "edit" });
+  });
+  it("refuses a journey the place cannot use, whatever the link says", async () => {
+    const a = await alex();
+    a.receiveLink("bankworkx://personal/j/supplier-payment", SCHEME);
+    await vi.waitFor(() => expect(a.getState().toast).toMatchObject({ ok: false }));
+    expect(a.getState().screen).toBe("app");
+  });
+  it("holds a link that arrives before the session is ready, and follows it once it is", async () => {
+    const a = make();
+    expect(a.receiveLink("bankworkx://personal/save", SCHEME)).toBe("held");
+    a.login(); await a.loadSession();
+    expect(a.getState().shellTab).toBe("save");
+  });
+  it("offers to switch for a link into a company, and opens it after the step-up", async () => {
+    const a = await alex();
+    expect(a.receiveLink("bankworkx://business/beta/approvals", SCHEME)).toBe("offer");
+    await a.acceptOffer(); await confirm(a);
+    const arrived = a.getState().arrived!;
+    await a.applyLink(arrived); a.clearArrived();
+    expect(a.getState()).toMatchObject({ workspace: "business", shellTab: "approvals" });
   });
 });
 

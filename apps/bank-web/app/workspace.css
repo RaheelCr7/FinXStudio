@@ -79,7 +79,7 @@ button.ws-row-main { cursor: pointer; }
 
 .ws-journey { max-inline-size: 560px; margin-inline: auto; border-radius: var(--r-xl); border: 1px solid var(--c-border); background: var(--c-bg); overflow: clip; }
 
-/* Business (Graphite): denser, flatter */
+/* Business: denser, flatter */
 .ws-app[data-ws="business"] .ws-section { border-radius: var(--r-md); padding: 12px 14px; }
 .ws-app[data-ws="business"] .ws-row-main { padding-block: 8px; }
 .ws-app[data-ws="business"] .ws-hero { border-radius: var(--r-md); padding: 16px 18px; } .ws-app[data-ws="business"] .ws-hero-amount { font-size: 30px; }
