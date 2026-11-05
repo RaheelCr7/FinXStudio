@@ -491,3 +491,13 @@ describe("scenario setup can keep what the bank answered", () => {
     expect(r.results.map((x) => x.failures)).toEqual([[]]);
   });
 });
+
+describe("scenario conditions: empty lists", () => {
+  it("a list that comes back empty is an empty list for the journey", async () => {
+    const j = structuredClone(journeys[0]!) as any;
+    j.acceptance = [{ id: "AC-1", text: "x" }];
+    j.scenarios = [{ id: "T-1", name: "nobody to choose", covers: ["AC-1"], persona: "acme", conditions: { empty: ["corp.users.list"] }, steps: [{ expectScreen: "who" }, { expectNoText: "Sara Qureshi" }] }];
+    const r = await runScenarios(Journey.parse(j));
+    expect(r.results.map((x) => x.failures)).toEqual([[]]);
+  });
+});

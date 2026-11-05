@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { MockBank, defaultPersonaFor, personasFor, type SandboxConditions } from "./index";
+import { MockBank, defaultPersonaFor, personasFor, type SandboxConditions } from "../index";
 
 const NOW = Date.parse("2026-11-02T09:31:00Z");
 const hours = (n: number) => n * 3_600_000;

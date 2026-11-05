@@ -1,5 +1,5 @@
-import { BankError } from "./errors";
-import type { Flaws } from "./corporate";
+import { BankError } from "../errors";
+import type { Flaws } from "../business/corporate";
 
 /**
  * The payees a person saves: the checks on their details, the name check and the cooling-off rule. Pure functions with sandbox

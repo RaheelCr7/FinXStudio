@@ -172,7 +172,7 @@ export const Journey = z.object({
      */
     conditions: z.object({
       timeout: z.array(z.string()).optional(), unavailable: z.array(z.string()).optional(), latencyMs: z.number().int().nonnegative().optional(),
-      frozen: z.array(z.string()).optional(), transferFails: z.boolean().optional(), limitUsed: z.number().nonnegative().optional(), closedDays: z.array(z.string().regex(/^\d{4}-\d{2}-\d{2}$/)).optional(),
+      empty: z.array(z.string()).optional(), frozen: z.array(z.string()).optional(), transferFails: z.boolean().optional(), limitUsed: z.number().nonnegative().optional(), closedDays: z.array(z.string().regex(/^\d{4}-\d{2}-\d{2}$/)).optional(),
     }).optional(),
     /** Values the journey is opened with, by data path (as when another journey opens it, or an app deep link): they are there before the entry screen runs. */
     launch: z.record(z.string(), z.unknown()).optional(),

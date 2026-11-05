@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { MockBank, defaultPersonaFor, personasFor, type SandboxConditions } from "./index";
+import { MockBank, defaultPersonaFor, personasFor, type SandboxConditions } from "../index";
 
 describe("choosing a customer to preview a conversion with", () => {
   it("picks one with accounts in more than one currency", () => {

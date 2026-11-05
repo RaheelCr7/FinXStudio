@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { MockBank, type SandboxConditions } from "./index";
+import { MockBank, type SandboxConditions } from "../index";
 import { BANKWORKX_BILLERS, BILLER_CATEGORIES, autopayPlan, billCase, billOf, choicesOf, limitsOf, minimumCents, normaliseRef, validRef } from "./bills";
 
 const NOW = Date.parse("2026-11-03T10:00:00Z");

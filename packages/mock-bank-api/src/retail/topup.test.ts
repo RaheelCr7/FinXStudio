@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { MockBank, type SandboxConditions } from "./index";
+import { MockBank, type SandboxConditions } from "../index";
 import { MARKETS, OPERATORS, TOPUP_NUMBER_DAILY, amountChoices, dayKey, normaliseNumber, numberCase, receiptDate, validNumber } from "./topup";
 
 const NOW = Date.parse("2026-11-03T10:00:00Z");

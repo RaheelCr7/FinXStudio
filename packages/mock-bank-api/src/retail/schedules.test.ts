@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
-import { MockBank, personas, type SandboxConditions } from "./index";
-import type { Flaws } from "./corporate";
+import { MockBank, personas, type SandboxConditions } from "../index";
+import type { Flaws } from "../business/corporate";
 import { addMonths, changeState, dayName, isOpen, isoOf, msOf, nextOpen, nominal, prevOpen, remaining, runDate, upcoming, validIso } from "./schedules";
 
 // Tue 3 Nov 2026, 10:42 UTC: the day of the demo

@@ -30,6 +30,39 @@ export const RAILS: Record<SendType, RailSpec[]> = {
     { id: "swiftp", speed: "priority", name: "Priority", fee: 40, arrives: "Next business day", limit: null },
   ],
 };
+/**
+ * The bank's home market decides which rails serve the domestic speed classes (Standard, Same day, Instant): the customer never sees
+ * a scheme name, the bank maps each class to the rail its market has. `us` is the default and what RAILS above holds. Fees are in
+ * the sender's currency and the limits in the payee's, as for every rail; the figures are sandbox defaults (docs/journeys/09-payment-rails.md section 2).
+ */
+export type HomeMarket = "us" | "uk" | "eu" | "ae" | "sa" | "jo";
+export const DOMESTIC_RAILS: Record<HomeMarket, RailSpec[]> = {
+  us: RAILS.domestic,
+  uk: [
+    { id: "bacs", speed: "standard", name: "Standard", fee: 0, arrives: "3 business days", limit: 20_000 },
+    { id: "chaps", speed: "sameDay", name: "Same day", fee: 25, arrives: "Today", limit: null },
+    { id: "fps", speed: "instant", name: "Instant", fee: 0, arrives: "In seconds", limit: 1_000_000 },
+  ],
+  eu: [
+    { id: "sct", speed: "standard", name: "Standard", fee: 0, arrives: "Next business day", limit: 1_000_000 },
+    { id: "sinst", speed: "instant", name: "Instant", fee: 0.5, arrives: "In seconds", limit: 100_000 },
+  ],
+  ae: [
+    { id: "uaefts", speed: "standard", name: "Standard", fee: 2, arrives: "Today", limit: null },
+    { id: "aani", speed: "instant", name: "Instant", fee: 0.5, arrives: "In seconds", limit: 10_000 },
+  ],
+  sa: [
+    { id: "sarie", speed: "standard", name: "Standard", fee: 2, arrives: "Today", limit: null },
+    { id: "sarieI", speed: "instant", name: "Instant", fee: 0.5, arrives: "In seconds", limit: 20_000 },
+  ],
+  jo: [
+    { id: "jopacc", speed: "standard", name: "Standard", fee: 1, arrives: "Next business day", limit: 1_000_000 },
+    { id: "cliq", speed: "instant", name: "Instant", fee: 0.3, arrives: "In seconds", limit: 10_000 },
+  ],
+};
+/** The rails of every kind of payment for a bank whose home market is this one: only the domestic ones change. */
+export const railsFor = (market: HomeMarket = "us"): Record<SendType, RailSpec[]> => ({ ...RAILS, domestic: DOMESTIC_RAILS[market] ?? RAILS.domestic });
+
 /** Added to the fee when the sender pays all the bank charges of an international payment (a bank option). */
 export const SENDER_PAYS_ALL = 15;
 /** An international payment worth this much (US dollars) needs the payee's address and the relationship. */
@@ -59,8 +92,8 @@ export type SpeedView = RailSpec & { available: boolean; fits: boolean; reason?:
  * Every speed of a kind of payment for this amount (in the payee's currency): offered by the bank, not taken down, and within its limit.
  * `down` are rail ids that are not working right now.
  */
-export function speedsFor(type: SendType, receive: number, offer: Offer, down: string[] = [], limitsOff = false): SpeedView[] {
-  return RAILS[type].filter((r) => offer[r.speed]).map((r) => {
+export function speedsFor(type: SendType, receive: number, offer: Offer, down: string[] = [], limitsOff = false, rails: Record<SendType, RailSpec[]> = RAILS): SpeedView[] {
+  return rails[type].filter((r) => offer[r.speed]).map((r) => {
     const available = !down.includes(r.id);
     const fits = r.limit === null || receive <= r.limit || limitsOff;
     return { ...r, available, fits, ...(!available ? { reason: "Not available right now" } : !fits ? { reason: "Over the limit" } : {}) };

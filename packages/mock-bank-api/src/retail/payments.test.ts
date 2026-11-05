@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { MockBank, type SandboxConditions } from "./index";
+import { MockBank, type SandboxConditions } from "../index";
 import { businessDays, money, speedsFor, type Offer } from "./payments";
 
 const NOW = Date.parse("2026-11-02T09:31:00Z"); // a Monday

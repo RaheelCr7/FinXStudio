@@ -30,7 +30,7 @@ describe("dashboard view-models", () => {
   it("names and totals", () => {
     const p = alex();
     expect([displayName({ name: "Alex Morgan (new)" }), firstName(p), initials(p)]).toEqual(["Alex Morgan", "Alex", "AM"]);
-    expect(totalBalance(p, fin())).toBeCloseTo(8720.76 + 15254.37 + 9876.54, 2);
+    expect(totalBalance(p, fin())).toBeCloseTo(8720.76 + 15254.37 + 9876.54, 2); // the euro and pound accounts are not added to dollars
     expect(hasAccounts(p, fin())).toBe(true);
     expect(hasAccounts(new MockBank("sam").persona, new MockBank("sam").persona.finance!)).toBe(false);
   });
@@ -64,7 +64,7 @@ describe("dashboard view-models", () => {
 describe("accounts, budgets and wallet view-models", () => {
   it("merges own accounts and linked banks", () => {
     const items = accountItems(alex(), fin());
-    expect(items.map((i) => i.bank)).toEqual(["BankWorkx", "BankWorkx", "Summit Federal"]);
+    expect(items.map((i) => i.bank)).toEqual(["BankWorkx", "BankWorkx", "BankWorkx", "BankWorkx", "Summit Federal"]);
   });
   it("searches and groups transactions", () => {
     const t = fin().transactions;
