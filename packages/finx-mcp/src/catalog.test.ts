@@ -3,7 +3,7 @@ import { readFileSync } from "node:fs";
 import { Action, Block, Journey } from "@finx/journey-schema";
 import { lintAll } from "@finx/renderer-core";
 import { ADAPTER_CATALOG } from "@finx/mock-bank-api";
-import { ACTIONS, BLOCKS, getCatalog, LINT_RULES, SECTIONS, SKELETON } from "./catalog";
+import { ACTIONS, adapterDetail, adapterGist, adapterIndex, BLOCKS, CATALOG_MAX_CHARS, catalogSizes, CatalogError, getCatalog, LINT_RULES, SECTIONS, SKELETON } from "./catalog";
 
 const src = (rel: string) => readFileSync(new URL(rel, import.meta.url), "utf8");
 
@@ -31,12 +31,58 @@ describe("catalog stays in sync with the real schema and lint", () => {
     expect([...emitted].filter((c) => !documented.has(c))).toEqual([]);
     expect([...documented].filter((c) => !emitted.has(c))).toEqual([]);
   });
-  it("lists every sandbox adapter", () => {
-    expect((getCatalog("adapters") as any).adapters.list).toEqual(ADAPTER_CATALOG);
+  it("lists every sandbox adapter in the index, and returns each full entry on request", () => {
+    const { index } = (getCatalog("adapters") as any).adapters as ReturnType<typeof adapterIndex>;
+    expect(Object.values(index).flat()).toHaveLength(ADAPTER_CATALOG.length);
+    for (const a of ADAPTER_CATALOG) {
+      const family = a.adapter.split(".").slice(0, 2).join(".");
+      const last = a.adapter.slice(family.length + 1);
+      const line = index[family]?.find((l) => l.startsWith(`${last}: `) || l.startsWith(`${last} -> `));
+      expect(line, a.adapter).toBeDefined();
+      if (a.suggestedId !== last) expect(line, a.adapter).toContain(` -> ${a.suggestedId}: `);
+      else expect(line, a.adapter).not.toContain(" -> ");
+      expect(line!.match(/ \[([a-z, ]+)\]$/)?.[1] ?? "", a.adapter).toBe([a.moneyMoving ? "money" : "", a.requiresOtp ? "otp" : ""].filter(Boolean).join(", "));
+    }
+    // the detail is the entries of ADAPTER_CATALOG, unchanged and in the same order
+    expect((getCatalog("adapters", "bank,corp,cab,sandbox") as any).adapters.list).toEqual(ADAPTER_CATALOG);
+    expect(Object.keys(getCatalog("adapters", "bank.payees"))).toEqual(["adapters"]);
+    expect((getCatalog("adapters", "bank.payees") as any).adapters.list.map((a: any) => a.adapter)).toEqual(ADAPTER_CATALOG.filter((a) => a.adapter.startsWith("bank.payees.")).map((a) => a.adapter));
+    expect(adapterDetail("bank.otp.verify, bank.otp.verify,bank.otp").map((a) => a.adapter)).toEqual(["bank.otp.send", "bank.otp.verify"]);
   });
-  it("sections return only what was asked for, and the whole catalog stays within a sensible size", () => {
+  it("refuses an unknown adapter, an empty selector, and an adapter filter on another section", () => {
+    expect(() => adapterDetail("bank.pay")).toThrow(CatalogError); // a prefix ends at a dot: bank.pay is not bank.payees
+    expect(() => adapterDetail("bank.nope")).toThrow(/Families: .*bank\.payees/);
+    expect(() => adapterDetail(" , ")).toThrow(CatalogError);
+    expect(() => getCatalog("blocks", "bank")).toThrow(CatalogError);
+    expect(() => getCatalog("all", "bank")).toThrow(CatalogError);
+  });
+  it("gives every adapter a short gist for the index", () => {
+    for (const a of ADAPTER_CATALOG) {
+      const g = adapterGist(a);
+      expect(g.length, a.adapter).toBeGreaterThan(8);
+      expect(g.length, a.adapter).toBeLessThanOrEqual(101);
+      expect(g.split("(").length, a.adapter).toBe(g.split(")").length); // never cut inside a bracket
+    }
+  });
+  it("sections return only what was asked for", () => {
     for (const s of SECTIONS.filter((x) => x !== "all")) expect(Object.keys(getCatalog(s))).toEqual([s]);
-    const size = JSON.stringify(getCatalog("all")).length;
-    expect(size).toBeLessThan(96_500); // agents read it by section; the whole is rarely asked for (it grew with corporate payments, bulk, payroll, the pop-up, map and date blocks, the payee adapters, the quote and pay adapters of Send money, the saved-billers and quote adapters of Pay a bill, the amounts, numbers and check adapters of Mobile top-up, and the seven schedule adapters and the scheduled-payments customer of Schedule a payment; trimmed first, raised by 3,000 because those cannot be described in less without dropping the inputs and errors a journey needs; then the session, company-quote and retail-record adapters of the combined demo, 31 adapters in about 9,600, trimmed to one line each; then raised by 4,500 for the status chip, timeline, data table and chart blocks, which are described once and read by section; then by 3,000 for the file, document, signature and ID capture blocks, the receipt action and session.permissions; then by 1,000, after trimming, for the approvals inbox adapters (list, approve several, pass on) and the business purposes; then by 5,000, after trimming to one line each, leaving the Security adapters to docs/BANKWORKX.md and leaving out of the customers everything that is the usual, for the 13 sign-in and recovery adapters (94,200); then by 1,500 only, after trimming 420 from older entries and keeping each new one to a line, for the 8 Settings > Security adapters of Change password, Trusted devices, Set up quick sign-in and Change quick PIN and the strict code (96,090 now); the output of a tool call is cut at MAX_OUTPUT_CHARS in tools.ts, raised to the same 96,500 so that the whole catalog still arrives as valid JSON, so this is the ceiling)
+  });
+
+  // Agents read the whole catalog (section "all") first, so it is kept small: the adapters are an index there, and their inputs, results and
+  // errors are fetched by family. When a size below fails, the message lists every section's size (also: pnpm --filter @finx/mcp catalog-size).
+  // Trim the section that grew (shorter wording, no repeats) before raising a number, and raise it by what the new entries need, not more.
+  const SECTION_CEILINGS: Record<string, number> = { overview: 900, journey: 2_600, blocks: 22_500, actions: 3_000, expressions: 1_900, data: 900, localization: 1_100, adapters: 12_700, personas: 5_800, lint: 4_300, patterns: 1_700 };
+  it("each section stays within its ceiling, and the whole stays within the size the tool returns", () => {
+    const sizes = catalogSizes();
+    const report = JSON.stringify(sizes);
+    expect(Object.keys(SECTION_CEILINGS).sort(), "a section has no ceiling").toEqual(SECTIONS.filter((x) => x !== "all").sort());
+    for (const [k, max] of Object.entries(SECTION_CEILINGS)) expect(sizes[k]!, `${k} is ${sizes[k]} (limit ${max}); sizes: ${report}`).toBeLessThanOrEqual(max);
+    expect(sizes.all!, `the whole catalog is ${sizes.all} (limit ${CATALOG_MAX_CHARS}); sizes: ${report}`).toBeLessThan(CATALOG_MAX_CHARS);
+    expect(sizes.all).toBe(JSON.stringify(getCatalog("all")).length);
+  });
+  it("the full entries of one family fit in one small answer, and a whole domain fits in the tool's limit", () => {
+    const families = new Set(ADAPTER_CATALOG.map((a) => a.adapter.split(".").slice(0, 2).join(".")));
+    for (const f of families) expect(JSON.stringify(adapterDetail(f)).length, f).toBeLessThan(9_000);
+    for (const d of ["bank", "corp", "cab"]) expect(JSON.stringify(getCatalog("adapters", d)).length, d).toBeLessThan(CATALOG_MAX_CHARS);
   });
 });

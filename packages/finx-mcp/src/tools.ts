@@ -3,7 +3,7 @@ import { z } from "zod";
 import { localTransfer, payBill, validateJourney, type Journey } from "@finx/journey-schema";
 import { personas, SIGNED_OUT } from "@finx/mock-bank-api";
 import { adviceFor, lintForAgent, sameContent } from "./advice";
-import { getCatalog, SECTIONS } from "./catalog";
+import { CATALOG_MAX_CHARS, CatalogError, getCatalog, SECTIONS } from "./catalog";
 import { applyPatch, PatchError } from "./patch";
 import { simulate } from "./simulate";
 import { mutationCheck, runScenarios } from "./scenarios";
@@ -17,11 +17,11 @@ export type ToolDeps = {
 
 const MAX_JSON_BYTES = 200 * 1024;
 const MAX_SCREENS = 30;
-const MAX_OUTPUT_CHARS = 96_500;
+const MAX_OUTPUT_CHARS = 90_000;
 
-const ok = (data: unknown, pretty = true): CallToolResult => {
+const ok = (data: unknown, pretty = true, max = MAX_OUTPUT_CHARS): CallToolResult => {
   let text = typeof data === "string" ? data : JSON.stringify(data, null, pretty ? 2 : 0);
-  if (text.length > MAX_OUTPUT_CHARS) text = text.slice(0, MAX_OUTPUT_CHARS) + "\n…output truncated. Ask for a smaller section.";
+  if (text.length > max) text = text.slice(0, max) + "\n…output truncated. Ask for a smaller section.";
   return { content: [{ type: "text", text }] };
 };
 const fail = (message: string, details?: unknown): CallToolResult => ({
@@ -34,7 +34,7 @@ async function guarded(fn: () => Promise<CallToolResult>): Promise<CallToolResul
   try { return await fn(); }
   catch (e) {
     if (e instanceof StudioError) return fail(e.message, e.issues);
-    if (e instanceof PatchError) return fail(e.message);
+    if (e instanceof PatchError || e instanceof CatalogError) return fail(e.message);
     return fail(`Unexpected error: ${(e as Error).message}`);
   }
 }
@@ -77,10 +77,13 @@ export function registerTools(server: McpServer, deps: ToolDeps) {
 
   server.registerTool("finx_get_catalog", {
     title: "FinX platform reference",
-    description: "Read this first. The authoring reference for FinX journeys: block types and their fields, actions, the rule/expression language, data conventions, English and Urdu localization rules, the banking integrations that exist, sandbox customers, lint rules and proven patterns. Pass a section for just one part. It describes what the engine really does today, including its limits.",
-    inputSchema: z.object({ section: z.enum(SECTIONS).default("all").describe("all, or one of: overview, journey, blocks, actions, expressions, data, localization, adapters, personas, lint, patterns") }),
+    description: "Read this first. The authoring reference for FinX journeys: block types and their fields, actions, the rule/expression language, data conventions, English and Urdu localization rules, the banking integrations that exist, sandbox customers, lint rules and proven patterns. Pass a section for just one part. The adapters part is an index (what each does, by family); to use an adapter, fetch its inputs, results and errors with section adapters and adapter set to its name or family, e.g. bank.payees or cab.auth.signIn,bank.otp. It describes what the engine really does today, including its limits.",
+    inputSchema: z.object({
+      section: z.enum(SECTIONS).default("all").describe("all, or one of: overview, journey, blocks, actions, expressions, data, localization, adapters, personas, lint, patterns"),
+      adapter: z.string().optional().describe("Only with section adapters: adapter names or families, comma separated (bank.payees, corp.payments.initiate, cab). Returns their inputs, results and errors instead of the index."),
+    }),
     annotations: { readOnlyHint: true, idempotentHint: true, openWorldHint: false },
-  }, async ({ section }) => ok(getCatalog(section), false));
+  }, ({ section, adapter }) => guarded(async () => ok(getCatalog(section, adapter), false, CATALOG_MAX_CHARS)));
 
   server.registerTool("finx_get_example", {
     title: "A shipped, lint-clean example journey",

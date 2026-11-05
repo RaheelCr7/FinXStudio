@@ -42,7 +42,7 @@ A review run appears on the Agents board as *Review agent*, done, with the repor
 
 | Tool | Changes things? | Purpose |
 |---|---|---|
-| `finx_get_catalog` | no | The authoring reference: blocks, actions, expressions, data, Urdu rules, integrations, personas, lint rules, patterns |
+| `finx_get_catalog` | no | The authoring reference: blocks, actions, expressions, data, Urdu rules, integrations, personas, lint rules, patterns. The sandbox adapters are an index (one line each, by family); `section: adapters` with `adapter` (names or families, comma separated, e.g. `bank.payees,bank.otp`) returns their inputs, results and errors. The whole catalog is kept under 56,000 characters (`pnpm --filter @finx/mcp catalog-size` shows each section) |
 | `finx_get_example` | no | A shipped, lint-clean journey to copy structure from |
 | `finx_list_journeys`, `finx_get_journey` | no | Read what is in Studio, with lint issues |
 | `finx_list_catalog` | read only | The ready-made journeys a project can add, and which it already has |

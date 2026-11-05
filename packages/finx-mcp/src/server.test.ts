@@ -46,6 +46,17 @@ describe("FinX MCP server", () => {
     const all = await call("finx_get_catalog");
     expect(Object.keys(all.json)).toEqual(expect.arrayContaining(["overview", "journey", "blocks", "actions", "expressions", "data", "localization", "adapters", "personas", "lint", "patterns"]));
     expect(Object.keys((await call("finx_get_catalog", { section: "adapters" })).json)).toEqual(["adapters"]);
+    // the adapters are an index in "all" and in their own section; the inputs, results and errors come by name or family
+    expect(all.json.adapters.index["bank.payees"].length).toBeGreaterThan(3);
+    expect(all.json.adapters.list).toBeUndefined();
+    expect(all.text.length).toBeLessThan(56_000);
+    const detail = await call("finx_get_catalog", { section: "adapters", adapter: "bank.otp.verify,bank.payees.save" });
+    expect(detail.json.adapters.list.map((a: any) => a.adapter)).toEqual(["bank.payees.save", "bank.otp.verify"]);
+    expect(detail.json.adapters.list[0]).toMatchObject({ requiresOtp: true, input: expect.any(Object), returns: expect.any(String) });
+    const missing = await call("finx_get_catalog", { section: "adapters", adapter: "bank.nope" });
+    expect(missing.isError).toBe(true);
+    expect(missing.text).toContain("bank.payees");
+    expect((await call("finx_get_catalog", { section: "blocks", adapter: "bank" })).isError).toBe(true);
     expect((await call("finx_get_example", { name: "pay-a-bill" })).json.slug).toBe("pay-a-bill");
   });
 

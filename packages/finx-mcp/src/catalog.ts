@@ -1,4 +1,4 @@
-import { ADAPTER_CATALOG, describePersonas } from "@finx/mock-bank-api";
+import { ADAPTER_CATALOG, describePersonas, type AdapterInfo } from "@finx/mock-bank-api";
 
 /**
  * The reference an AI agent reads before authoring a journey. It documents what the engine really does today,
@@ -286,7 +286,79 @@ const OVERVIEW = {
   scope: "Agents only write drafts. Publishing needs the person's explicit instruction.",
 };
 
-export function getCatalog(section: Section = "all") {
+/** A request the catalog cannot answer (an unknown adapter name, or an adapter filter on another section). The tool turns it into a readable error. */
+export class CatalogError extends Error {}
+
+/**
+ * The most characters finx_get_catalog returns. The whole catalog (section "all") has to fit, so that it arrives as valid JSON.
+ * catalog.test.ts keeps the real size under it, and the number is a little above that size, so growth shows up as a failing test.
+ */
+export const CATALOG_MAX_CHARS = 56_000;
+
+/** The family of an adapter: its first two name parts, e.g. bank.payees. The index groups by it and a detail request usually names it. */
+const familyOf = (name: string) => name.split(".").slice(0, 2).join(".");
+
+/** What an adapter does in a few words: the first sentence of its description, cut at a colon or semicolon after a real phrase, and at 100 characters. */
+export function adapterGist(a: AdapterInfo): string {
+  let g = a.description.split(/\.(?:\s|$)/)[0]!.trim();
+  for (const m of g.matchAll(/[:;]\s/g)) {
+    const before = g.slice(0, m.index);
+    if (m.index! >= 25 && before.split("(").length === before.split(")").length) { g = before; break; }
+  }
+  g = g.replace(/[:;]$/, "");
+  if (g.length > 100) {
+    g = g.slice(0, 100).replace(/\s+\S*$/, "");
+    if (g.lastIndexOf("(") > g.lastIndexOf(")")) g = g.slice(0, g.lastIndexOf("(")).trimEnd();
+    g += "…";
+  }
+  return g;
+}
+
+const ADAPTER_DETAIL_NOTE = "Declare an integration { id: suggestedId, adapter, mode: \"sandbox\" } for each adapter you use. moneyMoving: moves money. requiresOtp: needs the one-time code first.";
+
+/**
+ * The sandbox adapters as a short index, grouped by family: one line each with what it does, enough to plan a journey.
+ * Inputs, results and errors are not in it: section "adapters" with `adapter` returns them (the ADAPTER_CATALOG entries, unchanged).
+ */
+export function adapterIndex() {
+  const families: Record<string, string[]> = {};
+  for (const a of ADAPTER_CATALOG) {
+    const family = familyOf(a.adapter);
+    const last = a.adapter.slice(family.length + 1);
+    const flags = [a.moneyMoving ? "money" : "", a.requiresOtp ? "otp" : ""].filter(Boolean);
+    (families[family] ??= []).push(`${last}${a.suggestedId === last ? "" : ` -> ${a.suggestedId}`}: ${adapterGist(a)}${flags.length ? ` [${flags.join(", ")}]` : ""}`);
+  }
+  return {
+    note: "Only these adapters exist today. If the brief needs something else, say so in the run summary instead of inventing one. A line is <name>[ -> suggested integration id; without it the id is the name]: what it does. The adapter is the family key, a dot and the name. [money] moves money, [otp] needs the one-time code first. The index has no inputs, results or errors: before you declare an adapter, fetch its entry with section \"adapters\" and adapter set to its name or family, several comma separated, e.g. \"bank.payees\" or \"cab.auth.signIn,bank.otp\". Then declare an integration { id, adapter, mode: \"sandbox\" } for each one you use.",
+    index: families,
+  };
+}
+
+/** The full entries of the adapters a selector names: comma-separated adapter names or dotted prefixes, e.g. "bank.payees,corp". */
+export function adapterDetail(selector: string): AdapterInfo[] {
+  const terms = selector.split(",").map((t) => t.trim()).filter(Boolean);
+  if (!terms.length) throw new CatalogError("adapter is empty. Name an adapter or a family, e.g. bank.payees. Section adapters lists them.");
+  const picked = new Set<AdapterInfo>();
+  for (const t of terms) {
+    const hits = ADAPTER_CATALOG.filter((a) => a.adapter === t || a.adapter.startsWith(`${t}.`));
+    if (!hits.length) throw new CatalogError(`No adapter or family called "${t}". Families: ${[...new Set(ADAPTER_CATALOG.map((a) => familyOf(a.adapter)))].join(", ")}.`);
+    for (const h of hits) picked.add(h);
+  }
+  return ADAPTER_CATALOG.filter((a) => picked.has(a));
+}
+
+/** The size in characters of each part of the catalog as the tool returns it (compact JSON), to find what grew. */
+export function catalogSizes() {
+  const sizes: Record<string, number> = {};
+  const all = getCatalog("all") as Record<string, unknown>;
+  for (const k of Object.keys(all)) sizes[k] = JSON.stringify(all[k]).length;
+  sizes.all = JSON.stringify(all).length;
+  return sizes;
+}
+
+/** `adapter` only applies to section "adapters": it swaps the index for the full entries (input, returns, errors) of the adapters it names. */
+export function getCatalog(section: Section = "all", adapter?: string) {
+  if (adapter !== undefined && section !== "adapters") throw new CatalogError('adapter only works with section "adapters".');
   const all = {
     overview: OVERVIEW,
     journey: {
@@ -304,7 +376,7 @@ export function getCatalog(section: Section = "all") {
     expressions: EXPRESSIONS,
     data: DATA,
     localization: LOCALIZATION,
-    adapters: { note: "Declare an integration { id: suggestedId, adapter, mode: \"sandbox\" } for each adapter you use. Only these exist today. If the brief needs something else, say so in the run summary instead of inventing one.", list: ADAPTER_CATALOG },
+    adapters: adapter === undefined ? adapterIndex() : { note: ADAPTER_DETAIL_NOTE, list: adapterDetail(adapter) },
     personas: { note: "Use these in finx_simulate_journey. The code 000000 is accepted for every customer; use 999999 as a wrong code.", list: describePersonas() },
     lint: LINT_RULES,
     patterns: PATTERNS,

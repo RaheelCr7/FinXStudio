@@ -36,7 +36,9 @@ async function main() {
   check("11 tools are advertised", tools.length === 11, tools.join(", "));
 
   const catalog = await call("finx_get_catalog", { section: "adapters" });
-  check("catalog lists the sandbox adapters", catalog.json?.adapters?.list?.length === 11);
+  check("catalog indexes the sandbox adapters", Object.keys(catalog.json?.adapters?.index ?? {}).length > 0);
+  const detail = await call("finx_get_catalog", { section: "adapters", adapter: "bank.otp" });
+  check("catalog returns the entries of an adapter family", detail.json?.adapters?.list?.length === 2);
 
   const list = await call("finx_list_journeys");
   check("Studio is reachable and lists journeys", !list.isError && Array.isArray(list.json?.journeys), list.isError ? list.text : `${list.json.journeys.length} journeys`);
