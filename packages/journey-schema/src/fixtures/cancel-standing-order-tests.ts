@@ -89,7 +89,7 @@ export const cancelStandingOrderScenarios: NonNullable<Journey["scenarios"]> = [
   T("T-13", "A paused payment can be cancelled", ["AC-5"], [
     text("Omar Haddad"), text("Paused"), press("Omar Haddad"), screen("cancel"), text("Paused: the last two attempts failed."), press("Cancel payment"), screen("success"), text("Payment cancelled"), sched("SCH-1008", "status", "cancelled"),
   ]),
-  T("T-14", "With nothing scheduled the person is told so", ["AC-5"], [screen("pick"), text("Nothing scheduled."), text("Set up a payment once")], { persona: "alex" }),
+  T("T-14", "With nothing scheduled the person is told so", ["AC-5"], [screen("pick"), text("Nothing scheduled."), text("Set up a payment once")], { persona: "alexglobal" }),
   T("T-15", "The bank does not answer in time when cancelling: Check scheduled first, nothing cancelled", ["AC-6"], [
     press("Lena Fischer"), press("Cancel payment"), screen("timeout"), text("We didn't get an answer in time"), text("Check your scheduled payments before you try again"), press("Check scheduled"),
     sched("SCH-1005", "status", "active"),

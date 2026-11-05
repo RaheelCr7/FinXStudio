@@ -118,6 +118,18 @@ const alexSchedPayees = (): Beneficiary[] => {
     us("ben_peak", "Peak Fitness", "Apex Credit Union", "011000015", "500002290"),
   ];
 };
+/** The billers Alex has saved (the same for the scheduled-payments customer and Alex himself). */
+const alexBillers = (): SavedBiller[] => [
+  { id: "sb_harbor", nickname: "Harbor Insurance", billerId: "harbor_insurance", reference: "HI12345678" },
+  { id: "sb_card", nickname: "Northwind Card", billerId: "northwind_card", reference: "1234567890123456" },
+  { id: "sb_power", nickname: "Home electricity", billerId: "city_power", reference: "4400123456" },
+];
+/** The mobile numbers Alex has saved for topping up. */
+const alexNumbers = (): SavedNumber[] => [
+  { id: "sn_phone", name: "My phone", operatorId: "aster", number: "5550123456" },
+  { id: "sn_maya", name: "Maya", operatorId: "aster", number: "5550987654" },
+  { id: "sn_lena", name: "Lena", operatorId: "bright", number: "5550765432" },
+];
 /**
  * A schedule of the Payments cast. `done` payments were dealt with before today, so the anchor is worked back from the next date
  * (the sandbox clock of the demo is Tue 3 Nov 2026; a scenario fixes it there).
@@ -168,7 +180,12 @@ export const personas: Record<string, Persona> = {
   alex: {
     id: "alex", brand: "bankworkx", name: "Alex Morgan", phone: "+1 415 555 0142",
     accounts: alexAccounts().map((a) => ({ ...a, kind: a.id === "acc_save" ? "savings" as const : "current" as const, available: a.id === "acc_main" ? 8602.36 : a.balance })),
-    beneficiaries: alexPayees(),
+    beneficiaries: alexSchedPayees(),
+    // what the Payments journeys need to have something to pick: saved billers and mobile numbers, and the scheduled payments (the test customers
+    // alexbills, alextopup and alexsched hold the same data separately, because their tests count what they have)
+    savedBillers: [...alexBillers(), { id: "sb_net", nickname: "Home internet", billerId: "skyline_broadband", reference: "5550012345" }],
+    savedNumbers: alexNumbers(),
+    schedules: alexSchedules(),
     limits: { daily: 50000, usedToday: 0 },
     limitsByCurrency: { EUR: { daily: 20000, usedToday: 0 }, AED: { daily: 100000, usedToday: 0 } },
     finance: alexFinance(),
@@ -235,11 +252,7 @@ export const personas: Record<string, Persona> = {
     id: "alextopup", brand: "bankworkx", name: "Alex Morgan (saved numbers)", phone: "+1 415 555 0142",
     accounts: alexAccounts(),
     beneficiaries: [],
-    savedNumbers: [
-      { id: "sn_phone", name: "My phone", operatorId: "aster", number: "5550123456" },
-      { id: "sn_maya", name: "Maya", operatorId: "aster", number: "5550987654" },
-      { id: "sn_lena", name: "Lena", operatorId: "bright", number: "5550765432" },
-    ],
+    savedNumbers: alexNumbers(),
     limits: { daily: 50000, usedToday: 0 },
     limitsByCurrency: { EUR: { daily: 20000, usedToday: 0 }, AED: { daily: 100000, usedToday: 0 } },
     finance: alexFinance(),
@@ -251,11 +264,7 @@ export const personas: Record<string, Persona> = {
     id: "alexsched", brand: "bankworkx", name: "Alex Morgan (scheduled payments)", phone: "+1 415 555 0142",
     accounts: alexAccounts(),
     beneficiaries: alexSchedPayees(),
-    savedBillers: [
-      { id: "sb_harbor", nickname: "Harbor Insurance", billerId: "harbor_insurance", reference: "HI12345678" },
-      { id: "sb_card", nickname: "Northwind Card", billerId: "northwind_card", reference: "1234567890123456" },
-      { id: "sb_power", nickname: "Home electricity", billerId: "city_power", reference: "4400123456" },
-    ],
+    savedBillers: alexBillers(),
     schedules: alexSchedules(),
     limits: { daily: 50000, usedToday: 0 },
     limitsByCurrency: { EUR: { daily: 20000, usedToday: 0 }, AED: { daily: 100000, usedToday: 0 } },

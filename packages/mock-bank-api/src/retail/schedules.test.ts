@@ -89,7 +89,8 @@ describe("the cast of scheduled payments", () => {
     const all = await b.call("bank.schedules.list");
     expect(all.sch_rent).toMatchObject({ id: "sch_rent", name: "Rent", text: "Rent · Monthly, 1 Dec, $1,450.00", beneficiaryId: "ben_james", status: "active" });
     expect(Object.keys(await b.call("bank.schedules.list", { status: "live" }))).toEqual(["sch_rent"]);
-    expect(await (await bank("alex")).call("bank.schedules.list")).toEqual({});
+    // Alex himself carries the same cast now (so the journeys have something to schedule, change and cancel in the app)
+    expect(Object.keys(await (await bank("alex")).call("bank.schedules.list")).sort()).toEqual(Object.keys(await (await bank("alexsched")).call("bank.schedules.list")).sort());
     // a payment made later in Send money is an older entry: listed with no status filter, not managed here
     const c = await verified("alexpayees");
     await c.call("bank.schedules.cancel", { scheduleId: "sch_rent", scope: "all" });
