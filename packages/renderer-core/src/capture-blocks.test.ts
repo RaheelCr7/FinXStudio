@@ -124,6 +124,13 @@ describe("session.permissions", () => {
     expect(r.get("session.permissions")).toEqual(["a"]);
     expect(() => { (r.get("session.permissions") as string[]).push("x"); }).toThrow();
   });
+  it("is not written by a bank answer saved with saveAs either", async () => {
+    const j = journey([], {}, { integrations: [{ id: "who", adapter: "bank.who", mode: "sandbox" }] });
+    j.screens[0]!.onEnter = [{ type: "callApi", integration: "who", saveAs: "session.permissions" }];
+    const r = new JourneyRunner(j, { adapter: async () => ["forged"], session: { permissions: ["a"] } });
+    await r.start();
+    expect(r.get("session.permissions")).toEqual(["a"]);
+  });
   it("has() reads lists and maps", () => {
     expect([evaluate("has(a, 'x')", { a: ["x"] }), evaluate("has(a, 'y')", { a: ["x"] }), evaluate("has(m, 'k')", { m: { k: 1 } }), evaluate("has(z, 'k')", {})]).toEqual([true, false, true, false]);
     expect(checkExpression("has(session.permissions, 'x')")).toBeNull();

@@ -11,8 +11,15 @@ export function DocumentViewer({ title, paragraphs, read, onRead, height = 240, 
     const el = box.current;
     if (!read && el && reachedEnd(el.scrollTop, el.clientHeight, el.scrollHeight)) onRead?.();
   };
-  // a text that fits without scrolling is read as soon as it is shown
-  useEffect(check, [read, paragraphs.length]); // eslint-disable-line react-hooks/exhaustive-deps
+  // a text that fits without scrolling is read as soon as it is shown; a box that is hidden or not laid out yet is checked again when it gets a size
+  useEffect(() => {
+    check();
+    const el = box.current;
+    if (!el || typeof ResizeObserver === "undefined") return;
+    const watch = new ResizeObserver(check);
+    watch.observe(el);
+    return () => watch.disconnect();
+  }, [read, paragraphs.length]); // eslint-disable-line react-hooks/exhaustive-deps
   return (
     <div className="fxc-field fxc-doc">
       <h3 id={`${id}-title`} className="fxc-doc-title">{title}</h3>

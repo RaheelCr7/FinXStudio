@@ -9,5 +9,7 @@ export const strokesFromPath = (path: unknown): SignaturePoint[][] =>
   String(path ?? "").split("M").filter(Boolean).map((seg) => seg.split("L").map((pt) => { const [x, y] = pt.trim().split(/\s+/).map(Number); return { x: x ?? 0, y: y ?? 0 }; }));
 export const pointCount = (strokes: SignaturePoint[][]) => strokes.reduce((n, s) => n + s.length, 0);
 
-/** Whether the person has scrolled to the end of a text: within a few pixels of the bottom, or the text fits without scrolling at all. */
-export const reachedEnd = (top: number, visible: number, total: number, slack = 8): boolean => total <= visible + slack || top + visible >= total - slack;
+/** Whether the person has scrolled to the end of a text: within a few pixels of the bottom, or the text fits without scrolling at all. Never true for a box with no size. */
+export const reachedEnd = (top: number, visible: number, total: number, slack = 8): boolean =>
+  // a box with no size (hidden, or not laid out yet) has shown nothing, so nothing was read
+  visible > 0 && total > 0 && (total <= visible + slack || top + visible >= total - slack);

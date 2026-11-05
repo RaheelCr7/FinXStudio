@@ -230,11 +230,11 @@ export function ChartBlock({ b, lang }: P) {
 
 declare const require: (id: string) => any;
 /** The phone's file picker (expo-document-picker). Loaded when first used, so a build without it still runs everything else. */
-async function pickFile(accept: FileKind[]): Promise<{ name: string; size: number; uri: string } | undefined> {
+async function pickFile(accept: FileKind[]): Promise<{ name: string; size: number | undefined; uri: string } | undefined> {
   const picker = require("expo-document-picker");
   const r = await picker.getDocumentAsync({ type: accept.flatMap((k) => MIME[k]), copyToCacheDirectory: true, multiple: false });
   const a = r.canceled ? undefined : r.assets?.[0];
-  return a ? { name: String(a.name), size: Number(a.size ?? 0), uri: String(a.uri) } : undefined;
+  return a ? { name: String(a.name), size: typeof a.size === "number" ? a.size : undefined, uri: String(a.uri) } : undefined;
 }
 
 /** A file from the phone's picker. Text files (csv, xml) are read so a bank call can check their rows; the others are kept as a name and a size. */
@@ -248,10 +248,12 @@ export function FileUploadBlock({ b, set, lang }: P) {
     try {
       const f = await pickFile(accept);
       if (!f) return;
-      const bad = fileProblem(f, accept, b.maxKb);
+      // some providers give no size: read it from the file rather than call the file empty
+      const size = f.size ?? (await (await fetch(f.uri)).blob()).size;
+      const bad = fileProblem({ name: f.name, size }, accept, b.maxKb);
       if (bad) { setProblem(fileMessage(lang, bad, accept, b.maxKb)); return; }
       setProblem(undefined);
-      set(b.bind, fileValue(f, TEXT_KINDS.includes(fileKindOf(f.name)!) ? await (await fetch(f.uri)).text() : undefined));
+      set(b.bind, fileValue({ name: f.name, size }, TEXT_KINDS.includes(fileKindOf(f.name)!) ? await (await fetch(f.uri)).text() : undefined));
     } catch { setProblem(fileMessage(lang, "empty", accept, b.maxKb)); }
     finally { setBusy(false); }
   };
