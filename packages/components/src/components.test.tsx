@@ -112,3 +112,13 @@ describe("theme", () => {
     expect(vars["--bar-bg"]).toBe("#00853E");
   });
 });
+
+
+describe("Avatar", () => {
+  it("is wrapped in its own class, apart from the small tile of a choice list, so the name is not pushed over what follows", async () => {
+    const { Avatar } = await import("./web/Avatar");
+    const { container } = render(<Avatar name="Taylor Brooks" text="••3308" />);
+    expect(container.querySelector(".fxc-avatar-block")).toBeTruthy();
+    expect(container.querySelector(".fxc-avatar")).toBeNull();
+  });
+});

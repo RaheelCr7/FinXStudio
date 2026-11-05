@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import * as matchers from "vitest-axe/matchers";
@@ -31,6 +31,18 @@ describe("JourneyPlayer", () => {
     const alerts = await screen.findAllByRole("alert");
     expect(alerts.map((a) => a.textContent)).toContain("Required");
     await waitFor(() => expect((document.activeElement as HTMLElement).getAttribute("aria-invalid")).toBe("true"));
+  });
+
+  it("scrolls the first field with a mistake into view, so a mistake below the fold is not missed", async () => {
+    const scrolled = vi.fn();
+    const original = Element.prototype.scrollIntoView;
+    Element.prototype.scrollIntoView = scrolled as any;
+    try {
+      player();
+      await userEvent.click(await screen.findByRole("button", { name: "Find my bill" }));
+      await waitFor(() => expect(scrolled).toHaveBeenCalled());
+      expect(scrolled.mock.contexts[0]).toHaveProperty("className", expect.stringContaining("fxc-field"));
+    } finally { Element.prototype.scrollIntoView = original; }
   });
 
   it("moves focus to the new screen's title, and offers a back button that returns", async () => {

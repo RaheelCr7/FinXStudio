@@ -85,6 +85,8 @@ export type Persona = {
   retail?: RetailData;
   /** One login, several places to bank from: the companies this person acts for. Absent for a persona with a single place. */
   identity?: IdentityDef;
+  /** A customer made for tests and previews (Alex with saved payees, with fifty payees, ...): not offered at the apps' sign-in, still there for Studio and scenarios. */
+  testCast?: boolean;
   /** deterministic failure modes for testing unhappy paths */
   behaviour: { otpCode: string; transferFails?: boolean; kyc: "verified" | "pending" | "rejected" };
 };
@@ -195,7 +197,7 @@ export const personas: Record<string, Persona> = {
   },
   // Alex with a Euro and a Dirham account too, for moving money between accounts in different currencies.
   alexglobal: {
-    id: "alexglobal", brand: "bankworkx", name: "Alex Morgan (accounts in three currencies)", phone: "+1 415 555 0142",
+    id: "alexglobal", brand: "bankworkx", testCast: true, name: "Alex Morgan (accounts in three currencies)", phone: "+1 415 555 0142",
     accounts: [
       { id: "acc_main", name: "Main", maskedNumber: "••4410", iban: "US00 BWX 0000 0000 4410", balance: 8720.76, currency: "USD", status: "active", canDebit: true },
       { id: "acc_save", name: "Savings", maskedNumber: "••7731", iban: "US00 BWX 0000 0000 7731", balance: 15254.37, currency: "USD", status: "active", canDebit: true },
@@ -211,7 +213,7 @@ export const personas: Record<string, Persona> = {
   // The Payments cast: Alex with four accounts and saved payees, and a scheduled payment that uses one of them. Separate from Alex and
   // Alex with three currencies because their tests count what they have.
   alexpayees: {
-    id: "alexpayees", brand: "bankworkx", name: "Alex Morgan (saved payees)", phone: "+1 415 555 0142",
+    id: "alexpayees", brand: "bankworkx", testCast: true, name: "Alex Morgan (saved payees)", phone: "+1 415 555 0142",
     accounts: alexAccounts(),
     beneficiaries: alexPayees(),
     schedules: [{
@@ -225,7 +227,7 @@ export const personas: Record<string, Persona> = {
   },
   // Alex with the most payees the bank allows (50), to try the limit.
   alexfull: {
-    id: "alexfull", brand: "bankworkx", name: "Alex Morgan (50 saved payees)", phone: "+1 415 555 0142",
+    id: "alexfull", brand: "bankworkx", testCast: true, name: "Alex Morgan (50 saved payees)", phone: "+1 415 555 0142",
     accounts: alexAccounts(),
     beneficiaries: Array.from({ length: MAX_PAYEES }, (_, i) => {
       const n = String(i + 1).padStart(2, "0"), account = String(1000000 + i + 1);
@@ -238,7 +240,7 @@ export const personas: Record<string, Persona> = {
   },
   // Alex with the Payments cast's accounts and two saved billers, for paying bills. Separate from the others because their tests count what they have.
   alexbills: {
-    id: "alexbills", brand: "bankworkx", name: "Alex Morgan (saved billers)", phone: "+1 415 555 0142",
+    id: "alexbills", brand: "bankworkx", testCast: true, name: "Alex Morgan (saved billers)", phone: "+1 415 555 0142",
     accounts: alexAccounts(),
     beneficiaries: [],
     savedBillers: [{ id: "sb_power", nickname: "Home electricity", billerId: "city_power", reference: "4400123456" }, { id: "sb_net", nickname: "Home internet", billerId: "skyline_broadband", reference: "5550012345" }],
@@ -249,7 +251,7 @@ export const personas: Record<string, Persona> = {
   },
   // Alex with the Payments cast's accounts and three saved mobile numbers, for topping up. Separate from the others because their tests count what they have.
   alextopup: {
-    id: "alextopup", brand: "bankworkx", name: "Alex Morgan (saved numbers)", phone: "+1 415 555 0142",
+    id: "alextopup", brand: "bankworkx", testCast: true, name: "Alex Morgan (saved numbers)", phone: "+1 415 555 0142",
     accounts: alexAccounts(),
     beneficiaries: [],
     savedNumbers: alexNumbers(),
@@ -261,7 +263,7 @@ export const personas: Record<string, Persona> = {
   // Alex with the Payments cast's accounts, ten saved payees, three saved billers and eight scheduled payments (and one that ended), for scheduling,
   // changing and cancelling payments. Separate from the others because their tests count what they have.
   alexsched: {
-    id: "alexsched", brand: "bankworkx", name: "Alex Morgan (scheduled payments)", phone: "+1 415 555 0142",
+    id: "alexsched", brand: "bankworkx", testCast: true, name: "Alex Morgan (scheduled payments)", phone: "+1 415 555 0142",
     accounts: alexAccounts(),
     beneficiaries: alexSchedPayees(),
     savedBillers: alexBillers(),
@@ -332,7 +334,7 @@ export const personas: Record<string, Persona> = {
 // Alex again, for the approvals inbox: Beta has more waiting (a close name, a name that does not match, one Alex started, one that must wait for Lee, two approvals
 // in any order) and a payment that was rejected. Separate from Alex because the combined demo counts what Beta has waiting.
 personas.alexbiz = {
-  ...structuredClone(personas.alex!), id: "alexbiz", name: "Alex Morgan (business cast)",
+  ...structuredClone(personas.alex!), id: "alexbiz", testCast: true, name: "Alex Morgan (business cast)",
   identity: { id: "alex", name: "Alex Morgan", password: "Bwx!Demo2026", cast: true, business: [{ id: "alpha", company: ALPHA, userId: "alex" }, { id: "beta", company: BETA_CAST, userId: "alex" }] },
 };
 

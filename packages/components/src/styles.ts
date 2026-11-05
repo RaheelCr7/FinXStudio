@@ -42,7 +42,7 @@ const raw = `
 .fxc-select { appearance: none; padding-inline-end: 40px; cursor: pointer; }
 .fxc-input-wrap { position: relative; }
 .fxc-select-chevron { position: absolute; inset-block: 0; inset-inline-end: 12px; display: grid; place-items: center; pointer-events: none; color: var(--c-text-muted); }
-.fxc-avatar { display: grid; justify-items: center; gap: 4px; text-align: center; }
+.fxc-avatar-block { display: grid; justify-items: center; gap: 4px; text-align: center; }
 .fxc-avatar-disc { display: grid; place-items: center; inline-size: 72px; block-size: 72px; border-radius: 50%; background: color-mix(in srgb, var(--c-accent) 14%, transparent); color: var(--c-accent); font-size: 26px; font-weight: 700; }
 .fxc-avatar-name { font-size: 16px; font-weight: 700; }
 .fxc-avatar-text { font-size: 13px; color: var(--c-text-muted); }

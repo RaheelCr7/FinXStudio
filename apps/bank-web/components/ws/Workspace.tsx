@@ -1,5 +1,5 @@
 "use client";
-import { usePathname, useRouter } from "next/navigation";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useEffect, useRef } from "react";
 import { needsSwitch, parseLink, tabAllowed, tabLabel } from "@finx/bank-client";
 import { Notice, ScreenView } from "./ScreenView";
@@ -10,7 +10,9 @@ import { useWs } from "./use-ws";
 export function Workspace() {
   const { app, project, s, ctx, router } = useWs();
   const path = usePathname();
-  const link = parseLink(path.slice(`/${project.id}`.length));
+  // usePathname has no query: the values a button or a link carries (?paymentId=...) are read from the search parameters
+  const query = useSearchParams().toString();
+  const link = parseLink(path.slice(`/${project.id}`.length) + (query ? `?${query}` : ""));
   const active = s.session.info?.activeContextId;
   const mismatch = !!link && !!active && needsSwitch(link, active);
   // the place that was active when this address was opened: an address left behind by a switch is not a request to switch back

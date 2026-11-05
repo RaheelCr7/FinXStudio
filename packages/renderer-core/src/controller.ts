@@ -57,7 +57,12 @@ export class JourneyController {
   }
 
   /** Opens the first screen (launch values are already in place), then fills in any initial answers. */
-  async start() {
+  private starting?: Promise<void>;
+  /** Opens the first screen once. A second call (React runs an effect twice in development) gets the same answer and runs nothing again, so launch values used once are not lost. */
+  start(): Promise<void> {
+    return (this.starting ??= this.begin());
+  }
+  private async begin() {
     await this.runner.start();
     for (const [path, value] of Object.entries(this.opts.initial ?? {})) this.runner.set(path, value);
   }

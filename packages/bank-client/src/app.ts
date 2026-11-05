@@ -128,7 +128,8 @@ export class BankApp {
     if (this.adapterFor !== this.current) { const bank = this.current; this.adapterFor = bank; this.adapterFn = (id, input) => bank.call(id, input); }
     return this.adapterFn;
   }
-  personas = () => personasFor(this.deps.preset, this.deps.projectId);
+  /** The customers the sign-in offers: the demo customers, not the ones made for tests. */
+  personas = () => personasFor(this.deps.preset, this.deps.projectId).filter((p) => !p.testCast);
   money = (n: number) => (this.deps.money ?? usd)(n);
 
   /** The shell fields of a signed-out or just-switched app. Preferences are not in it: they survive a switch. */

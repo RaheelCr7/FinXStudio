@@ -44,6 +44,14 @@ describe("Personal", () => {
     await userEvent.click(await screen.findByRole("button", { name: "Send money" }));
     expect(nav.push).toHaveBeenCalledWith("/bankworkx/personal/j/personal-transfer");
   });
+  it("starts the journey with the values in the address: ?operatorId=aster skips the operator step of Mobile top-up", async () => {
+    nav.search = new URLSearchParams("operatorId=aster&junk=1");
+    try {
+      shell("/bankworkx/personal/j/mobile-topup");
+      expect(await screen.findByRole("heading", { name: "Mobile number", level: 1 }, { timeout: 5000 })).toBeTruthy();
+      expect(screen.queryByRole("heading", { name: "Choose your operator" })).toBeNull();
+    } finally { nav.search = new URLSearchParams(); }
+  });
   it("shows a row's buttons with the values the row passes in", async () => {
     shell("/bankworkx/personal/payments");
     await userEvent.click(await screen.findByRole("button", { name: /Taylor Brooks/ }));
