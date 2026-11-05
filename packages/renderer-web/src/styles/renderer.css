@@ -127,3 +127,16 @@
 .fx-legend-item:focus-visible, .fx-chart-toggle:focus-visible { outline: 3px solid color-mix(in srgb, var(--c-accent) 55%, transparent); outline-offset: 2px; }
 .fx-legend-dot { inline-size: 10px; block-size: 10px; border-radius: 50%; flex: none; }
 .fx-chart-toggle { align-self: flex-start; padding: 6px 12px; border: 1px solid var(--c-border-strong); border-radius: var(--r-pill); background: var(--c-surface); color: var(--c-text); font: inherit; font-size: 13px; cursor: pointer; }
+
+.fx-receipt { display: none; }
+@media print {
+  body * { visibility: hidden; }
+  .fx-receipt, .fx-receipt * { visibility: visible; }
+  .fx-receipt { display: block; position: absolute; inset: 0; padding: 32px; background: #fff; color: #000; font: 14px/1.5 system-ui, sans-serif; }
+  .fx-receipt h1 { margin: 0 0 16px; font-size: 22px; }
+  .fx-receipt dl { margin: 0; }
+  .fx-receipt dl > div { display: flex; justify-content: space-between; gap: 24px; padding: 8px 0; border-bottom: 1px solid #ccc; }
+  .fx-receipt dt { color: #555; }
+  .fx-receipt dd { margin: 0; text-align: end; font-variant-numeric: tabular-nums; }
+  .fx-receipt dd.fx-receipt-note { text-align: start; }
+}

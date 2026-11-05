@@ -1,4 +1,4 @@
-export type { ButtonProps, TextFieldProps, AppBarProps, ListRowProps, AlertProps, ResultProps, SummaryListProps, SwitchProps, CheckboxProps, ChoiceOption, ChoiceGroupProps, QuickAmount, AmountFieldProps, CodeInputProps, SectionHeaderProps, ShortcutsProps, HeroProps, DividerProps, AccordionProps, DialogProps, DateFieldProps, DropdownProps, AvatarProps, MapPinsProps, BalanceListProps, KeypadKey, KeypadProps, PinDotsProps, StatusTone, StatusChipProps, TimelineProps, DataTableProps, DataTableCell } from "./props";
+export type { ButtonProps, TextFieldProps, AppBarProps, ListRowProps, AlertProps, ResultProps, SummaryListProps, SwitchProps, CheckboxProps, ChoiceOption, ChoiceGroupProps, QuickAmount, AmountFieldProps, CodeInputProps, SectionHeaderProps, ShortcutsProps, HeroProps, DividerProps, AccordionProps, DialogProps, DateFieldProps, DropdownProps, AvatarProps, MapPinsProps, BalanceListProps, KeypadKey, KeypadProps, PinDotsProps, StatusTone, StatusChipProps, TimelineProps, DataTableProps, DataTableCell, FileFieldProps, DocumentViewerProps, SignaturePadProps, IdCaptureProps } from "./props";
 export { Button } from "./web/Button";
 export { TextField } from "./web/TextField";
 export { AppBar } from "./web/AppBar";
@@ -27,6 +27,11 @@ export { Accordion } from "./web/Accordion";
 export { StatusChip } from "./web/StatusChip";
 export { Timeline } from "./web/Timeline";
 export { DataTable } from "./web/DataTable";
+export { FileField } from "./web/FileField";
+export { DocumentViewer } from "./web/DocumentViewer";
+export { SignaturePad } from "./web/SignaturePad";
+export { IdCapture } from "./web/IdCapture";
+export * from "./signature";
 export { Icon } from "./web/Icon";
 export { componentsCss } from "./styles";
 export { brandVars } from "./theme";

@@ -26,6 +26,10 @@ import { BalanceList } from "./web/BalanceList";
 import { StatusChip } from "./web/StatusChip";
 import { Timeline } from "./web/Timeline";
 import { DataTable } from "./web/DataTable";
+import { FileField } from "./web/FileField";
+import { DocumentViewer } from "./web/DocumentViewer";
+import { SignaturePad } from "./web/SignaturePad";
+import { IdCapture } from "./web/IdCapture";
 
 const LONG = "A very long label that has to wrap onto a second line without breaking the layout";
 
@@ -445,4 +449,75 @@ catalog.push({
   ],
   a11y: ["A real table with column headings (scope=col); a sorted heading says aria-sort, and sorting is a button in the heading.", "Every tick box is named by its row, and the header box is half-ticked when only some rows are.", "Search is a labelled field; filter chips are buttons with aria-pressed; the count of ticked rows and the page summary are announced politely.", "On a phone the same rows become cards with the same names, ticks and actions; the sort list replaces the headings."],
   tokens: ["field.height", "field.radius", "radius.lg"],
+});
+
+const FILE_STRINGS = { choose: "Choose a file", replace: "Choose another", remove: "Remove", drop: "or drop it here" };
+catalog.push({
+  name: "FileField", group: "Inputs", Component: FileField, purpose: "Choose a file by button or by dropping it: a payment file, a document, a picture.",
+  props: [
+    { name: "label", type: "string", description: "Names the field." },
+    { name: "accept", type: "string", description: "The file input's accept list (.csv,.xml). Web only." },
+    { name: "hint / helper / error", type: "string", description: "What may be chosen and how big; a line of help; what is wrong." },
+    { name: "file", type: "{ name, detail? }", description: "The file chosen, with its size under the name." },
+    { name: "onFile / onPick", type: "fn", description: "Web: a file was chosen or dropped. Phone: the button was pressed and the app opens its picker." },
+    { name: "onRemove / busy / strings", type: "fn / boolean / object", description: "Remove the file; reading it; the words on the buttons." },
+  ],
+  states: [
+    { name: "Empty", props: { label: "Payment file", accept: ".csv,.xml", hint: "CSV or XML, up to 256 KB.", strings: FILE_STRINGS } },
+    { name: "Chosen", props: { label: "Payment file", accept: ".csv", file: { name: "october-payroll.csv", detail: "12 KB" }, strings: FILE_STRINGS, onRemove: () => {} } },
+    { name: "Error", props: { label: "Payment file", accept: ".csv", error: "Use a CSV or XML file.", strings: FILE_STRINGS } },
+    { name: "Reading", props: { label: "Payment file", accept: ".csv", busy: true, strings: FILE_STRINGS } },
+  ],
+  a11y: ["The real file input sits inside the button, so keyboard and screen readers use the browser's own control; it is named by the label, and the hint and error are tied to it.", "The error is announced; the chosen file's name is text, not only an icon.", "Dropping a file is an extra, never the only way."],
+  tokens: ["button.radius", "button.border", "radius.lg"],
+});
+
+const PARAS = [{ heading: "1. Using the account", text: "You agree to keep your details up to date and to tell us if anything changes." }, { heading: "2. Payments", text: "A payment you approve cannot be undone once it has been released to the receiving bank." }, { text: "A long closing paragraph that has to wrap onto several lines without breaking the layout of the box it is drawn in." }];
+catalog.push({
+  name: "DocumentViewer", group: "Inputs", Component: DocumentViewer, purpose: "A text the person must read to the end (terms, an agreement) before going on.",
+  props: [
+    { name: "title / paragraphs", type: "string / { heading?, text }[]", description: "The document, in order." },
+    { name: "read / onRead", type: "boolean / () => void", description: "Whether the end was reached; called once when it is (at once if the text fits)." },
+    { name: "height / error / strings", type: "number / string / object", description: "The box's height; what is wrong; the words under the box." },
+  ],
+  states: [
+    { name: "Not read yet", props: { title: "Terms of use", paragraphs: PARAS, read: false, height: 120, strings: { progress: "Scroll to the end to continue.", done: "You have read the whole document." } } },
+    { name: "Read", props: { title: "Terms of use", paragraphs: PARAS, read: true, strings: { progress: "Scroll to the end to continue.", done: "You have read the whole document." } } },
+    { name: "Error", props: { title: "Terms of use", paragraphs: PARAS, read: false, error: "Read the document to the end first.", strings: { progress: "Scroll to the end to continue.", done: "You have read the whole document." } } },
+  ],
+  a11y: ["The scrolling box is a named region that takes focus, so the keyboard scrolls it.", "Reaching the end is announced politely and is also written under the box; the text is real text, not an image."],
+  tokens: ["radius.lg"],
+});
+
+const SIG_STRINGS = { type: "Type", draw: "Draw", name: "Type your full name", clear: "Clear", pad: "Signature box. Draw with a finger or a mouse; use Type for the keyboard.", modes: "How to sign" };
+catalog.push({
+  name: "SignaturePad", group: "Inputs", Component: SignaturePad, purpose: "Sign by typing a name or by drawing it.",
+  props: [
+    { name: "label / helper / error", type: "string", description: "Names the field; help; what is wrong." },
+    { name: "modes / mode / onMode", type: "(type | draw)[] / type | draw / fn", description: "Which ways to sign are offered and the one in use." },
+    { name: "name / onName", type: "string / fn", description: "The typed name." },
+    { name: "path / onPath", type: "string / (path, points) => void", description: "The drawn line as a path, and how many points it has." },
+  ],
+  states: [
+    { name: "Typed", props: { label: "Sign here", modes: ["type", "draw"], mode: "type", name: "Alex Morgan", strings: SIG_STRINGS } },
+    { name: "Drawn", props: { label: "Sign here", modes: ["type", "draw"], mode: "draw", path: "M20 80 L60 40 L100 80 L140 40 L180 80", strings: SIG_STRINGS } },
+    { name: "Error", props: { label: "Sign here", modes: ["type"], mode: "type", error: "Type your full name.", strings: SIG_STRINGS } },
+  ],
+  a11y: ["Typing a name is a plain labelled text field, so a keyboard and a screen reader can sign; drawing is an extra for a pointer or touch.", "The two ways are a radio group; the drawing box says in words how to use it and where the keyboard way is.", "The error is announced."],
+  tokens: ["field.height", "field.radius", "radius.lg"],
+});
+
+const CAP_STRINGS = { capture: "Capture", retake: "Retake", done: "Captured", simulated: "Simulated: no camera is used and nothing is saved." };
+catalog.push({
+  name: "IdCapture", group: "Inputs", Component: IdCapture, purpose: "A simulated capture of an identity document and a selfie, step by step.",
+  props: [
+    { name: "label / error", type: "string", description: "Names the field; what is still to do." },
+    { name: "steps", type: "{ id, label, hint, done, ref? }[]", description: "front, back and selfie, each with its state and the reference of the simulated picture." },
+    { name: "onCapture", type: "(id) => void", description: "A step's button was pressed." },
+  ],
+  states: [
+    { name: "Nothing yet", props: { label: "Verify your identity", steps: [{ id: "front", label: "Front of the document", hint: "Fit the whole document in the frame.", done: false }, { id: "selfie", label: "Selfie", hint: "Look at the camera in good light.", done: false }], strings: CAP_STRINGS } },
+    { name: "Half done", props: { label: "Verify your identity", steps: [{ id: "front", label: "Front of the document", hint: "", done: true, ref: "SIM-FRONT-1" }, { id: "selfie", label: "Selfie", hint: "Look at the camera in good light.", done: false }], error: "Still to capture: selfie.", strings: CAP_STRINGS } },
+  ],
+  a11y: ["Each step is a list item with its own button named by the step and the action (Capture: Selfie).", "Done is written in words with the reference, not only drawn as a tick; the line under the title says it is simulated."],
 });

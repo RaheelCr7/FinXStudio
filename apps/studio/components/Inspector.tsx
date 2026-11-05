@@ -165,6 +165,31 @@ function BlockEditor({ b, journey, onChange }: { b: any; journey: Journey; onCha
         <button className="btn sm" onClick={() => onChange({ series: [...b.series, { key: "value", label: "Series" }] })}>+ Add series</button>
         <Field label="Currency (code or {{path}})"><input className="input mono" value={b.currency ?? ""} onChange={(e) => onChange({ currency: e.target.value || undefined })} /></Field>
         <label className="row" style={{ gap: 8, fontSize: 13 }}><input type="checkbox" checked={b.table === true} onChange={(e) => onChange({ table: e.target.checked || undefined })} />Offer “Show as table”</label></>) : null}
+      {b.type === "fileUpload" ? (<>
+        <Loc label="Label" journey={journey} value={b.label} onChange={(label) => onChange({ label })} />
+        <BindField journey={journey} value={b.bind} onChange={(bind) => onChange({ bind })} />
+        <Field label="Allowed files">
+          <div className="row" style={{ gap: 12, flexWrap: "wrap" }}>{(["csv", "xml", "pdf", "image"] as const).map((k) => (
+            <label key={k} className="row" style={{ gap: 6, fontSize: 13 }}><input type="checkbox" checked={b.accept.includes(k)} onChange={(e) => { const next = e.target.checked ? [...b.accept, k] : b.accept.filter((x: string) => x !== k); if (next.length) onChange({ accept: next }); }} />{k}</label>))}</div></Field>
+        <Field label="Largest file (KB)" hint="Empty: 256 KB for csv and xml, 10 MB for pdf and pictures."><input className="input" type="number" min={1} value={b.maxKb ?? ""} onChange={(e) => onChange({ maxKb: e.target.value ? Math.max(1, Number(e.target.value)) : undefined })} /></Field>
+        <Loc label="Helper text" journey={journey} value={b.helper ?? ""} onChange={(helper) => onChange({ helper: helper || undefined })} /></>) : null}
+      {b.type === "documentViewer" ? (<>
+        <Loc label="Title" journey={journey} value={b.title} onChange={(title) => onChange({ title })} />
+        <Loc label="Text" journey={journey} value={b.text} onChange={(text) => onChange({ text })} multiline />
+        <div className="faint">Separate paragraphs with a blank line; a line starting with ## is a heading. The customer cannot continue until the end was reached.</div>
+        <BindField journey={journey} value={b.bind} onChange={(bind) => onChange({ bind })} /></>) : null}
+      {b.type === "signature" ? (<>
+        <Loc label="Label" journey={journey} value={b.label} onChange={(label) => onChange({ label })} />
+        <BindField journey={journey} value={b.bind} onChange={(bind) => onChange({ bind })} />
+        <Field label="Ways to sign"><select className="select" value={(b.modes ?? ["type", "draw"]).join("+")} onChange={(e) => onChange({ modes: e.target.value === "type+draw" ? undefined : e.target.value.split("+") })}><option value="type+draw">Type or draw</option><option value="type">Type only</option><option value="draw">Draw only (no keyboard way)</option></select></Field>
+        <Field label="Typed name must match (optional)" hint="A {{data}} value such as the customer's name."><input className="input mono" value={b.expectedName ?? ""} onChange={(e) => onChange({ expectedName: e.target.value || undefined })} /></Field>
+        <Loc label="Helper text" journey={journey} value={b.helper ?? ""} onChange={(helper) => onChange({ helper: helper || undefined })} /></>) : null}
+      {b.type === "idCapture" ? (<>
+        <Loc label="Label" journey={journey} value={b.label} onChange={(label) => onChange({ label })} />
+        <BindField journey={journey} value={b.bind} onChange={(bind) => onChange({ bind })} />
+        <Field label="Steps"><div className="row" style={{ gap: 12, flexWrap: "wrap" }}>{(["front", "back", "selfie"] as const).map((k) => { const steps: string[] = b.steps ?? ["front", "selfie"]; return (
+          <label key={k} className="row" style={{ gap: 6, fontSize: 13 }}><input type="checkbox" checked={steps.includes(k)} onChange={(e) => { const next = (["front", "back", "selfie"] as const).filter((x) => (x === k ? e.target.checked : steps.includes(x))); if (next.length) onChange({ steps: next }); }} />{k}</label>); })}</div></Field>
+        <div className="faint">The capture is simulated: no camera is used and no picture is kept.</div></>) : null}
       <RuleField journey={journey} label="Show this block when" none="Always shown" value={b.visibleWhen} onChange={(visibleWhen) => onChange({ visibleWhen })} />
     </div>
   );

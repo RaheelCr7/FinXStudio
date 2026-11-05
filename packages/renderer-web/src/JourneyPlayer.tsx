@@ -1,7 +1,7 @@
 "use client";
-import { useEffect, useMemo, useReducer, useRef } from "react";
+import { useEffect, useMemo, useReducer, useRef, useState } from "react";
 import type { Journey } from "@finx/journey-schema";
-import { JourneyController, ui, type Adapter, type BlockType, type ChainRequest, type JourneyEvent } from "@finx/renderer-core";
+import { JourneyController, ui, type Adapter, type BlockType, type ChainRequest, type JourneyEvent, type Receipt } from "@finx/renderer-core";
 import type { BrandLook } from "@finx/ui-kit";
 import { AppBar, componentsCss } from "@finx/components";
 import { Button, registry } from "./blocks/blocks";
@@ -17,6 +17,10 @@ export type JourneyPlayerProps = {
   launch?: Record<string, any>;
   /** The journey asked to open another one (navigate.toJourney); without it a message is shown. */
   onOpenJourney?: (req: ChainRequest) => void;
+  /** What the person may do where they bank from; journeys read it as `session.permissions` (read-only). */
+  session?: { permissions?: string[] };
+  /** A journey shared a receipt. By default the page prints it (the browser's print dialog also saves a PDF). */
+  onShare?: (receipt: Receipt) => void;
   /** Receives screen views, mistakes, bank failures and exits (never answers), for analytics. */
   onEvent?: (e: JourneyEvent) => void;
   /** The close button, and back from the first screen. */
@@ -33,8 +37,19 @@ export type JourneyPlayerProps = {
  * this draws it with real form elements: labels, error messages that are announced, a step list, Enter to continue,
  * and focus that moves to the screen title (or the first mistake) so keyboard and screen-reader users are never left behind.
  */
-export function JourneyPlayer({ journey, adapter, lang, initial, launch, onOpenJourney, onEvent, onClose, onExit, look, brandName }: JourneyPlayerProps) {
-  const controller = useMemo(() => new JourneyController(journey, { adapter, lang, initial, launch, onOpenJourney, onEvent }), [journey, adapter]);
+export function JourneyPlayer({ journey, adapter, lang, initial, launch, onOpenJourney, onEvent, onClose, onExit, look, brandName, session, onShare }: JourneyPlayerProps) {
+  const [receipt, setReceipt] = useState<Receipt | null>(null);
+  const share = useRef(onShare);
+  share.current = onShare;
+  const controller = useMemo(() => new JourneyController(journey, { adapter, lang, initial, launch, onOpenJourney, onEvent, session, onShare: (r) => (share.current ? share.current(r) : setReceipt(r)) }), [journey, adapter]);
+  // print the receipt once it is on the page, then take it away again
+  useEffect(() => {
+    if (!receipt) return;
+    const done = () => setReceipt(null);
+    window.addEventListener("afterprint", done, { once: true });
+    window.print?.();
+    return () => window.removeEventListener("afterprint", done);
+  }, [receipt]);
   const [, force] = useReducer((x: number) => x + 1, 0);
   useEffect(() => controller.subscribe(force), [controller]);
   useEffect(() => { void controller.start(); }, [controller]);
@@ -108,6 +123,12 @@ export function JourneyPlayer({ journey, adapter, lang, initial, launch, onOpenJ
         </div>
         {hero ? null : <footer className="fx-player-foot">{buttonRow}</footer>}
       </form>
+      {receipt ? (
+        <div className="fx-receipt" role="document" aria-label={receipt.title}>
+          <h1>{receipt.title}</h1>
+          <dl>{receipt.lines.map((l, i) => l.label ? <div key={i}><dt>{l.label}</dt><dd>{l.value}</dd></div> : <div key={i}><dd className="fx-receipt-note">{l.value}</dd></div>)}</dl>
+        </div>
+      ) : null}
     </div>
     </LookContext.Provider>
   );

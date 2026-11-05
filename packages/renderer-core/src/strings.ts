@@ -10,6 +10,11 @@ const STRINGS: Record<string, Record<string, string>> = {
     show: "Show", hide: "Hide", otpLabel: "One-time code, {n} digits", quickAmounts: "Quick amounts", amountWhole: "Enter a whole amount, without decimals", amountDecimals: "Use at most {n} decimal places",
     tableSearch: "Search", tableAll: "All", tableEmpty: "Nothing to show yet.", tableNoMatch: "No rows match your search or filters.", tableClear: "Clear search and filters", tableRange: "{from}–{to} of {total}", tablePrev: "Previous page", tableNext: "Next page",
     tableSelectRow: "Select {name}", tableSelectAll: "Select all rows on this page", tableSelected: "{n} selected", tableTotal: "total {amount}", tableLimit: "You can select up to {n}.", tableSortBy: "Sort by", tableSortAsc: "ascending", tableSortDesc: "descending", tableOpen: "Open",
+    fileHint: "{types}, up to {size}.", fileType: "Use a {types} file.", fileTooBig: "The file is larger than {size}.", fileEmpty: "The file is empty.", fileChoose: "Choose a file", fileReplace: "Choose another", fileRemove: "Remove", fileDrop: "or drop it here",
+    docProgress: "Scroll to the end to continue.", docRead: "You have read the whole document.", docMustRead: "Read the document to the end first.",
+    sigType: "Type", sigDraw: "Draw", sigName: "Type your full name", sigNameShort: "Type your full name.", sigNameMismatch: "Type your name exactly as it is on your profile.", sigDrawMore: "Draw your signature in the box.", sigClear: "Clear", sigPad: "Signature box. Draw with a finger or a mouse; use Type for the keyboard.", sigModes: "How to sign",
+    capture_front: "Front of the document", capture_front_hint: "Fit the whole document in the frame.", capture_back: "Back of the document", capture_back_hint: "Turn it over and fit it in the frame.", capture_selfie: "Selfie", capture_selfie_hint: "Look at the camera in good light.",
+    captureTake: "Capture", captureRetake: "Retake", captureDone: "Captured", captureMissing: "Still to capture: {steps}.", captureSim: "Simulated: no camera is used and nothing is saved.",
     chartAsTable: "Show as table", chartAsChart: "Show as chart", chartSeries: "Show", timelineDone: "Done", timelineCurrent: "In progress", timelineUpcoming: "Not yet", timelineFailed: "Did not happen",
   },
   ur: {

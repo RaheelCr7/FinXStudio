@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { internalTransfer, localTransfer, manageBeneficiary, mobileTopup, payBill } from "@finx/journey-schema";
+import { Journey, internalTransfer, localTransfer, manageBeneficiary, mobileTopup, payBill } from "@finx/journey-schema";
 import { simulate, type Step } from "./simulate";
 
 const payHappy: Step[] = [
@@ -162,5 +162,35 @@ describe("simulate: launch values and journeys that open journeys", () => {
     const r = await simulate({ journey: internalTransfer, persona: "alexpayees", lang: "en", launch: { "opt.typeDomestic": false }, steps: [{ expectScreen: "payee" }] });
     expect(r.ok).toBe(true);
     expect(r.opened[0]!.launch).toEqual({ "opt.typeDomestic": false, "launch.type": "internal" });
+  });
+});
+
+describe("session permissions in a walk", () => {
+  const gated = Journey.parse({
+    id: "j", slug: "gated", name: "Gated", version: 1, status: "draft", channels: ["web"], locale: { default: "en", supported: ["en"] }, entryScreen: "s", dataModel: {}, integrations: [],
+    screens: [{ id: "s", title: "S", kind: "terminal", blocks: [
+      { type: "text", text: "Manage cards", visibleWhen: "has(session.permissions, 'cards.manage')" },
+      { type: "text", text: "Pay a supplier", visibleWhen: "has(session.permissions, 'biz.payments.initiate')" },
+    ] }],
+  });
+  it("gives a customer with several places the permissions of the place they are in (personal at first)", async () => {
+    const r = await simulate({ journey: gated, persona: "alex", lang: "en", steps: [{ expectText: "Manage cards" }, { expectNoText: "Pay a supplier" }] });
+    expect(r.failures).toEqual([]);
+  });
+  it("gives a customer with one place none", async () => {
+    const r = await simulate({ journey: gated, persona: "ayesha", lang: "en", steps: [{ expectNoText: "Manage cards" }, { expectNoText: "Pay a supplier" }] });
+    expect(r.failures).toEqual([]);
+  });
+  it("shows a table's cells, a chip and a timeline to expectText", async () => {
+    const j = Journey.parse({
+      id: "j", slug: "data", name: "Data", version: 1, status: "draft", channels: ["web"], locale: { default: "en", supported: ["en"] }, entryScreen: "s", dataModel: {}, integrations: [],
+      screens: [{ id: "s", title: "S", kind: "terminal", blocks: [
+        { type: "dataTable", source: "rows", label: "Rows", columns: [{ key: "n", label: "Name" }, { key: "st", label: "Status", type: "status" }] },
+        { type: "timeline", items: [{ id: "a", title: "Started by Priya" }] },
+      ] }],
+    });
+    const r = await simulate({ journey: j, persona: "ayesha", lang: "en", launch: { rows: [{ id: "1", n: "Zeta Supplies", st: "pending_approval" }] }, steps: [{ expectText: "Zeta Supplies" }, { expectText: "Pending approval" }, { expectText: "Started by Priya" }] });
+    expect(r.failures).toEqual([]);
+    expect(r.frames[0]!.blocks.join(" ")).toContain('table "Rows" 1 rows');
   });
 });

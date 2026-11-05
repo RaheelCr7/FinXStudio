@@ -5,7 +5,7 @@ import { interpolate, localize, wholeExpression } from "./template";
 import { ui } from "./strings";
 import { cardExpiryValid, luhnValid } from "./card";
 import { balanceRows } from "./blocks/pickers";
-import { statusChip, timelineState, tableColumns, tableRow, liveSelection, chartView, selectionTotal } from "./blocks/index";
+import { statusChip, timelineState, tableColumns, tableRow, liveSelection, chartView, selectionTotal, fileProblem, fileMessage, fileHint, acceptAttr, docParagraphs, signatureProblem, captureSteps, captureProblem, captureRows, receiptText, type FileKind, type Receipt } from "./blocks/index";
 
 /** The actions of a list row with every {{item.…}} filled in from that row, so pressing it acts on the right entry. */
 function bindItem(node: any, scope: any): any {
@@ -14,6 +14,9 @@ function bindItem(node: any, scope: any): any {
   if (node && typeof node === "object") return Object.fromEntries(Object.entries(node).map(([k, v]) => [k, bindItem(v, scope)]));
   return node;
 }
+
+/** session.permissions is the app's, not the journey's (a journey may keep its own answers elsewhere under session, such as session.userId). */
+const isSession = (path: string) => path === "session" || path === "session.permissions" || path.startsWith("session.permissions.");
 
 export type Adapter = (adapterId: string, input: Record<string, any>) => Promise<any>;
 /** What happened during a run, for analytics. No answers or personal data: only where the person was and what stopped them. */
@@ -24,7 +27,9 @@ export type RunEvent =
   | { type: "back"; screen: string }
   | { type: "exit"; screen: string }
   /** The journey asked to open another one. Only the target's name, never the values. */
-  | { type: "chain"; screen: string; journey: string };
+  | { type: "chain"; screen: string; journey: string }
+  /** A receipt was printed or shared. Only that it happened, never what it says. */
+  | { type: "share"; screen: string };
 /** A journey asking the app to open another one: the target's slug and the values to start it with, by data path. */
 export type ChainRequest = { journey: string; launch: Record<string, any>; returnTo?: string };
 export type RunnerOptions = {
@@ -33,6 +38,13 @@ export type RunnerOptions = {
   launch?: Record<string, any>;
   /** Opens another journey in place of this one (navigate.toJourney). Without it the request is refused with a message on the screen. */
   openJourney?: (req: ChainRequest) => void;
+  /**
+   * What the signed-in person may do in the place they are banking from, read-only: journeys read it as `session.permissions`
+   * (`visibleWhen: "has(session.permissions, 'biz.payments.initiate')"`). It hides things; the bank still enforces every rule.
+   */
+  session?: { permissions?: string[] };
+  /** The journey shared a receipt (the share action): the player prints it on the web or opens the share sheet on a phone. */
+  onShare?: (receipt: Receipt) => void;
 };
 export type ViewBlock = Block & { _error?: string };
 export type View = {
@@ -66,6 +78,8 @@ export class JourneyRunner {
   constructor(public journey: Journey, private opts: RunnerOptions) {
     this.lang = opts.lang ?? journey.locale.default;
     this.current = journey.entryScreen;
+    // read-only: nothing in a journey can write session.permissions (set, setData and launch values refuse it)
+    if (opts.session) this.state.session = { permissions: Object.freeze([...(opts.session.permissions ?? [])]) };
   }
 
   subscribe(fn: () => void): () => void { this.listeners.add(fn); return () => { this.listeners.delete(fn); }; }
@@ -77,14 +91,14 @@ export class JourneyRunner {
   setLang(l: string) { this.lang = l; this.emit(); }
 
   get(path: string) { return getPath(this.state, path); }
-  set(path: string, value: any) { setPath(this.state, path, value); delete this.errors[path]; this.emit(); }
+  set(path: string, value: any) { if (isSession(path)) return; setPath(this.state, path, value); delete this.errors[path]; this.emit(); }
 
   private scope() { return this.state; }
   private tx(t: any) { return interpolate(localize(t, this.lang, this.journey.locale.default), this.scope()); }
 
   async start() {
     // launch values come first: the entry screen's onEnter, branches and navigation rules can read them
-    for (const [path, value] of Object.entries(this.opts.launch ?? {})) setPath(this.state, path, value);
+    for (const [path, value] of Object.entries(this.opts.launch ?? {})) if (!isSession(path)) setPath(this.state, path, value);
     await this.enter(this.journey.entryScreen);
   }
 
@@ -112,6 +126,7 @@ export class JourneyRunner {
       if (!b.bind) continue;
       if (b.type === "cardForm") { this.validateCard(b.bind); continue; }
       const v = this.get(b.bind);
+      if (b.type === "documentViewer") { if (v !== true) this.errors[b.bind] = ui(this.lang, "docMustRead"); continue; }
       const def = this.journey.dataModel?.[b.bind];
       const empty = v == null || v === "" || (Array.isArray(v) && v.length === 0) || v === false && b.type !== "consent";
       if (b.type === "consent") {
@@ -119,6 +134,18 @@ export class JourneyRunner {
         continue;
       }
       if (def?.required && empty) { this.errors[b.bind] = ui(this.lang, "required"); continue; }
+      if (b.type === "fileUpload" && v != null) {
+        const problem = fileProblem(v as any, b.accept, b.maxKb);
+        if (problem) this.errors[b.bind] = fileMessage(this.lang, problem, b.accept, b.maxKb);
+      }
+      if (b.type === "signature" && v != null) {
+        const message = signatureProblem(this.lang, v, b.expectedName ? this.tx(b.expectedName) : undefined);
+        if (message) this.errors[b.bind] = message;
+      }
+      if (b.type === "idCapture") {
+        const message = captureProblem(this.lang, v, captureSteps(b.steps));
+        if (message) this.errors[b.bind] = message;
+      }
       if (b.type === "amountInput" && v != null) {
         const n = Number(v);
         const min = b.validation?.min != null ? this.num(b.validation.min) : undefined;
@@ -157,6 +184,21 @@ export class JourneyRunner {
     if (!/^[0-9]{3,4}$/.test(String(c.cvv ?? ""))) this.errors[`${bind}.cvv`] = ui(this.lang, "cardCvv");
   }
 
+  /** Builds the receipt of this screen and hands it to the player. Without a player that can print or share, nothing happens. */
+  private share(a: any) {
+    const blocks = (this.screen.blocks as any[]).filter((b) => !b.visibleWhen || this.safeEval(b.visibleWhen));
+    const result = blocks.find((b) => b.type === "result");
+    const title = a.title ? this.tx(a.title) : result ? this.tx(result.title) : this.tx(this.screen.title);
+    const lines: { label: string; value: string }[] = a.rows
+      ? a.rows.map((r: any) => ({ label: this.tx(r.label), value: this.tx(r.value) }))
+      : [
+        ...blocks.filter((b) => b.type === "reviewSummary").flatMap((b) => b.rows.map((r: any) => ({ label: this.tx(r.label), value: this.tx(r.value) }))),
+        ...(result?.text ? [{ label: "", value: this.tx(result.text) }] : []), ...(result?.meta ? [{ label: "", value: this.tx(result.meta) }] : []),
+      ];
+    this.note({ type: "share", screen: this.current });
+    this.opts.onShare?.({ title, lines, text: receiptText(title, lines) });
+  }
+
   private num(x: number | string): number { return typeof x === "number" ? x : Number(this.safeEval(x)); }
   private safeEval(expr: string): any { try { return evaluate(expr, this.scope()); } catch { return undefined; } }
 
@@ -190,12 +232,12 @@ export class JourneyRunner {
         case "setData": {
           // a value that is a whole {{expression}} is read from the journey's data now (for example the username that was found)
           const whole = wholeExpression(a.value);
-          setPath(this.state, a.path, whole ? this.safeEval(whole) : a.value);
+          if (!isSession(a.path)) setPath(this.state, a.path, whole ? this.safeEval(whole) : a.value);
           break;
         }
         case "showToast": this.toast = this.tx(a.text); this.emit(); break;
         case "exit": this.exited = true; this.note({ type: "exit", screen: this.current }); this.emit(); return;
-        case "share": break;
+        case "share": this.share(a); break;
         case "callApi": {
           const integ = this.journey.integrations.find((i) => i.id === a.integration);
           if (!integ) throw new Error(`Unknown integration ${a.integration}`);
@@ -342,6 +384,13 @@ export class JourneyRunner {
       if (b.total) out.selectionTotal = selectionTotal(out.rows, out.selected, b.total.key, this.tx(b.total.currency));
       if (b.empty) out.empty = say(b.empty);
     }
+    if (b.type === "fileUpload") {
+      const accept: FileKind[] = b.accept;
+      out.acceptAttr = acceptAttr(accept); out.hint = fileHint(this.lang, accept, b.maxKb);
+    }
+    if (b.type === "documentViewer") out.paragraphs = docParagraphs(this.tx(b.text));
+    if (b.type === "signature") { out.modes = b.modes ?? ["type", "draw"]; if (b.expectedName) out.expectedName = this.tx(b.expectedName); }
+    if (b.type === "idCapture") out.steps = captureRows(this.get(b.bind), captureSteps(b.steps), this.lang);
     if (b.type === "chart") {
       const say = (t: any) => this.tx(t);
       out.chart = chartView(Object.values(this.get(b.source) ?? {}), { ...b, xLabel: b.xLabel ? say(b.xLabel) : undefined }, say, b.currency ? this.tx(b.currency) : "");

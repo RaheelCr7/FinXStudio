@@ -58,6 +58,14 @@ function describeBlock(b: Record<string, any>): string | null {
     case "textInput": return `input[${b.bind}]="${b.value ?? ""}" label "${clip(b.label, 40)}"`;
     case "accountPicker": case "beneficiaryPicker": return `${b.type}[${b.bind}]=${b.value ?? ""} (${(b.items ?? []).length} choices)`;
     case "button": return `button "${clip(b.label, 40)}"`;
+    case "statusChip": return `status(${b.chip?.tone}) "${b.chip?.label}"`;
+    case "timeline": return `timeline ${(b.entries ?? []).map((e: any) => `${e.state}: ${clip(e.title, 30)}`).join("; ")}`;
+    case "dataTable": return `table "${clip(b.label, 30)}" ${(b.rows ?? []).length} rows${b.selectable ? `, ticked: ${(b.selected ?? []).join(",") || "none"}` : ""}`;
+    case "chart": return `chart(${b.kind}) "${clip(b.label, 30)}" ${b.chart?.series?.[0]?.points?.length ?? 0} points`;
+    case "fileUpload": return `file[${b.bind}]=${b.value?.name ?? ""}`;
+    case "documentViewer": return `document[${b.bind}] read=${b.value === true} "${clip(b.title, 40)}"`;
+    case "signature": return `signature[${b.bind}]=${b.value?.mode ?? ""}`;
+    case "idCapture": return `idCapture[${b.bind}] ${(b.steps ?? []).map((x: any) => `${x.id}${x.done ? "✓" : "…"}`).join(" ")}`;
     default: return b.type;
   }
 }
@@ -68,6 +76,12 @@ function visibleStrings(view: View): string[] {
     for (const k of ["label", "text", "title", "hint", "helper", "meta", "placeholder", "error", "name"]) if (typeof b[k] === "string") out.push(b[k]);
     if (typeof b.value === "string") out.push(b.value);
     for (const r of b.rows ?? []) out.push(r.label, r.value);
+    // a table's cells and chips, a status chip, the steps of a timeline, the paragraphs of a document, the steps of an ID capture
+    if (b.type === "dataTable") for (const r of b.rows ?? []) for (const c of Object.values<any>(r.cells ?? {})) out.push(c.text);
+    if (b.type === "statusChip" && b.chip) out.push(b.chip.label);
+    for (const e of b.entries ?? []) out.push(e.title, e.text, e.time);
+    for (const p of b.paragraphs ?? []) out.push(p.heading, p.text);
+    if (b.type === "idCapture") for (const x of b.steps ?? []) out.push(x.label);
     // a choice (its name and the line under it), a payee, or a row of a list (its label and the line under it)
     for (const i of b.items ?? []) { if (i?.name) out.push(i.name); else if (i?.displayName) out.push(i.displayName); if (b.type === "select" && i?.sub) out.push(i.sub); if (b.type === "menu") { if (i?.label) out.push(i.label); if (i?.text) out.push(i.text); } }
   }
@@ -121,7 +135,16 @@ export async function simulate(opts: SimOptions): Promise<SimResult> {
   const find = (want: string) => catalog.find((j) => j.slug === want) ?? catalog.find((j) => j.slug.startsWith(`${want}-`));
   const opened: SimResult["opened"] = [];
   let asked: ChainRequest | null = null;
-  const make = (j: Journey, launch?: Record<string, unknown>) => new JourneyRunner(j, { adapter: (id, input) => bank.call(id, input), lang, launch: launch as Record<string, any> | undefined, openJourney: (r) => { asked = r; } });
+  // what the signed-in person may do where they bank from, as the sandbox says it (journeys read it as session.permissions); only for customers with several places
+  let permissions: string[] | undefined;
+  const refreshPermissions = async () => {
+    try {
+      const s: any = await bank.call("bank.session.get", {});
+      permissions = s.contexts.find((c: any) => c.id === s.activeContextId)?.permissions;
+    } catch { permissions = undefined; }
+  };
+  await refreshPermissions();
+  const make = (j: Journey, launch?: Record<string, unknown>) => new JourneyRunner(j, { adapter: (id, input) => bank.call(id, input), lang, launch: launch as Record<string, any> | undefined, openJourney: (r) => { asked = r; }, ...(permissions ? { session: { permissions } } : {}) });
   let runner = make(journey, opts.launch);
   let cur = journey;
   /** A journey asked to open another: switch to it when it can be found (and it supports the language), else just remember the request. */
@@ -132,7 +155,7 @@ export async function simulate(opts: SimOptions): Promise<SimResult> {
       const usable = !!target && target.locale.supported.includes(lang);
       opened.push({ journey: req.journey, launch: req.launch, followed: usable });
       if (!usable) return;
-      cur = target!; runner = make(cur, req.launch);
+      cur = target!; await refreshPermissions(); runner = make(cur, req.launch);
       await runner.start();
     }
   };

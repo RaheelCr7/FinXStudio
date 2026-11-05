@@ -4,14 +4,14 @@ export const BLOCK_LABELS: Record<string, string> = {
   text: "Text", alert: "Alert", button: "Button", result: "Result", reviewSummary: "Review summary", consent: "Consent",
   otp: "OTP", stepper: "Progress steps", amountInput: "Amount", select: "Select", textInput: "Text input", accountPicker: "Account picker", beneficiaryPicker: "Beneficiary picker",
   toggle: "Switch", cardForm: "Card form",
-  hero: "Bank banner", sectionHeader: "Section heading", shortcuts: "Shortcuts", menu: "Menu", divider: "Divider", accordion: "Accordion", balanceList: "Balance list", dialog: "Pop-up", map: "Map", dateInput: "Date", avatar: "Avatar", statusChip: "Status chip", timeline: "Timeline", dataTable: "Data table", chart: "Chart",
+  hero: "Bank banner", sectionHeader: "Section heading", shortcuts: "Shortcuts", menu: "Menu", divider: "Divider", accordion: "Accordion", balanceList: "Balance list", dialog: "Pop-up", map: "Map", dateInput: "Date", avatar: "Avatar", statusChip: "Status chip", timeline: "Timeline", dataTable: "Data table", chart: "Chart", fileUpload: "File upload", documentViewer: "Document", signature: "Signature", idCapture: "ID capture",
 };
 export const BLOCK_GROUPS: Array<{ name: string; types: string[] }> = [
-  { name: "Content", types: ["text", "alert", "result", "hero", "sectionHeader", "divider", "accordion", "dialog", "map", "avatar", "timeline", "statusChip"] },
-  { name: "Inputs", types: ["textInput", "amountInput", "dateInput", "select", "toggle", "consent"] },
+  { name: "Content", types: ["text", "alert", "result", "hero", "sectionHeader", "divider", "accordion", "dialog", "map", "avatar", "timeline", "statusChip", "documentViewer"] },
+  { name: "Inputs", types: ["textInput", "amountInput", "dateInput", "select", "toggle", "consent", "fileUpload"] },
   { name: "Banking", types: ["accountPicker", "beneficiaryPicker", "cardForm", "reviewSummary", "balanceList"] },
   { name: "Data", types: ["dataTable", "chart"] },
-  { name: "Verification", types: ["otp"] },
+  { name: "Verification", types: ["otp", "signature", "idCapture"] },
   { name: "Actions", types: ["button", "shortcuts", "menu"] },
 ];
 
@@ -38,6 +38,10 @@ export function newBlock(type: string, j: Journey): Block {
     case "timeline": return { type: "timeline", label: "History", items: [{ id: "started", title: "Started", time: "{{item.at}}" }, { id: "done", title: "Done", state: "upcoming" }] };
     case "dataTable": return { type: "dataTable", source: "ctx.items", label: "Items", columns: [{ key: "name", label: "Name" }, { key: "amount", label: "Amount", type: "money", currency: j.apps?.includes("bankworkx") ? "USD" : "PKR" }], search: true };
     case "chart": return { type: "chart", kind: "line", source: "ctx.series", label: "Trend", x: "label", series: [{ key: "value", label: "Value" }] };
+    case "fileUpload": return { type: "fileUpload", bind: "upload.file", label: "Upload a file", accept: ["csv"] };
+    case "documentViewer": return { type: "documentViewer", bind: "terms.read", title: "Terms", text: "## First heading\nA first paragraph.\n\n## Second heading\nA second paragraph." };
+    case "signature": return { type: "signature", bind: "sign.signature", label: "Sign here" };
+    case "idCapture": return { type: "idCapture", bind: "kyc.id", label: "Verify your identity" };
     case "toggle": return { type: "toggle", bind: "option", label: "Turn this on" };
     case "cardForm": return { type: "cardForm", bind: "card" };
     case "consent": return { type: "consent", bind: "consent", termsVersion: "v1", text: "I agree to the terms", validation: { mustBeTrue: true } };
@@ -60,7 +64,7 @@ export function ensureDataModel(j: Journey): Journey {
   for (const s of out.screens) for (const b of s.blocks as any[]) {
     if (b.type === "cardForm") for (const k of ["number", "holder", "expiry", "cvv"]) if (!(`${b.bind}.${k}` in out.dataModel)) out.dataModel[`${b.bind}.${k}`] = { type: "string" };
     if (b.bind && !(b.bind in out.dataModel)) {
-      out.dataModel[b.bind] = b.type === "amountInput" ? { type: "money", currency: b.currency, required: true } : b.type === "consent" ? { type: "boolean", required: true } : b.type === "toggle" ? { type: "boolean" } : b.type === "cardForm" ? { type: "object", required: true } : b.type === "dataTable" ? { type: "array" } : { type: "string", required: b.type !== "otp" };
+      out.dataModel[b.bind] = b.type === "amountInput" ? { type: "money", currency: b.currency, required: true } : b.type === "consent" ? { type: "boolean", required: true } : b.type === "toggle" ? { type: "boolean" } : b.type === "cardForm" ? { type: "object", required: true } : b.type === "dataTable" ? { type: "array" } : ["fileUpload", "signature", "idCapture"].includes(b.type) ? { type: "object", required: true } : b.type === "documentViewer" ? { type: "boolean", required: true } : { type: "string", required: b.type !== "otp" };
     }
   }
   return out;
@@ -168,6 +172,9 @@ export function blockSummary(b: any): string {
     case "timeline": return b.source ? b.source : `${(b.items ?? []).length} steps`;
     case "dataTable": return `${b.source} · ${b.columns.length} columns`;
     case "chart": return `${b.kind} · ${b.source}`;
+    case "fileUpload": return `${b.accept.join(", ")} → ${b.bind}`;
+    case "documentViewer": return textOf(b.title);
+    case "signature": case "idCapture": return `${textOf(b.label)} → ${b.bind}`;
     default: return "";
   }
 }

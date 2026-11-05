@@ -262,3 +262,59 @@ export type DataTableProps = {
   /** The words around the table, in the screen's language. */
   strings: { search: string; all: string; clear: string; prev: string; next: string; selectRow: string; selectAll: string; sortBy: string; asc: string; desc: string; open: string };
 };
+
+export type FileFieldProps = {
+  label: string;
+  /** What may be chosen, in words, and how big ("CSV or XML, up to 256 KB."). */
+  hint?: string;
+  helper?: string;
+  error?: string;
+  /** The `accept` of the file input: ".csv,.xml". Web only. */
+  accept: string;
+  /** The file chosen, with a line under its name (its size). */
+  file?: { name: string; detail?: string };
+  /** A file was chosen or dropped (web). */
+  onFile?: (file: { name: string; size: number; type: string; text: () => Promise<string> }) => void;
+  /** The button was pressed (phone): the app opens its file picker. */
+  onPick?: () => void;
+  onRemove?: () => void;
+  busy?: boolean;
+  strings: { choose: string; replace: string; remove: string; drop: string };
+};
+
+export type DocumentViewerProps = {
+  title: string;
+  /** Paragraphs in order; a heading is drawn above its text. */
+  paragraphs: { heading?: string; text: string }[];
+  /** Whether the person has already reached the end. */
+  read: boolean;
+  /** Called once, when the end is reached (at once if the text fits without scrolling). */
+  onRead?: () => void;
+  height?: number;
+  error?: string;
+  strings: { progress: string; done: string };
+};
+
+export type SignaturePadProps = {
+  label: string;
+  helper?: string;
+  error?: string;
+  modes: ("type" | "draw")[];
+  mode: "type" | "draw";
+  onMode?: (mode: "type" | "draw") => void;
+  /** The typed name. */
+  name?: string;
+  onName?: (name: string) => void;
+  /** The drawn line as a path, and how many points it has. */
+  path?: string;
+  onPath?: (path: string, points: number) => void;
+  strings: { type: string; draw: string; name: string; clear: string; pad: string; modes: string };
+};
+
+export type IdCaptureProps = {
+  label: string;
+  error?: string;
+  steps: { id: string; label: string; hint: string; done: boolean; /** The reference of the simulated picture. */ ref?: string }[];
+  onCapture?: (id: string) => void;
+  strings: { capture: string; retake: string; done: string; simulated: string };
+};

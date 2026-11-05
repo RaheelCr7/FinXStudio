@@ -1,8 +1,8 @@
-import { Alert as KitAlert, AmountField, Button as KitButton, Accordion as KitAccordion, Dialog as KitDialog, DateField as KitDateField, Dropdown as KitDropdown, Avatar as KitAvatar, MapPins as KitMapPins, BalanceList as KitBalanceList, Checkbox, ChoiceGroup, CodeInput, Divider as KitDivider, Hero as KitHero, Keypad as KitKeypad, ListRow as KitListRow, PinDots as KitPinDots, Result as KitResult, SectionHeader as KitSectionHeader, Shortcuts as KitShortcuts, SummaryList, Switch, TextField as KitTextField, StatusChip as KitStatusChip, Timeline as KitTimeline, DataTable as KitDataTable } from "@finx/components/native";
+import { Alert as KitAlert, AmountField, Button as KitButton, Accordion as KitAccordion, Dialog as KitDialog, DateField as KitDateField, Dropdown as KitDropdown, Avatar as KitAvatar, MapPins as KitMapPins, BalanceList as KitBalanceList, Checkbox, ChoiceGroup, CodeInput, Divider as KitDivider, Hero as KitHero, Keypad as KitKeypad, ListRow as KitListRow, PinDots as KitPinDots, Result as KitResult, SectionHeader as KitSectionHeader, Shortcuts as KitShortcuts, SummaryList, Switch, TextField as KitTextField, StatusChip as KitStatusChip, Timeline as KitTimeline, DataTable as KitDataTable, FileField as KitFileField, DocumentViewer as KitDocumentViewer, SignaturePad as KitSignaturePad, IdCapture as KitIdCapture } from "@finx/components/native";
 import React from "react";
 import { Image, Pressable, Text, TextInput, View, StyleSheet, Platform, useWindowDimensions } from "react-native";
 import { mix, space } from "@finx/ui-kit";
-import { accountRows, amountText, typedAmount, applyKey, beneficiaryRows, cardFields, cardNetwork, cleanOtp, keyboardKind, KEYPAD_ROWS, otpCells, otpLabel, parseAmountText, prefixOf, quickAmounts, selectChoices, symbolOf, ui, CARDS_BELOW, dataTableProps, initialTableFor, tableStrings, type BlockProps, type BlockType, type ChartView, type TableState } from "@finx/renderer-core";
+import { accountRows, amountText, typedAmount, applyKey, beneficiaryRows, cardFields, cardNetwork, cleanOtp, keyboardKind, KEYPAD_ROWS, otpCells, otpLabel, parseAmountText, prefixOf, quickAmounts, selectChoices, symbolOf, ui, CARDS_BELOW, dataTableProps, initialTableFor, tableStrings, MIME, TEXT_KINDS, sizeText, fileKindOf, fileMessage, fileProblem, fileValue, nextCapture, type FileKind, type FileValue, type BlockProps, type BlockType, type ChartView, type TableState } from "@finx/renderer-core";
 import { useTheme } from "./theme";
 import { CardVisual, Donut, Icon, IconTile, LineChart, Segmented } from "./widgets";
 
@@ -228,11 +228,60 @@ export function ChartBlock({ b, lang }: P) {
   );
 }
 
+declare const require: (id: string) => any;
+/** The phone's file picker (expo-document-picker). Loaded when first used, so a build without it still runs everything else. */
+async function pickFile(accept: FileKind[]): Promise<{ name: string; size: number; uri: string } | undefined> {
+  const picker = require("expo-document-picker");
+  const r = await picker.getDocumentAsync({ type: accept.flatMap((k) => MIME[k]), copyToCacheDirectory: true, multiple: false });
+  const a = r.canceled ? undefined : r.assets?.[0];
+  return a ? { name: String(a.name), size: Number(a.size ?? 0), uri: String(a.uri) } : undefined;
+}
+
+/** A file from the phone's picker. Text files (csv, xml) are read so a bank call can check their rows; the others are kept as a name and a size. */
+export function FileUploadBlock({ b, set, lang }: P) {
+  const [problem, setProblem] = React.useState<string>();
+  const [busy, setBusy] = React.useState(false);
+  const accept: FileKind[] = b.accept;
+  const file = b.value as FileValue | undefined;
+  const pick = async () => {
+    setBusy(true);
+    try {
+      const f = await pickFile(accept);
+      if (!f) return;
+      const bad = fileProblem(f, accept, b.maxKb);
+      if (bad) { setProblem(fileMessage(lang, bad, accept, b.maxKb)); return; }
+      setProblem(undefined);
+      set(b.bind, fileValue(f, TEXT_KINDS.includes(fileKindOf(f.name)!) ? await (await fetch(f.uri)).text() : undefined));
+    } catch { setProblem(fileMessage(lang, "empty", accept, b.maxKb)); }
+    finally { setBusy(false); }
+  };
+  return <KitFileField label={b.label} hint={b.hint} helper={b.helper} error={problem ?? b.error} accept={b.acceptAttr} busy={busy} onPick={pick} onRemove={() => { setProblem(undefined); set(b.bind, undefined); }}
+    file={file ? { name: file.name, detail: sizeText(file.size) } : undefined} strings={{ choose: ui(lang, "fileChoose"), replace: ui(lang, "fileReplace"), remove: ui(lang, "fileRemove"), drop: "" }} />;
+}
+
+export function DocumentViewerBlock({ b, set, lang }: P) {
+  return <KitDocumentViewer title={b.title} paragraphs={b.paragraphs} read={b.value === true} height={b.height} error={b.error} onRead={() => set(b.bind, true)} strings={{ progress: ui(lang, "docProgress"), done: ui(lang, "docRead") }} />;
+}
+
+export function SignatureBlock({ b, set, lang }: P) {
+  const v = b.value as { mode?: "type" | "draw"; name?: string; path?: string } | undefined;
+  const [mode, setMode] = React.useState<"type" | "draw">(v?.mode ?? b.modes[0]);
+  const T = (k: string) => ui(lang, k);
+  return <KitSignaturePad label={b.label} helper={b.helper} error={b.error} modes={b.modes} mode={mode} onMode={setMode} name={v?.mode === "type" ? v.name : ""} path={v?.mode === "draw" ? v.path : ""}
+    onName={(name) => set(b.bind, { mode: "type", name })} onPath={(path, points) => set(b.bind, { mode: "draw", path, points })}
+    strings={{ type: T("sigType"), draw: T("sigDraw"), name: T("sigName"), clear: T("sigClear"), pad: T("sigPad"), modes: T("sigModes") }} />;
+}
+
+export function IdCaptureBlock({ b, set, lang }: P) {
+  return <KitIdCapture label={b.label} error={b.error} steps={b.steps} onCapture={(id) => set(b.bind, nextCapture(b.value, id as any))}
+    strings={{ capture: ui(lang, "captureTake"), retake: ui(lang, "captureRetake"), done: ui(lang, "captureDone"), simulated: ui(lang, "captureSim") }} />;
+}
+
 const s = StyleSheet.create({
   row: { flexDirection: "row", alignItems: "center", padding: 14, marginBottom: 10 },
 });
 export const registry: Record<BlockType, (p: P) => React.ReactElement | null> = {
   accountPicker: AccountPicker, beneficiaryPicker: BeneficiaryPicker, amountInput: AmountInput, select: SelectChips, textInput: TextField,
-  alert: Alert, toggle: Toggle, cardForm: CardForm, reviewSummary: ReviewSummary, consent: Consent, otp: Otp, result: Result, text: TextBlock, button: Button, stepper: () => null, hero: Hero, sectionHeader: SectionHeader, shortcuts: Shortcuts, menu: Menu, divider: Divider, accordion: AccordionBlock, dialog: DialogBlock, dateInput: DateInputBlock, avatar: AvatarBlock, map: MapBlock, balanceList: BalanceListBlock, statusChip: StatusChipBlock, timeline: TimelineBlock, dataTable: DataTableBlock, chart: ChartBlock,
+  alert: Alert, toggle: Toggle, cardForm: CardForm, reviewSummary: ReviewSummary, consent: Consent, otp: Otp, result: Result, text: TextBlock, button: Button, stepper: () => null, hero: Hero, sectionHeader: SectionHeader, shortcuts: Shortcuts, menu: Menu, divider: Divider, accordion: AccordionBlock, dialog: DialogBlock, dateInput: DateInputBlock, avatar: AvatarBlock, map: MapBlock, balanceList: BalanceListBlock, statusChip: StatusChipBlock, timeline: TimelineBlock, dataTable: DataTableBlock, chart: ChartBlock, fileUpload: FileUploadBlock, documentViewer: DocumentViewerBlock, signature: SignatureBlock, idCapture: IdCaptureBlock,
 };
 export { space };

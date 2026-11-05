@@ -25,6 +25,8 @@ const FUNCS: Record<string, (...a: any[]) => any> = {
   len: (x: any) => (x == null ? 0 : x.length ?? Object.keys(x).length),
   /** An entry of a map by a key that is itself data, for example get(ctx.carriers, deep.operatorId). Own entries only; missing is undefined. */
   get: (o: any, k: any) => (o != null && typeof o === "object" && Object.prototype.hasOwnProperty.call(o, String(k)) ? o[String(k)] : undefined),
+  /** Whether a list contains a value, or a map has an entry: has(session.permissions, 'biz.payments.initiate'). */
+  has: (c: any, v: any) => (Array.isArray(c) ? c.includes(v) : c != null && typeof c === "object" ? Object.prototype.hasOwnProperty.call(c, String(v)) : false),
   isEmpty: (x: any) => x == null || x === "" || (Array.isArray(x) && x.length === 0),
 };
 

@@ -33,7 +33,12 @@ export const Action: z.ZodType<any> = z.lazy(() =>
       }).optional(),
     }),
     z.object({ type: z.literal("showToast"), text: LocalizedText }),
-    z.object({ type: z.literal("share"), template: z.string() }),
+    /**
+     * Shares a receipt of this screen: printed on the web, the share sheet on a phone. `template` names the kind (receipt).
+     * The receipt has `title` (default: the result's title or the screen's), then `rows` (labels and values, may use {{templates}});
+     * without rows it takes the screen's review rows and the result's text and reference line.
+     */
+    z.object({ type: z.literal("share"), template: z.string(), title: LocalizedText.optional(), rows: z.array(z.object({ label: LocalizedText, value: LocalizedText })).optional() }),
     z.object({ type: z.literal("exit") }),
   ]),
 );
@@ -175,6 +180,26 @@ export const Block = z.discriminatedUnion("type", [
     series: z.array(z.object({ key: z.string(), label: LocalizedText })).min(1),
     currency: z.string().optional(), table: z.boolean().optional(), height: z.number().int().min(80).max(400).optional(),
   }),
+  /**
+   * Chooses a file: csv, xml, pdf or an image. The answer saved at `bind` is { name, size, kind } and, for csv and xml, `content` (the text),
+   * so a bank call can check the rows. Pictures and PDFs are not kept. `maxKb` replaces the usual limit (256 KB for csv and xml, 10 MB for the rest).
+   */
+  z.object({ ...base, type: z.literal("fileUpload"), bind: z.string(), label: LocalizedText, accept: z.array(z.enum(["csv", "xml", "pdf", "image"])).min(1), maxKb: z.number().int().min(1).optional(), helper: LocalizedText.optional() }),
+  /**
+   * A text to read to the end (terms, an agreement). `text` has paragraphs separated by a blank line and "## " headings. `bind` becomes true when the person
+   * has scrolled to the bottom; a screen with an unread document does not validate. Pair it with a consent block for the tick.
+   */
+  z.object({ ...base, type: z.literal("documentViewer"), bind: z.string(), title: LocalizedText, text: LocalizedText, height: z.number().int().min(120).max(600).optional() }),
+  /**
+   * A signature, drawn or typed (`modes`, both by default; typing is the one a keyboard can use). Saved at `bind` as { mode, name } or { mode, path, points }.
+   * `expectedName` (a {{template}} such as the person's name) makes a typed signature match it. Pair it with an otp block for the code.
+   */
+  z.object({ ...base, type: z.literal("signature"), bind: z.string(), label: LocalizedText, modes: z.array(z.enum(["type", "draw"])).min(1).optional(), expectedName: z.string().optional(), helper: LocalizedText.optional() }),
+  /**
+   * A simulated capture of an identity document and a selfie: a button per step "takes" a picture (no camera, nothing is kept). Saved at `bind` as
+   * { front: { ref }, selfie: { ref } }. `steps` is front, back, selfie (front and selfie by default); every step must be captured.
+   */
+  z.object({ ...base, type: z.literal("idCapture"), bind: z.string(), label: LocalizedText, steps: z.array(z.enum(["front", "back", "selfie"])).min(1).optional() }),
   z.object({ ...base, type: z.literal("button"), label: LocalizedText, variant: z.enum(["primary", "secondary", "ghost"]).optional(), actions: z.array(Action) }),
 ]);
 export type Block = z.infer<typeof Block>;

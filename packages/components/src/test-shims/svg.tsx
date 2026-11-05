@@ -4,3 +4,4 @@ export default function Svg({ children, ...p }: any) { return <svg {...p}>{child
 export const G = ({ children, ...p }: any) => <g {...p}>{children}</g>;
 export const Path = (p: any) => <path {...p} />;
 export const Rect = (p: any) => <rect {...p} />;
+export const Line = (p: any) => <line {...p} />;
