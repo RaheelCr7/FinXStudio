@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { interpolate } from "./template";
+import { interpolate, wholeExpression } from "./template";
 
 describe("money with a currency", () => {
   it("formats in the named currency, or the one on the data", () => {
@@ -19,5 +19,21 @@ describe("money formatter lint", () => {
       screens: [{ id: "a", title: "A", kind: "terminal", blocks: [{ type: "text", text }] }] });
     expect(lintExpressions(mk("{{ a.amt | money:JOD }}")).map((i) => i.code)).toEqual([]);
     expect(lintExpressions(mk("{{ a.amt | money:nope.currency }}")).map((i) => i.code)).toContain("unknown_reference");
+  });
+});
+
+describe("wholeExpression", () => {
+  it("reads a value that is exactly one expression, trimmed", () => {
+    expect(wholeExpression("{{ a.b }}")).toBe("a.b");
+    expect(wholeExpression("{{a}}")).toBe("a");
+  });
+  it("refuses anything else", () => {
+    for (const v of ["a {{ b }}", "{{ b }} a", "{{ }}", "{{}}", "{{ a } b }}", 5, undefined, "{{ a }"]) expect(wholeExpression(v as any), String(v)).toBeNull();
+  });
+  it("is not slow on braces and spaces", () => {
+    const nasty = "{{" + " ".repeat(200_000) + "{{{{";
+    const t = Date.now();
+    wholeExpression(nasty); interpolate(nasty, {});
+    expect(Date.now() - t).toBeLessThan(500);
   });
 });

@@ -58,8 +58,9 @@ export function lintExpressions(j: Journey): LintIssue[] {
   };
   const checkTemplates = (node: unknown, where: string, screen: string) => {
     if (typeof node === "string") {
-      for (const m of node.matchAll(/\{\{\s*([^}]+?)\s*\}\}/g)) {
-        const [expr, fmtPart] = m[1]!.split("|").map((x) => x.trim());
+      for (const m of node.matchAll(/\{\{([^}]*)\}\}/g)) {
+        if (!m[1]!.trim()) continue;
+        const [expr, fmtPart] = m[1]!.trim().split("|").map((x) => x.trim());
         const [fmt, arg] = (fmtPart ?? "").split(":").map((x) => x.trim());
         if (fmt && !(fmt in FORMATTERS)) issues.push({ code: "unknown_formatter", screen, message: `${where}: unknown formatter "${fmt}" (use ${Object.keys(FORMATTERS).join(" or ")})` });
         checkExpr(expr!, where, screen);

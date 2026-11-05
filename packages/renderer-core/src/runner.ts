@@ -1,7 +1,7 @@
 import type { Journey, Screen, Block } from "@finx/journey-schema";
 import { evaluate, getPath, setPath } from "./expr";
 import { currencyInfo } from "@finx/ui-kit";
-import { interpolate, localize } from "./template";
+import { interpolate, localize, wholeExpression } from "./template";
 import { ui } from "./strings";
 import { cardExpiryValid, luhnValid } from "./card";
 import { balanceRows } from "./blocks/pickers";
@@ -187,8 +187,8 @@ export class JourneyRunner {
         }
         case "setData": {
           // a value that is a whole {{expression}} is read from the journey's data now (for example the username that was found)
-          const whole = typeof a.value === "string" ? /^\{\{\s*([^}]+?)\s*\}\}$/.exec(a.value) : null;
-          setPath(this.state, a.path, whole ? this.safeEval(whole[1]!) : a.value);
+          const whole = wholeExpression(a.value);
+          setPath(this.state, a.path, whole ? this.safeEval(whole) : a.value);
           break;
         }
         case "showToast": this.toast = this.tx(a.text); this.emit(); break;
@@ -227,8 +227,8 @@ export class JourneyRunner {
     const opt = this.state.opt;
     if (opt && typeof opt === "object") for (const [k, v] of Object.entries(opt)) launch[`opt.${k}`] = v;
     for (const [path, v] of Object.entries<any>(a.with ?? {})) {
-      const whole = typeof v === "string" ? /^\{\{\s*([^}]+?)\s*\}\}$/.exec(v) : null;
-      launch[path] = whole ? this.safeEval(whole[1]!) : typeof v === "string" && v.includes("{{") ? interpolate(v, this.scope()) : v;
+      const whole = wholeExpression(v);
+      launch[path] = whole ? this.safeEval(whole) : typeof v === "string" && v.includes("{{") ? interpolate(v, this.scope()) : v;
     }
     const req: ChainRequest = { journey: a.toJourney, launch, ...(a.returnTo ? { returnTo: a.returnTo } : {}) };
     this.note({ type: "chain", screen: this.current, journey: a.toJourney });
@@ -241,10 +241,9 @@ export class JourneyRunner {
   private resolveInput(input: Record<string, any>): Record<string, any> {
     const out: Record<string, any> = {};
     for (const [k, v] of Object.entries(input)) {
-      if (typeof v === "string" && /^\{\{\s*[^}]+\s*\}\}$/.test(v)) {
-        const expr = v.replace(/^\{\{\s*|\s*\}\}$/g, "");
-        out[k] = this.safeEval(expr);
-      } else out[k] = v;
+      const expr = wholeExpression(v);
+      if (expr) out[k] = this.safeEval(expr);
+      else out[k] = v;
     }
     return out;
   }

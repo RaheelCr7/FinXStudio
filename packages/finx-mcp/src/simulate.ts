@@ -1,5 +1,5 @@
 import { bankworkxJourneys, type Journey } from "@finx/journey-schema";
-import { JourneyRunner, localize, type ChainRequest, type View } from "@finx/renderer-core";
+import { JourneyRunner, localize, wholeExpression, type ChainRequest, type View } from "@finx/renderer-core";
 import { MockBank, personas, type Flaws, type ProviderId, type SandboxConditions } from "@finx/mock-bank-api";
 
 /** One scripted action or check. Actions change state; expectations only check it. */
@@ -106,7 +106,7 @@ export async function simulate(opts: SimOptions): Promise<SimResult> {
   const saved: Record<string, unknown> = {};
   const pick = (path: string) => path.split(".").reduce((o: any, k) => o?.[k], { setup: saved });
   const resolve = (v: unknown): unknown => {
-    if (typeof v === "string") { const m = /^\{\{\s*(setup\.[^}]+?)\s*\}\}$/.exec(v); return m ? pick(m[1]!) : v; }
+    if (typeof v === "string") { const e = wholeExpression(v); return e?.startsWith("setup.") ? pick(e) : v; }
     if (Array.isArray(v)) return v.map(resolve);
     if (v && typeof v === "object") return Object.fromEntries(Object.entries(v).map(([k, x]) => [k, resolve(x)]));
     return v;
