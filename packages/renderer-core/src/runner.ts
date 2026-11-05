@@ -244,7 +244,7 @@ export class JourneyRunner {
           const input = this.resolveInput(a.input ?? {});
           try {
             const res = await this.opts.adapter(integ.adapter, input);
-            if (a.saveAs) setPath(this.state, a.saveAs, res);
+            if (a.saveAs && !isSession(a.saveAs)) setPath(this.state, a.saveAs, res);
             if (a.integration === "otpVerify") this.otpFailures = 0;
           } catch (err: any) {
             // what went wrong, for the screen that follows: {{ctx.error.message}} and routes on {{ctx.error.code}}

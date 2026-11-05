@@ -77,6 +77,18 @@ describe("documentViewer", () => {
     renderBlock("documentViewer", await resolved(BLOCK), { set });
     expect(set).toHaveBeenCalledWith("read", true);
   });
+  it("does not count a box with no size as read, and counts it once it gets one", async () => {
+    sizes(0, 0);
+    let notify: () => void = () => {};
+    vi.stubGlobal("ResizeObserver", class { constructor(cb: () => void) { notify = cb; } observe() {} disconnect() {} });
+    const set = vi.fn();
+    renderBlock("documentViewer", await resolved(BLOCK), { set });
+    expect(set).not.toHaveBeenCalled();
+    sizes(100, 240);
+    notify();
+    expect(set).toHaveBeenCalledWith("read", true);
+    vi.unstubAllGlobals();
+  });
   it("says so once it was read", async () => {
     sizes(1000, 100);
     renderBlock("documentViewer", await resolved(BLOCK, { read: true }));
