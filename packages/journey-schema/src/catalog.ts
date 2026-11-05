@@ -28,6 +28,14 @@ import { changePassword } from "./fixtures/change-password";
 import { trustedDevices } from "./fixtures/trusted-devices";
 import { changeQuickPin } from "./fixtures/change-quick-pin";
 import { setupQuickLogin } from "./fixtures/setup-quick-login";
+import { accounts } from "./fixtures/accounts";
+import { accountDetails } from "./fixtures/account-details";
+import { statement } from "./fixtures/statement";
+import { accountNickname } from "./fixtures/account-nickname";
+import { openAnotherAccount } from "./fixtures/open-another-account";
+import { budgets } from "./fixtures/budgets";
+import { transferTypes } from "./fixtures/transfer-types";
+import { singleTransfer } from "./fixtures/single-transfer";
 
 /**
  * The journey catalog: ready-made journeys a project can add to its own app.
@@ -162,8 +170,48 @@ export const catalog: CatalogEntry[] = [
   },
   {
     id: createBudget.slug, category: "Budgeting", madeFor: "bankworkx", journey: createBudget,
-    summary: "Set a monthly spending limit for a category and get warned before it is reached.",
-    highlights: ["Category tiles", "Amount with limits", "Alert toggle"],
+    summary: "Set a monthly amount for a spending category and get alerts at 80% and 100%; change or delete it later. No code: no money moves.",
+    highlights: ["Categories that have a budget are marked", "10.00 to 100,000.00 a month", "Alerts at 80% and 100%", "Edit and delete in one journey", "Spent in the last 30 days"],
+  },
+  {
+    id: accounts.slug, category: "Accounts", madeFor: "bankworkx", journey: accounts,
+    summary: "Every account in one place: the total in the home currency and a row for each account with its available balance, grouped Everyday, Savings, Other currencies and Hidden.",
+    highlights: ["Total of the ledger balances in dollars", "Available balance on every row", "Frozen, Dormant and Closing chips", "Hide the amounts", "Opens the account"],
+  },
+  {
+    id: accountDetails.slug, category: "Accounts", madeFor: "bankworkx", journey: accountDetails,
+    summary: "One account: available and ledger balance and what is on hold, the numbers of the home market, rename, hide, close with a one-time code, and its transactions with search and a report-a-problem.",
+    highlights: ["Available, ledger and on hold", "Search, In and Out, Show more", "Report a problem once per payment", "Close with a reason, a destination and a code", "Dormant and Closing warnings"],
+  },
+  {
+    id: statement.slug, category: "Accounts", madeFor: "bankworkx", journey: statement,
+    summary: "A statement for an account and a period as PDF or CSV, downloaded or emailed; the bank can add an official statement, a proof of address letter and a balance certificate with a fee and a one-time code.",
+    highlights: ["This month, last month, 3 months or dates", "Refusals before any fee: empty period, dates, dormant account, funds", "Fee taken only after the code", "Paperless remembered per account", "Timeout and unavailable screens"],
+  },
+  {
+    id: accountNickname.slug, category: "Accounts", madeFor: "bankworkx", journey: accountNickname,
+    summary: "Rename an account: an alias that opens Account details at its Rename step.",
+    highlights: ["Alias of Account details", "2 to 24 characters, no duplicate names", "Use the original name"],
+  },
+  {
+    id: openAnotherAccount.slug, category: "Accounts", madeFor: "bankworkx", journey: openAnotherAccount,
+    summary: "Open a current, savings or currency account in a few steps: choose, name it, review the key facts and the terms, confirm with a one-time code. At most six accounts.",
+    highlights: ["Savings and currency accounts switched on by the bank", "Name checked before the code", "Key facts of the product", "One-time code, three wrong codes stop it", "Account limit"],
+  },
+  {
+    id: budgets.slug, category: "Budgeting", madeFor: "bankworkx", journey: budgets,
+    summary: "Every monthly budget with what was spent in the last 30 days, how much of it is used and a chip: On track, Close to limit or Over budget; Edit, Delete and New budget open Create a budget.",
+    highlights: ["Chips at 80% and 100%", "Never more than 100% shown", "Empty state", "Opens Create a budget"],
+  },
+  {
+    id: transferTypes.slug, category: "Payments", madeFor: "bankworkx", journey: transferTypes,
+    summary: "The ways to send money the bank has on, how fast each is, and the speeds to another bank and another country with arrival, fee and limit; each opens the journey that sends that way.",
+    highlights: ["Rows follow the bank's options", "Speeds and fees from the bank's home market", "No scheme or country named", "Moves no money"],
+  },
+  {
+    id: singleTransfer.slug, category: "Payments", madeFor: "bankworkx", journey: singleTransfer,
+    summary: "Quick transfer: pay a saved payee at another bank or in another country. An alias that opens Send money with the type chosen, with the bank's Instant, Later and new-payee options passed on.",
+    highlights: ["Alias of Send money", "Instant, Later and new-payee options reach Send money", "Nothing to send with when both ways are off"],
   },
   {
     id: invest.slug, category: "Investing", madeFor: "bankworkx", journey: invest,

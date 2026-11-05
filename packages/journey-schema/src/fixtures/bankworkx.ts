@@ -19,6 +19,18 @@ import { changePassword } from "./change-password";
 import { trustedDevices } from "./trusted-devices";
 import { changeQuickPin } from "./change-quick-pin";
 import { setupQuickLogin } from "./setup-quick-login";
+import { accounts } from "./accounts";
+import { accountDetails } from "./account-details";
+import { statement } from "./statement";
+import { openAnotherAccount } from "./open-another-account";
+import { createBudget } from "./create-budget";
+import { budgets } from "./budgets";
+import { transferTypes } from "./transfer-types";
+import { accountNickname } from "./account-nickname";
+import { singleTransfer } from "./single-transfer";
+
+// Create a budget is its own file (accounts and budgets belong together); it is still exported from here, where it always was
+export { createBudget };
 
 /** Journeys for the BankWorkx app. English only for now; the app filters them out of other banks' apps with `apps`. */
 const base = { version: 1, status: "published" as const, channels: ["mobile" as const], apps: ["bankworkx"], locale: { default: "en", supported: ["en"] } };
@@ -198,61 +210,6 @@ export const connectAccount: Journey = {
   ],
 };
 
-export const createBudget: Journey = {
-  ...base, id: "jrn_create_budget", slug: "create-budget", name: "Create budget", entryScreen: "setup",
-  dataModel: {
-    "budget.category": { type: "string", required: true },
-    "budget.limit": { type: "number", required: true, currency: "USD" },
-    "budget.alert": { type: "boolean" },
-  },
-  integrations: [{ id: "createBudget", adapter: "bank.budgets.create", mode: "sandbox" }],
-  screens: [
-    {
-      id: "setup", title: "New budget",
-      blocks: [
-        { type: "stepper", steps: ["setup", "review"] },
-        {
-          type: "select", bind: "budget.category", label: "What are you budgeting for?", variant: "tiles",
-          choices: [
-            { id: "Food & Drinks", label: "Food & Drinks", icon: "food" }, { id: "Shopping", label: "Shopping", icon: "bag" }, { id: "Transport", label: "Transport", icon: "trend" },
-            { id: "Health", label: "Health", icon: "shield" }, { id: "Travel", label: "Travel", icon: "wallet" }, { id: "Bills", label: "Bills", icon: "repeat" },
-          ],
-        },
-        {
-          type: "amountInput", bind: "budget.limit", currency: "USD", label: "Monthly limit", helper: "Choose an amount from $10 to $100,000", quickAmounts: [100, 250, 500, 1000],
-          validation: { min: 10, max: 100000, messages: { min: "A budget must be at least $10", max: "A budget can be at most $100,000" } },
-        },
-        { type: "toggle", bind: "budget.alert", label: "Alert me at 80%", helper: "We'll tell you when you're close to the limit" },
-        { type: "button", label: "Continue", variant: "primary", actions: [{ type: "validate" }, { type: "navigate", to: "review" }] },
-      ],
-    },
-    {
-      id: "review", title: "Review budget",
-      blocks: [
-        { type: "reviewSummary", rows: [{ label: "Category", value: "{{budget.category}}" }, { label: "Monthly limit", value: "${{budget.limit | money}}" }, { label: "Resets", value: "Every month" }] },
-        {
-          type: "button", label: "Create budget", variant: "primary",
-          actions: [
-            { type: "callApi", integration: "createBudget", input: { category: "{{budget.category}}", limit: "{{budget.limit}}" }, saveAs: "result", onError: { navigate: "failed" } },
-            { type: "navigate", to: "success" },
-          ],
-        },
-      ],
-    },
-    {
-      id: "success", title: "Budget created", kind: "terminal",
-      blocks: [{ type: "result", tone: "success", title: "Budget created", text: "{{budget.category}}: ${{budget.limit | money}} a month. You'll see it on your dashboard." }, done],
-    },
-    {
-      id: "failed", title: "Budget not created", kind: "terminal",
-      blocks: [
-        { type: "result", tone: "error", title: "We couldn't create this budget", text: "You may already have a budget for this category. Try a different one." },
-        { type: "button", label: "Try again", variant: "primary", actions: [{ type: "navigate", to: "setup" }] },
-      ],
-    },
-  ],
-};
-
 export const invest: Journey = {
   ...base, id: "jrn_invest", slug: "invest", name: "Invest", entryScreen: "buy",
   dataModel: {
@@ -363,4 +320,4 @@ export const sellInvestment: Journey = {
   ],
 };
 
-export const bankworkxJourneys: Journey[] = [addMoney, addCard, connectAccount, createBudget, invest, sellInvestment, ownTransfer, manageBeneficiary, personalTransfer, internalTransfer, internationalTransfer, payBillBankworkx, mobileTopup, schedulePayment, cancelStandingOrder, supplierPayment, approvePayments, signIn, forgotUsername, resetPassword, forgotPassword, unlockAccount, changePassword, trustedDevices, changeQuickPin, setupQuickLogin];
+export const bankworkxJourneys: Journey[] = [addMoney, addCard, connectAccount, createBudget, invest, sellInvestment, ownTransfer, manageBeneficiary, personalTransfer, internalTransfer, internationalTransfer, payBillBankworkx, mobileTopup, schedulePayment, cancelStandingOrder, supplierPayment, approvePayments, signIn, forgotUsername, resetPassword, forgotPassword, unlockAccount, changePassword, trustedDevices, changeQuickPin, setupQuickLogin, accounts, accountDetails, statement, openAnotherAccount, budgets, accountNickname, transferTypes, singleTransfer];

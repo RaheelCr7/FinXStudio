@@ -4,7 +4,7 @@ import { alexInvest, type InvestState } from "./invest";
 
 export type Category = "food" | "income" | "shopping" | "coffee" | "rent" | "transport" | "entertainment" | "health" | "groceries" | "vehicle" | "investing" | "bills";
 export type Txn = { id: string; title: string; category: Category; /** negative = money out */ amount: number; daysAgo: number; time?: string };
-export type Budget = { id: string; name: string; category: Category; limit: number; spent: number };
+export type Budget = { id: string; name: string; category: Category; limit: number; spent: number; /** Tell the customer at 80% and at 100% of the limit; on unless said otherwise. */ alert80?: boolean; alert100?: boolean };
 export type Subscription = { id: string; name: string; amount: number; nextInDays: number; color: string };
 export type LinkedBank = { id: string; bank: string; kind: "Savings" | "Current" | "Credit"; maskedNumber: string; balance: number };
 export type SavedCard = { id: string; network: "mastercard" | "visa"; last4: string; holder: string; expiry: string; nickname: string; isDefault: boolean };

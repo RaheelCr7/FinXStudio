@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { bankworkxJourneys, chainTargets, chainWarnings, bulkPayment, catalog, corporateApproval, corporatePayment, Journey, withdrawPayment, payrollRun, ownTransfer, manageBeneficiary, personalTransfer, internalTransfer, internationalTransfer, payBillBankworkx, mobileTopup, schedulePayment, cancelStandingOrder, supplierPayment, approvePayments, signIn, forgotUsername, resetPassword, forgotPassword, unlockAccount, changePassword, trustedDevices, setupQuickLogin, changeQuickPin } from "@finx/journey-schema";
+import { bankworkxJourneys, chainTargets, chainWarnings, bulkPayment, catalog, corporateApproval, corporatePayment, Journey, withdrawPayment, payrollRun, ownTransfer, manageBeneficiary, personalTransfer, internalTransfer, internationalTransfer, payBillBankworkx, mobileTopup, schedulePayment, cancelStandingOrder, supplierPayment, approvePayments, signIn, forgotUsername, resetPassword, forgotPassword, unlockAccount, changePassword, trustedDevices, setupQuickLogin, changeQuickPin, accounts, accountDetails, statement, accountNickname, openAnotherAccount, budgets, createBudget, transferTypes, singleTransfer } from "@finx/journey-schema";
 import { lintAll } from "@finx/renderer-core";
 import { mutationCheck, runScenarios } from "./scenarios";
 import { simulate } from "./simulate";
@@ -836,4 +836,258 @@ describe("change-quick-pin: Change quick PIN", () => {
     expect(chainTargets(changeQuickPin)).toEqual(["setup-quick-login"]);
     expect(chainWarnings(changeQuickPin, bankworkxJourneys.map((x) => x.slug))).toEqual([]);
   });
+});
+
+/**
+ * The Accounts journeys (Personal: Accounts) and the two ways to send money that are a view or an alias. They run for Alex Morgan, whose account states are the
+ * sandbox's (Main with a card payment on hold; the dormant, overdrawn and closing accounts of the customer "alexaccounts"). The sandbox clock is pinned to
+ * Tuesday 3 November 2026. A rule of the bank that a journey only meets through another one it opens is proved where it lives: each such survivor says where.
+ * A scenario cannot set the bank's home market, so the numbers of the other markets are proved by the sandbox's own tests (accounts.test.ts).
+ */
+const RESEND = "Resending the code is a button of the code field that a scenario cannot press; the first send has the same error path and is proved";
+const ACCOUNT_RULES = ["bank-totalHidden", "bank-totalFx", "bank-lastVisible", "bank-nameRules", "bank-nameTaken", "bank-closeHolds", "bank-closeOverdrawn", "bank-closeNeedsCode", "bank-reportPending", "bank-reportDuplicate", "bank-reportOutgoing", "bank-txFilter", "bank-pendingFirst", "bank-accountLimit", "bank-openNeedsCode"];
+const except = (ids: string[], ...not: string[]) => ids.filter((id) => !not.includes(id));
+const STATEMENT_RULES = ["bank-statementDates", "bank-statementEmpty", "bank-feeFunds", "bank-feeConvert", "bank-issueNeedsCode", "bank-letterDormant"];
+/** The bank rules of sending money to someone else and between a person's own accounts: Send money, Between my accounts and Add a payee prove them. */
+const SEND_RULES = ["bank-sameAccount", "bank-canDebit", "bank-funds", "bank-quoteExpiry", "bank-quoteReplay", "bank-railLimit", "bank-dailyLimit", "bank-coolingOff", "bank-sanctions", "bank-purposeRule", "bank-addressRule", "bank-bankCode", "bank-payeeLimit", "bank-payeeDuplicate", "bank-ibanChecksum", "bank-sepa", "bank-countryMatch", "bank-routingChecksum", "bank-sortCode", "bank-bic"];
+
+describe("accounts: Accounts", () => {
+  const j = Journey.parse(accounts);
+  const ACC: Record<string, string> = {
+    ...linked(except(ACCOUNT_RULES, "bank-totalHidden", "bank-totalFx"), "account-details or open-another-account"),
+    "no-error-path-14": "A refresh that fails after the list has loaded cannot be arranged: a sandbox condition applies to the whole walk, so the first load fails first (the first load's error path is proved)",
+  };
+  it("is lint clean, every scenario passes and every acceptance criterion is proved", async () => {
+    expect(lintAll(j)).toEqual([]);
+    const r = await runScenarios(j);
+    expect(r.results.filter((x) => !x.ok).map((x) => `${x.id} ${x.name}: ${x.failures.join(" | ")}`)).toEqual([]);
+    expect(r.coverage.map((c) => [c.id, c.status])).toEqual((j.acceptance ?? []).map((a) => [a.id, "proved"]));
+    expect([r.passed, r.total, r.coverage.length]).toEqual([19, 19, 10]);
+  });
+  it("the tests notice when the journey or the bank's rules are broken (mutation check)", async () => {
+    const m = await mutationCheck(j, ACC);
+    expect(m.survived.map((s) => `${s.id}: ${s.what}`)).toEqual([]);
+    expect([m.total, m.killed, m.accepted.length]).toEqual([36, 22, 14]);
+    for (const id of ["bank-totalHidden", "bank-totalFx"]) expect(m.results.find((x) => x.id === id)?.killed, id).toBe(true);
+  }, 240_000);
+  it("is for BankWorkx only, for the web and the phone", () => {
+    expect([accounts.apps, accounts.channels]).toEqual([["bankworkx"], ["web", "mobile"]]);
+    expect(catalog.filter((c) => c.id === "accounts").map((c) => [c.madeFor, c.category])).toEqual([["bankworkx", "Accounts"]]);
+    expect(chainTargets(accounts).sort()).toEqual(["account-details", "open-another-account"]);
+    expect(chainWarnings(accounts, bankworkxJourneys.map((x) => x.slug))).toEqual([]);
+  });
+});
+
+describe("account-details: Account details", () => {
+  const j = Journey.parse(accountDetails);
+  const ACC: Record<string, string> = {
+    ...linked(["bank-totalFx"], "accounts"),
+    ...linked(STATEMENT_RULES, "statement"),
+    "no-error-path-38": "Showing an account again can only fail if the adapter that hid it fails: the hidden account is arranged with that adapter, so a condition on it stops the set-up too",
+    "no-error-path-90": "Putting the original name back can only fail if the adapter that gave the account its name fails: the name is arranged with that adapter, so a condition on it stops the set-up too",
+    "no-error-path-106": RESEND,
+    "no-rule-fail-1": "The screen checks the holds and the overdraft first (closeStart), so the bank's own refusal after the code is reached only by an account whose holds appeared in between; the bank's refusal is proved by T-35",
+  };
+  it("is lint clean, every scenario passes and every acceptance criterion is proved", async () => {
+    expect(lintAll(j)).toEqual([]);
+    const r = await runScenarios(j);
+    expect(r.results.filter((x) => !x.ok).map((x) => `${x.id} ${x.name}: ${x.failures.join(" | ")}`)).toEqual([]);
+    expect(r.coverage.map((c) => [c.id, c.status])).toEqual((j.acceptance ?? []).map((a) => [a.id, "proved"]));
+    expect([r.passed, r.total, r.coverage.length]).toEqual([43, 43, 14]);
+  });
+  it("the tests notice when the journey or the bank's rules are broken (mutation check)", async () => {
+    const m = await mutationCheck(j, ACC);
+    expect(m.survived.map((s) => `${s.id}: ${s.what}`)).toEqual([]);
+    expect([m.total, m.killed, m.accepted.length]).toEqual([52, 41, 11]);
+    for (const id of ["bank-lastVisible", "bank-nameRules", "bank-nameTaken", "bank-closeHolds", "bank-closeOverdrawn", "bank-closeNeedsCode", "bank-reportPending", "bank-reportDuplicate", "bank-reportOutgoing", "bank-txFilter", "bank-pendingFirst"]) expect(m.results.find((x) => x.id === id)?.killed, id).toBe(true);
+  }, 240_000);
+  it("is for BankWorkx only, for the web and the phone, and opens the list and the statement", () => {
+    expect([accountDetails.apps, accountDetails.channels]).toEqual([["bankworkx"], ["web", "mobile"]]);
+    expect(catalog.filter((c) => c.id === "account-details").map((c) => [c.madeFor, c.category])).toEqual([["bankworkx", "Accounts"]]);
+    expect(chainTargets(accountDetails).sort()).toEqual(["accounts", "statement"]);
+    expect(chainWarnings(accountDetails, bankworkxJourneys.map((x) => x.slug))).toEqual([]);
+  });
+});
+
+describe("statement: Statement", () => {
+  const j = Journey.parse(statement);
+  const ACC: Record<string, string> = {
+    ...linked(ACCOUNT_RULES, "accounts or account-details"),
+    "no-error-path-44": RESEND,
+    "no-rule-fail-3": "A refusal of the code or the door after the bank accepted the code (OTP_REQUIRED, NOT_OFFICIAL, PERMISSION_DENIED) cannot be arranged from the screens, which use the right door and the code just checked; the bank's refusals are proved by T-26 and T-28",
+  };
+  it("is lint clean, every scenario passes and every acceptance criterion is proved", async () => {
+    expect(lintAll(j)).toEqual([]);
+    const r = await runScenarios(j);
+    expect(r.results.filter((x) => !x.ok).map((x) => `${x.id} ${x.name}: ${x.failures.join(" | ")}`)).toEqual([]);
+    expect(r.coverage.map((c) => [c.id, c.status])).toEqual((j.acceptance ?? []).map((a) => [a.id, "proved"]));
+    expect([r.passed, r.total, r.coverage.length]).toEqual([35, 35, 12]);
+  });
+  it("the tests notice when the journey or the bank's rules are broken (mutation check)", async () => {
+    const m = await mutationCheck(j, ACC);
+    expect(m.survived.map((s) => `${s.id}: ${s.what}`)).toEqual([]);
+    expect([m.total, m.killed, m.accepted.length]).toEqual([41, 26, 15]);
+    // the rules of the document itself are caught by its own screens and by the sandbox asked directly
+    for (const id of ["bank-statementDates", "bank-statementEmpty", "bank-feeFunds", "bank-feeConvert", "bank-issueNeedsCode", "bank-letterDormant"]) expect(m.results.find((x) => x.id === id)?.killed, id).toBe(true);
+  }, 240_000);
+  it("is for BankWorkx only, for the web and the phone, and takes a fee only through the official door", () => {
+    expect([statement.apps, statement.channels]).toEqual([["bankworkx"], ["web", "mobile"]]);
+    expect(catalog.filter((c) => c.id === "statement").map((c) => [c.madeFor, c.category])).toEqual([["bankworkx", "Accounts"]]);
+    expect(statement.integrations.filter((i) => /statements\.(issue|deliver)/.test(i.adapter)).map((i) => i.adapter)).toEqual(["bank.statements.deliver", "bank.statements.issue"]);
+    expect(chainTargets(statement).sort()).toEqual(["account-details", "accounts"]);
+  });
+});
+
+describe("account-nickname: Rename an account (opens Account details)", () => {
+  const j = Journey.parse(accountNickname);
+  const ACC = linked(except(ACCOUNT_RULES, "bank-nameTaken"), "account-details");
+  it("is lint clean, every scenario passes and every acceptance criterion is proved", async () => {
+    expect(lintAll(j)).toEqual([]);
+    const r = await runScenarios(j);
+    expect(r.results.filter((x) => !x.ok).map((x) => `${x.id} ${x.name}: ${x.failures.join(" | ")}`)).toEqual([]);
+    expect(r.coverage.map((c) => [c.id, c.status])).toEqual((j.acceptance ?? []).map((a) => [a.id, "proved"]));
+    expect([r.passed, r.total, r.coverage.length]).toEqual([4, 4, 3]);
+  });
+  it("is a thin entry: no bank calls and two screens of its own, and it opens Account details", () => {
+    expect(j.integrations).toEqual([]);
+    expect(j.screens.map((s) => s.id)).toEqual(["start", "off"]);
+    expect(chainTargets(j)).toEqual(["account-details"]);
+    expect([j.apps, catalog.find((c) => c.id === "account-nickname")?.madeFor]).toEqual([["bankworkx"], "bankworkx"]);
+  });
+  it("the tests notice when the entry is broken (mutation check)", async () => {
+    const m = await mutationCheck(j, ACC);
+    expect(m.survived.map((s) => `${s.id}: ${s.what}`)).toEqual([]);
+    expect([m.total, m.killed, m.accepted.length]).toEqual([15, 5, 10]);
+    expect(m.results.filter((x) => x.kind === "journey" && !x.killed)).toEqual([]);
+  }, 240_000);
+});
+
+describe("open-another-account: Open another account", () => {
+  const j = Journey.parse(openAnotherAccount);
+  const ACC: Record<string, string> = {
+    ...linked(["bank-totalHidden", "bank-totalFx"], "accounts"),
+    "no-error-path-29": RESEND,
+    "no-rule-fail-3": "The currency step asks for a choice before it goes on, so the bank's CURRENCY_REQUIRED is reached only by a forged call (T-8)",
+  };
+  it("is lint clean, every scenario passes and every acceptance criterion is proved", async () => {
+    expect(lintAll(j)).toEqual([]);
+    const r = await runScenarios(j);
+    expect(r.results.filter((x) => !x.ok).map((x) => `${x.id} ${x.name}: ${x.failures.join(" | ")}`)).toEqual([]);
+    expect(r.coverage.map((c) => [c.id, c.status])).toEqual((j.acceptance ?? []).map((a) => [a.id, "proved"]));
+    expect([r.passed, r.total, r.coverage.length]).toEqual([23, 23, 10]);
+  });
+  it("the tests notice when the journey or the bank's rules are broken (mutation check)", async () => {
+    const m = await mutationCheck(j, ACC);
+    expect(m.survived.map((s) => `${s.id}: ${s.what}`)).toEqual([]);
+    expect([m.total, m.killed, m.accepted.length]).toEqual([27, 23, 4]);
+    for (const id of ["bank-accountLimit", "bank-openNeedsCode", "bank-nameRules", "bank-nameTaken"]) expect(m.results.find((x) => x.id === id)?.killed, id).toBe(true);
+  }, 240_000);
+  it("is for BankWorkx only, for the web and the phone, and ends on the list of accounts", () => {
+    expect([openAnotherAccount.apps, openAnotherAccount.channels]).toEqual([["bankworkx"], ["web", "mobile"]]);
+    expect(catalog.filter((c) => c.id === "open-another-account").map((c) => [c.madeFor, c.category])).toEqual([["bankworkx", "Accounts"]]);
+    expect(chainTargets(openAnotherAccount)).toEqual(["accounts"]);
+  });
+});
+
+describe("create-budget: Create a budget", () => {
+  const j = Journey.parse(createBudget);
+  const ACC: Record<string, string> = {
+    "bank-budgetChips": LINKED("budgets"),
+    "no-rule-fail-3": "The amount is checked on the screen before it is sent (the engine's own rule), so the bank's INVALID_AMOUNT is reached only by a forged call (T-22)",
+    "no-rule-fail-4": "A category comes from the cards, never typed, so the bank's CATEGORY_REQUIRED is reached only by a forged call (T-22)",
+  };
+  it("is lint clean, every scenario passes and every acceptance criterion is proved", async () => {
+    expect(lintAll(j)).toEqual([]);
+    const r = await runScenarios(j);
+    expect(r.results.filter((x) => !x.ok).map((x) => `${x.id} ${x.name}: ${x.failures.join(" | ")}`)).toEqual([]);
+    expect(r.coverage.map((c) => [c.id, c.status])).toEqual((j.acceptance ?? []).map((a) => [a.id, "proved"]));
+    expect([r.passed, r.total, r.coverage.length]).toEqual([26, 26, 10]);
+  });
+  it("the tests notice when the journey or the bank's rules are broken (mutation check)", async () => {
+    const m = await mutationCheck(j, ACC);
+    expect(m.survived.map((s) => `${s.id}: ${s.what}`)).toEqual([]);
+    expect([m.total, m.killed, m.accepted.length]).toEqual([23, 20, 3]);
+    for (const id of ["bank-budgetAmount", "bank-budgetDuplicate"]) expect(m.results.find((x) => x.id === id)?.killed, id).toBe(true);
+  }, 240_000);
+  it("is for BankWorkx only, never asks for a code or a tick, and opens the budgets view", () => {
+    expect([createBudget.apps, createBudget.channels]).toEqual([["bankworkx"], ["web", "mobile"]]);
+    expect(catalog.filter((c) => c.id === "create-budget").map((c) => [c.madeFor, c.category])).toEqual([["bankworkx", "Budgeting"]]);
+    expect(createBudget.integrations.some((i) => /otp/.test(i.adapter))).toBe(false);
+    expect(createBudget.screens.some((s) => s.blocks.some((b: any) => b.type === "otp" || b.type === "consent"))).toBe(false);
+    expect(chainTargets(createBudget)).toEqual(["budgets"]);
+  });
+});
+
+describe("budgets: Budgets", () => {
+  const j = Journey.parse(budgets);
+  const ACC = linked(["bank-budgetAmount", "bank-budgetDuplicate"], "create-budget");
+  it("is lint clean, every scenario passes and every acceptance criterion is proved", async () => {
+    expect(lintAll(j)).toEqual([]);
+    const r = await runScenarios(j);
+    expect(r.results.filter((x) => !x.ok).map((x) => `${x.id} ${x.name}: ${x.failures.join(" | ")}`)).toEqual([]);
+    expect(r.coverage.map((c) => [c.id, c.status])).toEqual((j.acceptance ?? []).map((a) => [a.id, "proved"]));
+    expect([r.passed, r.total, r.coverage.length]).toEqual([13, 13, 7]);
+  });
+  it("the tests notice when the journey or the bank's rules are broken (mutation check)", async () => {
+    const m = await mutationCheck(j, ACC);
+    expect(m.survived.map((s) => `${s.id}: ${s.what}`)).toEqual([]);
+    expect([m.total, m.killed, m.accepted.length]).toEqual([13, 11, 2]);
+    expect(m.results.find((x) => x.id === "bank-budgetChips")?.killed).toBe(true);
+  }, 240_000);
+  it("is a view for BankWorkx only: it changes nothing itself and opens Create a budget", () => {
+    expect([budgets.apps, budgets.channels]).toEqual([["bankworkx"], ["web", "mobile"]]);
+    expect(catalog.filter((c) => c.id === "budgets").map((c) => [c.madeFor, c.category])).toEqual([["bankworkx", "Budgeting"]]);
+    expect(budgets.integrations.map((i) => i.adapter)).toEqual(["bank.budgets.list"]);
+    expect(chainTargets(budgets)).toEqual(["create-budget"]);
+  });
+});
+
+describe("transfer-types: Ways to send money", () => {
+  const j = Journey.parse(transferTypes);
+  const ACC = linked(SEND_RULES, "personal-transfer or own-transfer");
+  it("is lint clean, every scenario passes and every acceptance criterion is proved", async () => {
+    expect(lintAll(j)).toEqual([]);
+    const r = await runScenarios(j);
+    expect(r.results.filter((x) => !x.ok).map((x) => `${x.id} ${x.name}: ${x.failures.join(" | ")}`)).toEqual([]);
+    expect(r.coverage.map((c) => [c.id, c.status])).toEqual((j.acceptance ?? []).map((a) => [a.id, "proved"]));
+    expect([r.passed, r.total, r.coverage.length]).toEqual([15, 15, 8]);
+  });
+  it("the tests notice when the journey or the bank's rules are broken (mutation check)", async () => {
+    const m = await mutationCheck(j, ACC);
+    expect(m.survived.map((s) => `${s.id}: ${s.what}`)).toEqual([]);
+    expect([m.total, m.killed, m.accepted.length]).toEqual([30, 10, 20]);
+    expect(m.results.filter((x) => x.kind === "journey" && !x.killed)).toEqual([]);
+  }, 240_000);
+  it("is for BankWorkx only, moves no money and asks for no code, and opens the journeys that send", () => {
+    expect([transferTypes.apps, transferTypes.channels]).toEqual([["bankworkx"], ["web", "mobile"]]);
+    expect(catalog.filter((c) => c.id === "transfer-types").map((c) => [c.madeFor, c.category])).toEqual([["bankworkx", "Payments"]]);
+    expect(transferTypes.integrations.map((i) => i.adapter)).toEqual(["bank.payments.speeds"]);
+    expect(chainTargets(transferTypes).sort()).toEqual(["own-transfer", "personal-transfer"]);
+    expect(chainWarnings(transferTypes, bankworkxJourneys.map((x) => x.slug))).toEqual([]);
+  });
+});
+
+describe("single-transfer: Quick transfer (opens Send money)", () => {
+  const j = Journey.parse(singleTransfer);
+  const ACC = linked(["bank-canDebit", "bank-quoteExpiry", "bank-quoteReplay", "bank-railLimit", "bank-dailyLimit", "bank-sanctions", "bank-addressRule", "bank-bankCode", "bank-payeeLimit", "bank-payeeDuplicate", "bank-ibanChecksum", "bank-sepa", "bank-countryMatch", "bank-routingChecksum", "bank-sortCode", "bank-bic"], "personal-transfer");
+  it("is lint clean, every scenario passes and every acceptance criterion is proved", async () => {
+    expect(lintAll(j)).toEqual([]);
+    const r = await runScenarios(j);
+    expect(r.results.filter((x) => !x.ok).map((x) => `${x.id} ${x.name}: ${x.failures.join(" | ")}`)).toEqual([]);
+    expect(r.coverage.map((c) => [c.id, c.status])).toEqual((j.acceptance ?? []).map((a) => [a.id, "proved"]));
+    expect([r.passed, r.total, r.coverage.length]).toEqual([16, 16, 7]);
+  });
+  it("is a thin entry: no bank calls and three screens of its own, and it opens Send money", () => {
+    expect(j.integrations).toEqual([]);
+    expect(j.screens.map((s) => s.id)).toEqual(["start", "choose", "off"]);
+    expect(chainTargets(j)).toEqual(["personal-transfer"]);
+    expect([j.apps, catalog.find((c) => c.id === "single-transfer")?.madeFor]).toEqual([["bankworkx"], "bankworkx"]);
+    expect(chainWarnings(j, bankworkxJourneys.map((x) => x.slug))).toEqual([]);
+  });
+  it("the tests notice when the entry is broken (mutation check)", async () => {
+    const m = await mutationCheck(j, ACC);
+    expect(m.survived.map((s) => `${s.id}: ${s.what}`)).toEqual([]);
+    expect([m.total, m.killed, m.accepted.length]).toEqual([26, 10, 16]);
+    expect(m.results.filter((x) => x.kind === "journey" && !x.killed)).toEqual([]);
+  }, 240_000);
 });

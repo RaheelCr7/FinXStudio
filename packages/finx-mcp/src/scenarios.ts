@@ -195,6 +195,33 @@ export function bankMutants(journey: Journey): Mutant[] {
     ["pinLockOff", "The bank never turns quick sign-in off after wrong PINs", uses(/^bank\.devices\.verifyPin$/)],
     ["currentPin", "The bank changes the PIN without the current one having been checked", uses(/^bank\.devices\.changePin$/)],
     ["pinSame", "The bank takes the PIN the person has now as the new one", uses(/^bank\.devices\.changePin$/)],
+    // Personal: Accounts. The total and what leaves it, the names, hiding, closing, reporting a problem, the list of transactions, opening an account
+    ["totalHidden", "The bank counts the accounts the customer hid in the total", uses(/^bank\.accounts\.overview$/)],
+    ["totalFx", "The bank counts the foreign currency accounts in the total when the bank leaves them out", uses(/^bank\.accounts\.overview$/)],
+    ["lastVisible", "The bank lets the last visible account be hidden", uses(/^bank\.accounts\.setHidden$/)],
+    ["nameRules", "The bank takes an account name that is too short, too long or has odd characters", uses(/^bank\.accounts\.(rename|open)$/)],
+    ["nameTaken", "The bank takes an account name another account already has", uses(/^bank\.accounts\.(rename|open)$/)],
+    ["closeHolds", "The bank closes an account that has card payments on hold", uses(/^bank\.accounts\.requestClosure$/)],
+    ["closeOverdrawn", "The bank closes an overdrawn account", uses(/^bank\.accounts\.requestClosure$/)],
+    ["closeNeedsCode", "The bank takes a closure request without the one-time code", uses(/^bank\.accounts\.requestClosure$/)],
+    ["reportPending", "The bank takes any reason on a payment that is still pending", uses(/^bank\.accounts\.reportProblem$/)],
+    ["reportDuplicate", "The bank takes a second report on the same payment", uses(/^bank\.accounts\.reportProblem$/)],
+    ["reportOutgoing", "The bank takes a report on a payment received", uses(/^bank\.accounts\.reportProblem$/)],
+    ["txFilter", "The bank ignores the search and the direction of a list of transactions", uses(/^bank\.accounts\.transactions$/)],
+    ["pendingFirst", "The bank lists pending items among the others", uses(/^bank\.accounts\.transactions$/)],
+    ["accountLimit", "The bank lets a customer hold more than six accounts", uses(/^bank\.accounts\.open$/)],
+    ["openNeedsCode", "The bank opens an account without the one-time code", uses(/^bank\.accounts\.open$/)],
+    // statements, letters and certificates
+    ["statementDates", "The bank takes dates that are the wrong way round, before the account opened or too far apart", uses(/^bank\.statements\.(prepare|deliver|issue)$/)],
+    ["statementEmpty", "The bank issues a statement for a period with no transactions", uses(/^bank\.statements\.(prepare|deliver|issue)$/)],
+    ["feeFunds", "The bank takes a fee the account cannot pay", uses(/^bank\.statements\.(prepare|issue)$/)],
+    ["feeConvert", "The bank takes the fee in dollars from an account in another currency", uses(/^bank\.statements\.(prepare|issue)$/)],
+    ["issueNeedsCode", "The bank issues an official document without the one-time code", uses(/^bank\.statements\.issue$/)],
+    ["letterDormant", "The bank issues a proof of address letter for a dormant account", uses(/^bank\.statements\.(prepare|issue)$/)],
+    // budgets
+    ["budgetAmount", "The bank takes a budget below 10.00, above 100,000.00 or with odd decimals", uses(/^bank\.budgets\.(create|update)$/)],
+    ["budgetDuplicate", "The bank takes a second budget for a category", uses(/^bank\.budgets\.create$/)],
+    ["budgetChips", "The bank says On track whatever has been spent", uses(/^bank\.budgets\.list$/)],
   ];
   const rules = all.filter(([, , reachable]) => reachable).map(([k, what]) => [k, what] as [keyof Flaws, string]);
   return rules.map(([k, what]) => ({ id: `bank-${k}`, what, kind: "bank" as const, flaws: { [k]: false } as Flaws }));

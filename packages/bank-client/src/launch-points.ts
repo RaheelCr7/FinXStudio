@@ -41,9 +41,13 @@ const PERSONAL: Def[] = [
   ["home", "Add money", "add-money", "payments.create", [], { quick: true, icon: "dollar" }],
   ["home.upcoming", "Edit", "schedule-payment", "payments.schedule", ["scheduleId"]],
   ["home.offer", "Apply", "apply-loan", "loans.apply", ["offerId"]],
-  ["home.offer", "Open", "open-another-account", "accounts.manage", ["offerId"]],
+  ["home.offer", "Open", "open-another-account", "accounts.manage", ["offerId", "product"]],
   ["home", "See all your money", "connect-account", "accounts.manage"],
   ["accounts", "Open another account", "open-another-account", "accounts.manage"],
+  // the views of the Accounts tab as journeys a bank can switch off: no button of the shell draws these places, the command bar and the links open them
+  ["accounts.overview", "Accounts overview", "accounts", "accounts.view"],
+  ["accounts.budgetview", "Budgets", "budgets", "accounts.view"],
+  ["accounts.detail", "Details", "account-details", "accounts.view", ["accountId"]],
   ["accounts.detail", "Statement", "statement", "accounts.statement", ["accountId"]],
   ["accounts.detail", "Rename", "account-nickname", "accounts.manage", ["accountId"]],
   ["accounts.detail", "Transfer", "own-transfer", "payments.create", ["accountId"]],
@@ -51,6 +55,10 @@ const PERSONAL: Def[] = [
   ["accounts.detail", "Ask about this account", "new-message", "messages.send", ["accountId"]],
   ["accounts.transaction", "Dispute", "dispute-transaction", "cards.dispute", ["transactionId"]],
   ["accounts.budgets", "New budget", "create-budget", "accounts.manage", ["category"]],
+  ["accounts.budget", "Edit", "create-budget", "accounts.manage", ["budgetId"]],
+  ["accounts.budget", "Delete", "create-budget", "accounts.manage", ["budgetId", "mode"], { fixed: { mode: "delete" } }],
+  ["payments.hub", "Ways to send money", "transfer-types", "payments.create"],
+  ["payments.hub", "Quick transfer", "single-transfer", "payments.create"],
   ["payments.hub", "Between my accounts", "own-transfer", "payments.create"],
   ["payments.hub", "To a customer", "internal-transfer", "payments.create", ["beneficiaryId"]],
   ["payments.hub", "To another bank", "personal-transfer", "payments.create", ["beneficiaryId"]],
@@ -144,7 +152,7 @@ export const LAUNCH_POINTS: LaunchPoint[] = [...make("personal", PERSONAL), ...m
 /** Older names of journeys that exist under another slug today (docs/journeys/README.md, "Slug mapping to existing fixtures"). */
 export const JOURNEY_ALIASES: Record<string, string[]> = {
   "supplier-payment": ["corporate-payment"], "approve-payments": ["corporate-approval"], "withdraw-payment": ["withdraw-a-payment"], "pay-bill": ["pay-a-bill"],
-  "personal-transfer": ["fund-transfer-local"], "own-transfer": ["convert-currency"],
+  "personal-transfer": ["fund-transfer-local"], "own-transfer": ["convert-currency"], statement: ["account-statement"],
 };
 
 /** The slug of the catalog entry that runs `journey`: the journey itself (or a bank's copy of it), else its older name. */

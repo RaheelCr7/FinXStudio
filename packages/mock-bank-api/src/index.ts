@@ -1,5 +1,5 @@
 import { BankError } from "./errors";
-import { alexFinance, type Finance } from "./retail/finance";
+import { alexFinance, type Category, type Finance } from "./retail/finance";
 import { ACME, type CorpCompany, type Flaws } from "./business/corporate";
 import { ALPHA, BETA, BETA_CAST, seedPayments } from "./business/alpha-beta";
 import { createCorporateProvider, type CorporateProvider, type ProviderId } from "./business/corporate-provider";
@@ -38,9 +38,11 @@ export { PERSONAL_PERMISSIONS, personalNeeds, permissionsOf, ROLE_LABEL, STEP_UP
 export { ACCESS, AccessDirectory, KNOWN_DEVICE, NEW_DEVICE, FIXED_CODE, EXPIRED_CODE, PASSWORD_RULES_BWX, bwxPasswordProblems, pinProblem, type AccessUser, type AccessDevice, type DeviceInfo } from "./access";
 export { sha256, secretHash } from "./hash";
 
-export type Account = { id: string; name: string; maskedNumber: string; iban: string; balance: number; currency: string; status: "active" | "frozen"; canDebit: boolean;
+export type Account = { id: string; name: string; maskedNumber: string; iban: string; balance: number; currency: string; status: "active" | "frozen" | "dormant" | "closing"; canDebit: boolean;
   /** What can be spent now: the balance less what is on hold. Absent: the whole balance. `balance` is the ledger balance. */
-  available?: number; nickname?: string; kind?: "current" | "savings" };
+  available?: number; nickname?: string; kind?: "current" | "savings";
+  /** Kept by retail/accounts.ts: what the product is, when it opened and what it pays (the seeds are described there), whether the customer hid it, a closure asked for, paperless statements. */
+  facts?: { product: string; openedOn: string; interest: string }; hidden?: boolean; closure?: { reference: string; destination: string }; paperless?: boolean };
 export type Beneficiary = {
   id: string; displayName: string; bank: string; maskedNumber: string; addedAt: number;
   /** What kind of payee, where its account is and its details: set for payees saved with bank.payees.save (and the Payments cast). */
@@ -342,6 +344,33 @@ personas.alexbiz = {
   ...structuredClone(personas.alex!), id: "alexbiz", testCast: true, name: "Alex Morgan (business cast)",
   identity: { id: "alex", name: "Alex Morgan", password: "Bwx!Demo2026", cast: true, business: [{ id: "alpha", company: ALPHA, userId: "alex" }, { id: "beta", company: BETA_CAST, userId: "alex" }] },
 };
+
+// Alex again, for the Accounts journeys: six accounts (the fifth dormant, the sixth overdrawn by $5.00, so it cannot pay the fee of an official statement or be closed) and a budget in every
+// category, each at an edge of the chips (79.99%, exactly 80%, 99.99%, exactly 100%, far over). Separate from Alex because the dashboards count his accounts and budgets.
+{
+  const alex = personas.alex!;
+  const edge = (id: string, name: string, category: Category, limit: number, spent: number) => ({ id, name, category, limit, spent });
+  const retail = structuredClone(alex.retail!);
+  retail.transactions.push(
+    { id: "tx_s1", accountId: "acc_spare", date: "2026-10-10", title: "From Main", category: "Transfer", amount: 40, currency: "USD", status: "posted" },
+    { id: "tx_s2", accountId: "acc_spare", date: "2026-10-25", title: "Coffee Corner", category: "Food", amount: -45, currency: "USD", status: "posted" },
+  );
+  personas.alexaccounts = {
+    ...structuredClone(alex), id: "alexaccounts", testCast: true, name: "Alex Morgan (account states)", retail,
+    accounts: [
+      ...structuredClone(alex.accounts),
+      { id: "acc_old", name: "Old savings", maskedNumber: "••6602", iban: "US00 BWX 0000 0000 6602", balance: 12, currency: "USD", status: "dormant", canDebit: true, kind: "savings" },
+      { id: "acc_spare", name: "Spare", maskedNumber: "••6603", iban: "US00 BWX 0000 0000 6603", balance: -5, currency: "USD", status: "active", canDebit: true, kind: "current" },
+    ],
+    finance: {
+      ...alexFinance(),
+      budgets: [
+        edge("b_food", "Food & Drinks", "food", 100, 79.99), edge("b_shop", "Shopping", "shopping", 100, 80), edge("b_transport", "Transport", "transport", 100, 99.99), edge("b_health", "Health", "health", 100, 100),
+        edge("b_travel", "Travel", "transport", 100, 320), edge("b_bills", "Bills", "bills", 1000, 0), edge("b_ent", "Entertainment", "entertainment", 300, 272), edge("b_subs", "Subscriptions", "bills", 40, 32),
+      ],
+    },
+  };
+}
 
 // The customers behind the sign-in cast (access.ts): people who can sign in with a username and password. They have no accounts of their own
 // (what a screen shows after signing in is the new-customer start), so they are not offered at the sign-in picker; scenarios and the demo use them.
