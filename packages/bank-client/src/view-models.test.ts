@@ -66,6 +66,24 @@ describe("accounts, budgets and wallet view-models", () => {
     const items = accountItems(alex(), fin());
     expect(items.map((i) => i.bank)).toEqual(["BankWorkx", "BankWorkx", "BankWorkx", "BankWorkx", "Summit Federal"]);
   });
+  it("writes each account balance in its own currency, never a euro or dirham balance with a dollar sign", () => {
+    const items = accountItems(alex(), fin());
+    expect(items.map((i) => i.text).slice(0, 2)).toEqual(["$8,720.76", "$15,254.37"]);
+    expect(items[2]!.text).toMatch(/^€\s?2,400/);
+    expect(items[3]!.text).toMatch(/AED/);
+    expect(items[2]!.text).not.toContain("$");
+    expect(items[3]!.text).not.toContain("$");
+    expect(items.map((i) => i.currency)).toEqual(["USD", "USD", "EUR", "AED", "USD"]);
+  });
+  it("a total is the app’s currency only, added in minor units: the euro and dirham accounts stay out and 0.10 + 0.20 is 0.30", () => {
+    const p = alex(), f = fin();
+    expect(totalBalance(p, f)).toBe(33851.67);
+    const drift = { accounts: [{ ...p.accounts[0]!, balance: 0.1 }, { ...p.accounts[1]!, balance: 0.2 }, p.accounts[2]!] };
+    expect(totalBalance(drift, { currency: "USD", linked: [] })).toBe(0.3);
+    // a credit line is not money the customer has
+    expect(totalBalance(drift, { currency: "USD", linked: [{ id: "l", bank: "B", kind: "Credit", maskedNumber: "••1", balance: 500 }] })).toBe(0.3);
+    expect(totalBalance(drift, { currency: "EUR", linked: [] })).toBe(2400);
+  });
   it("searches and groups transactions", () => {
     const t = fin().transactions;
     expect(filterTransactions(t, "starbucks", "all").map((x) => x.title)).toEqual(["Starbucks Coffee"]);

@@ -103,7 +103,7 @@ export function toIsoDate(s: unknown): string {
   return m ? `${m[3]}-${m[2]}-${m[1]}` : t;
 }
 
-type Ctx = { otpVerified: () => boolean; clearOtp: () => void };
+type Ctx = { otpVerified: () => boolean; clearOtp: () => void; /** The sandbox clock. */ now: () => number };
 
 export class CabSandbox {
   private profile?: CabProfile;
@@ -170,7 +170,7 @@ export class CabSandbox {
         return ok && p && p.status === "ACTIVE" ? { ok: true, firstName: p.firstName, lastLogin: p.lastLogin, defaultSignIn: this.device.default, accountCount: p.accounts.length, netWorth: p.netWorth.assets - p.netWorth.debt, currency: CAB_CURRENCY } : { ok: false };
       }
 
-      case "cab.preview.get": return { enabled: this.preview, accounts: this.previewAccounts(), asOf: new Date().toISOString() };
+      case "cab.preview.get": return { enabled: this.preview, accounts: this.previewAccounts(), asOf: new Date(this.ctx.now()).toISOString() };
       case "cab.preview.accounts": return this.previewAccounts();
       case "cab.preview.set": { this.preview = input.enabled === true || input.enabled === "true"; return { ok: true, enabled: this.preview }; }
 

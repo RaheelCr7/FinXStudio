@@ -628,7 +628,7 @@ export class BankApp {
   securityView() { return this.view<SecurityVm>("security"); }
   /** The login history for these filters (cached per place and filters; a change of filters is a new key). */
   historyKey = (q: HistoryQuery) => `history:${q.result}:${q.days}:${q.deviceId}:${q.order}:${q.page}`;
-  loadHistoryView(q: HistoryQuery, deviceId: string, force = false) { return this.loadView<History>(this.viewKey(this.historyKey(q)), () => loadHistory(this.call, q, deviceId, Date.now()), force); }
+  loadHistoryView(q: HistoryQuery, deviceId: string, force = false) { return this.loadView<History>(this.viewKey(this.historyKey(q)), () => loadHistory(this.call, q, deviceId, this.now()), force); }
   historyView(q: HistoryQuery) { return this.view<History>(this.historyKey(q)); }
   /**
    * Turns biometrics off for this device (it only makes sign-in stricter, so no step-up): the PIN if one is set, else the password. A failure

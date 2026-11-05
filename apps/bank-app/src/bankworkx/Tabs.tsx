@@ -22,7 +22,7 @@ const has = (a: Actions, slug: string) => a.journeys.some((j) => slugIs(j.slug, 
 export function Accounts({ a }: { a: Actions }) {
   const { c, r } = useTheme();
   const fin = a.bank.persona.finance!;
-  const items = accountItems(a.bank.persona, fin);
+  const items = accountItems(a.bank.persona, fin, a.money);
   const [sel, setSel] = useState<string | null>(null);
   const [q, setQ] = useState("");
   const [kind, setKind] = useState<"all" | "in" | "out">("all");
@@ -41,11 +41,11 @@ export function Accounts({ a }: { a: Actions }) {
           {items.map((x) => {
             const on = (sel ?? items[0]!.id) === x.id;
             return (
-              <Pressable key={x.id} accessibilityRole="button" accessibilityState={{ selected: on }} accessibilityLabel={`${x.bank} ${x.name} ${x.mask}, ${a.money(x.balance)}`} onPress={() => setSel(x.id)}
+              <Pressable key={x.id} accessibilityRole="button" accessibilityState={{ selected: on }} accessibilityLabel={`${x.bank} ${x.name} ${x.mask}, ${x.text}`} onPress={() => setSel(x.id)}
                 style={{ width: 168, padding: 14, borderRadius: r.lg, backgroundColor: c.surface, borderWidth: 2, borderColor: on ? c.accent2 : "transparent", gap: 8 }}>
                 <IconTile icon="bank" color={c.accent} bg={c.accentSoft} size={38} />
                 <Text style={{ color: c.textFaint, fontSize: 11, textTransform: "uppercase", letterSpacing: 0.6 }}>{x.name}</Text>
-                <Text style={[{ color: c.text, fontSize: 18, fontWeight: "800" }, tab]}>{a.money(x.balance)}</Text>
+                <Text style={[{ color: c.text, fontSize: 18, fontWeight: "800" }, tab]}>{x.text}</Text>
                 <Text style={{ color: c.textMuted, fontSize: 12 }}>{x.bank} {x.mask}</Text>
               </Pressable>
             );

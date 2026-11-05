@@ -342,6 +342,16 @@ describe("cancelling and skipping", () => {
 });
 
 describe("the scheduler (runDue)", () => {
+  it("runs only when asked for by its own name: an unknown or misspelt schedule adapter is UNKNOWN_ADAPTER and moves no money", async () => {
+    const b = await bank();
+    const before = await balance(b, "acc_main");
+    for (const a of ["bank.schedules.rundue", "bank.schedules.runDue2", "bank.schedules.", "bank.schedules.run"]) await fails(b.call(a, { date: "2027-01-01" }), "UNKNOWN_ADAPTER");
+    // and the schedule group itself, reached directly, does not fall through to the scheduler either
+    const group = (b as any).retail.schedulesApi.bind((b as any).retail) as (adapter: string, input: Record<string, unknown>) => unknown;
+    expect(() => group("bank.schedules.runDu", { date: "2027-01-01" })).toThrow(expect.objectContaining({ code: "UNKNOWN_ADAPTER" }));
+    expect(await balance(b, "acc_main")).toBe(before);
+    expect(b.now()).toBe(NOW);
+  });
   it("pays what is due, moves the clock, and moves the next date on", async () => {
     const b = await bank();
     const runs = await b.call("bank.schedules.runDue", { date: "2026-11-06" });

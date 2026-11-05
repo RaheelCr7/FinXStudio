@@ -186,13 +186,28 @@ describe("Alex at Alpha is a Maker, at Beta an Approver, whatever is forced", ()
 });
 
 describe("the notification centre", () => {
+  const text = (list: any) => Object.fromEntries((Object.values(list) as any[]).map((n) => [n.id, n.text]));
   it("answers in every place, each item tagged with the place it belongs to", async () => {
     const { b } = alex();
     const inPersonal = Object.values(await b.call("bank.notifications.list")) as any[];
     await enter(b, "alpha");
     const inAlpha = Object.values(await b.call("bank.notifications.list")) as any[];
-    expect(inAlpha).toEqual(inPersonal);
+    expect(inAlpha.map((n) => [n.id, n.context, n.at, n.read, n.topic])).toEqual(inPersonal.map((n) => [n.id, n.context, n.at, n.read, n.topic]));
     expect(new Set(inAlpha.map((n) => n.context))).toEqual(new Set(["personal", "alpha", "beta"]));
     expect(Object.values(await b.call("bank.notifications.list", { context: "beta" })).map((n: any) => n.context)).toEqual(["beta"]);
+  });
+  it("the bank itself gives the words of the place the person is in only: another place's item says New activity and what it is about, never the detail", async () => {
+    const { b } = alex();
+    expect(text(await b.call("bank.notifications.list"))).toEqual({ n_1: "New activity", n_2: "Salary received: $4,200.00", n_3: "New activity" });
+    await enter(b, "alpha");
+    // inside Alpha the personal salary and Beta's approval are withheld, whatever the client does with the list
+    const inAlpha = await b.call("bank.notifications.list");
+    expect(text(inAlpha)).toEqual({ n_1: "New activity", n_2: "New activity", n_3: "Payment PAY-1187 settled" });
+    expect(JSON.stringify(Object.values(inAlpha).filter((n: any) => n.context !== "alpha"))).not.toMatch(/Nimbus|8,200|Salary|4,200|PAY-1187/);
+    expect(inAlpha.n_1).toEqual({ id: "n_1", context: "beta", topic: "approval", text: "New activity", at: "2026-11-03T09:12:00Z", read: false });
+    // a filter does not unlock it: asking for Beta from Alpha gives Beta's item, masked
+    expect(text(await b.call("bank.notifications.list", { context: "beta" }))).toEqual({ n_1: "New activity" });
+    await b.call("bank.session.switch", { contextId: "beta" });
+    expect(text(await b.call("bank.notifications.list"))).toEqual({ n_1: "Payment awaiting your approval: USD 8,200.00 to Nimbus Logistics", n_2: "New activity", n_3: "New activity" });
   });
 });

@@ -10,7 +10,7 @@ import { RetailSandbox, type OtpState } from "./retail/retail";
 import { BusinessSandbox, type Actor } from "./business/business";
 import { hit, isListAdapter } from "./conditions";
 import { DEFAULT_CONFIG, journeyEnabled, type BankConfig } from "./config";
-import { STEP_UP_SECONDS, contextsOf, type IdentityDef } from "./identity";
+import { PERSONAL_PERMISSIONS, STEP_UP_SECONDS, contextsOf, personalNeeds, type IdentityDef } from "./identity";
 import { ACCESS, AccessDirectory, AccessSandbox, type DeviceInfo } from "./access";
 import { assertSandboxAllowed } from "./policy";
 import { addDays, addMonths, scheduleLine, type AmountMode, type Freq, type ScheduleDetail, type ScheduleKind } from "./retail/schedules";
@@ -34,7 +34,7 @@ export { PER_USD, FX_SPREAD, FX_FEE_RATE, QUOTE_TTL_SECONDS, DEFAULT_FX, BANKWOR
 export { BILLERS, CARRIERS } from "./retail/retail";
 export * from "./retail/data";
 export { DEFAULT_CONFIG, CORE_JOURNEYS, journeyEnabled, HOME_MARKETS, type BankConfig, type HomeMarket } from "./config";
-export { PERSONAL_PERMISSIONS, permissionsOf, ROLE_LABEL, STEP_UP_SECONDS, type ContextInfo, type IdentityDef } from "./identity";
+export { PERSONAL_PERMISSIONS, personalNeeds, permissionsOf, ROLE_LABEL, STEP_UP_SECONDS, type ContextInfo, type IdentityDef } from "./identity";
 export { ACCESS, AccessDirectory, KNOWN_DEVICE, NEW_DEVICE, FIXED_CODE, EXPIRED_CODE, PASSWORD_RULES_BWX, bwxPasswordProblems, pinProblem, type AccessUser, type AccessDevice, type DeviceInfo } from "./access";
 export { sha256, secretHash } from "./hash";
 
@@ -169,8 +169,8 @@ export const personas: Record<string, Persona> = {
       { id: "acc_savings", name: "Savings", maskedNumber: "••2204", iban: "PK12 MEZN 0000 1234 5678 2204", balance: 1250000, currency: "PKR", status: "active", canDebit: true },
     ],
     beneficiaries: [
-      { id: "ben_4821", displayName: "Ahmed Khan", bank: "HBL", maskedNumber: "••4821", addedAt: Date.now() - 90 * day },
-      { id: "ben_1190", displayName: "Sana Malik", bank: "UBL", maskedNumber: "••1190", addedAt: Date.now() - 40 * day },
+      { id: "ben_4821", displayName: "Ahmed Khan", bank: "HBL", maskedNumber: "••4821", addedAt: 0, addedAgoMs: 90 * day },
+      { id: "ben_1190", displayName: "Sana Malik", bank: "UBL", maskedNumber: "••1190", addedAt: 0, addedAgoMs: 40 * day },
     ],
     limits: { daily: 50000, usedToday: 0 },
     behaviour: { otpCode: "482100", kyc: "verified" },
@@ -178,7 +178,7 @@ export const personas: Record<string, Persona> = {
   bilal: {
     id: "bilal", brand: "meezan", name: "Bilal Raza (transfer fails)", phone: "+92 301 5550192",
     accounts: [{ id: "acc_current", name: "Current", maskedNumber: "••3301", iban: "PK50 MEZN 0000 7777 0000 3301", balance: 92000, currency: "PKR", status: "active", canDebit: true }],
-    beneficiaries: [{ id: "ben_9001", displayName: "Hira Builders", bank: "MCB", maskedNumber: "••9001", addedAt: Date.now() - 12 * day }],
+    beneficiaries: [{ id: "ben_9001", displayName: "Hira Builders", bank: "MCB", maskedNumber: "••9001", addedAt: 0, addedAgoMs: 12 * day }],
     limits: { daily: 50000, usedToday: 40000 },
     behaviour: { otpCode: "111111", transferFails: true, kyc: "verified" },
   },
@@ -299,7 +299,7 @@ export const personas: Record<string, Persona> = {
       { id: "acc_aed", name: "Dirham account", maskedNumber: "••1147", iban: "PK19 MEZN 0000 5555 0000 1147", balance: 15000, currency: "AED", status: "active", canDebit: true },
       { id: "acc_kwd", name: "Dinar account", maskedNumber: "••9042", iban: "PK63 MEZN 0000 5555 0000 9042", balance: 120.75, currency: "KWD", status: "active", canDebit: true },
     ],
-    beneficiaries: [{ id: "ben_4821", displayName: "Ahmed Khan", bank: "HBL", maskedNumber: "••4821", addedAt: Date.now() - 90 * day }],
+    beneficiaries: [{ id: "ben_4821", displayName: "Ahmed Khan", bank: "HBL", maskedNumber: "••4821", addedAt: 0, addedAgoMs: 90 * day }],
     limits: { daily: 50000, usedToday: 0 },
     limitsByCurrency: { USD: { daily: 2000, usedToday: 0 }, AED: { daily: 7000, usedToday: 0 }, KWD: { daily: 300, usedToday: 0 } },
     behaviour: { otpCode: "482100", kyc: "verified" },
@@ -400,7 +400,13 @@ export type SandboxConditions = {
   device?: "known" | "new" | "unusual" | "browser";
   /** A session with no call for this many seconds ends: the next call answers SESSION_EXPIRED (the shell's timeout is 300). Off unless set. */
   idleTimeoutSeconds?: number;
+  /** Personal permissions the person lacks (for example "payments.create"): the personal context no longer lists them and the bank refuses what needs them with PERMISSION_DENIED. */
+  withoutPermissions?: string[];
+  /** Pins the sandbox clock to this date and time (ISO, for example 2026-11-03T10:42:00Z): value dates, cut-offs, "today" and references follow it, not the day the test runs. */
+  now?: string;
 };
+/** What a notification from another place says: where it is from is the `context`, what it is about the `topic`. */
+export const OTHER_PLACE_NOTICE = "New activity";
 /** How long a journey waits for the bank before it treats the call as timed out. */
 export const ANSWER_LIMIT_MS = 10_000;
 
@@ -420,7 +426,7 @@ const needsStepUp = (adapter: string, input: Record<string, any>) =>
 export class MockBank {
   private p!: Persona;
   private otp: OtpState = { attempts: 0, verified: false };
-  /** The clock quotes expire by; tests replace it. */
+  /** The clock the bank runs on: quotes expire by it, value dates, cut-offs, "today" and every reference come from it. The real clock unless the bank is made with `now` (or the condition `now`); tests and scenarios replace it. */
   now: () => number = () => Date.now();
   /** Things that go wrong on purpose. A scenario sets them when the bank is made; a test or a dev panel may change them between calls. */
   conditions: SandboxConditions;
@@ -441,10 +447,13 @@ export class MockBank {
    * `personaId` is the customer the bank serves; SIGNED_OUT ("signed-out") starts with nobody signed in, for a sign-in journey (the customer is loaded when it completes).
    * `corpProvider` picks which corporate bank API stands behind the corp.* adapters; journeys do not change.
    */
-  constructor(personaId = "ayesha", options: { corpProvider?: ProviderId; /** rules switched off, for mutation checks only */ corpFlaws?: Flaws; /** things that go wrong on purpose, for scenarios */ conditions?: SandboxConditions; /** how the bank is set up */ config?: Partial<BankConfig>; /** the credentials the bank remembers, shared between banks; a new one is made when left out */ directory?: AccessDirectory; /** the device the app is on (for trusted devices and the code on a new one) */ device?: DeviceInfo } = {}) {
+  constructor(personaId = "ayesha", options: { corpProvider?: ProviderId; /** rules switched off, for mutation checks only */ corpFlaws?: Flaws; /** things that go wrong on purpose, for scenarios */ conditions?: SandboxConditions; /** the sandbox clock: a fixed instant (milliseconds) or a function; wins over conditions.now. The real clock when left out. */ now?: number | (() => number); /** how the bank is set up */ config?: Partial<BankConfig>; /** the credentials the bank remembers, shared between banks; a new one is made when left out */ directory?: AccessDirectory; /** the device the app is on (for trusted devices and the code on a new one) */ device?: DeviceInfo } = {}) {
     assertSandboxAllowed(); // a production build must not run customers on the sandbox (policy.ts)
     this.opts = { corpProvider: options.corpProvider, corpFlaws: options.corpFlaws };
     this.conditions = structuredClone(options.conditions ?? {});
+    const pin = options.now ?? (this.conditions.now !== undefined ? Date.parse(this.conditions.now) : undefined);
+    if (typeof pin === "number" && !Number.isFinite(pin)) throw new Error(`The sandbox clock needs a date and time, for example 2026-11-03T10:42:00Z (got ${String(this.conditions.now ?? options.now)})`);
+    if (pin !== undefined) this.now = typeof pin === "function" ? pin : () => pin;
     this.config = { ...structuredClone(DEFAULT_CONFIG), ...structuredClone(options.config ?? {}) };
     this.signedOut = personaId === SIGNED_OUT;
     this.access = new AccessSandbox(options.directory ?? new AccessDirectory(), { now: () => this.now(), flaws: () => this.opts.corpFlaws ?? {}, config: () => this.config, deviceKind: () => this.conditions.device, appDevice: () => options.device, signedIn: () => !this.signedOut });
@@ -487,9 +496,11 @@ export class MockBank {
     const ctx = this.contexts().find((x) => x.id === this.session.active)!;
     return { contextId: ctx.id, userId: id.business.find((b) => b.id === ctx.id)!.userId, permissions: ctx.permissions };
   }
+  /** What the person may do in the personal context: everything, less what a scenario takes away (conditions.withoutPermissions). */
+  private personalPermissions() { const without = this.conditions.withoutPermissions ?? []; return PERSONAL_PERMISSIONS.filter((p) => !without.includes(p)); }
   private contexts() {
     const id = this.p.identity!;
-    return contextsOf(id, { name: this.p.name, limits: { ...this.p.limits, currency: this.p.accounts[0]?.currency ?? "USD" } }, Object.fromEntries([...this.providers].map(([k, v]) => [k, v.getCompany()])));
+    return contextsOf(id, { name: this.p.name, limits: { ...this.p.limits, currency: this.p.accounts[0]?.currency ?? "USD" }, permissions: this.personalPermissions() }, Object.fromEntries([...this.providers].map(([k, v]) => [k, v.getCompany()])));
   }
 
   /** Ends the session, as an idle timeout would: every later call answers SESSION_EXPIRED until a new MockBank (a new sign-in) is made. */
@@ -551,14 +562,20 @@ export class MockBank {
       }
     }
     const business = adapter.startsWith("corp.");
-    // the notification centre spans every place the person banks from (each item says which), so it answers in any context
-    if (adapter === "bank.notifications.list") return this.retail.call(adapter, input);
+    // the notification centre spans every place the person banks from (each item says which), so it answers in any context, but what an item says
+    // belongs to its own place: from another place the bank gives only that there is something, and what it is about (never the amount or the payee)
+    if (adapter === "bank.notifications.list") {
+      const list = await this.retail.call(adapter, input);
+      return Object.fromEntries(Object.entries<any>(list).map(([id, n]) => [id, n.context === this.session.active ? n : { id: n.id, context: n.context, topic: n.topic, text: OTHER_PLACE_NOTICE, at: n.at, read: n.read }]));
+    }
     // a persona with companies keeps each place apart: personal adapters work only in the personal context and company adapters only in a company
     if (this.p.identity) {
       const inCompany = this.session.active !== "personal";
       if (business && !inCompany) throw new BankError("WRONG_CONTEXT", "This belongs to your business banking. Switch to your business to continue.");
       if (!business && inCompany) throw new BankError("WRONG_CONTEXT", "This belongs to your personal banking. Switch to Personal to continue.");
     }
+    // the personal adapters that move money or change what is saved need the permission, as the company ones do (a screen only hides the button)
+    if (!business && this.opts.corpFlaws?.permissions !== false) { const held = this.personalPermissions(); if (personalNeeds(adapter, input).some((p) => !held.includes(p))) throw new BankError("PERMISSION_DENIED", "Your access doesn't allow this."); }
     // a change to how the customer signs in needs a step-up in the last five minutes (a customer with a session; the shell asks for it before it opens the journey)
     if (SECURITY_ADAPTERS.test(adapter) && this.p.identity && this.opts.corpFlaws?.stepUpGate !== false && needsStepUp(adapter, input) && !(this.session.stepUpUntil !== undefined && now <= this.session.stepUpUntil)) throw new BankError("STEP_UP_REQUIRED", "For your security, confirm it's you first.");
     if (SECURITY_ADAPTERS.test(adapter)) return this.access.security(adapter, input, { codeVerified: () => this.otp.verified, clearCode: () => { this.otp.verified = false; } });

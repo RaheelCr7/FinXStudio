@@ -57,6 +57,16 @@ describe("notifications", () => {
     expect(n[0]!.link).toEqual({ workspace: "business", companyId: "beta", tab: "approvals" });
     expect(n[1]!.link).toEqual({ workspace: "personal", tab: "accounts" });
   });
+  it("follows the bank's topic when the bank has withheld the words of another place's notification", async () => {
+    const masked: RawNotification[] = [
+      { id: "n_1", context: "beta", text: "New activity", topic: "approval", at: "2026-11-03T09:12:00Z", read: false },
+      { id: "n_3", context: "alpha", text: "New activity", topic: "payment", at: "2026-10-30T14:00:00Z", read: false },
+    ];
+    const n = noticesFor(masked, await ctxs(), "personal");
+    expect(n.map((x) => x.text)).toEqual(["New activity", "New activity"]);
+    expect(n[0]!.link).toEqual({ workspace: "business", companyId: "beta", tab: "approvals" });
+    expect(n[1]!.link).toEqual({ workspace: "business", companyId: "alpha", tab: "payments" });
+  });
   it("counts unread, per place, and treats opened ones as read", async () => {
     const contexts = await ctxs();
     const n = noticesFor(raw, contexts, "personal");

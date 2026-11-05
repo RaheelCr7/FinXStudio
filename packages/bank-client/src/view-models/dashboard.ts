@@ -1,4 +1,5 @@
 import type { Finance, Persona, Txn, Budget, Subscription } from "@finx/mock-bank-api";
+import { sumMoney } from "./widgets";
 
 export type Filter = "all" | "income" | "expense";
 
@@ -7,10 +8,12 @@ export const displayName = (persona: Pick<Persona, "name">) => persona.name.spli
 export const firstName = (persona: Pick<Persona, "name">) => persona.name.split(" ")[0] ?? "";
 export const initials = (persona: Pick<Persona, "name">) => persona.name.split(" ").map((x) => x[0]).slice(0, 2).join("");
 
-/** Everything the customer has: own accounts plus linked banks, leaving out credit lines. */
+/**
+ * Everything the customer has in the app's currency: own accounts in that currency plus linked banks (which have no currency of their own and
+ * count as the app's), leaving out credit lines. An account in another currency is never added to it. Summed through minor units, not floats.
+ */
 export function totalBalance(persona: Pick<Persona, "accounts">, fin: Pick<Finance, "linked" | "currency">): number {
-  // balances are added up in the app's currency only: an account in another currency is never added to them
-  return persona.accounts.filter((x) => x.currency === fin.currency).reduce((s, x) => s + x.balance, 0) + fin.linked.reduce((s, x) => s + (x.kind === "Credit" ? 0 : x.balance), 0);
+  return sumMoney([...persona.accounts.filter((x) => x.currency === fin.currency).map((x) => x.balance), ...fin.linked.filter((x) => x.kind !== "Credit").map((x) => x.balance)], fin.currency);
 }
 export const hasAccounts = (persona: Pick<Persona, "accounts">, fin: Pick<Finance, "linked">) => persona.accounts.length + fin.linked.length > 0;
 

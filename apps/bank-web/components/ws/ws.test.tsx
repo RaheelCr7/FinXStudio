@@ -1,9 +1,10 @@
 // @vitest-environment happy-dom
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { cleanup, screen, waitFor, within } from "@testing-library/react";
+import { act, cleanup, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import * as matchers from "vitest-axe/matchers";
 import type { BankApp } from "@finx/bank-client";
+import { PERSONAL_PERMISSIONS } from "@finx/mock-bank-api";
 import { axeCheck, BANKWORKX, nav, renderPage } from "../test-utils";
 import { useApp } from "../AppProvider";
 import { Guard } from "../Guard";
@@ -11,6 +12,12 @@ import { Workspace } from "./Workspace";
 import { WorkspaceFrame } from "./WorkspaceFrame";
 
 expect.extend(matchers as any);
+// the journey player is the real one; this only records what the shell hands it as the person's permissions
+const played = vi.hoisted(() => ({ sessions: [] as unknown[] }));
+vi.mock("@finx/renderer-web", async (orig) => {
+  const real = await orig<typeof import("@finx/renderer-web")>();
+  return { ...real, JourneyPlayer: (p: any) => { played.sessions.push(p.session); return <real.JourneyPlayer {...p} />; } };
+});
 let app: BankApp;
 const Probe = () => { app = useApp().app; return null; };
 const shell = (path: string) => { nav.path = path; return renderPage(<><Probe /><Guard><WorkspaceFrame><Workspace /></WorkspaceFrame></Guard></>, BANKWORKX); };
@@ -27,6 +34,29 @@ async function enter(company: string) {
   await userEvent.type(await within(su).findByLabelText(/^Code sent to/), "000000");
   await userEvent.click(within(su).getByRole("button", { name: "Continue" }));
 }
+
+describe("session.permissions in a journey", () => {
+  const permissionsHanded = () => (played.sessions.at(-1) as { permissions: string[] } | undefined)?.permissions;
+  beforeEach(() => { played.sessions.length = 0; });
+  it("the shell hands the player the permissions of the place the journey opens in: Personal's, then Alpha's as a Maker", async () => {
+    nav.path = "/bankworkx/personal/j/mobile-topup";
+    shell("/bankworkx/personal/j/mobile-topup");
+    await waitFor(() => expect(permissionsHanded()).toBeTruthy(), { timeout: 5000 });
+    expect(permissionsHanded()).toEqual(PERSONAL_PERMISSIONS);
+    expect(permissionsHanded()).toContain("payments.create");
+    cleanup(); played.sessions.length = 0;
+    shell("/bankworkx/personal/home");
+    await screen.findByText("$23,975.13");
+    await enter("Alpha Trading LLC");
+    await waitFor(() => expect(document.documentElement.dataset.workspace).toBe("business"));
+    nav.path = "/bankworkx/business/alpha/j/supplier-payment";
+    await act(async () => { app.bump(); });
+    await waitFor(() => expect(permissionsHanded()).toBeTruthy());
+    expect(permissionsHanded()).toContain("biz.payments.initiate");
+    expect(permissionsHanded()).not.toContain("biz.approvals.approve");
+    expect(permissionsHanded()).not.toContain("payments.create");
+  });
+});
 
 describe("Personal", () => {
   it("draws the balance, the accounts and the quick actions from the bank, without accessibility violations", async () => {

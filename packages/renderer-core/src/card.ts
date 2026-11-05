@@ -11,10 +11,11 @@ export function luhnValid(num: string): boolean {
   return sum % 10 === 0;
 }
 
-/** MM/YY that has not passed yet. The card is good through the last day of its month. */
-export function cardExpiryValid(expiry: string, now = new Date()): boolean {
+/** MM/YY that has not passed yet. The card is good through the last day of its month (by the person's own calendar, or by UTC when `utc` is set, for a fixed clock). */
+export function cardExpiryValid(expiry: string, now = new Date(), utc = false): boolean {
   const m = /^(0[1-9]|1[0-2])\/([0-9]{2})$/.exec(expiry.trim());
   if (!m) return false;
-  const end = new Date(2000 + Number(m[2]), Number(m[1]), 0, 23, 59, 59);
-  return end.getTime() >= now.getTime();
+  const year = 2000 + Number(m[2]), month = Number(m[1]);
+  const end = utc ? Date.UTC(year, month, 0, 23, 59, 59) : new Date(year, month, 0, 23, 59, 59).getTime();
+  return end >= now.getTime();
 }

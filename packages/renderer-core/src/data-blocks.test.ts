@@ -126,3 +126,30 @@ describe("dateInput range", () => {
     expect(r.validate()).toBe(true);
   });
 });
+
+describe("today, by the clock the runner is given", () => {
+  const run = async (blocks: any[], data: Record<string, any>, iso: string) => {
+    const r = new JourneyRunner(journey(blocks, Object.fromEntries(Object.keys(data).map((k) => [k, { type: "object" }]))), { adapter: async () => ({}), launch: data, now: () => Date.parse(iso) });
+    await r.start();
+    return r;
+  };
+  it("a date limit of today is the injected day (UTC), not the day the test runs", async () => {
+    const field = [{ type: "dateInput", bind: "d", label: "Send on", min: "today", max: "today" }];
+    const ok = await run(field, { d: "2026-11-03" }, "2026-11-03T23:59:00Z");
+    expect(ok.validate()).toBe(true);
+    const early = await run(field, { d: "2026-11-02" }, "2026-11-03T00:01:00Z");
+    expect(early.validate()).toBe(false);
+    expect(early.errors.d).toBe("That date is too early");
+    const late = await run(field, { d: "2026-11-04" }, "2026-11-03T12:00:00Z");
+    expect(late.validate()).toBe(false);
+    expect(late.errors.d).toBe("That date is too late");
+  });
+  it("a card is good through the end of its month by the same clock", async () => {
+    const card = [{ type: "cardForm", bind: "c" }];
+    const data = { c: { number: "4242424242424242", holder: "Alex Morgan", expiry: "10/26", cvv: "123" } };
+    expect((await run(card, data, "2026-10-31T23:00:00Z")).validate()).toBe(true);
+    const expired = await run(card, data, "2026-11-02T10:00:00Z");
+    expect(expired.validate()).toBe(false);
+    expect(Object.keys(expired.errors)).toEqual(["c.expiry"]);
+  });
+});

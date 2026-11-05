@@ -18,7 +18,11 @@ export type SavingsGoal = { id: string; name: string; target: number; saved: num
 export type LoanInstalment = { n: number; due: string; principal: number; interest: number; balance: number };
 export type Loan = { id: string; name: string; principal: number; outstanding: number; currency: string; ratePercent: number; monthlyPayment: number; nextDue: string; schedule: LoanInstalment[] };
 export type Message = { id: string; subject: string; from: string; at: string; read: boolean; body: string };
-export type Notification = { id: string; /** which place it belongs to */ context: string; text: string; at: string; read: boolean };
+export type Notification = {
+  id: string; /** which place it belongs to */ context: string; text: string; at: string; read: boolean;
+  /** What it is about, said without the details: the bank gives this (not the text) for a notification of another place. */
+  topic: "approval" | "payment" | "account" | "card" | "general";
+};
 export type ServiceRequest = { id: string; type: string; summary: string; status: "open" | "in progress" | "closed"; openedAt: string };
 export type Application = {
   id: string; type: "account"; status: "draft" | "submitted" | "in review" | "approved" | "declined" | "active";
