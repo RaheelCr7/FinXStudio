@@ -38,7 +38,7 @@ export const ownTransferScenarios: NonNullable<Journey["scenarios"]> = [
     steps: [
       ...accounts("acc_main", "acc_save"), set({ "own.amount": 200, "own.note": "Rainy day" }), press("Continue"),
       screen("review"), text("Rainy day"), text("Total taken"), balance("acc_main", 8720.76),
-      ...confirm, ...code(), press("Move $200"),
+      ...confirm, ...code(), press("Move $200.00"),
       screen("success"), text("Money moved"),
       balance("acc_main", 8520.76), balance("acc_save", 15454.37),
       { expectBank: { adapter: "bank.limits.get", path: "usedToday", equals: 0 } },
@@ -50,7 +50,7 @@ export const ownTransferScenarios: NonNullable<Journey["scenarios"]> = [
       ...accounts("acc_main", "acc_eur"), set({ "own.amount": 500 }), press("See the rate"),
       screen("review"), text("1 USD = 0.926 EUR"), text("Margin on the rate"), text("None"), text("Fee (0.20%)"), text("Total taken"), text("$501"), text("€463"),
       ...unchanged,
-      ...confirm, text("Authorise converting $500 to €463"), ...code(), press("Convert $500"),
+      ...confirm, text("Authorise converting $500.00 to €463.00"), ...code(), press("Convert $500.00"),
       screen("success"), text("Converted"),
       balance("acc_main", 8219.76), balance("acc_eur", 2863),
     ],
@@ -59,12 +59,12 @@ export const ownTransferScenarios: NonNullable<Journey["scenarios"]> = [
     id: "T-3", name: "A rate that ran out: new rate named beside the old one, nothing charged, confirm again at the new rate", covers: ["AC-3"], ...base,
     steps: [
       ...accounts("acc_main", "acc_eur"), set({ "own.amount": 500 }), press("See the rate"), screen("review"),
-      ...confirm, ...code(), { advance: 31 }, press("Convert $500"),
+      ...confirm, ...code(), { advance: 31 }, press("Convert $500.00"),
       screen("review"), text("The rate moved from 0.926 to 0.926185"), text("1 USD = 0.926185 EUR"),
       ...unchanged,
       press("Get a new rate"),
       { expectToast: "New rate: 1 USD = 0.925722 EUR" },
-      ...confirm, ...code(), press("Convert $500"),
+      ...confirm, ...code(), press("Convert $500.00"),
       screen("success"), balance("acc_main", 8219.76), balance("acc_eur", 2862.86),
     ],
   },
@@ -110,7 +110,7 @@ export const ownTransferScenarios: NonNullable<Journey["scenarios"]> = [
     id: "T-8", name: "Three wrong codes lock the journey and no balance changes", covers: ["AC-8"], ...base,
     steps: [
       ...accounts("acc_main", "acc_save"), set({ "own.amount": 200 }), press("Continue"),
-      ...confirm, ...code("111111"), press("Move $200"), screen("otp"), press("Move $200"), screen("otp"), press("Move $200"),
+      ...confirm, ...code("111111"), press("Move $200.00"), screen("otp"), press("Move $200.00"), screen("otp"), press("Move $200.00"),
       screen("locked"), text("Too many wrong codes"), text("No money has left your account."),
       ...unchanged,
     ],
@@ -120,7 +120,7 @@ export const ownTransferScenarios: NonNullable<Journey["scenarios"]> = [
     conditions: { timeout: ["bank.transfers.own"], latencyMs: 10000 },
     steps: [
       ...accounts("acc_main", "acc_save"), set({ "own.amount": 200 }), press("Continue"),
-      ...confirm, ...code(), press("Move $200"),
+      ...confirm, ...code(), press("Move $200.00"),
       screen("timeout"), text("We didn't get an answer in time"), text("Check Activity before you try again"), press("Check Activity"),
       ...unchanged,
     ],
@@ -139,7 +139,7 @@ export const ownTransferScenarios: NonNullable<Journey["scenarios"]> = [
     conditions: { transferFails: true },
     steps: [
       ...accounts("acc_main", "acc_save"), set({ "own.amount": 200 }), press("Continue"),
-      ...confirm, ...code(), press("Move $200"),
+      ...confirm, ...code(), press("Move $200.00"),
       screen("failed"), text("We couldn't complete this right now."), text("No money has left your account."),
       ...unchanged,
     ],
@@ -149,7 +149,7 @@ export const ownTransferScenarios: NonNullable<Journey["scenarios"]> = [
     steps: [
       ...accounts("acc_eur", "acc_aed"), set({ "own.amount": 100 }), press("See the rate"),
       screen("review"), text("1 EUR = 3.965443 AED"), text("Fee (0.20%)"), text("€0.20"), text("€100.20"), text("AED 396.54"),
-      ...confirm, ...code(), press("Convert €100"),
+      ...confirm, ...code(), press("Convert €100.00"),
       screen("success"), balance("acc_eur", 2299.8), balance("acc_aed", 11396.54), balance("acc_main", 8720.76),
     ],
   },
@@ -158,7 +158,7 @@ export const ownTransferScenarios: NonNullable<Journey["scenarios"]> = [
     steps: [
       ...accounts("acc_main", "acc_eur"), set({ "own.dir": "get", "own.amount": 100 }), press("See the rate"),
       screen("review"), text("$108"), text("$0.22"), text("$108.22"), text("€100"),
-      ...confirm, ...code(), press("Convert $108"),
+      ...confirm, ...code(), press("Convert $108.00"),
       screen("success"), balance("acc_main", 8612.54), balance("acc_eur", 2500),
     ],
   },
@@ -176,7 +176,7 @@ export const ownTransferScenarios: NonNullable<Journey["scenarios"]> = [
     steps: [
       set({ "opt.fxFee": false }), ...accounts("acc_main", "acc_eur"), set({ "own.amount": 500 }), press("See the rate"),
       screen("review"), text("Fee"), text("$0"), text("$500"),
-      ...confirm, ...code(), press("Convert $500"),
+      ...confirm, ...code(), press("Convert $500.00"),
       screen("success"), balance("acc_main", 8220.76), balance("acc_eur", 2863),
     ],
   },
@@ -185,7 +185,7 @@ export const ownTransferScenarios: NonNullable<Journey["scenarios"]> = [
     steps: [
       ...accounts("acc_main", "acc_save"), set({ "own.amount": 200 }), press("Continue"),
       press("Confirm and send code"), screen("review"), { expectError: "Tick to confirm." },
-      ...confirm, screen("otp"), press("Move $200"), screen("otp"), { expectError: "Enter all 6 digits" },
+      ...confirm, screen("otp"), press("Move $200.00"), screen("otp"), { expectError: "Enter all 6 digits" },
       ...unchanged,
     ],
   },
@@ -193,7 +193,7 @@ export const ownTransferScenarios: NonNullable<Journey["scenarios"]> = [
     id: "T-17", name: "Services that are down at the start, when sending the code, or when converting show the standard message", covers: ["AC-9"], ...base,
     conditions: { unavailable: ["bank.fx.convert"] },
     steps: [
-      ...accounts("acc_main", "acc_eur"), set({ "own.amount": 500 }), press("See the rate"), ...confirm, ...code(), press("Convert $500"),
+      ...accounts("acc_main", "acc_eur"), set({ "own.amount": 500 }), press("See the rate"), ...confirm, ...code(), press("Convert $500.00"),
       screen("unavailable"), ...unchanged,
     ],
   },
@@ -214,8 +214,8 @@ export const ownTransferScenarios: NonNullable<Journey["scenarios"]> = [
     id: "T-20", name: "Converting: a code that is too short is not sent, and three wrong codes lock the journey", covers: ["AC-8"], ...base,
     steps: [
       ...accounts("acc_main", "acc_eur"), set({ "own.amount": 500 }), press("See the rate"), ...confirm,
-      press("Convert $500"), screen("otp"), { expectError: "Enter all 6 digits" },
-      ...code("111111"), press("Convert $500"), screen("otp"), press("Convert $500"), screen("otp"), press("Convert $500"),
+      press("Convert $500.00"), screen("otp"), { expectError: "Enter all 6 digits" },
+      ...code("111111"), press("Convert $500.00"), screen("otp"), press("Convert $500.00"), screen("otp"), press("Convert $500.00"),
       screen("locked"), text("Too many wrong codes"),
       ...unchanged,
     ],

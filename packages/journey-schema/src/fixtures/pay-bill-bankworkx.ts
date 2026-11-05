@@ -259,7 +259,7 @@ export const payBillBankworkx: Journey = {
           type: "reviewSummary", visibleWhen: "ctx.q.rate > 0",
           rows: [
             { label: "Rate", value: "1 {{ctx.q.billCurrency}} = {{ctx.q.rate}} {{ctx.q.currency}}" },
-            { label: "You pay", value: "{{ctx.q.youPay | money:ctx.q.currency}}" },
+            { label: "You pay", value: "{{ctx.q.youPay | money2:ctx.q.currency}}" },
           ],
         },
         { type: "reviewSummary", rows: [{ label: "From", value: ACCT }, { label: "Date", value: "Today" }] },
@@ -391,7 +391,7 @@ export const payBillBankworkx: Journey = {
         { type: "reviewSummary", visibleWhen: "pb.result.fee > 0", rows: [{ label: "Fee", value: MONEY("pb.result.fee") }] },
         {
           type: "reviewSummary", visibleWhen: "pb.result.rate > 0",
-          rows: [{ label: "Rate", value: "1 {{ctx.q.billCurrency}} = {{pb.result.rate}} {{pb.result.currency}}" }, { label: "You paid", value: "{{pb.result.youPay | money:pb.result.currency}}" }],
+          rows: [{ label: "Rate", value: "1 {{ctx.q.billCurrency}} = {{pb.result.rate}} {{pb.result.currency}}" }, { label: "You paid", value: "{{pb.result.youPay | money2:pb.result.currency}}" }],
         },
         { type: "reviewSummary", rows: [{ label: "From", value: ACCT }, { label: "Date", value: "Today" }] },
         { type: "reviewSummary", visibleWhen: "pb.result.nextAutopay", rows: [{ label: "Next automatic payment", value: "{{pb.result.nextAutopay}}" }] },

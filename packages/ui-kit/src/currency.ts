@@ -61,14 +61,14 @@ export const fromMinor = (minor: number, currency: string, custom?: CurrencyInfo
  * anything else shows the currency's own digits (JOD 12.500, $86.50). A negative amount puts the sign first (-$86.50).
  * Pass an Arabic or Urdu locale ("ar-EG", "ur-PK") for native digits.
  */
-export function formatMoney(amount: number, currency = "PKR", locale = "en-US", custom?: CurrencyInfo[]): string {
+export function formatMoney(amount: number, currency = "PKR", locale = "en-US", custom?: CurrencyInfo[], fixed = false): string {
   const { decimals } = currencyInfo(currency, custom);
   const n = roundMoney(amount, currency, custom);
   let body: string;
   try {
-    body = new Intl.NumberFormat(locale, { minimumFractionDigits: Number.isInteger(n) ? 0 : decimals, maximumFractionDigits: decimals }).format(Math.abs(n));
+    body = new Intl.NumberFormat(locale, { minimumFractionDigits: fixed || !Number.isInteger(n) ? decimals : 0, maximumFractionDigits: decimals }).format(Math.abs(n));
   } catch {
-    body = Math.abs(n).toLocaleString("en-US", { minimumFractionDigits: Number.isInteger(n) ? 0 : decimals, maximumFractionDigits: decimals });
+    body = Math.abs(n).toLocaleString("en-US", { minimumFractionDigits: fixed || !Number.isInteger(n) ? decimals : 0, maximumFractionDigits: decimals });
   }
   return `${n < 0 ? "-" : ""}${prefixOf(currency, custom)}${body}`;
 }

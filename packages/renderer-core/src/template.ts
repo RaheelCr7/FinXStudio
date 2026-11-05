@@ -5,7 +5,7 @@ export const FORMATTERS: Record<string, (v: any, arg?: string) => string> = {
   /** A plain number with thousands separators. With a currency ({{ amount | money:JOD }}) it is that currency's own money: symbol, its decimals (JPY 0, JOD 3). */
   money: (v, currency) => (v == null || v === "" ? "" : currency ? formatMoney(Number(v), currency) : Number(v).toLocaleString("en-US", { maximumFractionDigits: 2 })),
   /** Always two decimals, for prices: 184.2 becomes 184.20. */
-  money2: (v, _currency) => (v == null || v === "" ? "" : Number(v).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })),
+  money2: (v, currency) => (v == null || v === "" ? "" : currency ? formatMoney(Number(v), currency, "en-US", undefined, true) : Number(v).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })),
   /** A date and time for a person: 03/30/2026 12:50 PM, in the device's time zone. */
   datetime: (v) => { const d = v ? new Date(v) : null; return d && !isNaN(d.getTime()) ? `${d.toLocaleDateString("en-US", { month: "2-digit", day: "2-digit", year: "numeric" })} ${d.toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit" })}` : ""; },
   /** A saved date (YYYY-MM-DD) as a person writes it: 01 / 01 / 2001. */
