@@ -54,7 +54,7 @@ const PERSONAL: Def[] = [
   ["payments.hub", "To another bank", "personal-transfer", "payments.create", ["beneficiaryId"]],
   ["payments.hub", "To another country", "international-transfer", "payments.create", ["beneficiaryId", "country"]],
   ["payments.hub", "Bills", "pay-bill", "payments.create", ["billerId"]],
-  ["payments.hub", "Top up", "mobile-topup", "payments.create", ["carrierId"]],
+  ["payments.hub", "Top up", "mobile-topup", "payments.create", ["operatorId"]],
   ["payments.beneficiaries", "Add", "manage-beneficiary", "beneficiaries.manage", ["mode"], { fixed: { mode: "add" } }],
   ["payments.beneficiary", "Edit", "manage-beneficiary", "beneficiaries.manage", ["beneficiaryId"], { fixed: { mode: "edit" } }],
   ["payments.beneficiary", "Delete", "manage-beneficiary", "beneficiaries.manage", ["beneficiaryId"], { fixed: { mode: "delete" } }],
@@ -198,6 +198,29 @@ export function launchValues(lp: LaunchPoint, passed: Record<string, unknown> = 
   const out: Record<string, unknown> = {};
   for (const k of lp.passes) if (passed[k] !== undefined && passed[k] !== "") out[k] = passed[k];
   return { ...out, ...(lp.fixed ?? {}) };
+}
+
+/** Where a journey reads the values it was opened with: the engine puts launch values at data paths, and journeys read them under `launch.`. */
+export const LAUNCH_PREFIX = "launch.";
+
+/** The names a journey may be opened with: what any launch point of it declares (passed or fixed), under any of its names. */
+export function launchNames(journey: string): Set<string> {
+  const names = new Set<string>();
+  for (const lp of LAUNCH_POINTS) {
+    if (slugIs(journey, lp.journey) || (JOURNEY_ALIASES[lp.journey] ?? []).some((a) => slugIs(journey, a))) { for (const k of lp.passes) names.add(k); for (const k of Object.keys(lp.fixed ?? {})) names.add(k); }
+  }
+  return names;
+}
+
+/**
+ * Values as a button or a link carries them (plain names) to what the engine takes: only the names the journey's launch points declare,
+ * each at `launch.<name>`. A name the journey does not declare, from an address or another app's link, is dropped, so a link cannot set
+ * `opt`, `ctx` or any other path the journey keeps for itself.
+ */
+export function launchFromValues(journey: string, values: Record<string, unknown> | undefined): Record<string, unknown> {
+  const allowed = launchNames(journey), out: Record<string, unknown> = {};
+  for (const [k, v] of Object.entries(values ?? {})) if (allowed.has(k) && v !== undefined && v !== "") out[`${LAUNCH_PREFIX}${k}`] = v;
+  return out;
 }
 
 /** Whether a button belongs to one row (it needs a value the row passes in) rather than to the section or the tab. */

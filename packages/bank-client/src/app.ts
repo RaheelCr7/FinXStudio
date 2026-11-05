@@ -3,7 +3,7 @@ import type { Preset, WorkspaceId } from "@finx/ui-kit";
 import { slugIs, type CatalogResult, type Live, type createLive } from "./live";
 import { usd } from "./format";
 import { NO_SETTINGS, activeContext, findContext, workspaceOf, type BankSettings, type ContextInfo, type SessionInfo } from "./session";
-import { entryFor, journeyAllowed, launchPointsFor, launchValues, type LaunchPoint } from "./launch-points";
+import { entryFor, journeyAllowed, launchFromValues, launchPointsFor, launchValues, type LaunchPoint } from "./launch-points";
 import { linkContext, needsSwitch, parseLink, type Link } from "./links";
 import { FIRST_TAB, isTab, type ShellTab } from "./view-models/menus";
 import { noticesFor, type ContextNotice, type RawNotification } from "./view-models/notices";
@@ -148,7 +148,7 @@ export class BankApp {
   }
   logout() {
     this.epoch++;
-    this.arriveAfter = null; this.pending = null;
+    this.arriveAfter = null; this.pending = null; this.stepUpProof = null;
     this.freshBank();
     this.set({ screen: "login", budgetId: null, investView: null, sheet: null, subId: null, active: null, toast: null, ...this.freshShell(), tick: this.state.tick + 1 });
   }
@@ -259,7 +259,14 @@ export class BankApp {
    * `confirmStepUp` finishes the switch). Everything that belongs to the place being left is cleared; language, light or dark and
    * the last tab of each workspace stay.
    */
+  private switchBusy = false;
   async switchContext(contextId: string): Promise<"switched" | "step-up" | "failed"> {
+    // one switch at a time: a second tap while one is running would use the old place and file the current tab under the wrong workspace
+    if (this.switchBusy) return "failed";
+    this.switchBusy = true;
+    try { return await this.switchOnce(contextId); } finally { this.switchBusy = false; }
+  }
+  private async switchOnce(contextId: string): Promise<"switched" | "step-up" | "failed"> {
     const info = this.state.session.info, target = findContext(info, contextId);
     if (!info || !target) { this.say("You don't have access to that.", false); return "failed"; }
     if (contextId === info.activeContextId) { this.deliver(); return "switched"; }
@@ -296,36 +303,48 @@ export class BankApp {
   private deliver() { if (this.arriveAfter) { const link = this.arriveAfter; this.arriveAfter = null; this.set({ arrived: link }); } }
   clearArrived() { if (this.state.arrived) this.set({ arrived: null }); }
 
-  /** Step 1 of the confirmation: the password (or biometrics); the bank then sends a code. */
+  /** The proof the customer gave in step 1, kept in memory only until the switch is done (the bank asks for it again with the code). */
+  private stepUpProof: { method: "password" | "biometric"; secret?: string } | null = null;
+  /** Step 1 of the confirmation: the password (or biometrics) is checked first; only a right one makes the bank send a code. */
   async beginStepUp(input: { method?: "password" | "biometric"; secret?: string } = {}) {
     const su = this.state.stepUp;
     if (!su) return;
     this.set({ stepUp: { ...su, busy: true, error: undefined } });
+    const proof = { method: input.method ?? "password", ...(input.secret !== undefined ? { secret: input.secret } : {}) } as const;
     try {
-      await this.call("bank.otp.send");
-      await this.call("bank.session.stepUp", { method: input.method ?? "password", ...(input.secret !== undefined ? { secret: input.secret } : {}) });
+      await this.call("bank.session.stepUp", proof);
     } catch (e: any) {
-      // the right password is answered "code needed": that is the way forward
-      if (e?.code === "OTP_REQUIRED") { this.set({ stepUp: { ...su, phase: "code", busy: false, error: undefined, phone: this.persona.phone.replace(/\d(?=(?:\D*\d){4})/g, "•") } }); return; }
+      // the right password is answered "code needed": that is the way forward, and only now is a code sent
+      if (e?.code === "OTP_REQUIRED") {
+        try { await this.call("bank.otp.send"); } catch (err: any) { this.set({ stepUp: { ...su, busy: false, error: err?.message ?? "We couldn't send the code. Try again." } }); return; }
+        this.stepUpProof = proof;
+        this.set({ stepUp: { ...su, phase: "code", busy: false, error: undefined, phone: this.persona.phone.replace(/\d(?=(?:\D*\d){4})/g, "•") } });
+        return;
+      }
       this.set({ stepUp: { ...su, busy: false, error: e?.message ?? "That didn't work. Try again." } });
+      return;
     }
+    // already confirmed (a code was still valid): the switch can go ahead
+    this.stepUpProof = null; this.set({ stepUp: null });
+    await this.switchContext(su.contextId);
   }
   /** Step 2: the one-time code. Done, the switch that asked for it finishes. */
   async confirmStepUp(code: string) {
-    const su = this.state.stepUp;
-    if (!su) return;
+    const su = this.state.stepUp, proof = this.stepUpProof;
+    if (!su || !proof) return;
     this.set({ stepUp: { ...su, busy: true, error: undefined } });
     try {
       await this.call("bank.otp.verify", { code });
-      await this.call("bank.session.stepUp", { method: "password" });
+      await this.call("bank.session.stepUp", proof);
     } catch (e: any) {
       this.set({ stepUp: { ...su, busy: false, error: e?.message ?? "That didn't work. Try again." } });
       return;
     }
+    this.stepUpProof = null;
     this.set({ stepUp: null });
     await this.switchContext(su.contextId);
   }
-  cancelStepUp() { this.arriveAfter = null; this.set({ stepUp: null, switching: null }); }
+  cancelStepUp() { this.stepUpProof = null; this.arriveAfter = null; this.set({ stepUp: null, switching: null }); }
 
   // ---- links ------------------------------------------------------------------------------------------------------
   /**
@@ -356,7 +375,7 @@ export class BankApp {
     if (link.journey === undefined) { this.setShellTab(link.tab); this.set({ screen: "app", active: null, opening: null }); return; }
     const ctx = this.context;
     if (!ctx || !journeyAllowed(link.journey, { context: ctx, entries: this.state.catalog.entries, settings: this.state.session.settings })) { this.say("This isn't available to you here.", false); return; }
-    await this.openJourney(link.journey, undefined, link.values);
+    await this.openJourney(link.journey, undefined, launchFromValues(link.journey, link.values));
   }
   declineOffer() { this.set({ offer: null }); }
   /** The customer accepted: switch (with a step-up if the bank wants one), then `arrived` carries the link. */
@@ -424,7 +443,9 @@ export class BankApp {
   }
   /** The journey to open and its starting values for a button, with the values the place passed in. */
   launchTarget(lp: LaunchPoint, passed: Record<string, unknown> = {}) {
-    return { slug: entryFor(lp.journey, this.state.catalog.entries) ?? lp.journey, values: launchValues(lp, passed) };
+    const slug = entryFor(lp.journey, this.state.catalog.entries) ?? lp.journey, values = launchValues(lp, passed);
+    // `values` are plain names (an address carries them); `launch` is what the engine takes
+    return { slug, values, launch: launchFromValues(slug, values) };
   }
 
   // ---- notices -----------------------------------------------------------------------------------------------------

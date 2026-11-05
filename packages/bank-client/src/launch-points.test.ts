@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { MockBank } from "@finx/mock-bank-api";
-import { LAUNCH_POINTS, entryFor, journeyAllowed, journeyOn, launchPointsFor, launchValues, tabOfPlace } from "./launch-points";
+import { LAUNCH_POINTS, entryFor, journeyAllowed, journeyOn, launchFromValues, launchNames, launchPointsFor, launchValues, tabOfPlace } from "./launch-points";
 import { tabsOf } from "./view-models/menus";
 import type { ContextInfo } from "./session";
 
@@ -131,5 +131,18 @@ describe("row and section buttons", () => {
     expect(isRowLevel(by("schedule-payment", "Change"))).toBe(true);
     const several = by("approve-payments", "Approve several");
     expect([isRowLevel(several), isSectionLevel(several)]).toEqual([false, false]);
+  });
+});
+
+describe("launch values for the engine", () => {
+  it("puts the declared names under launch. and drops the rest", () => {
+    expect(launchFromValues("mobile-topup", { operatorId: "aster", opt: "x", junk: "1", empty: "" })).toEqual({ "launch.operatorId": "aster" });
+    expect(launchFromValues("mobile-topup-bankworkx", { operatorId: "aster" })).toEqual({ "launch.operatorId": "aster" });
+    expect(launchFromValues("no-such-journey", { a: "1" })).toEqual({});
+    expect(launchFromValues("mobile-topup", undefined)).toEqual({});
+  });
+  it("names the operator the way Mobile top-up reads it", () => {
+    expect(launchNames("mobile-topup").has("operatorId")).toBe(true);
+    expect(launchNames("mobile-topup").has("carrierId")).toBe(false);
   });
 });

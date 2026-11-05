@@ -85,7 +85,7 @@ export function ScreenView({ app, tab, allowed, title }: { app: BankApp; tab: Sh
   useEffect(() => { if (allowed) void app.loadShell(tab); }, [app, tab, allowed, active, s.tick]);
   const view = allowed ? s.views[app.viewKey(tab)] : undefined;
   const screen = view?.data as Screen | undefined;
-  const open = (lp: LaunchPoint, passed?: Record<string, string>) => { const t = app.launchTarget(lp, passed); void app.openJourney(t.slug, undefined, t.values); };
+  const open = (lp: LaunchPoint, passed?: Record<string, string>) => { const t = app.launchTarget(lp, passed); void app.openJourney(t.slug, undefined, t.launch); };
   const head = app.launchPoints({ place: tab }).filter(isSectionLevel);
   const hub = app.launchPoints({ place: `${tab}.hub` });
   let body: React.ReactNode;

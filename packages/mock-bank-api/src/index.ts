@@ -390,7 +390,7 @@ export class MockBank {
   private business: BusinessSandbox;
   private providers = new Map<string, CorporateProvider>();
   /** The session, as a server would hold it: which context is active, whether a step-up is still valid, and whether it has ended. */
-  private session = { active: "personal", stepUpUntil: undefined as number | undefined, passwordOk: false, ended: false, audit: 0 };
+  private session = { active: "personal", stepUpUntil: undefined as number | undefined, ended: false, audit: 0 };
 
   /** `corpProvider` picks which corporate bank API stands behind the corp.* adapters; journeys do not change. */
   constructor(personaId = "ayesha", options: { corpProvider?: ProviderId; /** rules switched off, for mutation checks only */ corpFlaws?: Flaws; /** things that go wrong on purpose, for scenarios */ conditions?: SandboxConditions; /** how the bank is set up */ config?: Partial<BankConfig> } = {}) {
@@ -505,14 +505,11 @@ export class MockBank {
       case "bank.session.stepUp": {
         const method = String(input.method ?? "password");
         if (method !== "password" && method !== "biometric") throw new BankError("STEP_UP_FAILED", "That didn't work. Try again.");
-        if (method === "password" && input.secret !== undefined) {
-          // a wrong password stops here; the right one is remembered while the code is entered
-          this.session.passwordOk = String(input.secret) === id.password;
-          if (!this.session.passwordOk) throw new BankError("STEP_UP_FAILED", "That password isn't right.");
-        } else if (method === "biometric") this.session.passwordOk = true;
-        if (!this.session.passwordOk) throw new BankError("STEP_UP_FAILED", "That password isn't right.");
+        // the proof comes with every call (the password, or the device's biometric check) and nothing is remembered between calls: a password
+        // given once cannot be reused later by a call that leaves it out
+        if (method === "password" && (typeof input.secret !== "string" || input.secret !== id.password)) throw new BankError("STEP_UP_FAILED", "That password isn't right.");
         if (!this.otp.verified) throw new BankError("OTP_REQUIRED", "OTP not verified");
-        this.otp.verified = false; this.session.passwordOk = false;
+        this.otp.verified = false;
         this.session.stepUpUntil = now + STEP_UP_SECONDS * 1000;
         return { stepUpUntil: new Date(this.session.stepUpUntil).toISOString() };
       }

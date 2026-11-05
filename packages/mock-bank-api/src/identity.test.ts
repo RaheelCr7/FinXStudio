@@ -7,7 +7,7 @@ const alex = () => { const b = new MockBank("alex"); let t = NOW; b.now = () => 
 const code = async (p: Promise<unknown>) => p.then(() => "no error", (e) => e.code as string);
 const verify = async (b: MockBank) => { await b.call("bank.otp.send"); await b.call("bank.otp.verify", { code: "482100" }); };
 /** Password, then the one-time code, as the step-up sheet does it. */
-async function stepUp(b: MockBank) { await b.call("bank.session.stepUp", { method: "password", secret: "Bwx!Demo2026" }).catch(() => undefined); await verify(b); return b.call("bank.session.stepUp", { method: "password" }); }
+async function stepUp(b: MockBank) { await b.call("bank.session.stepUp", { method: "password", secret: "Bwx!Demo2026" }).catch(() => undefined); await verify(b); return b.call("bank.session.stepUp", { method: "password", secret: "Bwx!Demo2026" }); }
 async function enter(b: MockBank, id: "alpha" | "beta") { await stepUp(b); return b.call("bank.session.switch", { contextId: id }); }
 
 describe("bank.session.get", () => {
@@ -43,13 +43,20 @@ describe("switching and step-up", () => {
     expect(await code(b.call("bank.session.stepUp", { method: "password", secret: "Bwx!Demo2026" }))).toBe("OTP_REQUIRED");
     expect(await code(b.call("bank.session.switch", { contextId: "alpha" }))).toBe("STEP_UP_REQUIRED");
     await verify(b);
-    const r = await b.call("bank.session.stepUp", { method: "password" });
+    const r = await b.call("bank.session.stepUp", { method: "password", secret: "Bwx!Demo2026" });
     expect(Date.parse(r.stepUpUntil) - NOW).toBe(300_000);
   });
   it("without having typed the password, the code alone is not enough", async () => {
     const { b } = alex();
     await verify(b);
     expect(await code(b.call("bank.session.stepUp", { method: "password" }))).toBe("STEP_UP_FAILED");
+  });
+  it("a password given once is not remembered: the call that finishes the step-up must carry it again", async () => {
+    const { b } = alex();
+    expect(await code(b.call("bank.session.stepUp", { method: "password", secret: "Bwx!Demo2026" }))).toBe("OTP_REQUIRED");
+    await verify(b);
+    expect(await code(b.call("bank.session.stepUp", { method: "password" }))).toBe("STEP_UP_FAILED");
+    expect((await b.call("bank.session.stepUp", { method: "password", secret: "Bwx!Demo2026" })).stepUpUntil).toBeDefined();
   });
   it("switches into Alpha and back; going back to Personal asks for nothing", async () => {
     const { b } = alex();

@@ -68,6 +68,36 @@ describe("switching places", () => {
     a.cancelStepUp();
     expect(a.getState().stepUp).toBeNull();
   });
+  it("sends no code for a wrong password, and sends one only after the right password", async () => {
+    const a = await alex();
+    const spy = vi.spyOn((a as any).current, "call");
+    await a.switchContext("beta");
+    await a.beginStepUp({ secret: "nope" });
+    expect(spy.mock.calls.some((c) => c[0] === "bank.otp.send")).toBe(false);
+    await a.beginStepUp({ secret: PASSWORD });
+    expect(spy.mock.calls.filter((c) => c[0] === "bank.otp.send")).toHaveLength(1);
+    expect(a.getState().stepUp).toMatchObject({ phase: "code" });
+  });
+  it("sends the password again with the code, because the bank remembers nothing between the two calls", async () => {
+    const a = await alex();
+    const spy = vi.spyOn((a as any).current, "call");
+    await a.switchContext("beta");
+    await a.beginStepUp({ secret: PASSWORD });
+    await a.confirmStepUp("000000");
+    const final = spy.mock.calls.filter((c) => c[0] === "bank.session.stepUp").at(-1)!;
+    expect(final[1]).toMatchObject({ method: "password", secret: PASSWORD });
+    expect(a.getState().workspace).toBe("business");
+  });
+  it("does one switch at a time: a second tap while one runs changes nothing", async () => {
+    const b = await alex();
+    await b.switchContext("alpha"); await confirm(b);
+    expect(b.getState().workspace).toBe("business");
+    b.setShellTab("payments");
+    const results = await Promise.all([b.switchContext("personal"), b.switchContext("personal")]);
+    expect(results.sort()).toEqual(["failed", "switched"]);
+    expect(b.getState().prefs.lastTab.business).toBe("payments");
+    expect(b.getState().prefs.lastTab.personal).not.toBe("payments");
+  });
   it("clears the wrong-password message once the next step opens", async () => {
     const a = await alex();
     await a.switchContext("beta");
@@ -265,7 +295,13 @@ describe("links from the device", () => {
     const a = await alex();
     expect(a.receiveLink("bankworkx://personal/j/manage-beneficiary?beneficiaryId=ben_taylor&mode=edit", SCHEME)).toBe("go");
     await vi.waitFor(() => expect(a.getState().screen).toBe("journey"));
-    expect(a.getState().active!.launch).toEqual({ beneficiaryId: "ben_taylor", mode: "edit" });
+    expect(a.getState().active!.launch).toEqual({ "launch.beneficiaryId": "ben_taylor", "launch.mode": "edit" });
+  });
+  it("drops a value in a link that the journey's launch points do not declare, so a link cannot set opt, ctx or other paths", async () => {
+    const a = await alex();
+    a.receiveLink("bankworkx://personal/j/manage-beneficiary?beneficiaryId=ben_taylor&opt=x&ctx=y&launch=z&consent=true", SCHEME);
+    await vi.waitFor(() => expect(a.getState().screen).toBe("journey"));
+    expect(a.getState().active!.launch).toEqual({ "launch.beneficiaryId": "ben_taylor" });
   });
   it("refuses a journey the place cannot use, whatever the link says", async () => {
     const a = await alex();
@@ -300,7 +336,7 @@ describe("launching a journey from a button", () => {
   it("gives the journey and the values it starts with", async () => {
     const a = await alex();
     const lp = a.launchPoints({ place: "payments.beneficiary" }).find((l) => l.label === "Edit")!;
-    expect(a.launchTarget(lp, { beneficiaryId: "ben_taylor", junk: 1 })).toEqual({ slug: "manage-beneficiary", values: { beneficiaryId: "ben_taylor", mode: "edit" } });
+    expect(a.launchTarget(lp, { beneficiaryId: "ben_taylor", junk: 1 })).toEqual({ slug: "manage-beneficiary", values: { beneficiaryId: "ben_taylor", mode: "edit" }, launch: { "launch.beneficiaryId": "ben_taylor", "launch.mode": "edit" } });
   });
 });
 
