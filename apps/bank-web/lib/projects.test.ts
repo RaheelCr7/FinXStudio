@@ -40,6 +40,23 @@ describe("projects", () => {
     expect(readProject({ ...acme, background: "javascript:1" })!.def.background).toBe("#F6F7F9");
   });
 
+  it("carries a bank's workspace looks from Studio, rebuilt from checked fields only", () => {
+    const p = readProject({ ...acme, workspaces: {
+      personal: { name: "Calm", accent: "#2F5BFF", look: { pageBg: "#F3F6FF", logo: "data:x" }, radius: { lg: 24 } },
+      business: { accent: "red;}</style><script>" }, other: { accent: "#2F5BFF" },
+    } })!;
+    expect(Object.keys(p.workspaces)).toEqual(["personal"]);
+    expect(p.workspaces.personal!.radius.lg).toBe(24);
+    expect(p.workspaces.personal!.look).toEqual({ pageBg: "#F3F6FF" });
+    expect(readProject(acme)!.workspaces).toEqual({});
+  });
+
+  it("serves the BankWorkx workspace looks of the bundled bank", async () => {
+    vi.stubGlobal("fetch", vi.fn(async () => { throw new Error("down"); }));
+    const p = (await getProject("bankworkx"))!;
+    expect(Object.keys(p.workspaces)).toEqual(["personal", "business"]);
+  });
+
   it("does not know other names, including the ones the app itself uses", async () => {
     studio({ projects: [acme] });
     for (const id of ["nobank", "api", "theme", "_next", "constructor", "__proto__", "Acme-Bank", "acme bank"]) expect(await getProject(id), id).toBeUndefined();

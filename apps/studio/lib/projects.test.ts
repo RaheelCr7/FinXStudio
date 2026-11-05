@@ -97,6 +97,35 @@ describe("projects", () => {
     await expect(projects.updateProjectComponents("nope", {})).rejects.toThrow(/No project/);
   });
 
+  it("sets a workspace look, keeps the rest of the project, and can undo it with the previous theme", async () => {
+    const theme = { name: "Calm", accent: "#0F6E56", look: { pageBg: "#F4F7F5" }, radius: { lg: 12 }, mode: "light" as const };
+    const r = await projects.updateProjectWorkspace("meezan", "business", theme);
+    expect(r.previous).toBeUndefined();
+    expect(r.project.workspaces).toEqual({ business: theme });
+    const saved = JSON.parse(readFileSync(file, "utf8"));
+    expect(saved.meezan.workspaces).toEqual({ business: theme });
+    expect(saved.meezan.accent).toBe("#0F6E56");
+    const again = await projects.updateProjectWorkspace("meezan", "business", { accent: "#1D4ED8" });
+    expect(again.previous).toEqual(theme);
+    const reset = await projects.updateProjectWorkspace("meezan", "business", null);
+    expect(reset.previous).toEqual({ accent: "#1D4ED8" });
+    expect(JSON.parse(readFileSync(file, "utf8")).meezan.workspaces).toBeUndefined();
+  });
+
+  it("themes the two workspaces independently", async () => {
+    await projects.updateProjectWorkspace("meezan", "personal", { accent: "#1D4ED8" });
+    await projects.updateProjectWorkspace("meezan", "business", { accent: "#0F6E56" });
+    await projects.updateProjectWorkspace("meezan", "personal", null);
+    expect(JSON.parse(readFileSync(file, "utf8")).meezan.workspaces).toEqual({ business: { accent: "#0F6E56" } });
+  });
+
+  it("refuses a workspace look that is unreadable, unknown, or for a project or workspace that does not exist", async () => {
+    await expect(projects.updateProjectWorkspace("meezan", "business", { accent: "#FFD700", radius: { md: 999 } })).rejects.toThrow(/too light.*0 to 60/);
+    await expect(projects.updateProjectWorkspace("meezan", "admin", {})).rejects.toThrow(/personal or business/);
+    await expect(projects.updateProjectWorkspace("meezan", "business", "x")).rejects.toThrow(/object/);
+    await expect(projects.updateProjectWorkspace("nope", "business", {})).rejects.toThrow(/No project/);
+  });
+
   it("reports an existing project's shape without changing the file", async () => {
     const before = readFileSync(file, "utf8");
     const shape = await projects.getProjectShape("cab");

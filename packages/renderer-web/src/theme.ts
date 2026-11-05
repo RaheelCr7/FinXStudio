@@ -1,4 +1,4 @@
-import { completeColors, componentCssVars, resolveComponentTokens, type Brand } from "@finx/ui-kit";
+import { WORKSPACES, completeColors, componentCssVars, resolveComponentTokens, type Brand, type WorkspaceId } from "@finx/ui-kit";
 
 const kebab = (k: string) => k.replace(/[A-Z]/g, (m) => "-" + m.toLowerCase());
 const SAFE_ID = /^[a-z0-9][a-z0-9-]{0,62}$/;
@@ -12,17 +12,24 @@ function declarations(brand: Brand, mode: "light" | "dark"): string {
   return lines.join("");
 }
 
-/**
- * The stylesheet that gives one bank its colours: CSS variables (--c-accent, --c-surface, --r-lg…) for light and dark.
- * Dark applies when the page says data-mode="dark", or when the visitor's system is dark and the page has not chosen light.
- * The selectors only match `<html data-brand="<id>">`, so each bank's sheet colours only its own pages.
- */
-export function themeCss(brand: Brand): string {
-  if (!SAFE_ID.test(brand.id)) throw new Error(`Unsafe brand id: ${brand.id}`);
-  const root = `:root[data-brand="${brand.id}"]`;
+function rules(root: string, brand: Brand): string[] {
   return [
     `${root}{${declarations(brand, "light")}}`,
     `${root}[data-mode="dark"]{${declarations(brand, "dark")}}`,
     `@media (prefers-color-scheme:dark){${root}:not([data-mode="light"]){${declarations(brand, "dark")}}}`,
-  ].join("\n") + "\n";
+  ];
+}
+
+/**
+ * The stylesheet that gives one bank its colours: CSS variables (--c-accent, --c-surface, --r-lg…) for light and dark.
+ * Dark applies when the page says data-mode="dark", or when the visitor's system is dark and the page has not chosen light.
+ * The selectors only match `<html data-brand="<id>">`, so each bank's sheet colours only its own pages.
+ * A bank that themed its workspaces passes them too: each is scoped further by `data-workspace="personal|business"`, so the page
+ * switches look by changing that one attribute. A page with no data-workspace (or a workspace the bank did not theme) shows the bank's own look.
+ */
+export function themeCss(brand: Brand, workspaces: Partial<Record<WorkspaceId, Brand>> = {}): string {
+  if (!SAFE_ID.test(brand.id)) throw new Error(`Unsafe brand id: ${brand.id}`);
+  const root = `:root[data-brand="${brand.id}"]`;
+  const scoped = WORKSPACES.flatMap((w) => (workspaces[w] ? rules(`${root}[data-workspace="${w}"]`, workspaces[w]!) : []));
+  return [...rules(root, brand), ...scoped].join("\n") + "\n";
 }

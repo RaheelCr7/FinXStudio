@@ -6,9 +6,9 @@ import { COUNTRIES, LANGUAGES, LOOKS, accentProblem, applyLook, brandDefs, count
 import { useProjects } from "./Projects";
 import { buildCommands } from "./ProjectList";
 import { LookPreview, type PreviewMode } from "./design/LookPreview";
+import { LookEditor } from "./design/LookEditor";
 
 export type Starter = { slug: string; name: string; apps: string[]; screens: number };
-const SWATCHES = ["#3155CE", "#0F6E56", "#7C3AED", "#BE185D", "#B45309", "#0E7490", "#1D4ED8", "#9F1239"];
 const slugOf = (n: string) => n.toLowerCase().trim().normalize("NFKD").replace(/[̀-ͯ]/g, "").replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "").slice(0, 30);
 const suggestId = (n: string) => `com.${slugOf(n).replace(/-/g, "") || "yourbank"}.app`;
 const CHANNEL_INFO: { id: Channel; name: string; help: string; built: boolean }[] = [
@@ -222,36 +222,7 @@ export function NewProjectWizard({ starters, onClose, initialAccent }: { starter
               ) : null}
 
               {step === 4 ? (
-                <div className="stack" style={{ gap: 16 }}>
-                  <div className="looks">
-                    {LOOKS.map((l) => (
-                      <button key={l.id} className="preset-card" aria-pressed={lookId === l.id} onClick={() => chooseLook(l.id)}>
-                        <span style={{ display: "flex", gap: 4 }}><i style={{ width: 22, height: 10, borderRadius: Math.min(l.radius?.md ?? 12, 6), background: l.accent }} /><i style={{ width: 14, height: 10, borderRadius: Math.min(l.radius?.md ?? 12, 6), background: l.look?.pageBg ?? "var(--border-strong)" }} /></span>
-                        <b>{l.name}</b><span className="muted" style={{ fontSize: 12.5 }}>{l.description}</span>
-                      </button>
-                    ))}
-                  </div>
-                  <div className="field">Brand colour
-                    <div className="row" style={{ marginTop: 6 }}>
-                      <input aria-label="Pick a colour" type="color" value={/^#[0-9a-fA-F]{6}$/.test(accent) ? accent : "#3155CE"} onChange={(e) => setAccent(e.target.value.toUpperCase())} style={{ width: 44, height: 38, border: 0, background: "none", padding: 0 }} />
-                      <input aria-label="Colour code" className="input mono" style={{ width: 120 }} value={accent} onChange={(e) => setAccent(e.target.value.toUpperCase())} />
-                    </div>
-                    <div className="swatches" style={{ marginTop: 8 }}>{SWATCHES.map((sw) => <button key={sw} className="swatch" aria-label={`Use ${sw}`} aria-pressed={accent.toUpperCase() === sw} style={{ background: sw }} onClick={() => setAccent(sw)} />)}</div>
-                    {accentErr ? <div role="alert" style={{ color: "var(--negative)", fontSize: 13, marginTop: 6 }}>{accentErr}</div> : null}
-                  </div>
-                  <div className="field">Feel
-                    <label className="row" style={{ gap: 10, marginTop: 6 }}><span style={{ width: 90 }}>Roundness</span>
-                      <input type="range" min={0} max={28} value={mood?.roundness ?? (draft.radius?.md ?? 12)} aria-label="Roundness" onChange={(e) => setMood({ roundness: +e.target.value, density: mood?.density ?? 50 })} style={{ flex: 1 }} /><span className="faint mono">{mood?.roundness ?? (draft.radius?.md ?? 12)}px</span></label>
-                    <label className="row" style={{ gap: 10 }}><span style={{ width: 90 }}>Density</span>
-                      <input type="range" min={0} max={100} value={mood?.density ?? 50} aria-label="Density" onChange={(e) => setMood({ roundness: mood?.roundness ?? (draft.radius?.md ?? 12), density: +e.target.value })} style={{ flex: 1 }} /><span className="faint">{(mood?.density ?? 50) < 35 ? "Compact" : (mood?.density ?? 50) > 65 ? "Comfortable" : "Balanced"}</span></label>
-                    {mood ? <button className="btn sm" style={{ alignSelf: "flex-start", marginTop: 4 }} onClick={() => setMood(null)}>Back to this look&rsquo;s own sizes</button> : null}
-                  </div>
-                  <div className="card" style={{ gap: 6, boxShadow: "none" }}>
-                    <b>Accessibility</b>
-                    {checks.map((c) => <div key={c.id} className="row" style={{ gap: 8, fontSize: 13 }}><span className={`chip ${c.ok ? "pos" : "neg"}`}>{c.ok ? "Pass" : "Fix"}</span><span style={{ flex: 1 }}>{c.label}</span><span className="faint mono">{c.value}</span></div>)}
-                    {checks.filter((c) => !c.ok).map((c) => <div key={c.id} className="faint">{c.label}: {c.fix}</div>)}
-                  </div>
-                </div>
+                <LookEditor lookId={lookId} accent={accent} accentErr={accentErr} mood={mood} defaultRoundness={draft.radius?.md ?? 12} checks={checks} onLook={chooseLook} onAccent={setAccent} onMood={setMood} />
               ) : null}
 
               {step === 5 ? (
