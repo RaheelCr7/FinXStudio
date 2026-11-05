@@ -61,6 +61,8 @@ Set `FINX_PROFILE=production` and the following. Demo behaviour is untouched whe
 | `FINX_SERVICE_PERSON` | The person id agents act as. Pick someone without the publish permission; agents can never publish regardless. |
 | `FINX_DATA_DIR` | Where Studio keeps its data (people, credentials, audit log). Back it up; protect it. |
 
+The sign-in page (`/login`, `apps/studio/components/signin/`) is the same screen in both profiles: in production it posts to `/api/auth/login`; in demo, which has no passwords, it says so on the page and only plays the states before opening the workspace. Nothing is sent in demo. "Remember me" keeps the person id on that device, never a password.
+
 What it does: pages redirect to `/login`; the API answers 401 without a session or service token, except sign-in and what the apps need (published journeys, the project list); the demo identity cookie is ignored; browser writes must carry an allowed `Origin` and the session cookie is `HttpOnly; Secure; SameSite=Strict`; five failed sign-ins lock that person and address for 15 minutes; every response carries security headers; the activity log is also written to `audit.log`, a hash chain whose integrity `GET /api/audit` verifies (admins only); a project nobody has configured requires someone else to publish a change.
 
 Limits worth knowing: the rate limit and lockout live in one server's memory; the audit log proves tampering after the fact but a person with write access to the data directory can still delete the whole file, so ship it to write-once storage; CSP stays report-only until its reports are clean.
