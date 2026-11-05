@@ -355,6 +355,12 @@ describe("notifications", () => {
 
 describe("after a journey ends", () => {
   it("reads the approvals count again at once, so the badge does not wait for the journey to close", async () => {
+    // the company's cut-off is 16:00 UTC: pin the clock to a working morning so the test gives the same answer at any hour
+    vi.useFakeTimers({ toFake: ["Date"] });
+    vi.setSystemTime(new Date("2026-11-04T10:00:00Z"));
+    try { await approvalsBadgeFollowsTheJourney(); } finally { vi.useRealTimers(); }
+  });
+  const approvalsBadgeFollowsTheJourney = async () => {
     const a = await alex();
     await a.switchContext("beta"); await confirm(a);
     await a.loadShell("approvals", true);
@@ -366,7 +372,7 @@ describe("after a journey ends", () => {
     await (a as any).current.call("corp.payments.approve", { paymentId: pending.find((p) => p.amount < 25000).id });
     a.journeyFinished();
     await vi.waitFor(() => expect(a.approvalsBadge).toBe(before - 1));
-  });
+  };
   it("does nothing in Personal", async () => {
     const a = await alex();
     a.journeyFinished();

@@ -250,7 +250,11 @@ export const Journey = z.object({
     conditions: z.object({
       timeout: z.array(z.string()).optional(), unavailable: z.array(z.string()).optional(), latencyMs: z.number().int().nonnegative().optional(),
       empty: z.array(z.string()).optional(), frozen: z.array(z.string()).optional(), transferFails: z.boolean().optional(), limitUsed: z.number().nonnegative().optional(), closedDays: z.array(z.string().regex(/^\d{4}-\d{2}-\d{2}$/)).optional(),
+      /** The device a sign-in comes from, and how long a session may stay quiet before it ends (seconds). */
+      device: z.enum(["known", "new", "unusual"]).optional(), idleTimeoutSeconds: z.number().int().positive().optional(),
     }).optional(),
+    /** How the bank is set up for this scenario: its options per journey (for example { "sign-in": { forceExpiry: false } }). */
+    config: z.object({ options: z.record(z.string(), z.record(z.string(), z.unknown())).optional() }).optional(),
     /** Values the journey is opened with, by data path (as when another journey opens it, or an app deep link): they are there before the entry screen runs. */
     launch: z.record(z.string(), z.unknown()).optional(),
     /** Calls made on the bank before the walk starts, for example a payment waiting for approval. */

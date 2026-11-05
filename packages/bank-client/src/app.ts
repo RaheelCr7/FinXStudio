@@ -1,4 +1,4 @@
-import { MockBank, isProviderId, maskPhone, personasFor, type Persona } from "@finx/mock-bank-api";
+import { AccessDirectory, MockBank, SIGNED_OUT, isProviderId, maskPhone, personasFor, type DeviceInfo, type Persona } from "@finx/mock-bank-api";
 import type { Preset, WorkspaceId } from "@finx/ui-kit";
 import { slugIs, type CatalogResult, type Live, type createLive } from "./live";
 import { usd } from "./format";
@@ -29,6 +29,8 @@ const DEFAULT_PREFS: Prefs = { scheme: "system", lastTab: { personal: "home", bu
 export type AppState = {
   screen: "login" | "app" | "journey";
   personaId: string;
+  /** The sandbox customer picker is shown instead of the sign-in journey (for development). Always true for a bank without a real sign-in. */
+  picker: boolean;
   lang: string;
   tab: TabId;
   budgetId: string | null;
@@ -85,6 +87,13 @@ export type BankAppDeps = {
   toastMs?: number;
   /** How long the "Switching to ..." moment lasts at least (apps give it a short pause; tests none). */
   switchMs?: number;
+  /**
+   * The bank has a real sign-in: the sign-in journey signs the customer in at the sandbox (username, password, code on a new device), and the
+   * sandbox customer picker is only there when asked for (`showPicker`). Without it the picker is the sign-in, as before.
+   */
+  signIn?: boolean;
+  /** The device this app is on, for trusted devices and the code on a new one (the sandbox remembers it for as long as the app runs). */
+  device?: DeviceInfo;
 };
 
 /**
@@ -106,12 +115,18 @@ export class BankApp {
   private inflight = new Map<string, Promise<void>>();
   /** A link that arrived before the session was ready (a deep link that opened the app): followed once it is. */
   private heldLink: Link | null = null;
+  /** What the sandbox bank remembers about who can sign in (passwords as hashes, trusted devices, locks). It outlives a sign-out, so a device that was trusted is still trusted. */
+  private access = new AccessDirectory();
+  private picker: boolean;
+  /** The bank made for the sign-in journey: only a customer it signed in counts as signed in by the journey (a customer chosen another way does not). */
+  private signInBank?: MockBank;
 
   constructor(private deps: BankAppDeps) {
     const personaId = deps.defaultPersona ?? personasFor(deps.preset, deps.projectId)[0]?.id ?? "ayesha";
-    this.current = this.newBank(personaId);
+    this.picker = !deps.signIn;
+    this.current = this.picker ? this.newBank(personaId) : this.signedOutBank();
     this.state = {
-      screen: "login", personaId, lang: "en", tab: "dashboard", budgetId: null, investView: null, sheet: null, subId: null, paying: false, toast: null, tick: 0,
+      screen: "login", personaId, picker: this.picker, lang: "en", tab: "dashboard", budgetId: null, investView: null, sheet: null, subId: null, paying: false, toast: null, tick: 0,
       catalog: { entries: deps.live.bundledEntries(), source: "bundled" }, active: null, opening: null, studioUrl: deps.studioUrl,
       ...this.freshShell(),
     };
@@ -138,11 +153,36 @@ export class BankApp {
       prefs: this.state?.prefs ?? DEFAULT_PREFS, search: "", filters: {} as Record<string, string>, drafts: {} as AppState["drafts"], views: {} as AppState["views"], readIds: [] as string[] };
   }
   private set(patch: Partial<AppState>) { this.state = { ...this.state, ...patch }; for (const l of [...this.listeners]) l(); }
-  private newBank(personaId: string) { return new MockBank(personaId, { corpProvider: isProviderId(this.deps.bankApi) ? this.deps.bankApi : undefined }); }
-  private freshBank() { this.current = this.newBank(this.state.personaId); }
+  private newBank(personaId: string) { return new MockBank(personaId, { corpProvider: isProviderId(this.deps.bankApi) ? this.deps.bankApi : undefined, directory: this.access, device: this.deps.device }); }
+  /** A bank that nobody is signed in to: only the sign-in and recovery adapters answer, until the sign-in journey completes. */
+  private signedOutBank() { return (this.signInBank = this.newBank(SIGNED_OUT)); }
+  private freshBank() { this.current = this.picker ? this.newBank(this.state.personaId) : this.signedOutBank(); }
 
   // ---- signing in and out ------------------------------------------------------------------------------------------
-  selectPersona(id: string) { this.epoch++; this.set({ personaId: id, ...this.freshShell() }); this.freshBank(); this.set({ tick: this.state.tick + 1 }); }
+  selectPersona(id: string) { this.epoch++; this.set({ personaId: id, ...this.freshShell() }); this.current = this.newBank(id); this.set({ tick: this.state.tick + 1 }); }
+  /** Whether the bank has a real sign-in (the picker is then only there for development). */
+  get hasSignIn() { return !!this.deps.signIn; }
+  /** Shows or hides the sandbox customer picker (for development). Only a bank with a real sign-in has anything to switch. */
+  showPicker(on: boolean) {
+    if (!this.deps.signIn || this.picker === on) return;
+    this.picker = on;
+    this.epoch++;
+    this.set({ picker: on, ...this.freshShell() });
+    this.freshBank();
+    this.set({ tick: this.state.tick + 1 });
+  }
+  /**
+   * The sign-in journey has ended. When the bank now serves a customer the app opens it: who signed in is the bank's own answer (its session),
+   * so no password, token or name passes through the journey or the app. Returns whether a customer is signed in.
+   */
+  finishSignIn(): boolean {
+    const bank = this.current;
+    if (this.picker || bank !== this.signInBank || !bank.signedIn || this.state.screen !== "login") return false;
+    this.epoch++;
+    this.set({ personaId: bank.persona.id, ...this.freshShell() });
+    this.login();
+    return true;
+  }
   login() {
     this.set({ screen: "app", tab: "dashboard" });
     void this.refreshCatalog();

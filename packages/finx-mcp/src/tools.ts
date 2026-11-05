@@ -1,7 +1,7 @@
 import type { CallToolResult, McpServer } from "@modelcontextprotocol/server";
 import { z } from "zod";
 import { localTransfer, payBill, validateJourney, type Journey } from "@finx/journey-schema";
-import { personas } from "@finx/mock-bank-api";
+import { personas, SIGNED_OUT } from "@finx/mock-bank-api";
 import { adviceFor, lintForAgent, sameContent } from "./advice";
 import { getCatalog, SECTIONS } from "./catalog";
 import { applyPatch, PatchError } from "./patch";
@@ -17,7 +17,7 @@ export type ToolDeps = {
 
 const MAX_JSON_BYTES = 200 * 1024;
 const MAX_SCREENS = 30;
-const MAX_OUTPUT_CHARS = 90_000;
+const MAX_OUTPUT_CHARS = 95_000;
 
 const ok = (data: unknown, pretty = true): CallToolResult => {
   let text = typeof data === "string" ? data : JSON.stringify(data, null, pretty ? 2 : 0);
@@ -190,10 +190,10 @@ export function registerTools(server: McpServer, deps: ToolDeps) {
 
   server.registerTool("finx_simulate_journey", {
     title: "Run a journey in the sandbox",
-    description: `Runs a scripted scenario through the real journey engine against the sandbox bank and shows every screen. Steps: set (fill inputs), press (a button), and expectScreen / expectText / expectError / expectToast checks. Returns each screen's blocks, failed checks with context, the screens that were and were not visited, final data, and balance changes. Always test: the happy path, a validation failure, a failure path (wrong OTP three times; the customer 'bilal' fails after a correct OTP), and one run in Urdu. Customers: ${Object.keys(personas).join(", ")} (see finx_get_catalog personas for their OTP codes). Give slug (the saved draft) or journey.`,
+    description: `Runs a scripted scenario through the real journey engine against the sandbox bank and shows every screen. Steps: set (fill inputs), press (a button), and expectScreen / expectText / expectError / expectToast checks. Returns each screen's blocks, failed checks with context, the screens that were and were not visited, final data, and balance changes. Always test: the happy path, a validation failure, a failure path (wrong OTP three times; the customer 'bilal' fails after a correct OTP), and one run in Urdu. Customers: ${Object.keys(personas).join(", ")} (see finx_get_catalog personas for their OTP codes), or ${SIGNED_OUT} for a journey that runs before anyone is signed in (sign-in, recovery). Give slug (the saved draft) or journey.`,
     inputSchema: z.object({
       slug: slugSchema.optional(), journey: journeyJson.optional(),
-      persona: z.enum(Object.keys(personas) as [string, ...string[]]).default("ayesha"),
+      persona: z.enum([...Object.keys(personas), SIGNED_OUT] as unknown as [string, ...string[]]).default("ayesha"),
       lang: z.string().default("en").describe("en, or ur to test Urdu"),
       steps: z.array(stepSchema).max(80).describe("The scenario, in order"),
       launch: z.record(z.string(), z.unknown()).optional().describe("Values the journey is opened with, by data path, there before its entry screen runs"),
@@ -212,7 +212,7 @@ export function registerTools(server: McpServer, deps: ToolDeps) {
 
   server.registerTool("finx_run_scenarios", {
     title: "Run the tests that travel with a journey",
-    description: "Runs every scenario saved in the journey (journey.scenarios) through the real engine against the sandbox bank, and reports which pass, which fail and why, and for each acceptance criterion (journey.acceptance, AC-1 …) whether a passing scenario proves it, it is failing, or it is uncovered. Use it after writing or changing scenarios, and before saying a journey is done. A scenario is { id: T-1, name, covers: [AC-1], persona, context?, now?, conditions?, setup?, steps } with the same steps as finx_simulate_journey (press also takes the key of a table row), plus expectBank { adapter, input?, path, equals } to read the bank (for example that no money moved), expectBankError { adapter, input?, code } (a forced call the bank must refuse, such as a role without the permission), context (a company of a customer with several places, switched into first), expectNoText (the text is not on the screen) and advance: seconds to move the sandbox clock (a rate that is held for 30 seconds). conditions makes the sandbox misbehave on purpose: { timeout: [adapters], latencyMs, unavailable: [adapters], frozen: [account ids], transferFails, limitUsed (money already sent today, against the daily limit), closedDays: [YYYY-MM-DD dates the bank is closed, for scheduled payments] }; unavailable also takes rail:<id> to take one payment speed down.",
+    description: "Runs every scenario saved in the journey (journey.scenarios) through the real engine against the sandbox bank, and reports which pass, which fail and why, and for each acceptance criterion (journey.acceptance, AC-1 …) whether a passing scenario proves it, it is failing, or it is uncovered. Use it after writing or changing scenarios, and before saying a journey is done. A scenario is { id: T-1, name, covers: [AC-1], persona, context?, now?, conditions?, setup?, steps } with the same steps as finx_simulate_journey (press also takes the key of a table row), plus expectBank { adapter, input?, path, equals } to read the bank (for example that no money moved), expectBankError { adapter, input?, code } (a forced call the bank must refuse, such as a role without the permission), context (a company of a customer with several places, switched into first), expectNoText (the text is not on the screen) and advance: seconds to move the sandbox clock (a rate that is held for 30 seconds). conditions makes the sandbox misbehave on purpose: { timeout: [adapters], latencyMs, unavailable: [adapters], frozen: [account ids], transferFails, limitUsed (money already sent today, against the daily limit), closedDays: [YYYY-MM-DD dates the bank is closed, for scheduled payments], device: known | new | unusual (the device of a sign-in), idleTimeoutSeconds (a session with no call that long ends with SESSION_EXPIRED) }; unavailable also takes rail:<id> to take one payment speed down. config: { options: { slug: { option: value } } } sets the bank's options (for example sign-in: forceExpiry, riskStepUp). persona signed-out starts with nobody signed in.",
     inputSchema: z.object({ slug: slugSchema.optional(), journey: journeyJson.optional(), provider: z.enum(["reference", "bank-b"]).optional().describe("Run the corporate adapters against the second bank API instead") }),
     annotations: { readOnlyHint: true, openWorldHint: false },
   }, ({ slug, journey, provider }) => guarded(async () => {

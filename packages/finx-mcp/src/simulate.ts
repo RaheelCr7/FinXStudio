@@ -1,6 +1,6 @@
 import { bankworkxJourneys, type Journey } from "@finx/journey-schema";
 import { JourneyRunner, localize, wholeExpression, type ChainRequest, type View } from "@finx/renderer-core";
-import { MockBank, personas, type Flaws, type ProviderId, type SandboxConditions } from "@finx/mock-bank-api";
+import { MockBank, SIGNED_OUT, personas, type BankConfig, type Flaws, type ProviderId, type SandboxConditions } from "@finx/mock-bank-api";
 
 /** One scripted action or check. Actions change state; expectations only check it. */
 export type Step =
@@ -52,12 +52,13 @@ function describeBlock(b: Record<string, any>): string | null {
     case "result": return `result(${b.tone}) "${clip(b.title)}"${b.text ? ` "${clip(b.text)}"` : ""}${b.meta ? ` [${clip(b.meta)}]` : ""}`;
     case "reviewSummary": return `review ${b.rows.map((r: any) => `${clip(r.label, 24)}: ${clip(r.value, 30)}`).join("; ")}`;
     case "consent": return `consent[${b.bind}]=${b.value === true} "${clip(b.text, 50)}"`;
-    case "otp": return `otp[${b.bind}]="${b.value ?? ""}"`;
+    // a hidden field (a password, a PIN) is never written into a transcript: only that it has something in it
+    case "otp": return `otp[${b.bind}]="${b.masked ? "•".repeat(String(b.value ?? "").length) : b.value ?? ""}"`;
     case "amountInput": return `amount[${b.bind}]=${b.value ?? ""}${b.helper ? ` helper "${clip(b.helper, 60)}"` : ""}`;
     case "select": return `select[${b.bind}]=${b.value ?? ""} options: ${(b.items ?? []).map((i: any) => i.name).join(", ")}`;
     case "toggle": return `toggle[${b.bind}]=${b.value === true} "${clip(b.label, 40)}"`;
     case "cardForm": { const v = b.value ?? {}; return `cardForm[${b.bind}] number "${v.number ?? ""}" holder "${v.holder ?? ""}" expiry "${v.expiry ?? ""}"${Object.values(b.errors ?? {}).some(Boolean) ? ` errors: ${Object.entries(b.errors).filter(([, m]) => m).map(([k, m]) => `${k}: ${m}`).join("; ")}` : ""}`; }
-    case "textInput": return `input[${b.bind}]="${b.value ?? ""}" label "${clip(b.label, 40)}"`;
+    case "textInput": return `input[${b.bind}]="${b.secure ? "•".repeat(String(b.value ?? "").length) : b.value ?? ""}" label "${clip(b.label, 40)}"`;
     case "accountPicker": case "beneficiaryPicker": return `${b.type}[${b.bind}]=${b.value ?? ""} (${(b.items ?? []).length} choices)`;
     case "button": return `button "${clip(b.label, 40)}"`;
     case "statusChip": return `status(${b.chip?.tone}) "${b.chip?.label}"`;
@@ -104,6 +105,8 @@ export type SimOptions = {
   flaws?: Flaws;
   /** Things that go wrong in the sandbox on purpose (a timeout, an unavailable adapter, a frozen account). */
   conditions?: SandboxConditions;
+  /** How the bank is set up: its options per journey (for example sign-in: forceExpiry, riskStepUp). */
+  config?: Partial<BankConfig>;
   /** Values the journey is opened with, by data path: they are there before the entry screen runs. */
   launch?: Record<string, unknown>;
   /** Where to find a journey that this one opens (navigate.toJourney, by slug; a copy for a bank, add-money-acme, matches add-money). Default: the shipped BankWorkx journeys. A target not found here is recorded, not followed. */
@@ -112,11 +115,12 @@ export type SimOptions = {
 
 export async function simulate(opts: SimOptions): Promise<SimResult> {
   const { journey, persona, lang, steps } = opts;
-  if (!(persona in personas)) throw new Error(`Unknown persona "${persona}". Use one of: ${Object.keys(personas).join(", ")}`);
+  // "signed-out" starts with nobody signed in, for a journey that runs before sign-in (sign-in, recovery): the customer is loaded when it signs one in
+  if (!(persona in personas) && persona !== SIGNED_OUT) throw new Error(`Unknown persona "${persona}". Use one of: ${[...Object.keys(personas), SIGNED_OUT].join(", ")}`);
   if (!journey.locale.supported.includes(lang)) throw new Error(`Language "${lang}" is not supported by this journey (supported: ${journey.locale.supported.join(", ")})`);
   if (steps.length > MAX_STEPS) throw new Error(`Too many steps (${steps.length}). The limit is ${MAX_STEPS}.`);
 
-  const bank = new MockBank(persona, { corpProvider: opts.provider, corpFlaws: opts.flaws, conditions: opts.conditions });
+  const bank = new MockBank(persona, { corpProvider: opts.provider, corpFlaws: opts.flaws, conditions: opts.conditions, config: opts.config });
   if (opts.now !== undefined) bank.now = () => opts.now!;
   const setupFailures: string[] = [];
   // working in a company from the start: the same calls the shell makes (a one-time code, the password, the switch), before anything is arranged or walked

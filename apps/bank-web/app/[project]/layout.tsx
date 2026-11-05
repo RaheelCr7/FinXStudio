@@ -32,7 +32,7 @@ export default async function ProjectLayout({ children, params }: { children: Re
       <body>
         <RegisterSW />
         <WorkspaceScope />
-        <AppProvider project={{ id: project.id, preset: project.brand.preset, name: project.def.name, shell: project.shell, currency: project.def.currency, bankApi: project.def.bankApi, look: project.brand.look }}>{children}</AppProvider>
+        <AppProvider project={{ id: project.id, preset: project.brand.preset, name: project.def.name, shell: project.shell, currency: project.def.currency, bankApi: project.def.bankApi, look: project.brand.look, signIn: project.shell === "bankworkx" }}>{children}</AppProvider>
       </body>
     </html>
   );

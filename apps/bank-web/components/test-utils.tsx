@@ -4,6 +4,8 @@ import { axe } from "vitest-axe";
 import { AppProvider, type ProjectInfo } from "./AppProvider";
 
 export const BANKWORKX: ProjectInfo = { id: "bankworkx", preset: "bankworkx", name: "BankWorkx", shell: "bankworkx", currency: "USD" };
+/** BankWorkx with its real sign-in (the sign-in journey); the sandbox customer picker is then for development only. */
+export const BANKWORKX_SIGNIN: ProjectInfo = { ...BANKWORKX, signIn: true };
 export const MEEZAN: ProjectInfo = { id: "meezan", preset: "meezan", name: "Meezan Digital", shell: "meezan", currency: "PKR" };
 
 export const nav = { push: vi.fn(), replace: vi.fn(), params: {} as Record<string, string>, path: "/", search: new URLSearchParams() };

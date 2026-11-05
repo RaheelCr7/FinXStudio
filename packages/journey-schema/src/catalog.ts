@@ -19,6 +19,11 @@ import { internalTransfer } from "./fixtures/internal-transfer";
 import { internationalTransfer } from "./fixtures/international-transfer";
 import { addMoney, addCard, connectAccount, createBudget, invest, sellInvestment } from "./fixtures/bankworkx";
 import { cabJourneys } from "./fixtures/cab";
+import { signIn } from "./fixtures/sign-in";
+import { forgotUsername } from "./fixtures/forgot-username";
+import { resetPassword } from "./fixtures/reset-password";
+import { forgotPassword } from "./fixtures/forgot-password";
+import { unlockAccount } from "./fixtures/unlock-account";
 
 /**
  * The journey catalog: ready-made journeys a project can add to its own app.
@@ -165,6 +170,31 @@ export const catalog: CatalogEntry[] = [
     id: sellInvestment.slug, category: "Investing", madeFor: "bankworkx", journey: sellInvestment,
     summary: "Sell part or all of a holding and have the money paid into an account.",
     highlights: ["Holding picker", "Amount capped by what you own", "Failure path with nothing sold"],
+  },
+  {
+    id: signIn.slug, category: "Access", madeFor: "bankworkx", journey: signIn,
+    summary: "Sign in with a username and password; a one-time code on a new or unusual device; a new password when the old one expired; trust the device; quick sign-in with a PIN, passkey or Face ID. Locks after 5 wrong tries.",
+    highlights: ["Attempts left, then locked, with a way to unlock", "Code on a new device, never on a trusted one", "New password with five rules", "Trust this device for 90 days", "Quick PIN, passkey or Face ID", "Timeout and unavailable screens"],
+  },
+  {
+    id: forgotUsername.slug, category: "Access", madeFor: "bankworkx", journey: forgotUsername,
+    summary: "Get the username by message: a mobile number or email with a date of birth, then a one-time code. The username is sent to the contact on file and never shown.",
+    highlights: ["Mobile or email with date of birth", "A miss never says which part failed", "Locks after 3 tries", "The username is never shown", "Timeout and unavailable screens"],
+  },
+  {
+    id: resetPassword.slug, category: "Access", madeFor: "bankworkx", journey: resetPassword,
+    summary: "Get back into a profile by username or email and a one-time code, then choose a new password, or only unlock the profile and keep the old password.",
+    highlights: ["Reset or unlock in one journey", "Code to the mobile on file, masked", "Five password rules", "Lock cleared by a reset", "Token that runs out", "Timeout and unavailable screens"],
+  },
+  {
+    id: forgotPassword.slug, category: "Access", madeFor: "bankworkx", journey: forgotPassword,
+    summary: "The name behind the Forgot password? link: Reset password opened in its reset mode, so a bank can place the link under its own name.",
+    highlights: ["Alias of Reset password", "Passes the username on"],
+  },
+  {
+    id: unlockAccount.slug, category: "Access", madeFor: "bankworkx", journey: unlockAccount,
+    summary: "Unlock a locked profile with a one-time code and keep the password: Reset password opened in its unlock mode. With unlocking switched off it offers the reset.",
+    highlights: ["Alias of Reset password", "Password unchanged", "Says when the profile was not locked"],
   },
   // Cairo Amman Bank: the access journeys from its design file
   ...(

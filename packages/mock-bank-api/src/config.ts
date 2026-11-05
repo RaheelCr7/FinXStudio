@@ -18,5 +18,5 @@ export type BankConfig = {
 export const DEFAULT_CONFIG: BankConfig = { homeMarket: "us", disabled: [], options: {} };
 
 /** Journeys that cannot be switched off (the catalog's `core` entries). */
-export const CORE_JOURNEYS = ["sign-in"];
+export const CORE_JOURNEYS = ["sign-in", "sign-in-bankworkx"];
 export const journeyEnabled = (c: BankConfig, slug: string) => CORE_JOURNEYS.includes(slug) || !c.disabled.includes(slug);

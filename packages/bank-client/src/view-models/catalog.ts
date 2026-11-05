@@ -14,8 +14,12 @@ const ORDER = Object.keys(ACTION_META);
 export const actionOf = (slug: string) => ORDER.find((k) => slugIs(slug, k));
 const rank = (slug: string) => { const k = actionOf(slug); return k ? ORDER.indexOf(k) : 99; };
 
+/** The journeys that run before anyone is signed in (signing in and getting back in): they belong to the sign-in screen, never to a list of things to do. */
+export const PUBLIC_JOURNEYS = ["sign-in", "forgot-username", "reset-password", "forgot-password", "unlock-account"];
+export const isPublicJourney = (slug: string) => PUBLIC_JOURNEYS.some((k) => slugIs(slug, k));
+
 /** The quick-action list: known actions first in a sensible order, then anything a team adds in Studio. */
-export const orderedActions = (entries: Entry[]) => [...entries].sort((x, y) => rank(x.slug) - rank(y.slug));
+export const orderedActions = (entries: Entry[]) => entries.filter((e) => !isPublicJourney(e.slug)).sort((x, y) => rank(x.slug) - rank(y.slug));
 export const actionMeta = (slug: string) => ACTION_META[actionOf(slug) ?? ""] ?? { icon: "plus", text: "" };
 /** Whether this bank has published the journey that does something (by its base name). */
 export const hasAction = (entries: Entry[], base: string) => entries.some((j) => slugIs(j.slug, base));
