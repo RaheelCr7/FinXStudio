@@ -47,7 +47,7 @@ export function Shell({ children }: { children: React.ReactNode }) {
     { id: "go:design", title: "Design", group: "Go to", icon: Palette, hint: "Colours from a picture", keywords: "colours theme brand upload image logo", run: () => router.push("/design") },
     { id: "go:code", title: "Code", group: "Go to", icon: Code2, hint: "Generated source of this project", keywords: "export source download repo", run: () => router.push("/code") },
     { id: "go:people", title: "People and roles", group: "Go to", icon: Users, hint: "Who can edit and publish", keywords: "users permissions team", run: () => router.push("/people") },
-    { id: "go:agents", title: "Agents", group: "Go to", icon: Sparkles, hint: "AI work", run: () => router.push("/agents") },
+    { id: "go:agents", title: "AI assistant", group: "Go to", icon: Sparkles, hint: "Build and check journeys with AI", run: () => router.push("/agents") },
     { id: "new", title: "New journey", group: "General", icon: FilePlus2, keywords: "create add", run: () => { if (path === "/") window.dispatchEvent(new Event("finx:new-journey")); else router.push("/?new=1"); } },
     { id: "theme:light", title: "Light theme", group: "General", icon: Sun, keywords: "appearance", run: () => applyTheme("light") },
     { id: "theme:dark", title: "Dark theme", group: "General", icon: Moon, keywords: "appearance", run: () => applyTheme("dark") },
@@ -72,7 +72,7 @@ export function Shell({ children }: { children: React.ReactNode }) {
             <Link href="/git" className={path.startsWith("/git") ? "on" : ""} aria-current={path.startsWith("/git") ? "page" : undefined} title="Git sync and deploy"><GitBranch size={18} aria-hidden /><span className="lbl">Git</span></Link>
             <Link href="/bank-api" className={path.startsWith("/bank-api") ? "on" : ""} aria-current={path.startsWith("/bank-api") ? "page" : undefined} title="Bank API"><Plug size={18} aria-hidden /><span className="lbl">Bank API</span></Link>
             <Link href="/people" className={path.startsWith("/people") ? "on" : ""} aria-current={path.startsWith("/people") ? "page" : undefined} title="People"><Users size={18} aria-hidden /><span className="lbl">People</span></Link>
-            <Link href="/agents" className={path.startsWith("/agents") ? "on" : ""} aria-current={path.startsWith("/agents") ? "page" : undefined} title="Agents"><Sparkles size={18} aria-hidden /><span className="lbl">Agents</span></Link>
+            <Link href="/agents" className={path.startsWith("/agents") ? "on" : ""} aria-current={path.startsWith("/agents") ? "page" : undefined} title="AI assistant"><Sparkles size={18} aria-hidden /><span className="lbl">AI assistant</span></Link>
           </nav>
           <div className="side-foot">
             <UserSwitcher />
