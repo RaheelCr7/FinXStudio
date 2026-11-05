@@ -17,7 +17,7 @@ export type ContextNotice = {
 export function noticeLink(n: RawNotification): Link | undefined {
   const ws = n.context === PERSONAL ? { workspace: "personal" as const } : { workspace: "business" as const, companyId: n.context };
   if (/awaiting your approval/i.test(n.text) && ws.workspace === "business") return { ...ws, tab: "approvals" };
-  if (/payment .*(settled|rejected|released)/i.test(n.text) && ws.workspace === "business") return { ...ws, tab: "payments" };
+  if (/^payment\b/i.test(n.text) && /\b(settled|rejected|released)\b/i.test(n.text) && ws.workspace === "business") return { ...ws, tab: "payments" };
   if (/salary|received|statement/i.test(n.text) && ws.workspace === "personal") return { ...ws, tab: "accounts" };
   if (/card/i.test(n.text) && ws.workspace === "personal") return { ...ws, tab: "cards" };
   return { ...ws, tab: ws.workspace === "business" ? "overview" : "home" };

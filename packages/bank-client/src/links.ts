@@ -25,7 +25,8 @@ export function parseLink(input: string, scheme?: string): Link | null {
   let rest = input.trim();
   const m = rest.match(/^([a-z][a-z0-9+.-]*):\/\/(.*)$/i);
   if (m) { if (scheme && m[1]!.toLowerCase() !== scheme.toLowerCase()) return null; rest = m[2]!; }
-  const [pathPart, query = ""] = rest.replace(/#.*$/, "").split("?");
+  const hash = rest.indexOf("#");
+  const [pathPart, query = ""] = (hash < 0 ? rest : rest.slice(0, hash)).split("?");
   const parts = pathPart!.split("/").filter(Boolean);
   const workspace = parts.shift();
   if (workspace !== "personal" && workspace !== "business") return null;
