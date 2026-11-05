@@ -1,7 +1,7 @@
 import { BankError } from "./errors";
 import { alexFinance, type Finance } from "./retail/finance";
 import { ACME, type CorpCompany, type Flaws } from "./business/corporate";
-import { ALPHA, BETA, seedPayments } from "./business/alpha-beta";
+import { ALPHA, BETA, BETA_CAST, seedPayments } from "./business/alpha-beta";
 import { createCorporateProvider, type CorporateProvider, type ProviderId } from "./business/corporate-provider";
 import { CAB_PROFILES, type CabProfile } from "./retail/cab";
 import { alexRetail } from "./retail/alex";
@@ -25,7 +25,7 @@ export { createCorporateProvider, MappedCorporateProvider, PROVIDERS, PROVIDER_I
 export { BankBApi, ApiError } from "./business/corporate-b";
 export { applyRule, build, mapError, type MappingSpec } from "./business/mapping";
 export { MAX_BULK_LINES, SALARY_CAP_FACTOR, type CorpEmployee, type BatchCheck, type BulkLineInput, type BulkLineResult, ACME, CorporateSandbox, type CorporateBankAdapter, type CorpCompany, type Flaws, type CorpPayment, type CorpUser, type CorpRole, type InitiateInput, type CorpBeneficiary, type CorpTemplate, type CorpSignatoryGroup, type CorpAuditEntry } from "./business/corporate";
-export { ALPHA, BETA } from "./business/alpha-beta";
+export { ALPHA, BETA, BETA_CAST } from "./business/alpha-beta";
 export { parseBulkFile } from "./business/business";
 export { PER_USD, FX_SPREAD, FX_FEE_RATE, QUOTE_TTL_SECONDS, DEFAULT_FX, BANKWORKX_FX, midRate, customerRate, type FxConfig, type Quote } from "./retail/fx";
 export { BILLERS, CARRIERS } from "./retail/retail";
@@ -329,6 +329,13 @@ export const personas: Record<string, Persona> = {
   },
 };
 
+// Alex again, for the approvals inbox: Beta has more waiting (a close name, a name that does not match, one Alex started, one that must wait for Lee, two approvals
+// in any order) and a payment that was rejected. Separate from Alex because the combined demo counts what Beta has waiting.
+personas.alexbiz = {
+  ...structuredClone(personas.alex!), id: "alexbiz", name: "Alex Morgan (business cast)",
+  identity: { id: "alex", name: "Alex Morgan", password: "Bwx!Demo2026", cast: true, business: [{ id: "alpha", company: ALPHA, userId: "alex" }, { id: "beta", company: BETA_CAST, userId: "alex" }] },
+};
+
 /**
  * The sandbox customers for one bank app: the ones made for that project when there are any, otherwise the ones
  * for its look (a project that only chose a look shares that look's customers).
@@ -405,12 +412,12 @@ export class MockBank {
     if (c.limitUsed !== undefined) this.p.limits.usedToday = c.limitUsed;
     for (const a of this.p.accounts) if (c.frozen?.includes(a.id)) { a.status = "frozen"; a.canDebit = false; }
     const clock = (prov: CorporateProvider) => { prov.now = () => this.now(); return prov; };
-    if (this.p.identity) for (const b of this.p.identity.business) { const prov = clock(createCorporateProvider("reference", b.company, options.corpFlaws)); seedPayments(b.id, prov); this.providers.set(b.id, prov); }
+    if (this.p.identity) for (const b of this.p.identity.business) { const prov = clock(createCorporateProvider("reference", b.company, options.corpFlaws)); seedPayments(b.id, prov, !!this.p.identity.cast); this.providers.set(b.id, prov); }
     else if (this.p.corp) this.providers.set(this.p.corp.id, clock(createCorporateProvider(options.corpProvider ?? "reference", this.p.corp, options.corpFlaws)));
     this.retail = new RetailSandbox(this.p, { now: () => this.now(), otp: this.otp, conditions: () => this.conditions, flaws: options.corpFlaws ?? {}, config: () => this.config, setNow: (fn) => { this.now = fn; } });
     this.business = new BusinessSandbox({
       now: () => this.now(), otp: this.otp, transferFails: () => !!this.p.behaviour.transferFails, config: () => this.config, conditions: () => this.conditions,
-      provider: () => this.activeProvider(), actor: () => this.actor(),
+      provider: () => this.activeProvider(), actor: () => this.actor(), flaws: () => options.corpFlaws ?? {},
     });
   }
   get persona() { return this.p; }

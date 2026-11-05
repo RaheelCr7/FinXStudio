@@ -32,6 +32,8 @@ export type IdentityDef = {
   /** The password the step-up asks for with method "password" (sandbox seed; a real bank checks its own). */
   password: string;
   business: BusinessContextDef[];
+  /** The company books carry the fuller cast of payments (alpha-beta.ts, seedPayments) instead of the combined demo's. */
+  cast?: boolean;
 };
 
 /** How long a step-up stays valid (seconds): switching to a company within this time does not ask again. */

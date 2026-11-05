@@ -81,16 +81,34 @@ export const BETA: CorpCompany = {
 const pay = (p: Partial<CorpPayment> & Pick<CorpPayment, "id" | "companyId" | "fromAccountId" | "beneficiaryId" | "amount" | "reference" | "initiatedBy" | "initiatedAt" | "required" | "approvals" | "status">): CorpPayment =>
   ({ currency: "USD", valueDate: p.initiatedAt.slice(0, 10), afterCutoff: false, ...p });
 
+/**
+ * Beta with more on its books, for the approvals inbox: a supplier whose name the bank's record does not match. The customer "alexbiz" uses it
+ * (the plain Alex keeps the two waiting payments the combined demo counts).
+ */
+export const BETA_CAST: CorpCompany = {
+  ...BETA,
+  whitelist: [...BETA.whitelist, { id: "gulf", name: "Gulf Trade FZE", bank: "Emirates NBD", maskedNumber: "AE07 \u2022\u2022\u2022\u2022 3456", country: "AE", currency: "AED" }],
+};
+
 /** What already happened or waits when the day starts. Alpha: Alex's own payment waits and an earlier one settled. Beta: two payments started by others wait for Alex, one of them for a second approver after Lee. */
-export function seedPayments(companyId: string, corp: CorporateProvider) {
+export function seedPayments(companyId: string, corp: CorporateProvider, cast = false) {
   const sandbox = corp as unknown as { seedPayment(p: CorpPayment): void };
   const list: CorpPayment[] = companyId === "alpha" ? [
     pay({ id: "PAY-1187", companyId, fromAccountId: "alpha_ops", beneficiaryId: "harb", amount: 12_450, reference: "PO-5581", initiatedBy: "alex", initiatedAt: "2026-10-30T10:00:00Z", status: "released", required: 1, approvals: [{ userId: "dana", at: "2026-10-30T11:00:00Z" }], releasedAt: "2026-10-30T11:00:00Z", releaseReference: "CORP-20261030-1187" }),
     pay({ id: "PAY-2040", companyId, fromAccountId: "alpha_ops", beneficiaryId: "harb", amount: 18_900, reference: "PO-5612", initiatedBy: "alex", initiatedAt: "2026-11-03T09:30:00Z", status: "pending_approval", required: 1, approvals: [] }),
   ] : companyId === "beta" ? [
     pay({ id: "PAY-2012", companyId, fromAccountId: "beta_ops", beneficiaryId: "nimb", amount: 3_400, reference: "INV-2204", initiatedBy: "priya", initiatedAt: "2026-10-28T09:00:00Z", status: "released", required: 1, approvals: [{ userId: "alex", at: "2026-10-28T10:00:00Z" }], releasedAt: "2026-10-28T10:00:00Z", releaseReference: "CORP-20261028-2012" }),
-    pay({ id: "PAY-2039", companyId, fromAccountId: "beta_ops", beneficiaryId: "nimb", amount: 64_500, reference: "INV-2270", initiatedBy: "omar", initiatedAt: "2026-11-02T16:02:00Z", status: "pending_approval", required: 2, approvals: [{ userId: "lee", at: "2026-11-02T17:40:00Z" }] }),
+    pay({ id: "PAY-2039", companyId, fromAccountId: "beta_ops", beneficiaryId: "nimb", amount: 64_500, reference: "INV-2270", initiatedBy: "omar", initiatedAt: "2026-11-02T16:02:00Z", status: "pending_approval", required: 2, approvals: [{ userId: "lee", at: "2026-11-02T17:40:00Z" }], sequence: ["lee", "alex"] }),
     pay({ id: "PAY-2041", companyId, fromAccountId: "beta_ops", beneficiaryId: "nimb", amount: 8_200, reference: "INV-2291", initiatedBy: "priya", initiatedAt: "2026-11-03T09:12:00Z", status: "pending_approval", required: 1, approvals: [] }),
   ] : [];
+  // the cast: one waiting for a second approver in any order, one that must wait for Lee, a close name, a name that does not match, one Alex started, one that is over
+  if (cast && companyId === "beta") list.push(
+    pay({ id: "PAY-2043", companyId, fromAccountId: "beta_ops", beneficiaryId: "rhine", amount: 27_500, reference: "INV-2310", initiatedBy: "priya", initiatedAt: "2026-11-03T09:40:00Z", status: "pending_approval", required: 1, approvals: [], nameCheck: { result: "close", recorded: "Rhine Fracht GmbH" }, receive: { amount: 25_465, currency: "EUR" } }),
+    pay({ id: "PAY-2044", companyId, fromAccountId: "beta_ops", beneficiaryId: "nimb", amount: 9_800, reference: "INV-2312", initiatedBy: "alex", initiatedAt: "2026-11-03T09:45:00Z", status: "pending_approval", required: 1, approvals: [] }),
+    pay({ id: "PAY-2046", companyId, fromAccountId: "beta_ops", beneficiaryId: "rhine", amount: 56_000, reference: "INV-2318", initiatedBy: "omar", initiatedAt: "2026-11-03T09:50:00Z", status: "pending_approval", required: 2, approvals: [], receive: { amount: 51_856, currency: "EUR" } }),
+    pay({ id: "PAY-2047", companyId, fromAccountId: "beta_ops", beneficiaryId: "nimb", amount: 72_000, reference: "INV-2321", initiatedBy: "priya", initiatedAt: "2026-11-03T09:55:00Z", status: "pending_approval", required: 2, approvals: [], sequence: ["lee", "alex"] }),
+    pay({ id: "PAY-2048", companyId, fromAccountId: "beta_ops", beneficiaryId: "gulf", amount: 6_100, reference: "INV-2325", initiatedBy: "omar", initiatedAt: "2026-11-03T10:05:00Z", status: "pending_approval", required: 1, approvals: [], nameCheck: { result: "none", recorded: "Zenith Holdings" }, receive: { amount: 22_403, currency: "AED" } }),
+    pay({ id: "PAY-2036", companyId, fromAccountId: "beta_ops", beneficiaryId: "rhine", amount: 4_300, reference: "INV-2260", initiatedBy: "priya", initiatedAt: "2026-10-30T09:00:00Z", status: "rejected", required: 1, approvals: [], rejectedBy: "lee", rejectedAt: "2026-10-30T11:30:00Z", rejectReason: "Wrong amount" }),
+  );
   for (const p of list) sandbox.seedPayment(p);
 }

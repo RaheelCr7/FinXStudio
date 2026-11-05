@@ -17,7 +17,9 @@ export type Step =
   /** Moves the sandbox clock forward (seconds), for rules that depend on time, such as a rate that is only held for 30 seconds. */
   | { advance: number }
   /** Reads the bank with a read adapter and checks one value: { adapter, input?, path, equals } (for example that no money has moved). An input value of the form {{path}} is read from the journey's data. */
-  | { expectBank: { adapter: string; input?: Record<string, unknown>; path: string; equals: unknown } };
+  | { expectBank: { adapter: string; input?: Record<string, unknown>; path: string; equals: unknown } }
+  /** Calls the bank directly, the way a forged request would, bypassing every screen, and expects it to refuse with this error code (a role without the permission, another context). */
+  | { expectBankError: { adapter: string; input?: Record<string, unknown>; code: string } };
 
 export type Frame = { step: number; did: string; screen: string; title: string; kind: string; errors: Record<string, string>; toast?: string; blocks: string[] };
 export type SimResult = {
@@ -73,7 +75,7 @@ function describeBlock(b: Record<string, any>): string | null {
 function visibleStrings(view: View): string[] {
   const out: string[] = [view.title];
   for (const b of view.blocks as any[]) {
-    for (const k of ["label", "text", "title", "hint", "helper", "meta", "placeholder", "error", "name"]) if (typeof b[k] === "string") out.push(b[k]);
+    for (const k of ["label", "text", "title", "subtitle", "hint", "helper", "meta", "placeholder", "error", "name"]) if (typeof b[k] === "string") out.push(b[k]);
     if (typeof b.value === "string") out.push(b.value);
     for (const r of b.rows ?? []) out.push(r.label, r.value);
     // a table's cells and chips, a status chip, the steps of a timeline, the paragraphs of a document, the steps of an ID capture
@@ -94,6 +96,8 @@ export type SimOptions = {
   provider?: ProviderId;
   /** The sandbox clock, in milliseconds since 1970. */
   now?: number;
+  /** The company to be working in when the walk starts (a context of the signed-in person, such as "alpha"): the step-up and the switch are done first, as the shell does them. Only for a customer with several places. */
+  context?: string;
   /** Calls made on the bank before the walk starts. */
   setup?: { adapter: string; input?: Record<string, unknown>; saveAs?: string }[];
   /** Rules switched off in the sandbox, for mutation checks. */
@@ -115,6 +119,19 @@ export async function simulate(opts: SimOptions): Promise<SimResult> {
   const bank = new MockBank(persona, { corpProvider: opts.provider, corpFlaws: opts.flaws, conditions: opts.conditions });
   if (opts.now !== undefined) bank.now = () => opts.now!;
   const setupFailures: string[] = [];
+  // working in a company from the start: the same calls the shell makes (a one-time code, the password, the switch), before anything is arranged or walked
+  if (opts.context) {
+    const identity = bank.persona.identity;
+    const held = bank.conditions; bank.conditions = {};
+    try {
+      if (!identity) throw new Error(`${persona} has no companies to switch into`);
+      await bank.call("bank.otp.send", {});
+      await bank.call("bank.otp.verify", { code: bank.persona.behaviour.otpCode });
+      await bank.call("bank.session.stepUp", { method: "password", secret: identity.password });
+      await bank.call("bank.session.switch", { contextId: opts.context });
+    } catch (e) { setupFailures.push(`Switching into "${opts.context}" failed: ${(e as Error).message}`); }
+    bank.conditions = held;
+  }
   // what a setup call answered, by the name it was saved under: later inputs read it as {{setup.name.id}}, so a scenario never
   // hard-codes an id that differs from one bank API to the next (pay_1 on one, TXN-000001 on another)
   const saved: Record<string, unknown> = {};
@@ -159,6 +176,8 @@ export async function simulate(opts: SimOptions): Promise<SimResult> {
       await runner.start();
     }
   };
+  // a bank call made by a step: an input value that is exactly {{path}} is read from the journey's data (for example the id of the payment just chosen)
+  const bankInput = (input: Record<string, unknown> = {}) => Object.fromEntries(Object.entries(input).map(([k, v]) => [k, typeof v === "string" && /^\{\{\s*setup\./.test(v) ? resolve(v) : typeof v === "string" && /^\{\{[^}]+\}\}$/.test(v) ? runner.get(v.slice(2, -2).trim()) : v])) as Record<string, any>;
   const frames: Frame[] = [];
   const failures: string[] = [...setupFailures];
   const visited = new Set<string>();
@@ -195,7 +214,11 @@ export async function simulate(opts: SimOptions): Promise<SimResult> {
     } else if ("press" in step) {
       // a button, or a row of a menu (a list row, a shortcut) with that label
       const shown = runner.view().blocks as any[];
-      const rows = shown.filter((b) => b.type === "menu" || b.type === "shortcuts").flatMap((b) => (b.items ?? []).map((i: any) => ({ type: "button", label: i.label, actions: i.actions })));
+      // (a row of a table that opens on press is found by its key, for example the payment id)
+      const rows = [
+        ...shown.filter((b) => b.type === "menu" || b.type === "shortcuts").flatMap((b) => (b.items ?? []).map((i: any) => ({ type: "button", label: i.label, actions: i.actions }))),
+        ...shown.filter((b) => b.type === "dataTable").flatMap((b) => (b.rows ?? []).filter((r: any) => r.actions?.length).map((r: any) => ({ type: "button", label: r.id, actions: r.actions }))),
+      ];
       const buttons = [...shown.filter((b) => b.type === "button"), ...rows];
       // the same button as written in the journey (not translated), found by where it sits on the screen: a button that is hidden must not be mistaken for one that is shown
       const raw = [...shown.filter((b) => b.type === "button").map((b) => (runner.screen.blocks as any[])[b.srcIndex]), ...rows];
@@ -232,13 +255,21 @@ export async function simulate(opts: SimOptions): Promise<SimResult> {
         did = `expect validation error "${step.expectError}"`;
         const q = String(step.expectError).toLowerCase();
         if (!Object.entries(runner.errors).some(([k, m]) => k.toLowerCase() === q || m.toLowerCase().includes(q))) fail(n, `${did}: there is no such error on screen "${view.screenId}"`, view);
+      } else if ("expectBankError" in step) {
+        const e = step.expectBankError;
+        did = `expect bank ${e.adapter} to refuse with ${e.code}`;
+        try {
+          await bank.call(e.adapter, bankInput(e.input));
+          fail(n, `${did}: the bank accepted it`, view);
+        } catch (err) {
+          const got = (err as { code?: string }).code;
+          if (got !== e.code) fail(n, `${did}: it answered ${got ?? (err as Error).message}`, view);
+        }
       } else if ("expectBank" in step) {
         const e = step.expectBank;
         did = `expect bank ${e.adapter} ${e.path} = ${JSON.stringify(e.equals)}`;
         try {
-          // an input value that is exactly {{path}} is read from the journey's data (for example the id of the payment just chosen)
-          const input = Object.fromEntries(Object.entries(e.input ?? {}).map(([k, v]) => [k, typeof v === "string" && /^\{\{\s*setup\./.test(v) ? resolve(v) : typeof v === "string" && /^\{\{[^}]+\}\}$/.test(v) ? runner.get(v.slice(2, -2).trim()) : v]));
-          const got = e.path.split(".").reduce((o: any, k: string) => o?.[k], await bank.call(e.adapter, input as Record<string, any>));
+          const got = e.path.split(".").reduce((o: any, k: string) => o?.[k], await bank.call(e.adapter, bankInput(e.input)));
           if (JSON.stringify(got) !== JSON.stringify(e.equals)) fail(n, `${did}: it is ${JSON.stringify(got)}`, view);
         } catch (err) { fail(n, `${did}: the bank call failed: ${(err as Error).message}`, view); }
       } else if ("expectOpens" in step) {
@@ -254,7 +285,7 @@ export async function simulate(opts: SimOptions): Promise<SimResult> {
         did = `expect message "${step.expectToast}"`;
         if (!view.toast || !view.toast.toLowerCase().includes(String(step.expectToast).toLowerCase())) fail(n, `${did}: the message shown is ${view.toast ? `"${view.toast}"` : "none"}`, view);
       } else {
-        failures.push(`Step ${n} is not a known action. Use set, press, advance, expectScreen, expectText, expectNoText, expectError, expectToast, expectOpens or expectBank.`);
+        failures.push(`Step ${n} is not a known action. Use set, press, advance, expectScreen, expectText, expectNoText, expectError, expectToast, expectOpens, expectBank or expectBankError.`);
         stopped = true;
         break;
       }

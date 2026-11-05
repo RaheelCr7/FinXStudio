@@ -194,3 +194,42 @@ describe("session permissions in a walk", () => {
     expect(r.frames[0]!.blocks.join(" ")).toContain('table "Rows" 1 rows');
   });
 });
+
+describe("starting in a company, and calls forced past the screens", () => {
+  const gated = Journey.parse({
+    id: "j", slug: "gated2", name: "Gated", version: 1, status: "draft", channels: ["web"], locale: { default: "en", supported: ["en"] }, entryScreen: "s", dataModel: {}, integrations: [],
+    screens: [{ id: "s", title: "S", kind: "terminal", blocks: [
+      { type: "text", text: "Pay a supplier", visibleWhen: "has(session.permissions, 'biz.payments.initiate')" },
+      { type: "text", text: "Approve payments", visibleWhen: "has(session.permissions, 'biz.approvals.approve')" },
+    ] }],
+  });
+  it("context switches into the company first (the step-up and the code are done for the walk), so the permissions are that company's", async () => {
+    const alpha = await simulate({ journey: gated, persona: "alex", lang: "en", context: "alpha", steps: [{ expectText: "Pay a supplier" }, { expectNoText: "Approve payments" }] });
+    expect(alpha.failures).toEqual([]);
+    const beta = await simulate({ journey: gated, persona: "alex", lang: "en", context: "beta", steps: [{ expectNoText: "Pay a supplier" }, { expectText: "Approve payments" }, { expectBank: { adapter: "corp.company.get", path: "name", equals: "Beta Services Ltd" } }] });
+    expect(beta.failures).toEqual([]);
+  });
+  it("context runs before setup, so a setup call is made in the company; and it works with the clock fixed", async () => {
+    const r = await simulate({ journey: gated, persona: "alex", lang: "en", context: "beta", now: Date.parse("2026-11-03T10:42:00Z"), setup: [{ adapter: "corp.payments.get", input: { paymentId: "PAY-2041" }, saveAs: "p" }], steps: [{ expectBank: { adapter: "corp.payments.get", input: { paymentId: "{{setup.p.id}}" }, path: "status", equals: "pending_approval" } }] });
+    expect(r.failures).toEqual([]);
+  });
+  it("says so when the customer has no such company, or has no companies at all", async () => {
+    const wrong = await simulate({ journey: gated, persona: "alex", lang: "en", context: "gamma", steps: [{ expectText: "Pay a supplier" }] });
+    expect(wrong.ok).toBe(false);
+    expect(wrong.failures[0]).toContain('Switching into "gamma" failed');
+    const none = await simulate({ journey: gated, persona: "ayesha", lang: "en", context: "alpha", steps: [{ expectText: "x" }] });
+    expect(none.failures[0]).toContain("has no companies to switch into");
+  });
+  it("the conditions of a scenario apply to the walk, not to getting into the company", async () => {
+    const r = await simulate({ journey: gated, persona: "alex", lang: "en", context: "alpha", conditions: { unavailable: ["bank.otp.send", "bank.session.switch"] }, steps: [{ expectText: "Pay a supplier" }] });
+    expect(r.failures).toEqual([]);
+  });
+  it("expectBankError passes when the bank refuses with that code, and fails when it accepts or answers another code", async () => {
+    const ok = await simulate({ journey: gated, persona: "alex", lang: "en", context: "alpha", steps: [{ expectBankError: { adapter: "corp.payments.approve", input: { paymentId: "PAY-2040" }, code: "PERMISSION_DENIED" } }] });
+    expect(ok.failures).toEqual([]);
+    const wrongCode = await simulate({ journey: gated, persona: "alex", lang: "en", context: "alpha", steps: [{ expectBankError: { adapter: "corp.payments.approve", input: { paymentId: "PAY-2040" }, code: "SELF_APPROVAL" } }] });
+    expect(wrongCode.failures[0]).toContain("it answered PERMISSION_DENIED");
+    const accepted = await simulate({ journey: gated, persona: "alex", lang: "en", context: "alpha", steps: [{ expectBankError: { adapter: "corp.payments.get", input: { paymentId: "PAY-2040" }, code: "PERMISSION_DENIED" } }] });
+    expect(accepted.failures[0]).toContain("the bank accepted it");
+  });
+});
