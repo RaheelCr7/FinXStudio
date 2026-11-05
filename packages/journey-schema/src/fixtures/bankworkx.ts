@@ -15,6 +15,10 @@ import { forgotUsername } from "./forgot-username";
 import { resetPassword } from "./reset-password";
 import { forgotPassword } from "./forgot-password";
 import { unlockAccount } from "./unlock-account";
+import { changePassword } from "./change-password";
+import { trustedDevices } from "./trusted-devices";
+import { changeQuickPin } from "./change-quick-pin";
+import { setupQuickLogin } from "./setup-quick-login";
 
 /** Journeys for the BankWorkx app. English only for now; the app filters them out of other banks' apps with `apps`. */
 const base = { version: 1, status: "published" as const, channels: ["mobile" as const], apps: ["bankworkx"], locale: { default: "en", supported: ["en"] } };
@@ -359,4 +363,4 @@ export const sellInvestment: Journey = {
   ],
 };
 
-export const bankworkxJourneys: Journey[] = [addMoney, addCard, connectAccount, createBudget, invest, sellInvestment, ownTransfer, manageBeneficiary, personalTransfer, internalTransfer, internationalTransfer, payBillBankworkx, mobileTopup, schedulePayment, cancelStandingOrder, supplierPayment, approvePayments, signIn, forgotUsername, resetPassword, forgotPassword, unlockAccount];
+export const bankworkxJourneys: Journey[] = [addMoney, addCard, connectAccount, createBudget, invest, sellInvestment, ownTransfer, manageBeneficiary, personalTransfer, internalTransfer, internationalTransfer, payBillBankworkx, mobileTopup, schedulePayment, cancelStandingOrder, supplierPayment, approvePayments, signIn, forgotUsername, resetPassword, forgotPassword, unlockAccount, changePassword, trustedDevices, changeQuickPin, setupQuickLogin];

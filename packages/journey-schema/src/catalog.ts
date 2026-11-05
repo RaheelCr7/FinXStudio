@@ -24,6 +24,10 @@ import { forgotUsername } from "./fixtures/forgot-username";
 import { resetPassword } from "./fixtures/reset-password";
 import { forgotPassword } from "./fixtures/forgot-password";
 import { unlockAccount } from "./fixtures/unlock-account";
+import { changePassword } from "./fixtures/change-password";
+import { trustedDevices } from "./fixtures/trusted-devices";
+import { changeQuickPin } from "./fixtures/change-quick-pin";
+import { setupQuickLogin } from "./fixtures/setup-quick-login";
 
 /**
  * The journey catalog: ready-made journeys a project can add to its own app.
@@ -195,6 +199,26 @@ export const catalog: CatalogEntry[] = [
     id: unlockAccount.slug, category: "Access", madeFor: "bankworkx", journey: unlockAccount,
     summary: "Unlock a locked profile with a one-time code and keep the password: Reset password opened in its unlock mode. With unlocking switched off it offers the reset.",
     highlights: ["Alias of Reset password", "Password unchanged", "Says when the profile was not locked"],
+  },
+  {
+    id: changePassword.slug, category: "Access", madeFor: "bankworkx", journey: changePassword,
+    summary: "Change the password: the current one, a new one checked against the rules, then a one-time code. Five wrong current passwords lock the profile.",
+    highlights: ["Attempts left, then locked, with a reset", "Rules with their own messages", "One-time code, three tries", "Other devices signed out", "Step-up first"],
+  },
+  {
+    id: trustedDevices.slug, category: "Access", madeFor: "bankworkx", journey: trustedDevices,
+    summary: "See the devices that skip the new-device code, remove one or sign out all the others after a one-time code. The device in hand is never removed.",
+    highlights: ["Last use of each device, n of 5", "Code before any removal, three tries", "Locks the view after three wrong codes", "Step-up first"],
+  },
+  {
+    id: setupQuickLogin.slug, category: "Access", madeFor: "bankworkx", journey: setupQuickLogin,
+    summary: "Choose how this device signs you in without the password: Face ID or fingerprint, a passkey or a 6-digit PIN, confirmed on the device and with a one-time code; or turn it off.",
+    highlights: ["Methods the bank offers and the device can do", "PIN rules checked before the code", "Code, three tries", "Turning off needs no code", "Step-up first"],
+  },
+  {
+    id: changeQuickPin.slug, category: "Access", madeFor: "bankworkx", journey: changeQuickPin,
+    summary: "Change the 6-digit PIN used for quick sign-in on this device: the current PIN, then a new one with no repeats or runs. Three wrong PINs turn quick sign-in off.",
+    highlights: ["Current PIN is the proof, no code", "Tries left, then quick sign-in off", "PIN rules with their own messages", "Step-up first"],
   },
   // Cairo Amman Bank: the access journeys from its design file
   ...(

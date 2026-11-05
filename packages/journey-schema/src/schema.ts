@@ -251,7 +251,7 @@ export const Journey = z.object({
       timeout: z.array(z.string()).optional(), unavailable: z.array(z.string()).optional(), latencyMs: z.number().int().nonnegative().optional(),
       empty: z.array(z.string()).optional(), frozen: z.array(z.string()).optional(), transferFails: z.boolean().optional(), limitUsed: z.number().nonnegative().optional(), closedDays: z.array(z.string().regex(/^\d{4}-\d{2}-\d{2}$/)).optional(),
       /** The device a sign-in comes from, and how long a session may stay quiet before it ends (seconds). */
-      device: z.enum(["known", "new", "unusual"]).optional(), idleTimeoutSeconds: z.number().int().positive().optional(),
+      device: z.enum(["known", "new", "unusual", "browser"]).optional(), idleTimeoutSeconds: z.number().int().positive().optional(),
     }).optional(),
     /** How the bank is set up for this scenario: its options per journey (for example { "sign-in": { forceExpiry: false } }). */
     config: z.object({ options: z.record(z.string(), z.record(z.string(), z.unknown())).optional() }).optional(),
