@@ -433,14 +433,14 @@ describe("E-2: step-up is required to enter Alpha", () => {
     expect(activeId(app)).toBe("personal");
 
     await app.beginStepUp({ secret: "wrong" });
-    expect(app.getState().stepUp).toMatchObject({ phase: "password", error: "That password isn't right." });
+    expect(app.getState().stepUp).toMatchObject({ phase: "password", error: "That password isn't right. 4 tries left." });
     expect(await code(app.bank.call("bank.session.stepUp", { method: "password", secret: "wrong" })), "the bank answers STEP_UP_FAILED").toBe("STEP_UP_FAILED");
     expect(spy.mock.calls.some((c) => c[0] === "bank.otp.send"), "no code is sent for a wrong password").toBe(false);
 
     await app.beginStepUp({ secret: PASSWORD });
     expect(app.getState().stepUp).toMatchObject({ phase: "code" });
     await app.confirmStepUp("111111");
-    expect(app.getState().stepUp).toMatchObject({ phase: "code", error: "Incorrect code" });
+    expect(app.getState().stepUp).toMatchObject({ phase: "code", error: "That code isn't right. 2 tries left." });
     await app.confirmStepUp("222222");
     expect(app.getState().stepUp).not.toBeNull();
     await app.confirmStepUp("333333");

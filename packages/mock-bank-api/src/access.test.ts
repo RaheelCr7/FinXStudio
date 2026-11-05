@@ -468,6 +468,23 @@ describe("what a signed-in customer manages", () => {
     expect(await err(c.b.call("bank.session.stepUp", { method: "password", secret: PW }))).toBe("STEP_UP_FAILED");
     expect(await err(c.b.call("bank.session.stepUp", { method: "password", secret: "Harbour-Maple-47-Tide" }))).toBe("OTP_REQUIRED");
   });
+  it("the step-up of the shell takes the password, the quick PIN or the device's check; a wrong password or PIN counts with the sign-in's tries and the last one locks and ends the session", async () => {
+    const { b } = alex();
+    await up(b); await code(b); await b.call("bank.devices.setQuickSignIn", { method: "pin", pin: "504719" });
+    const wrong = (method: string, secret: string) => b.call("bank.session.stepUp", { method, secret }).catch((e) => ({ code: e.code, attempt: e.attempt, message: e.message }));
+    expect(await wrong("pin", "000000")).toMatchObject({ code: "STEP_UP_FAILED", attempt: 1, message: "That PIN isn't right." });
+    expect(await wrong("password", "wrong-wrong-12")).toMatchObject({ code: "STEP_UP_FAILED", attempt: 2 });
+    await b.call("bank.otp.send"); await b.call("bank.otp.verify", { code: "482100" });
+    expect(await b.call("bank.session.stepUp", { method: "pin", secret: "504719" })).toHaveProperty("stepUpUntil");
+    expect((await b.call("sandbox.access.inspect", { username: "alex.morgan" })).failedSignIns).toBe(0); // a right one sets the count back
+    for (let i = 1; i <= 4; i++) expect(await wrong("password", "wrong-wrong-12")).toMatchObject({ code: "STEP_UP_FAILED", attempt: i });
+    expect(await wrong("pin", "000000")).toMatchObject({ code: "LOCKED" });
+    expect((b as any).access.dir.find("alex.morgan").status).toBe("locked");
+    expect(await err(b.call("bank.devices.list"))).toBe("SESSION_EXPIRED");
+    // a PIN that is not set cannot be a step-up
+    const n = alex();
+    expect(await n.b.call("bank.session.stepUp", { method: "pin", secret: "504719" }).catch((e) => e.code)).toBe("STEP_UP_FAILED");
+  });
   it("a password that was checked is the proof for the change that follows, once and for five minutes; the new password is judged against the rules and what was used", async () => {
     const { b, tick } = alex();
     await up(b); await code(b);

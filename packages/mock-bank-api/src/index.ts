@@ -591,10 +591,19 @@ export class MockBank {
       }
       case "bank.session.stepUp": {
         const method = String(input.method ?? "password");
-        if (method !== "password" && method !== "biometric") throw new BankError("STEP_UP_FAILED", "That didn't work. Try again.");
+        if (method !== "password" && method !== "biometric" && method !== "pin") throw new BankError("STEP_UP_FAILED", "That didn't work. Try again.");
         // the proof comes with every call (the password, or the device's biometric check) and nothing is remembered between calls: a password
         // given once cannot be reused later by a call that leaves it out
-        if (method === "password" && !this.access.passwordIs(input.secret, id.password)) throw new BankError("STEP_UP_FAILED", "That password isn't right.");
+        if (method === "password" || method === "pin") {
+          const right = method === "password" ? this.access.passwordIs(input.secret, id.password) : this.access.pinIs(input.secret);
+          if (!right) {
+            // a wrong password or PIN counts with the sign-in's tries: the last one locks the profile and ends the session
+            const m = this.access.stepUpMistake();
+            if (m?.locked) { this.session.ended = true; throw new BankError("LOCKED", "Sign-in is locked to protect your account. Unlock it to continue."); }
+            throw new BankError("STEP_UP_FAILED", method === "pin" ? "That PIN isn't right." : "That password isn't right.", m ? ACCESS.maxFailedSignIns - m.left : undefined);
+          }
+          this.access.stepUpRight();
+        }
         if (!this.otp.verified) throw new BankError("OTP_REQUIRED", "OTP not verified");
         this.otp.verified = false;
         this.session.stepUpUntil = now + STEP_UP_SECONDS * 1000;

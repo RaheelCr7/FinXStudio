@@ -233,6 +233,17 @@ export class AccessSandbox {
     const u = this.me();
     return typeof secret === "string" && (u ? hashOf(secret, u.username) === u.passwordHash : secret === fallback);
   }
+  /** Whether this is the quick PIN of the device in hand (false when none is set). */
+  pinIs(secret: unknown) { const u = this.me(), dev = u?.devices.find((x) => x.id === this.thisDevice().id); return !!dev?.pinHash && typeof secret === "string" && hashPin(secret, dev.id) === dev.pinHash; }
+  /** A wrong password or PIN at the step-up counts with the sign-in's tries; the fifth locks the profile. Nothing for a customer without a username here. */
+  stepUpMistake(): { left: number; locked: boolean } | undefined {
+    const u = this.me(); if (!u) return undefined;
+    u.failedSignIns += 1; this.log(u, "wrong-password");
+    if (u.failedSignIns >= ACCESS.maxFailedSignIns && this.flaws().signInLock !== false) { this.lock(u); this.log(u, "locked"); return { left: 0, locked: true }; }
+    return { left: Math.max(0, ACCESS.maxFailedSignIns - u.failedSignIns), locked: false };
+  }
+  /** A right password or PIN at the step-up sets the count back to zero. */
+  stepUpRight() { const u = this.me(); if (u) u.failedSignIns = 0; }
   /** The session ended for lack of use: the history says so. */
   noteInactivity() { const u = this.me(); if (u) this.log(u, "inactivity"); }
   /** The signed-in customer, if the session has one. */
@@ -464,6 +475,8 @@ export class AccessSandbox {
       // the greeting and the remembered username only for a person this device was told to remember
       firstName: remembered?.firstName ?? "", username: remembered?.username ?? "", device: { id: d.id, name: d.name, kind: d.kind },
       trusted: !!dev?.trusted && dev.trustedUntil > this.now, quick: dev?.quick ?? "off",
+      // for Settings > Security, only for the customer who is signed in
+      ...(this.me() ? { passwordChangedAt: new Date(this.me()!.passwordChangedAt).toISOString() } : {}),
     };
   }
 
@@ -687,6 +700,7 @@ export class AccessSandbox {
         const u = this.requireMe(), page = Math.max(1, Number(input.page) || 1), size = Math.min(50, Math.max(1, Number(input.pageSize) || 20));
         const horizon = this.now - 90 * DAY;
         const rows = u.history.filter((h) => h.at >= horizon && (input.result === "ok" ? h.result === "ok" : input.result === "failed" ? h.result !== "ok" : true) && (!input.deviceId || h.deviceId === input.deviceId) && (!input.from || h.at >= Date.parse(String(input.from))) && (!input.to || h.at <= Date.parse(String(input.to))));
+        if (input.order === "oldest") rows.reverse();
         return { total: rows.length, items: rows.slice((page - 1) * size, page * size).map((h) => ({ at: new Date(h.at).toISOString(), result: h.result, method: h.method, deviceId: h.deviceId, deviceName: h.deviceName, place: h.place, ipMasked: h.ip })) };
       }
       default: return undefined;

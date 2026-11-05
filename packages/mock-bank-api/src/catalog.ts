@@ -321,7 +321,7 @@ export const ADAPTER_CATALOG: AdapterInfo[] = [
   },
   {
     adapter: "bank.session.stepUp", suggestedId: "stepUp", description: "Confirms it is the customer: password (or biometric), then the one-time code; valid 5 minutes. A right password is remembered while the code is entered, so call again without the secret.",
-    input: { method: "'password' or 'biometric'", secret: "the password" }, returns: "{ stepUpUntil }", requiresOtp: true, errors: ["STEP_UP_FAILED", "OTP_REQUIRED", "SESSION_EXPIRED"],
+    input: { method: "'password', 'pin' or 'biometric'", secret: "the password or PIN" }, returns: "{ stepUpUntil }", requiresOtp: true, errors: ["STEP_UP_FAILED", "OTP_REQUIRED", "SESSION_EXPIRED"],
   },
   {
     adapter: "bank.app.config", suggestedId: "appConfig", description: "How the bank is set up: home market (decides the rails behind Standard, Same day, Instant), journeys it switched off (a call made for one is JOURNEY_DISABLED), options per journey.",
@@ -476,7 +476,7 @@ export const ADAPTER_CATALOG: AdapterInfo[] = [
     returns: "{ ok } | { ok: false, code: INVALID_PASSWORD (attemptsLeft) | ACCOUNT_LOCKED }",
   },
   {
-    adapter: "bank.password.change", suggestedId: "changePassword", description: "Changes the password after bank.password.check, a step-up and a strict code.", input: { new: "text", confirm: "text", signOutOthers: "boolean" },
+    adapter: "bank.password.change", suggestedId: "changeOwnPassword", description: "Changes the password after bank.password.check, a step-up and a strict code.", input: { new: "text", confirm: "text", signOutOthers: "boolean" },
     returns: "{ ok, changedText, otherDevicesSignedOut } | { ok: false, code: PASSWORD_SAME | rules as sign-in }", requiresOtp: true,
   },
   {
@@ -488,14 +488,14 @@ export const ADAPTER_CATALOG: AdapterInfo[] = [
     returns: "{ removed } | error DEVICE_NOT_FOUND | CURRENT_DEVICE", requiresOtp: true,
   },
   {
-    adapter: "bank.devices.setQuickSignIn", suggestedId: "setQuickSignIn", description: "Quick sign-in on (step-up, strict code) or off (neither).", input: { method: "pin | biometric | passkey | off", pin: "6 digits" },
+    adapter: "bank.devices.setQuickSignIn", suggestedId: "setDeviceQuickSignIn", description: "Quick sign-in on (step-up, strict code) or off (neither).", input: { method: "pin | biometric | passkey | off", pin: "6 digits" },
     returns: "{ ok, method, device } | { ok: false, code: PIN_* | DEVICE_NOT_TRUSTED }",
   },
   {
     adapter: "bank.devices.checkPin", suggestedId: "checkPin", description: "Would this PIN do? Changes nothing.", input: { pin: "6 digits" }, returns: "{ ok } | { ok: false, code: PIN_INVALID | PIN_WEAK | PIN_PHONE }",
   },
   {
-    adapter: "bank.devices.verifyPin", suggestedId: "verifyPin", description: "Checks the quick PIN; the 3rd wrong turns quick sign-in off.", input: { pin: "6 digits" }, returns: "{ ok } | { ok: false, code: PIN_WRONG (triesLeft) | PIN_LOCKED }",
+    adapter: "bank.devices.verifyPin", suggestedId: "verifyQuickPin", description: "Checks the quick PIN; the 3rd wrong turns quick sign-in off.", input: { pin: "6 digits" }, returns: "{ ok } | { ok: false, code: PIN_WRONG (triesLeft) | PIN_LOCKED }",
   },
   {
     adapter: "bank.devices.changePin", suggestedId: "changePin", description: "A new PIN after bank.devices.verifyPin and a step-up.", input: { new: "6 digits" }, returns: "{ ok, device } | { ok: false, code: PIN_SAME | PIN_WEAK | PIN_PHONE }",
