@@ -45,6 +45,8 @@ export type RunnerOptions = {
   session?: { permissions?: string[] };
   /** The journey shared a receipt (the share action): the player prints it on the web or opens the share sheet on a phone. */
   onShare?: (receipt: Receipt) => void;
+  /** The clock for what a journey checks against today (a date limit of "today", a card that has expired). The real clock, in the person's time zone, when left out; a simulator passes the sandbox clock (UTC) so a scenario does not depend on the day it runs. */
+  now?: () => number;
 };
 export type ViewBlock = Block & { _error?: string };
 export type View = {
@@ -157,7 +159,7 @@ export class JourneyRunner {
         else if (max != null && n > max) this.errors[b.bind] = this.tx(b.validation.messages?.max ?? ui(this.lang, "maximum", { n: max }));
       }
       if (b.type === "dateInput" && v != null && v !== "") {
-        const t = String(v), today = new Date(), now = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, "0")}-${String(today.getDate()).padStart(2, "0")}`;
+        const t = String(v), now = this.today();
         // a limit is a date, "today", or a {{path}} to another answer (the end of a range cannot be before its start)
         const lim = (x?: string) => (x === "today" ? now : x && x.includes("{{") ? (this.tx(x) || undefined) : x);
         const real = /^(\d{4})-(\d{2})-(\d{2})$/.exec(t) && !Number.isNaN(Date.parse(t)) && new Date(t).toISOString().slice(0, 10) === t;
@@ -175,12 +177,19 @@ export class JourneyRunner {
     return bad.length === 0;
   }
 
+  /** Today as yyyy-mm-dd: by the injected clock (UTC) when there is one, else the person's own date. */
+  private today(): string {
+    if (this.opts.now) return new Date(this.opts.now()).toISOString().slice(0, 10);
+    const d = new Date();
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+  }
+
   /** Checks the four card fields and records one error per field. */
   private validateCard(bind: string) {
     const c = (this.get(bind) ?? {}) as Record<string, string>;
     if (!luhnValid(String(c.number ?? ""))) this.errors[`${bind}.number`] = ui(this.lang, "cardNumber");
     if (String(c.holder ?? "").trim().length < 2) this.errors[`${bind}.holder`] = ui(this.lang, "cardHolder");
-    if (!cardExpiryValid(String(c.expiry ?? ""))) this.errors[`${bind}.expiry`] = ui(this.lang, "cardExpiry");
+    if (!cardExpiryValid(String(c.expiry ?? ""), this.opts.now ? new Date(this.opts.now()) : undefined, !!this.opts.now)) this.errors[`${bind}.expiry`] = ui(this.lang, "cardExpiry");
     if (!/^[0-9]{3,4}$/.test(String(c.cvv ?? ""))) this.errors[`${bind}.cvv`] = ui(this.lang, "cardCvv");
   }
 

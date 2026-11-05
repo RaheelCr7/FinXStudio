@@ -91,9 +91,9 @@ export const alexRetail = (): RetailData => ({
     { id: "msg_3", subject: "Welcome to BankWorkx", from: "BankWorkx", at: "2019-03-12T10:00:00Z", read: true, body: "Thanks for banking with us." },
   ],
   notifications: [
-    { id: "n_1", context: "beta", text: "Payment awaiting your approval: USD 8,200.00 to Nimbus Logistics", at: "2026-11-03T09:12:00Z", read: false },
-    { id: "n_2", context: "personal", text: "Salary received: $4,200.00", at: "2026-11-01T06:00:00Z", read: true },
-    { id: "n_3", context: "alpha", text: "Payment PAY-1187 settled", at: "2026-10-30T14:00:00Z", read: true },
+    { id: "n_1", context: "beta", text: "Payment awaiting your approval: USD 8,200.00 to Nimbus Logistics", at: "2026-11-03T09:12:00Z", read: false, topic: "approval" },
+    { id: "n_2", context: "personal", text: "Salary received: $4,200.00", at: "2026-11-01T06:00:00Z", read: true, topic: "account" },
+    { id: "n_3", context: "alpha", text: "Payment PAY-1187 settled", at: "2026-10-30T14:00:00Z", read: true, topic: "payment" },
   ],
   requests: [{ id: "REQ-5001", type: "Card", summary: "Replacement card sent", status: "in progress", openedAt: "2026-10-29T10:00:00Z" }],
   applications: applications(),

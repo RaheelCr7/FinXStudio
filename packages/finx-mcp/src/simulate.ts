@@ -165,7 +165,7 @@ export async function simulate(opts: SimOptions): Promise<SimResult> {
     } catch { permissions = undefined; }
   };
   await refreshPermissions();
-  const make = (j: Journey, launch?: Record<string, unknown>) => new JourneyRunner(j, { adapter: (id, input) => bank.call(id, input), lang, launch: launch as Record<string, any> | undefined, openJourney: (r) => { asked = r; }, ...(permissions ? { session: { permissions } } : {}) });
+  const make = (j: Journey, launch?: Record<string, unknown>) => new JourneyRunner(j, { adapter: (id, input) => bank.call(id, input), lang, now: () => bank.now(), launch: launch as Record<string, any> | undefined, openJourney: (r) => { asked = r; }, ...(permissions ? { session: { permissions } } : {}) });
   let runner = make(journey, opts.launch);
   let cur = journey;
   /** A journey asked to open another: switch to it when it can be found (and it supports the language), else just remember the request. */

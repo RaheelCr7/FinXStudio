@@ -35,8 +35,8 @@ export function Accounts() {
           {items.map((x) => (
             <li key={x.id}>
               <label className={`wb-acct ${current === x.id ? "is-on" : ""}`}>
-                <input type="radio" className="fx-radio-input" name="acct" checked={current === x.id} onChange={() => setSel(x.id)} aria-label={`${x.bank} ${x.name} ${x.mask}, ${usd(x.balance)}`} />
-                <IconTile icon="bank" size={38} /><small>{x.name}</small><b className="wb-num">{usd(x.balance)}</b><span className="wb-muted">{x.bank} {x.mask}</span>
+                <input type="radio" className="fx-radio-input" name="acct" checked={current === x.id} onChange={() => setSel(x.id)} aria-label={`${x.bank} ${x.name} ${x.mask}, ${x.text}`} />
+                <IconTile icon="bank" size={38} /><small>{x.name}</small><b className="wb-num">{x.text}</b><span className="wb-muted">{x.bank} {x.mask}</span>
               </label>
             </li>
           ))}

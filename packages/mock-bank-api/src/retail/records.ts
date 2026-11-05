@@ -7,6 +7,15 @@ const keyed = <T extends { id: string }>(list: T[]) => Object.fromEntries(list.m
 const needData = (p: Persona): RetailData => { if (!p.retail) throw new BankError("NOT_SUPPORTED", "Not available for this customer"); return p.retail; };
 const inRange = (date: string, from?: string, to?: string) => (!from || date >= from) && (!to || date <= to);
 
+/** `bank.transactions.list` returns at most this many, which is also what it returns when no limit is asked for. */
+export const MAX_TRANSACTIONS = 100;
+const rowLimit = (v: unknown): number => {
+  if (v === undefined || v === null || v === "") return MAX_TRANSACTIONS;
+  const n = typeof v === "number" ? v : typeof v === "string" && /^\d+$/.test(v.trim()) ? Number(v) : NaN;
+  if (!Number.isInteger(n) || n < 1 || n > MAX_TRANSACTIONS) throw new BankError("INVALID_INPUT", `The limit must be a whole number from 1 to ${MAX_TRANSACTIONS}.`);
+  return n;
+};
+
 /** What the retail customer can read and the few things they can change in their own records. Returns undefined for an adapter it does not own. */
 export function retailRecords(p: Persona, adapter: string, input: Record<string, any>, now: number): any {
   switch (adapter) {
@@ -24,7 +33,7 @@ export function retailRecords(p: Persona, adapter: string, input: Record<string,
       return { accountId: a.id, nickname };
     }
     case "bank.transactions.list": {
-      const d = needData(p);
+      const d = needData(p), limit = rowLimit(input.limit);
       if (input.accountId && !p.accounts.some((a) => a.id === input.accountId)) throw new BankError("ACCOUNT_NOT_FOUND", "Account not found");
       const q = String(input.q ?? "").trim().toLowerCase();
       const list = d.transactions
@@ -33,7 +42,7 @@ export function retailRecords(p: Persona, adapter: string, input: Record<string,
           && (!input.status || t.status === input.status) && (!q || t.title.toLowerCase().includes(q))
           && (input.minAmount === undefined || Math.abs(t.amount) >= Number(input.minAmount)) && (input.maxAmount === undefined || Math.abs(t.amount) <= Number(input.maxAmount)))
         .sort((a, b) => b.date.localeCompare(a.date) || b.id.localeCompare(a.id));
-      return keyed(input.limit ? list.slice(0, Number(input.limit)) : list);
+      return keyed(list.slice(0, limit));
     }
     case "bank.statements.get": {
       const d = needData(p);

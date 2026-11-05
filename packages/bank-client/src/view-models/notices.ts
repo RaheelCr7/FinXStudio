@@ -2,7 +2,7 @@ import type { Link } from "../links";
 import { PERSONAL, type ContextInfo } from "../session";
 
 /** A notification as `bank.notifications.list` returns it: tagged with the place it belongs to. */
-export type RawNotification = { id: string; context: string; text: string; at: string; read: boolean };
+export type RawNotification = { id: string; context: string; text: string; at: string; read: boolean; /** What it is about, from the bank (it gives no text for another place's notification). Older answers have none: the text is read instead. */ topic?: string };
 export type ContextNotice = {
   id: string; context: string; at: string; read: boolean;
   /** What the list shows. A notice from another place shows only where it is from: its details stay with that place. */
@@ -13,13 +13,17 @@ export type ContextNotice = {
   link?: Link;
 };
 
+/** What a notification is about: the bank says (the text of another place's is withheld), or it is read from the text of an older answer. */
+const topicOf = (n: RawNotification): string => n.topic ?? (/awaiting your approval/i.test(n.text) ? "approval" : /^payment\b/i.test(n.text) && /\b(settled|rejected|released)\b/i.test(n.text) ? "payment" : /salary|received|statement/i.test(n.text) ? "account" : /card/i.test(n.text) ? "card" : "general");
+
 /** Where a notification leads, by what it is about. Anything unrecognised just marks it read. */
 export function noticeLink(n: RawNotification): Link | undefined {
   const ws = n.context === PERSONAL ? { workspace: "personal" as const } : { workspace: "business" as const, companyId: n.context };
-  if (/awaiting your approval/i.test(n.text) && ws.workspace === "business") return { ...ws, tab: "approvals" };
-  if (/^payment\b/i.test(n.text) && /\b(settled|rejected|released)\b/i.test(n.text) && ws.workspace === "business") return { ...ws, tab: "payments" };
-  if (/salary|received|statement/i.test(n.text) && ws.workspace === "personal") return { ...ws, tab: "accounts" };
-  if (/card/i.test(n.text) && ws.workspace === "personal") return { ...ws, tab: "cards" };
+  const topic = topicOf(n);
+  if (topic === "approval" && ws.workspace === "business") return { ...ws, tab: "approvals" };
+  if (topic === "payment" && ws.workspace === "business") return { ...ws, tab: "payments" };
+  if (topic === "account" && ws.workspace === "personal") return { ...ws, tab: "accounts" };
+  if (topic === "card" && ws.workspace === "personal") return { ...ws, tab: "cards" };
   return { ...ws, tab: ws.workspace === "business" ? "overview" : "home" };
 }
 

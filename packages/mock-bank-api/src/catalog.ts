@@ -16,11 +16,11 @@ export type AdapterInfo = {
 export const ADAPTER_CATALOG: AdapterInfo[] = [
   {
     adapter: "bank.accounts.list", suggestedId: "accounts", description: "The signed-in customer's accounts.",
-    input: { homeOnly: "optional, true: only accounts that can pay someone else" }, returns: "Object map keyed by account id: { id, name, maskedNumber, iban, balance, currency, status, canDebit }. Save as ctx.accounts and use with accountPicker.",
+    input: { homeOnly: "optional, true: only accounts that can pay someone else" }, returns: "Map by account id: { id, name, maskedNumber, iban, balance, currency, status, canDebit }. Save as ctx.accounts and use with accountPicker.",
   },
   {
     adapter: "bank.beneficiaries.list", suggestedId: "beneficiaries", description: "Saved payees. One added in the last 24 hours is new and may only be sent 500.00 USD in any 24 hours.",
-    input: { sendType: "optional: internal | domestic | international, only payees of that kind" }, returns: "Object map keyed by beneficiary id: { id, displayName, bank, maskedNumber, addedAt, ageHours, sendType } and, for payees saved with bank.payees.save: kind (internal | domestic | international), region (bw | us | eu | uk | me | world), country, nickname, label, verified, nameCheck, coolingOffUntil (ISO or null), coolingOffHoursLeft, allowanceLeft (USD, null when not new), scheduledCount, scheduledText. Save as ctx.beneficiaries.",
+    input: { sendType: "optional: internal | domestic | international, only payees of that kind" }, returns: "Map by beneficiary id: { id, displayName, bank, maskedNumber, addedAt, ageHours, sendType } and, for payees saved with bank.payees.save: kind (internal | domestic | international), region (bw | us | eu | uk | me | world), country, nickname, label, verified, nameCheck, coolingOffUntil (ISO or null), coolingOffHoursLeft, allowanceLeft (USD, null when not new), scheduledCount, scheduledText. Save as ctx.beneficiaries.",
   },
   {
     adapter: "bank.payees.validate", suggestedId: "validate", description: "Checks the details of a payee being added (or changed, with payeeId): the account for its region, no second copy, at most 50 payees. Fails with the first problem.",
@@ -197,7 +197,7 @@ export const ADAPTER_CATALOG: AdapterInfo[] = [
   },
   {
     adapter: "bank.billers.list", suggestedId: "billers", description: "Billers the customer can pay. BankWorkx: the bank's directory.",
-    input: { category: "BankWorkx", q: "BankWorkx" }, returns: "Object map keyed by biller id: { id, name, category } (BankWorkx adds label, format, accepts, fee). Save as ctx.billers; use as a block source.",
+    input: { category: "BankWorkx", q: "BankWorkx" }, returns: "Map by biller id: { id, name, category } (BankWorkx adds label, format, accepts, fee). Save as ctx.billers; use as a block source.",
   },
   {
     adapter: "bank.bills.saved", suggestedId: "savedBillers", description: "BankWorkx: saved billers; billerId and reference save one.",
@@ -222,7 +222,7 @@ export const ADAPTER_CATALOG: AdapterInfo[] = [
   },
   {
     adapter: "bank.carriers.list", suggestedId: "carriers", description: "Mobile carriers (Jazz, Zong, Telenor, Ufone). BankWorkx: operators.",
-    input: {}, returns: "Object map keyed by carrier id: { id, name }. Save as ctx.carriers and use with a select block (source). BankWorkx adds amounts.",
+    input: {}, returns: "Map by carrier id: { id, name }. Save as ctx.carriers and use with a select block (source). BankWorkx adds amounts.",
   },
   {
     adapter: "bank.topup.amounts", suggestedId: "amounts", description: "BankWorkx: an operator's fixed amounts.",
@@ -249,11 +249,11 @@ export const ADAPTER_CATALOG: AdapterInfo[] = [
   },
   {
     adapter: "bank.banks.list", suggestedId: "banks", description: "Banks a customer can connect (BankWorkx).",
-    input: {}, returns: "Object map keyed by bank id: { id, name, color }. Save as ctx.banks and use with a select block (source).",
+    input: {}, returns: "Map by bank id: { id, name, color }. Save as ctx.banks and use with a select block (source).",
   },
   {
     adapter: "bank.cards.list", suggestedId: "cards", description: "The customer's saved cards (BankWorkx).",
-    input: {}, returns: "Object map keyed by card id: { id, network, last4, holder, expiry, nickname, isDefault, name }. Save as ctx.cards and use with a select block (source).",
+    input: {}, returns: "Map by card id: { id, network, last4, holder, expiry, nickname, isDefault, name }. Save as ctx.cards and use with a select block (source).",
   },
   {
     adapter: "bank.deposit.create", suggestedId: "addMoney", description: "Adds money to an account from a saved card (BankWorkx). $1 to $50,000 per transaction.",
@@ -272,7 +272,7 @@ export const ADAPTER_CATALOG: AdapterInfo[] = [
   },
   {
     adapter: "bank.budgets.list", suggestedId: "budgets", description: "The customer's monthly budgets (BankWorkx).",
-    input: {}, returns: "Object map keyed by budget id: { id, name, category, limit, spent }. Save as ctx.budgets.",
+    input: {}, returns: "Map by budget id: { id, name, category, limit, spent }. Save as ctx.budgets.",
   },
   {
     adapter: "bank.budgets.create", suggestedId: "createBudget", description: "Creates a monthly budget for a category (BankWorkx).",
@@ -280,7 +280,7 @@ export const ADAPTER_CATALOG: AdapterInfo[] = [
   },
   {
     adapter: "bank.subscriptions.list", suggestedId: "subscriptions", description: "Recurring payments the customer has (BankWorkx).",
-    input: {}, returns: "Object map keyed by subscription id: { id, name, amount, nextInDays, color }. Save as ctx.subscriptions.",
+    input: {}, returns: "Map by subscription id: { id, name, amount, nextInDays, color }. Save as ctx.subscriptions.",
   },
   {
     adapter: "bank.subscriptions.pay", suggestedId: "paySubscription", description: "Pays a subscription now from an account (BankWorkx).",
@@ -289,7 +289,7 @@ export const ADAPTER_CATALOG: AdapterInfo[] = [
   },
   {
     adapter: "bank.invest.instruments", suggestedId: "instruments", description: "The stocks and funds that can be bought (BankWorkx). Made-up companies.",
-    input: {}, returns: "Object map keyed by symbol: { id, symbol, kind, sector, price, changePct, name }. Save as ctx.instruments and use it as a select source.",
+    input: {}, returns: "Map by symbol: { id, symbol, kind, sector, price, changePct, name }. Save as ctx.instruments and use it as a select source.",
   },
   {
     adapter: "bank.invest.buy", suggestedId: "buyInvestment", description: "Buys a stock or fund with a dollar amount from an account (BankWorkx). Buys fractional shares at today's price.",
@@ -298,7 +298,7 @@ export const ADAPTER_CATALOG: AdapterInfo[] = [
   },
   {
     adapter: "bank.invest.holdings", suggestedId: "holdings", description: "What the customer owns (BankWorkx).",
-    input: {}, returns: "Object map keyed by symbol: { id, symbol, shares, value, name }. Save as ctx.holdings and use it as a select source.",
+    input: {}, returns: "Map by symbol: { id, symbol, shares, value, name }. Save as ctx.holdings and use it as a select source.",
   },
   {
     adapter: "bank.invest.sell", suggestedId: "sellInvestment", description: "Sells a dollar amount of a holding and pays it into an account (BankWorkx). Selling the whole value sells every share.",
@@ -360,8 +360,8 @@ export const ADAPTER_CATALOG: AdapterInfo[] = [
   { adapter: "bank.accounts.rename", suggestedId: "renameAccount", description: "Sets an account nickname (1 to 30 characters).", input: { accountId: "id", nickname: "text" }, returns: "{ accountId, nickname }", errors: ["ACCOUNT_NOT_FOUND", "INVALID_NICKNAME"] },
   {
     adapter: "bank.transactions.list", suggestedId: "transactions", description: "Account transactions, newest first. A pending item lowers the available balance, not yet the ledger balance.",
-    input: { accountId: "optional", from: "YYYY-MM-DD", to: "YYYY-MM-DD", direction: "'in'|'out'", category: "text", status: "'posted'|'pending'", q: "text in the title", minAmount: "number", maxAmount: "number", limit: "number" },
-    returns: "Map by id: { id, accountId, date, title, category, amount (negative is out), currency, status, reference? }.", errors: ["ACCOUNT_NOT_FOUND", "NOT_SUPPORTED"],
+    input: { accountId: "optional", from: "YYYY-MM-DD", to: "YYYY-MM-DD", direction: "'in'|'out'", category: "text", status: "'posted'|'pending'", q: "text in the title", minAmount: "number", maxAmount: "number", limit: "1-100 (default 100)" },
+    returns: "Map by id: { id, accountId, date, title, category, amount (negative is out), currency, status, reference? }.", errors: ["ACCOUNT_NOT_FOUND", "INVALID_INPUT", "NOT_SUPPORTED"],
   },
   { adapter: "bank.statements.get", suggestedId: "statement", description: "A statement for an account and period: opening, closing, totals, posted transactions.", input: { accountId: "id", from: "YYYY-MM-DD", to: "YYYY-MM-DD" }, returns: "{ accountId, currency, from, to, opening, credits, debits, closing, count, transactions }", errors: ["ACCOUNT_NOT_FOUND", "INVALID_DATE", "NOT_SUPPORTED"] },
   { adapter: "bank.cards.issued", suggestedId: "issuedCards", description: "Debit and credit cards the bank issued (bank.cards.list is the saved cards).", input: {}, returns: "Map by id: { id, kind, network, last4, nickname, status 'inactive'|'active'|'frozen'|'blocked', accountId?, virtual, pinSet, limits, controls, creditLimit?, outstanding? }.", errors: ["NOT_SUPPORTED"] },
@@ -371,14 +371,14 @@ export const ADAPTER_CATALOG: AdapterInfo[] = [
   { adapter: "bank.loans.list", suggestedId: "loans", description: "Loans, without their schedule.", input: {}, returns: "Map by id: { id, name, principal, outstanding, currency, ratePercent, monthlyPayment, nextDue }.", errors: ["NOT_SUPPORTED"] },
   { adapter: "bank.loans.get", suggestedId: "loan", description: "One loan with its schedule.", input: { loanId: "id" }, returns: "{ …loan, schedule: [{ n, due, principal, interest, balance }] }", errors: ["LOAN_NOT_FOUND", "NOT_SUPPORTED"] },
   { adapter: "bank.messages.list", suggestedId: "messages", description: "Secure messages.", input: {}, returns: "Map by id: { id, subject, from, at, read, body }.", errors: ["NOT_SUPPORTED"] },
-  { adapter: "bank.notifications.list", suggestedId: "notifications", description: "Notifications, each tagged with its place (personal, or a company id).", input: { context: "optional" }, returns: "Map by id: { id, context, text, at, read }.", errors: ["NOT_SUPPORTED"] },
+  { adapter: "bank.notifications.list", suggestedId: "notifications", description: "Notifications, each tagged with its place (personal, or a company id). The text of other places is withheld.", input: { context: "optional" }, returns: "Map by id: { id, context, topic, text (\"New activity\" for another place), at, read }.", errors: ["NOT_SUPPORTED"] },
   { adapter: "bank.requests.list", suggestedId: "requests", description: "Service requests.", input: {}, returns: "Map by id: { id, type, summary, status, openedAt }.", errors: ["NOT_SUPPORTED"] },
   { adapter: "bank.profile.get", suggestedId: "profile", description: "The customer's profile.", input: {}, returns: "{ name, email, phone, dateOfBirth, customerSince, language, address }", errors: ["NOT_SUPPORTED"] },
   { adapter: "bank.applications.list", suggestedId: "applications", description: "Account applications, drafts included.", input: {}, returns: "Map by id: { id, status 'draft'|'submitted'|'in review'|'approved'|'declined'|'active', step, data, updatedAt, productId? }.", errors: ["NOT_SUPPORTED"] },
   { adapter: "bank.applications.get", suggestedId: "application", description: "One application, to resume it.", input: { applicationId: "id" }, returns: "The application.", errors: ["APPLICATION_NOT_FOUND", "NOT_SUPPORTED"] },
   { adapter: "bank.applications.save", suggestedId: "saveApplication", description: "Saves an application as a draft, or sends it (submit: true); a sent one cannot change.", input: { applicationId: "optional: new when absent", step: "screen to resume on", data: "answers so far", productId: "optional", submit: "optional" }, returns: "{ applicationId, status, step, updatedAt }", errors: ["APPLICATION_NOT_FOUND", "APPLICATION_LOCKED", "NOT_SUPPORTED"] },
   // ---- Cairo Amman Bank access journeys: outcomes come back as data ({ ok, code }) so a journey can route on them ----
-  { adapter: "cab.legalEntities.list", suggestedId: "legalEntities", description: "The legal entities a customer can choose from.", input: {}, returns: "Object map keyed by id: { id, name }. Save as legal.list and use with select source." },
+  { adapter: "cab.legalEntities.list", suggestedId: "legalEntities", description: "The legal entities a customer can choose from.", input: {}, returns: "Map by id: { id, name }. Save as legal.list and use with select source." },
   { adapter: "cab.captcha.generate", suggestedId: "captcha", description: "A picture-code challenge. The sandbox returns its text so a journey can show it.", input: {}, returns: "{ serviceKey, text }. Save as captcha; send serviceKey and what the customer typed to a call that checks it." },
   { adapter: "cab.captcha.verify", suggestedId: "captchaCheck", description: "Checks what the customer typed for a picture code.", input: { serviceKey: "captcha.serviceKey", value: "the typed text" }, returns: "{ ok }" },
   {
@@ -390,9 +390,9 @@ export const ADAPTER_CATALOG: AdapterInfo[] = [
   { adapter: "cab.device.setDefault", suggestedId: "setDefault", description: "Sets the default way to sign in; a PIN is six digits.", input: { mode: "'password' | 'pin' | 'biometric'", pin: "six digits, for pin" }, returns: "{ ok, default }", errors: ["INVALID_MODE", "PIN_INVALID"] },
   { adapter: "cab.device.verifyPin", suggestedId: "verifyPin", description: "Checks the sign-in PIN.", input: { pin: "six digits" }, returns: "{ ok }" },
   { adapter: "cab.preview.get", suggestedId: "preview", description: "Whether account preview before sign-in is on, and the balances it would show.", input: {}, returns: "{ enabled, accounts: map of { id, name, sub, balance, currency, maskedNumber }, asOf }" },
-  { adapter: "cab.preview.accounts", suggestedId: "previewAccounts", description: "The balances account preview shows before sign-in, ready for accountPicker.", input: {}, returns: "Object map keyed by account id: { id, name, balance, currency, maskedNumber }. Save as ctx.previewAccounts." },
+  { adapter: "cab.preview.accounts", suggestedId: "previewAccounts", description: "The balances account preview shows before sign-in, ready for accountPicker.", input: {}, returns: "Map by account id: { id, name, balance, currency, maskedNumber }. Save as ctx.previewAccounts." },
   { adapter: "cab.preview.set", suggestedId: "previewSet", description: "Turns account preview before sign-in on or off.", input: { enabled: "true or false" }, returns: "{ ok, enabled }" },
-  { adapter: "cab.language.list", suggestedId: "languages", description: "Languages the app offers.", input: {}, returns: "Object map keyed by language code: { id, name, sub }. Save as ctx.languages and use with select source." },
+  { adapter: "cab.language.list", suggestedId: "languages", description: "Languages the app offers.", input: {}, returns: "Map by language code: { id, name, sub }. Save as ctx.languages and use with select source." },
   { adapter: "cab.language.current", suggestedId: "currentLanguage", description: "The language the app uses now.", input: {}, returns: "{ current, name }" },
   { adapter: "cab.language.selection", suggestedId: "languageSelection", description: "Which language to show as selected on the language list: the one already picked, else the one in use.", input: { chosen: "the code picked so far, or empty" }, returns: "{ code, name }. Save as language so the list opens with it ticked." },
   { adapter: "cab.language.set", suggestedId: "setLanguage", description: "Changes the app language.", input: { code: "en_US, en_GB, fr_FR or ar_AE" }, returns: "{ ok, current, name }", errors: ["LANGUAGE_UNSUPPORTED"] },
@@ -420,7 +420,7 @@ export const ADAPTER_CATALOG: AdapterInfo[] = [
     adapter: "cab.recover.resetPassword", suggestedId: "resetPassword", description: "Sets a new password. The one-time code (bank.otp.send then bank.otp.verify) must be verified first.", input: { password: "text", confirm: "text, optional" },
     returns: "{ ok: true } or { ok: false, code: 'MISMATCH' | 'POLICY', problems }", requiresOtp: true, errors: ["VERIFY_FIRST", "OTP_REQUIRED"],
   },
-  { adapter: "cab.locations.search", suggestedId: "locations", description: "Branches and ATMs.", input: { kind: "'branch' | 'atm' | 'all'", rangeMiles: "5, 10, 25, 50 or 100", query: "optional text" }, returns: "Object map keyed by location id: { id, name, sub }. Save as loc.found; use len(loc.found) for the count and select source to list them." },
+  { adapter: "cab.locations.search", suggestedId: "locations", description: "Branches and ATMs.", input: { kind: "'branch' | 'atm' | 'all'", rangeMiles: "5, 10, 25, 50 or 100", query: "optional text" }, returns: "Map by location id: { id, name, sub }. Save as loc.found; use len(loc.found) for the count and select source to list them." },
   { adapter: "cab.locations.details", suggestedId: "locationDetail", description: "One branch or ATM.", input: { id: "location id" }, returns: "{ id, name, type, status, address, hours, phone, distanceKm, services }", errors: ["LOCATION_NOT_FOUND"] },
   // ---- Signing in (BankWorkx): answers are data; a journey that runs before sign-in uses persona "signed-out". Security's adapters (devices, PIN, password change, history) are in docs/BANKWORKX.md ----
   {

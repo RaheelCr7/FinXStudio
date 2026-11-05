@@ -4,6 +4,8 @@ import { JourneyRunner, type RunEvent } from "@finx/renderer-core";
 import { MockBank, SIGNED_OUT } from "@finx/mock-bank-api";
 import { simulate } from "./simulate";
 
+// the sandbox clock is pinned: the seeded sign-in dates and the password's age are read against it, not against the day the test runs
+const NOW = Date.parse("2026-11-03T10:00:00Z");
 const PW = "Bwx!Demo2026";
 const NEW_PW = "Granite-Lemon-92-River";
 const PIN = "504719";
@@ -31,7 +33,7 @@ describe("what a sign-in leaves behind", () => {
   });
 
   it("the events of a run carry only where the person was, never what they typed", async () => {
-    const bank = new MockBank(SIGNED_OUT, { conditions: { device: "new" } });
+    const bank = new MockBank(SIGNED_OUT, { now: NOW, conditions: { device: "new" } });
     const events: RunEvent[] = [];
     const runner = new JourneyRunner(Journey.parse(signIn), { adapter: (id, input) => bank.call(id, input), lang: "en", onEvent: (e) => events.push(e) });
     await runner.start();
@@ -57,7 +59,7 @@ describe("what a sign-in leaves behind", () => {
   });
 
   it("the bank never answers with a password, a PIN, a hash or the one-time code", async () => {
-    const bank = new MockBank(SIGNED_OUT, { conditions: { device: "known" } });
+    const bank = new MockBank(SIGNED_OUT, { now: NOW, conditions: { device: "known" } });
     const seen: unknown[] = [];
     for (const [a, i] of [
       ["bank.device.options", {}], ["bank.auth.signIn", { username: "alex.morgan", password: PW }], ["bank.auth.setQuickSignIn", { method: "pin", pin: PIN }],

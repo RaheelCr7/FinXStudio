@@ -51,6 +51,16 @@ describe("transactions and statements", () => {
     expect(Object.keys(await b.call("bank.transactions.list", { limit: 2 }))).toHaveLength(2);
     expect(await code(b.call("bank.transactions.list", { accountId: "nope" }))).toBe("ACCOUNT_NOT_FOUND");
   });
+  it("a limit is a whole number from 1 to 100; no limit gives the default, and anything else is refused rather than guessed", async () => {
+    const b = alex();
+    const all = Object.keys(await b.call("bank.transactions.list"));
+    expect(all.length).toBeGreaterThan(5);
+    expect(Object.keys(await b.call("bank.transactions.list", { limit: all.length - 1 }))).toEqual(all.slice(0, -1));
+    expect(Object.keys(await b.call("bank.transactions.list", { limit: "3" }))).toEqual(all.slice(0, 3));
+    expect(Object.keys(await b.call("bank.transactions.list", { limit: undefined }))).toEqual(all);
+    // -2 used to return all but the last two, NaN nothing and 0 everything
+    for (const limit of [-2, 0, NaN, 2.5, "abc", "-1", 101, Infinity, true, {}]) expect(await code(b.call("bank.transactions.list", { limit })), String(limit)).toBe("INVALID_INPUT");
+  });
   it("a statement adds up: opening plus credits and debits is the closing balance, and the closing is the ledger balance for a period to today", async () => {
     const s = await alex().call("bank.statements.get", { accountId: "acc_main", from: "2026-10-01", to: "2026-10-31" });
     expect(s.opening + s.credits + s.debits).toBeCloseTo(s.closing, 2);

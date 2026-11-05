@@ -71,7 +71,7 @@ export class RetailSandbox {
     this.savedNumbers = p.savedNumbers ?? [];
     this.fx = p.brand === "bankworkx" ? BANKWORKX_FX : DEFAULT_FX;
     this.flaws = host.flaws;
-    this.cab = new CabSandbox(p, { otpVerified: () => host.otp.verified, clearOtp: () => { host.otp.verified = false; } });
+    this.cab = new CabSandbox(p, { otpVerified: () => host.otp.verified, clearOtp: () => { host.otp.verified = false; }, now: () => host.now() });
   }
   private get otp(): OtpState { return this.host.otp; }
   private get conditions(): SandboxConditions { return this.host.conditions(); }
@@ -654,7 +654,9 @@ export class RetailSandbox {
         x.status = "cancelled"; x.endedOn = isoOf(this.now());
         return { ...base, status: "cancelled", cancelledOn: dayName(x.endedOn, true) };
       }
-      default: return this.runDue(input);
+      // the scheduler runs only when asked for by name: a misspelt schedule adapter must not move money
+      case "bank.schedules.runDue": return this.runDue(input);
+      default: throw new BankError("UNKNOWN_ADAPTER", `No sandbox handler for ${adapter}`);
     }
   }
   /**

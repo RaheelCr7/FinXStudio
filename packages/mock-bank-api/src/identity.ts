@@ -14,6 +14,22 @@ export const PERSONAL_PERMISSIONS = [
   "profile.update", "messages.send", "security.manage",
 ];
 
+/**
+ * What a call in the personal context needs, beyond being signed in: the permission of the adapter, and one more for what the input asks it to
+ * keep or repeat (a payee or biller saved with it, a payment set for later or on repeat). Reading, quoting and checking need none here.
+ * The company adapters have the same rule in business/business.ts (NEEDS).
+ */
+export function personalNeeds(adapter: string, input: Record<string, any> = {}): string[] {
+  const need: string[] = [];
+  if (/^bank\.(transfers\.(create|own)|payments\.create|fx\.convert|bills\.pay|topup\.create)$/.test(adapter)) need.push("payments.create");
+  else if (/^bank\.schedules\.(create|update|cancel)$/.test(adapter)) need.push("payments.schedule");
+  else if (/^bank\.payees\.(save|update|delete)$/.test(adapter)) need.push("beneficiaries.manage");
+  if (adapter === "bank.payments.create" && input.when === "later") need.push("payments.schedule");
+  if (adapter === "bank.bills.pay" && input.autopay === true) need.push("payments.schedule");
+  if ((adapter === "bank.payments.create" || adapter === "bank.bills.pay" || adapter === "bank.topup.create") && input.save === true) need.push("beneficiaries.manage");
+  return need;
+}
+
 const BIZ_BY_ROLE: Record<CorpRole, string[]> = {
   initiator: [
     "biz.accounts.view", "biz.accounts.export", "biz.payments.initiate", "biz.payments.bulk", "biz.payroll.run", "biz.payments.schedule",
@@ -45,8 +61,8 @@ export type ContextInfo = {
 };
 
 /** Builds the context list from the identity and the live company data (limits change as payments are made). */
-export function contextsOf(def: IdentityDef, personal: { name: string; limits: Record<string, number | string> }, companies: Record<string, CorpCompany>): ContextInfo[] {
-  const out: ContextInfo[] = [{ id: "personal", label: "Personal", workspace: "personal", roles: [], permissions: PERSONAL_PERMISSIONS, limits: personal.limits, access: "active" }];
+export function contextsOf(def: IdentityDef, personal: { name: string; limits: Record<string, number | string>; /** What the person holds here; all of PERSONAL_PERMISSIONS when left out. */ permissions?: string[] }, companies: Record<string, CorpCompany>): ContextInfo[] {
+  const out: ContextInfo[] = [{ id: "personal", label: "Personal", workspace: "personal", roles: [], permissions: personal.permissions ?? PERSONAL_PERMISSIONS, limits: personal.limits, access: "active" }];
   for (const b of def.business) {
     const c = companies[b.id] ?? b.company;
     const me = c.users.find((u) => u.id === b.userId);

@@ -294,6 +294,14 @@ describe("Settings > Security", () => {
     expect(a.securityView()?.data?.devices.text).toBe("3 of 5");
   });
 
+  it("the history window is counted from the app's clock (the sandbox's), so it does not empty as the real calendar moves on", async () => {
+    vi.useFakeTimers({ toFake: ["Date"] });
+    vi.setSystemTime(Date.parse("2028-01-01T00:00:00Z")); // long after the seeded sign-ins, which are dated at the demo's early November
+    const a = await alex();
+    await a.loadHistoryView(NO_FILTERS, "dev_iphone15");
+    expect(a.historyView(NO_FILTERS)?.data?.total).toBe(12);
+  });
+
   it("turning biometrics off goes to the PIN if there is one, else the password, with no step-up; a failure says so and leaves it as it was", async () => {
     const a = await alex();
     await a.loadSecurityView();
