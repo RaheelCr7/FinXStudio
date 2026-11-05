@@ -1,6 +1,6 @@
 "use client";
 import { createContext, useContext, useEffect, useState, useSyncExternalStore } from "react";
-import { BankApp, createLive, isRtl, type AppState } from "@finx/bank-client";
+import { BankApp, IDLE, createLive, isRtl, type AppState } from "@finx/bank-client";
 import { parseTrustedKeys } from "@finx/journey-schema";
 import { sandboxAllowedFor, setSandboxPolicy } from "@finx/mock-bank-api";
 import type { BrandLook, Preset } from "@finx/ui-kit";
@@ -16,6 +16,15 @@ const write = (v: Saved) => { try { sessionStorage.setItem(KEY, JSON.stringify(v
 
 /** The device the sandbox bank sees: the browser, which a customer can trust so that the next sign-in asks for no code. */
 const BROWSER = { id: "dev_web", name: "This browser", kind: "browser" as const };
+/**
+ * The session timeout of a BankWorkx session: five quiet minutes, with a warning for the last one. NEXT_PUBLIC_FINX_IDLE_SECONDS shortens it for a
+ * demo or a check on screen (a quarter of it, at most 60 seconds, is the warning); it is a setting of the build, never of the address.
+ */
+const idleConfig = () => {
+  const n = Number(process.env.NEXT_PUBLIC_FINX_IDLE_SECONDS);
+  const idleSeconds = Number.isFinite(n) && n >= 8 ? Math.floor(n) : IDLE.idleSeconds;
+  return { idleSeconds, warningSeconds: Math.min(IDLE.warningSeconds, Math.max(4, Math.floor(idleSeconds / 4))) };
+};
 const reducedMotion = () => typeof matchMedia === "function" && matchMedia("(prefers-reduced-motion: reduce)").matches;
 
 /**
@@ -23,7 +32,7 @@ const reducedMotion = () => typeof matchMedia === "function" && matchMedia("(pre
  * only who is signed in and the language are remembered for the tab.
  */
 function AppProviderInner({ project, children }: { project: ProjectInfo; children: React.ReactNode }) {
-  const [app] = useState(() => new BankApp({ preset: project.preset, projectId: project.id, bankApi: project.bankApi, live: createLive({ brand: project.id, trustedKeys: parseTrustedKeys(process.env.NEXT_PUBLIC_FINX_TRUSTED_KEYS) }), studioUrl: "/api/studio", switchMs: reducedMotion() ? 250 : 900, signIn: project.signIn, device: BROWSER }));
+  const [app] = useState(() => new BankApp({ preset: project.preset, projectId: project.id, bankApi: project.bankApi, live: createLive({ brand: project.id, trustedKeys: parseTrustedKeys(process.env.NEXT_PUBLIC_FINX_TRUSTED_KEYS) }), studioUrl: "/api/studio", switchMs: reducedMotion() ? 250 : 900, signIn: project.signIn, device: BROWSER, ...(project.shell === "bankworkx" ? { idle: idleConfig() } : {}) }));
   const [ready, setReady] = useState(false);
 
   useEffect(() => {

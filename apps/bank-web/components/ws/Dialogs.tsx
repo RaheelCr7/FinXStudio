@@ -31,21 +31,30 @@ export function SwitcherDialog({ open, onClose }: { open: boolean; onClose: () =
   );
 }
 
-/** "Confirm it's you": the password, then the code the bank sent. Opens when the bank asks for it before a company. */
+/**
+ * "Confirm it's you": the password (or the quick PIN, when that is how this device signs in), then the code the bank sent. Opens when the bank asks
+ * for it before a company, and before a security journey (Change password, Trusted devices, ...).
+ */
 export function StepUpDialog() {
   const { app, s } = useWs();
   const su = s.stepUp;
   const [secret, setSecret] = useState("");
   const [code, setCode] = useState("");
+  const [usePassword, setUsePassword] = useState(false);
   const target = s.session.info?.contexts.find((c) => c.id === su?.contextId);
-  useEffect(() => { if (!su) { setSecret(""); setCode(""); } }, [su]);
+  useEffect(() => { if (!su) { setSecret(""); setCode(""); setUsePassword(false); } }, [su]);
+  const pin = su?.method === "pin" && !usePassword;
+  const why = su?.reason ?? (target && !su?.then ? `To open ${target.label}.` : "");
   return (
     <Modal open={!!su} onClose={() => app.cancelStepUp()} title="Confirm it's you">
       {su ? (
-        <form className="ws-form" onSubmit={(e) => { e.preventDefault(); void (su.phase === "password" ? app.beginStepUp({ secret }) : app.confirmStepUp(code)); }}>
-          <p className="wb-muted">{target ? `To open ${target.label}.` : ""}</p>
+        <form className="ws-form" onSubmit={(e) => { e.preventDefault(); void (su.phase === "password" ? app.beginStepUp({ method: pin ? "pin" : "password", secret }) : app.confirmStepUp(code)); }}>
+          <p className="wb-muted">For your security, confirm it’s you first. {why}</p>
           {su.phase === "password" ? (
-            <label>Password<input type="password" autoComplete="current-password" value={secret} onChange={(e) => setSecret(e.target.value)} autoFocus aria-invalid={!!su.error} aria-describedby={su.error ? "ws-su-error" : undefined} /></label>
+            <>
+              <label>{pin ? "Quick PIN" : "Password"}<input type="password" inputMode={pin ? "numeric" : undefined} maxLength={pin ? 6 : undefined} autoComplete={pin ? "off" : "current-password"} value={secret} onChange={(e) => setSecret(pin ? e.target.value.replace(/\D/g, "") : e.target.value)} autoFocus aria-invalid={!!su.error} aria-describedby={su.error ? "ws-su-error" : undefined} /></label>
+              {pin ? <button type="button" className="wb-link" onClick={() => { setUsePassword(true); setSecret(""); }}>Use password instead</button> : null}
+            </>
           ) : (
             <label>Code sent to {su.phone}<input inputMode="numeric" autoComplete="one-time-code" pattern="[0-9]*" maxLength={6} value={code} onChange={(e) => setCode(e.target.value.replace(/\D/g, ""))} autoFocus aria-invalid={!!su.error} aria-describedby={su.error ? "ws-su-error" : undefined} /></label>
           )}

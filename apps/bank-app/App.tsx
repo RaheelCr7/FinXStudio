@@ -161,7 +161,7 @@ function MeezanApp() {
  */
 function BankworkxApp() {
   // BankWorkx has a real sign-in (the sign-in journey); the phone is the device the bank sees, so a trusted phone asks for no code next time
-  const [app] = useState(() => new BankApp({ preset: BRAND_INFO.preset, bankApi: BRAND_INFO.bankApi, live, studioUrl: DEFAULT_STUDIO_URL, switchMs: 900, signIn: true, device: { id: "dev_phone", name: "This phone", kind: "phone" } }));
+  const [app] = useState(() => new BankApp({ preset: BRAND_INFO.preset, bankApi: BRAND_INFO.bankApi, live, studioUrl: DEFAULT_STUDIO_URL, switchMs: 900, signIn: true, device: { id: "dev_phone", name: "This phone", kind: "phone" }, idle: true, keepPlace: true }));
   const s = useBankApp(app);
   const device = useColorScheme();
   useEffect(() => { loadStudioUrl().then((u) => app.setStudioUrl(u)); return () => app.dispose(); }, [app]);

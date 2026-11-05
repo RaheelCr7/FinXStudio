@@ -105,7 +105,7 @@ describe("switching to a company", () => {
     const su = await screen.findByRole("dialog", { name: "Confirm it's you" });
     await userEvent.type(within(su).getByLabelText("Password"), "wrong");
     await userEvent.click(within(su).getByRole("button", { name: "Continue" }));
-    expect(await within(su).findByRole("alert")).toHaveProperty("textContent", "That password isn't right.");
+    expect(await within(su).findByRole("alert")).toHaveProperty("textContent", "That password isn't right. 4 tries left.");
     expect(document.documentElement.dataset.workspace).toBe("personal");
   });
   it("offers to switch for an address into a company, and goes back to Personal when declined", async () => {
@@ -167,5 +167,139 @@ describe("the command bar", () => {
     expect(screen.getAllByRole("option")).toHaveLength(1);
     await userEvent.keyboard("{Enter}");
     expect(nav.push).toHaveBeenCalledWith("/bankworkx/personal/j/mobile-topup");
+  });
+});
+
+describe("Settings > Security and the session", () => {
+  it("the More tab has a Security row that goes to its page", async () => {
+    shell("/bankworkx/personal/more");
+    const link = await screen.findByRole("link", { name: /Security/ });
+    expect(link.getAttribute("href")).toBe("/bankworkx/personal/more/settings/security");
+  });
+
+  it("draws the password, the sign-in methods, the devices and the login history, with the buttons the place may use and no biometrics on the web, without accessibility violations", async () => {
+    const { container } = shell("/bankworkx/personal/more/settings/security");
+    expect(await screen.findByRole("heading", { name: "Security", level: 1 })).toBeTruthy();
+    expect(await screen.findByText("Last changed 2 May 2026")).toBeTruthy();
+    expect(screen.getByText("3 of 5")).toBeTruthy();
+    expect(screen.getByText("Not set")).toBeTruthy();
+    for (const name of ["Change password", "Set up", "Change", "Manage"]) expect(screen.getAllByRole("button", { name }).length).toBeGreaterThan(0);
+    expect(screen.queryByText(/Biometrics/)).toBeNull();
+    // the history: twelve sign-ins, the chips say what happened, the address is partly hidden
+    expect(await screen.findByRole("table")).toBeTruthy();
+    const rows = within(screen.getByRole("table"));
+    expect(rows.getAllByText("Signed in").length).toBeGreaterThan(5);
+    expect(rows.getByText("Wrong password")).toBeTruthy();
+    expect(screen.getByText("New device code")).toBeTruthy();
+    expect(screen.queryByText(/\d+\.\d+\.\d+\.\d+(?!•)/)).toBeNull();
+    expect(await axeCheck(container)).toHaveNoViolations();
+  });
+
+  it("filters the history: the result, and a way back when nothing matches", async () => {
+    shell("/bankworkx/personal/more/settings/security");
+    await screen.findByRole("table");
+    await userEvent.selectOptions(screen.getByLabelText("Result"), "failed");
+    const table = () => within(screen.getByRole("table"));
+    await waitFor(() => expect(table().queryByText("New device code")).toBeTruthy());
+    expect(table().queryAllByText("Signed in")).toHaveLength(0);
+    await userEvent.click(screen.getByRole("button", { name: "Clear filters" }));
+    await waitFor(() => expect(table().getAllByText("Signed in").length).toBeGreaterThan(5));
+    await userEvent.selectOptions(screen.getByLabelText("Period"), "7");
+    await waitFor(() => expect(table().queryByText("Wrong password")).toBeNull());
+  });
+
+  it("opens a row's details with the way to change the password", async () => {
+    shell("/bankworkx/personal/more/settings/security");
+    await userEvent.click((await screen.findAllByRole("button", { name: /Nov 2026/ }))[0]!);
+    const d = await screen.findByRole("dialog", { name: "Sign-in details" });
+    expect(within(d).getByText("How you signed in")).toBeTruthy();
+    expect(within(d).getByText(/We also recommend you change your password/)).toBeTruthy();
+    expect(within(d).getByRole("button", { name: "Change password" })).toBeTruthy();
+  });
+
+  it("asks it is the person before a security journey (password, then code) and opens the journey once it is, then not again for five minutes", async () => {
+    shell("/bankworkx/personal/more/settings/security");
+    await userEvent.click((await screen.findAllByRole("button", { name: "Manage" }))[0]!);
+    const su = await screen.findByRole("dialog", { name: "Confirm it's you" });
+    expect(within(su).getByText(/To trusted devices\./)).toBeTruthy();
+    await userEvent.type(within(su).getByLabelText("Password"), "nope");
+    await userEvent.click(within(su).getByRole("button", { name: "Continue" }));
+    expect((await within(su).findByRole("alert")).textContent).toBe("That password isn't right. 4 tries left.");
+    expect(nav.push).not.toHaveBeenCalled();
+    await userEvent.clear(within(su).getByLabelText("Password"));
+    await userEvent.type(within(su).getByLabelText("Password"), "Bwx!Demo2026");
+    await userEvent.click(within(su).getByRole("button", { name: "Continue" }));
+    await userEvent.type(await within(su).findByLabelText(/^Code sent to/), "000000");
+    await userEvent.click(within(su).getByRole("button", { name: "Continue" }));
+    await waitFor(() => expect(nav.push).toHaveBeenCalledWith("/bankworkx/personal/j/trusted-devices"));
+    // a second one inside the five minutes goes straight in
+    nav.push.mockClear();
+    await userEvent.click((await screen.findAllByRole("button", { name: "Change password" }))[0]!);
+    await waitFor(() => expect(nav.push).toHaveBeenCalledWith("/bankworkx/personal/j/change-password"));
+    expect(screen.queryByRole("dialog", { name: "Confirm it's you" })).toBeNull();
+  });
+
+  it("a security journey opened by its address asks first too, and Back leaves", async () => {
+    shell("/bankworkx/personal/j/change-password");
+    expect(await screen.findByText("Confirm it’s you first")).toBeTruthy();
+    expect(await screen.findByRole("dialog", { name: "Confirm it's you" })).toBeTruthy();
+    await userEvent.click(within(screen.getByRole("dialog", { name: "Confirm it's you" })).getByRole("button", { name: "Cancel" }));
+    await userEvent.click(screen.getByRole("button", { name: "Back" }));
+    expect(nav.push).toHaveBeenCalledWith("/bankworkx/personal/more/settings/security");
+  });
+
+  it("warns before the timeout, keeps the session on request and signs out when the time is up", async () => {
+    const real = Date.now();
+    shell("/bankworkx/personal/home");
+    await screen.findByText("$23,975.13");
+    const at = (s: number) => vi.spyOn(Date, "now").mockReturnValue(real + s * 1000);
+    at(250); (app as any).idleTick();
+    const warn = await screen.findByRole("dialog", { name: "Still there?" });
+    expect(within(warn).getByText(/we’ll sign you out in/)).toBeTruthy();
+    expect(within(warn).getByText(/^5[01]$/)).toBeTruthy();
+    await userEvent.click(within(warn).getByRole("button", { name: "Stay signed in" }));
+    await waitFor(() => expect(screen.queryByRole("dialog", { name: "Still there?" })).toBeNull());
+    expect(app.getState().screen).toBe("app");
+    at(250 + 300); (app as any).idleTick();
+    await waitFor(() => expect(nav.replace).toHaveBeenCalledWith("/bankworkx/login?next=%2Fbankworkx%2Fpersonal%2Fhome"));
+    expect(app.getState()).toMatchObject({ screen: "login", notice: "expired" });
+    vi.restoreAllMocks();
+  });
+
+  it("Log out asks once, and Cancel changes nothing", async () => {
+    shell("/bankworkx/personal/home");
+    await screen.findByText("$23,975.13");
+    await userEvent.click(screen.getByRole("button", { name: "Menu" }));
+    await userEvent.click(await screen.findByRole("button", { name: "Log out" }));
+    const d = await screen.findByRole("dialog", { name: "Sign out?" });
+    expect(within(d).getByText("You’ll need to sign in again.")).toBeTruthy();
+    await userEvent.click(within(d).getByRole("button", { name: "Cancel" }));
+    expect(app.getState().screen).toBe("app");
+    await userEvent.click(screen.getByRole("button", { name: "Menu" }));
+    await userEvent.click(await screen.findByRole("button", { name: "Log out" }));
+    await userEvent.click(within(await screen.findByRole("dialog", { name: "Sign out?" })).getByRole("button", { name: "Sign out" }));
+    expect(app.getState().screen).toBe("login");
+    expect(nav.replace).toHaveBeenCalledWith("/bankworkx/login");
+    expect(sessionStorage.getItem("finx.session") ?? "").not.toContain("\"signedIn\":true");
+  });
+
+  it("says when the network is gone and when it is back", async () => {
+    shell("/bankworkx/personal/home");
+    await screen.findByText("$23,975.13");
+    window.dispatchEvent(new Event("offline"));
+    expect((await screen.findByRole("status", { name: "" })).textContent ?? "").toContain("You’re offline. We’ll reconnect when you are.");
+    window.dispatchEvent(new Event("online"));
+    expect(await screen.findByText("You’re back online")).toBeTruthy();
+  });
+
+  it("a screen that cannot load says the bank is unavailable and offers to try again, keeping what was there", async () => {
+    shell("/bankworkx/personal/cards");
+    await screen.findByRole("heading", { name: "Cards", level: 1 });
+    app.bank.conditions = { unavailable: ["bank.cards.issued"] };
+    await app.loadShell("cards", true);
+    expect((await screen.findByRole("alert")).textContent).toContain("This service is not available right now");
+    app.bank.conditions = {};
+    await userEvent.click(screen.getByRole("button", { name: "Try again" }));
+    await waitFor(() => expect(screen.queryByRole("alert")).toBeNull());
   });
 });

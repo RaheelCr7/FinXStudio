@@ -12,6 +12,8 @@ export type SecurityVm = {
   /** The device in hand can do fingerprint or face sign-in (a flag the bank holds for the device; the browser cannot, the phone can). */
   biometrics: { available: boolean; on: boolean; helper?: string };
   device: { id: string; name: string };
+  /** The trusted devices, for the Device filter of the history. */
+  deviceList: { id: string; name: string }[];
 };
 
 const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
@@ -35,6 +37,7 @@ export async function loadSecurity(call: Call): Promise<SecurityVm> {
     devices: { count: list.count, max: list.max, text: `${list.count} of ${list.max}` },
     biometrics: { available, on: opt.quick === "biometric" && mode === "biometric", ...(available ? {} : { helper: NO_BIOMETRICS }) },
     device: { id: opt.device?.id ?? "", name: opt.device?.name ?? "" },
+    deviceList: (list.items ?? []).map((d: any) => ({ id: d.id, name: d.current ? `${d.name} (this device)` : d.name })),
   };
 }
 
@@ -62,10 +65,4 @@ export async function loadHistory(call: Call, q: HistoryQuery, currentDeviceId: 
     thisDevice: h.deviceId === currentDeviceId, place: h.place, ip: h.ipMasked, how: HOW[h.method] ?? h.method,
   }));
   return { rows, total: a.total, page: q.page, pages: Math.max(1, Math.ceil(a.total / HISTORY_PAGE)), none: a.total === 0 && !filtersOn(q) };
-}
-
-/** The devices to choose in the Device filter: the trusted ones and any the history mentions. */
-export async function loadHistoryDevices(call: Call): Promise<{ id: string; name: string }[]> {
-  const list = await call("bank.devices.list");
-  return (list.items ?? []).map((d: any) => ({ id: d.id, name: d.name }));
 }

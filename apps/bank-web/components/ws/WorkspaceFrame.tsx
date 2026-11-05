@@ -101,12 +101,12 @@ export function WorkspaceFrame({ children }: { children: React.ReactNode }) {
       <OfferDialog />
       <SwitchingOverlay />
 
-      <Modal open={s.sheet === "menu"} onClose={() => app.closeSheet()} title={info.identity.name}>
+      <Modal open={s.sheet === "menu"} onClose={() => { if (app.getState().sheet === "menu") app.closeSheet(); }} title={info.identity.name}>
         <fieldset className="ws-scheme">
           <legend>Appearance</legend>
           {SCHEMES.map(([id, name]) => <label key={id}><input type="radio" name="scheme" checked={s.prefs.scheme === id} onChange={() => app.setPrefs({ scheme: id })} /><span>{name}</span></label>)}
         </fieldset>
-        <button type="button" className="wb-btn wb-btn-danger" onClick={() => { app.logout(); router.push(`/${project.id}/login`); }}>Log out</button>
+        <button type="button" className="wb-btn wb-btn-danger" onClick={() => app.askSignOut()}>Log out</button>
       </Modal>
 
       <div className="wb-toast-zone" aria-live="polite">
