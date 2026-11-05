@@ -1,6 +1,6 @@
 import type { Journey } from "../schema";
 
-/** What must be true for "Abroad" to be right. The rules are those of Send money for "To another country"; this is the same flow, opened at its first step. */
+/** What must be true for "Abroad" to be right. The rules are those of Send money for "To another country"; this journey opens Send money (launch value launch.type) so it is the same flow, opened at its first step. */
 export const internationalTransferAcceptance: NonNullable<Journey["acceptance"]> = [
   { id: "AC-1", text: "It opens at the payee step with no choice of type: saved payees abroad first, or straight to a new payee when there are none. When the bank has switched this way of sending off (opt.typeIntl) it says \"Nothing to send with\"." },
   { id: "AC-2", text: "A new payee asks for the country, the name, the country's identifier (an IBAN or an account number) and, for Canada, India and Australia, a bank code; and the SWIFT/BIC. Each is checked, with the bank's own checks after the format." },
@@ -63,11 +63,12 @@ export const internationalTransferScenarios: NonNullable<Journey["scenarios"]> =
     ],
   },
   {
-    id: "T-4", name: "When the bank has switched this way of sending off: Nothing to send with; the other ways being off changes nothing", covers: ["AC-1"], ...base,
-    steps: [
-      set({ "opt.typeInternal": false, "opt.typeDomestic": false }), press("Back"), screen("payee"),
-      set({ "opt.typeIntl": false }), press("Back"), screen("type"), text("Nothing to send with"), text("Sending money isn’t available right now."), press("Continue"),
-    ],
+    id: "T-4", name: "When the bank has switched this way of sending off: Nothing to send with", covers: ["AC-1"], ...base, launch: { "opt.typeIntl": false },
+    steps: [screen("off"), text("Nothing to send with"), text("Sending money isn’t available right now."), noText("Who are you paying?"), press("Continue")],
+  },
+  {
+    id: "T-33", name: "The other ways of sending being off changes nothing: it still opens at the payee step", covers: ["AC-1"], ...base, launch: { "opt.typeInternal": false, "opt.typeDomestic": false },
+    steps: [{ expectOpens: { journey: "personal-transfer", with: { "launch.type": "international" } } }, screen("payee")],
   },
   {
     id: "T-5", name: "The purpose is needed, and the bank says so with the words of the screen", covers: ["AC-3"], ...base,

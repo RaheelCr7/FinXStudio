@@ -1,7 +1,7 @@
 import type { Journey, Screen, Block } from "@finx/journey-schema";
 import { evaluate, getPath, setPath } from "./expr";
 import { currencyInfo } from "@finx/ui-kit";
-import { interpolate, localize } from "./template";
+import { interpolate, localize, wholeExpression } from "./template";
 import { ui } from "./strings";
 import { cardExpiryValid, luhnValid } from "./card";
 import { balanceRows } from "./blocks/pickers";
@@ -21,8 +21,18 @@ export type RunEvent =
   | { type: "invalid"; screen: string; fields: string[] }
   | { type: "apiError"; screen: string; integration: string; code: string }
   | { type: "back"; screen: string }
-  | { type: "exit"; screen: string };
-export type RunnerOptions = { adapter: Adapter; lang?: string; onEvent?: (e: RunEvent) => void };
+  | { type: "exit"; screen: string }
+  /** The journey asked to open another one. Only the target's name, never the values. */
+  | { type: "chain"; screen: string; journey: string };
+/** A journey asking the app to open another one: the target's slug and the values to start it with, by data path. */
+export type ChainRequest = { journey: string; launch: Record<string, any>; returnTo?: string };
+export type RunnerOptions = {
+  adapter: Adapter; lang?: string; onEvent?: (e: RunEvent) => void;
+  /** Values at data paths that are there before the entry screen runs, so it can branch on them. */
+  launch?: Record<string, any>;
+  /** Opens another journey in place of this one (navigate.toJourney). Without it the request is refused with a message on the screen. */
+  openJourney?: (req: ChainRequest) => void;
+};
 export type ViewBlock = Block & { _error?: string };
 export type View = {
   screenId: string;
@@ -46,6 +56,8 @@ export class JourneyRunner {
   toast?: string;
   busy = false;
   exited = false;
+  /** Set once this journey has handed over to another one; the app replaces the player. */
+  chained?: ChainRequest;
   private otpFailures = 0;
   private listeners = new Set<() => void>();
   lang: string;
@@ -69,7 +81,11 @@ export class JourneyRunner {
   private scope() { return this.state; }
   private tx(t: any) { return interpolate(localize(t, this.lang, this.journey.locale.default), this.scope()); }
 
-  async start() { await this.enter(this.journey.entryScreen); }
+  async start() {
+    // launch values come first: the entry screen's onEnter, branches and navigation rules can read them
+    for (const [path, value] of Object.entries(this.opts.launch ?? {})) setPath(this.state, path, value);
+    await this.enter(this.journey.entryScreen);
+  }
 
   private async enter(id: string) {
     this.current = id;
@@ -162,6 +178,7 @@ export class JourneyRunner {
           break;
         case "navigate": {
           const rule = this.screen.navigation?.rules ? this.nextAfterNav(undefined) : undefined;
+          if (!rule && a.toJourney) { this.chain(a); return; }
           const target = rule ?? a.to;
           if (!target) return;
           this.history.push(this.current);
@@ -170,8 +187,8 @@ export class JourneyRunner {
         }
         case "setData": {
           // a value that is a whole {{expression}} is read from the journey's data now (for example the username that was found)
-          const whole = typeof a.value === "string" ? /^\{\{\s*([^}]+?)\s*\}\}$/.exec(a.value) : null;
-          setPath(this.state, a.path, whole ? this.safeEval(whole[1]!) : a.value);
+          const whole = wholeExpression(a.value);
+          setPath(this.state, a.path, whole ? this.safeEval(whole) : a.value);
           break;
         }
         case "showToast": this.toast = this.tx(a.text); this.emit(); break;
@@ -204,13 +221,29 @@ export class JourneyRunner {
     }
   }
 
+  /** Hands over to another journey. Values that are {{templates}} are read from this journey's data now; bank options (opt.*) go along, they belong to the bank. */
+  private chain(a: any) {
+    const launch: Record<string, any> = {};
+    const opt = this.state.opt;
+    if (opt && typeof opt === "object") for (const [k, v] of Object.entries(opt)) launch[`opt.${k}`] = v;
+    for (const [path, v] of Object.entries<any>(a.with ?? {})) {
+      const whole = wholeExpression(v);
+      launch[path] = whole ? this.safeEval(whole) : typeof v === "string" && v.includes("{{") ? interpolate(v, this.scope()) : v;
+    }
+    const req: ChainRequest = { journey: a.toJourney, launch, ...(a.returnTo ? { returnTo: a.returnTo } : {}) };
+    this.note({ type: "chain", screen: this.current, journey: a.toJourney });
+    if (!this.opts.openJourney) { this.toast = ui(this.lang, "journeyNotLoaded"); this.emit(); return; }
+    this.chained = req;
+    this.emit();
+    this.opts.openJourney(req);
+  }
+
   private resolveInput(input: Record<string, any>): Record<string, any> {
     const out: Record<string, any> = {};
     for (const [k, v] of Object.entries(input)) {
-      if (typeof v === "string" && /^\{\{\s*[^}]+\s*\}\}$/.test(v)) {
-        const expr = v.replace(/^\{\{\s*|\s*\}\}$/g, "");
-        out[k] = this.safeEval(expr);
-      } else out[k] = v;
+      const expr = wholeExpression(v);
+      if (expr) out[k] = this.safeEval(expr);
+      else out[k] = v;
     }
     return out;
   }

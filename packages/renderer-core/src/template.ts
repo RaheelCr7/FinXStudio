@@ -13,9 +13,22 @@ export const FORMATTERS: Record<string, (v: any, arg?: string) => string> = {
   upper: (v) => String(v ?? "").toUpperCase(),
 };
 
+/**
+ * The expression of a value that is exactly one {{ expression }} (trimmed), or null. Plain string handling, not a pattern with
+ * overlapping parts, so a journey full of braces and spaces cannot make it slow.
+ */
+export function wholeExpression(v: unknown): string | null {
+  if (typeof v !== "string" || !v.startsWith("{{") || !v.endsWith("}}") || v.length < 5) return null;
+  const inner = v.slice(2, -2);
+  if (inner.includes("}") || inner.includes("{")) return null;
+  return inner.trim() || null;
+}
+
 /** Interpolates {{ expr | formatter }} using the safe evaluator. Missing values render as empty string. */
 export function interpolate(text: string, scope: any): string {
-  return text.replace(/\{\{\s*([^}]+?)\s*\}\}/g, (_m, inner: string) => {
+  return text.replace(/\{\{([^{}]*)\}\}/g, (match, raw: string) => {
+    const inner = raw.trim();
+    if (!inner) return match;
     const [exprPart, fmtPart] = inner.split("|").map((s) => s.trim());
     const [fmt, argPart] = (fmtPart ?? "").split(":").map((s) => s.trim());
     let val: any;

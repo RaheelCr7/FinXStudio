@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import * as matchers from "vitest-axe/matchers";
-import { cabJourneys, localTransfer, payBill } from "@finx/journey-schema";
+import { cabJourneys, internalTransfer, localTransfer, mobileTopup, payBill } from "@finx/journey-schema";
 import { MockBank } from "@finx/mock-bank-api";
 import { JourneyPlayer } from "./JourneyPlayer";
 import { axeCheck } from "./test-utils";
@@ -79,6 +79,22 @@ describe("JourneyPlayer", () => {
     expect(screen.getByRole("heading", { level: 1 }).textContent).toBe("بل ادا کریں");
     expect(screen.getByRole("button", { name: "میرا بل تلاش کریں" })).toBeTruthy();
     expect(screen.getByRole("button", { name: "بند کریں" })).toBeTruthy();
+  });
+
+  it("opens at the step the launch values choose, before the first screen shows", async () => {
+    player(mobileTopup, { launch: { "launch.operatorId": "bright" } }, "alextopup");
+    expect((await screen.findByRole("heading", { level: 1 })).textContent).toBe("Mobile number");
+    expect(screen.queryByText("Choose your operator")).toBeNull();
+  });
+
+  it("hands over to the journey a journey opens, and says so when the app cannot", async () => {
+    const asked: any[] = [];
+    const first = player(internalTransfer, { onOpenJourney: (r: any) => asked.push(r) }, "alexpayees");
+    await waitFor(() => expect(asked).toEqual([{ journey: "personal-transfer", launch: { "launch.type": "internal" } }]));
+    first.unmount();
+    // no app to open it (the Studio preview): the person sees why nothing happened, nothing breaks
+    player(internalTransfer, {}, "alexpayees");
+    expect((await screen.findByRole("alert")).textContent).toBe("This step opens another journey, which is not loaded here.");
   });
 
   it("fills in initial answers and plays a journey with a card-style multi-field screen", async () => {

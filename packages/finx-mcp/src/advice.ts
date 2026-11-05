@@ -1,8 +1,10 @@
-import type { Journey, LintIssue } from "@finx/journey-schema";
+import { bankworkxJourneys, cabJourneys, catalog, chainWarnings, type Journey, type LintIssue } from "@finx/journey-schema";
 import { ADAPTER_CATALOG } from "@finx/mock-bank-api";
 import { lintAll } from "@finx/renderer-core";
 
 const KNOWN = new Set(ADAPTER_CATALOG.map((a) => a.adapter));
+/** The journeys another journey may open with navigate.toJourney: the shipped ones (the catalog, BankWorkx, CAB). */
+export const SHIPPED_SLUGS = [...new Set([...catalog.map((c) => c.id), ...bankworkxJourneys.map((j) => j.slug), ...cabJourneys.map((j) => j.slug)])];
 
 /** Blocking problems: everything Studio refuses to publish on, plus integrations that do not exist in the sandbox. */
 export function lintForAgent(j: Journey): LintIssue[] {
@@ -23,6 +25,7 @@ export function adviceFor(j: Journey): string[] {
     for (const a of actions) if (a.type === "callApi" && !a.onError) out.push(`Screen "${s.id}": callApi "${a.integration}" has no onError, so a failure would break the journey. Add onError (show a message, or navigate to a failed screen).`);
     if (s.kind !== "terminal" && !(s.blocks as any[]).some((b) => b.type === "button")) out.push(`Screen "${s.id}" has no button, so the customer cannot leave it.`);
   }
+  for (const w of chainWarnings(j, SHIPPED_SLUGS)) out.push(w.message);
   if (j.screens.length > 10) out.push(`The journey has ${j.screens.length} screens. Aim for 3 to 8 so customers finish it.`);
   const moves = j.integrations.some((i) => ADAPTER_CATALOG.find((a) => a.adapter === i.adapter)?.moneyMoving);
   if (moves && !j.screens.some((s) => s.kind === "terminal" && (s.blocks as any[]).some((b) => b.type === "result" && b.tone === "error"))) out.push("A money-moving journey should end in a failed screen (terminal, with an error result) that says no money has left the account.");

@@ -54,6 +54,8 @@ export const mobileTopup: Journey = {
   acceptance: mobileTopupAcceptance,
   scenarios: mobileTopupScenarios,
   dataModel: {
+    // set by whoever opens the journey (a deep link, or another journey): the operator to start with
+    "launch.operatorId": { type: "string" },
     "tu.opId": { type: "string" },
     "tu.opName": { type: "string" },
     "tu.new": { type: "boolean" },
@@ -95,8 +97,13 @@ export const mobileTopup: Journey = {
         { type: "setData", path: "tu.consent", value: false },
         { type: "setData", path: "otp.code", value: "" },
         { type: "callApi", integration: "carriers", saveAs: "ctx.carriers", onError: toRoute },
+        // opened with an operator that exists (launch.operatorId, there before this screen ran): choose it and skip the operator step. It is used once, so Top up again asks again.
+        { type: "setData", path: "tu.opId", value: "{{get(get(ctx.carriers, launch.operatorId), 'id')}}" },
+        { type: "setData", path: "tu.opName", value: "{{get(get(ctx.carriers, launch.operatorId), 'name')}}" },
+        { type: "setData", path: "launch.operatorId", value: "" },
         { type: "navigate", to: "op" },
       ],
+      navigation: { rules: [{ when: "!isEmpty(tu.opId)", to: "num" }] },
       blocks: [],
     },
     {
