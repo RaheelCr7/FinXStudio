@@ -33,7 +33,7 @@ export const ALPHA: CorpCompany = {
   companyDailyLimit: 1_000_000, companyUsedToday: 0, dualApprovalAbove: 50_000, codeAbove: 25_000,
   cutoff: "16:00", holidays: ["2026-11-09"], paymentSeq: { prefix: "PAY", start: 2042 },
   templates: [
-    { id: "tpl_packaging", name: "Monthly packaging", beneficiaryId: "harb", amount: 4_500, reference: "PO-STANDING", purpose: "Goods or services" },
+    { id: "tpl_packaging", name: "Monthly packaging", beneficiaryId: "harb", amount: 4_500, reference: "PO-STANDING", purpose: "Goods" },
     { id: "tpl_freight", name: "Quarterly freight", beneficiaryId: "whit", reference: "FREIGHT-Q", purpose: "Services" },
   ],
   signatoryGroups: [
@@ -82,6 +82,15 @@ const pay = (p: Partial<CorpPayment> & Pick<CorpPayment, "id" | "companyId" | "f
   ({ currency: "USD", valueDate: p.initiatedAt.slice(0, 10), afterCutoff: false, ...p });
 
 /**
+ * A company that has just been set up, for the empty states: no accounts, no suppliers, no templates, no payments. Alex is its Maker (customer "alexempty").
+ */
+export const GAMMA: CorpCompany = {
+  id: "gamma", name: "Gamma Works Inc", currency: "USD", accounts: [],
+  users: [{ id: "alex", name: "Alex Morgan", roles: ["initiator"], dailyLimit: 250_000, usedToday: 0 }, { id: "kim", name: "Kim Ortega", roles: ["approver"], dailyLimit: 0, usedToday: 0 }],
+  whitelist: [], companyDailyLimit: 1_000_000, companyUsedToday: 0, dualApprovalAbove: 50_000, codeAbove: 25_000, cutoff: "16:00", holidays: ["2026-11-09"], paymentSeq: { prefix: "PAY", start: 3001 }, templates: [], signatoryGroups: [], audit: [],
+};
+
+/**
  * Beta with more on its books, for the approvals inbox: a supplier whose name the bank's record does not match. The customer "alexbiz" uses it
  * (the plain Alex keeps the two waiting payments the combined demo counts).
  */
@@ -94,6 +103,11 @@ export const BETA_CAST: CorpCompany = {
 export function seedPayments(companyId: string, corp: CorporateProvider, cast = false) {
   const list: CorpPayment[] = companyId === "alpha" ? [
     pay({ id: "PAY-1187", companyId, fromAccountId: "alpha_ops", beneficiaryId: "harb", amount: 12_450, reference: "PO-5581", initiatedBy: "alex", initiatedAt: "2026-10-30T10:00:00Z", status: "released", required: 1, approvals: [{ userId: "dana", at: "2026-10-30T11:00:00Z" }], releasedAt: "2026-10-30T11:00:00Z", releaseReference: "CORP-20261030-1187" }),
+    // two supplier batches that were paid in October, long enough ago to have settled
+    pay({ id: "PAY-1180", companyId, fromAccountId: "alpha_ops", beneficiaryId: "bulk", amount: 21_300, reference: "Supplier batch 17", initiatedBy: "alex", initiatedAt: "2026-10-23T09:00:00Z", status: "released", required: 1, approvals: [{ userId: "dana", at: "2026-10-23T10:00:00Z" }], releasedAt: "2026-10-23T10:00:00Z", releaseReference: "CORP-20261023-1180",
+      lines: [{ n: 1, beneficiaryId: "harb", amount: 9_800, reference: "PO-5400" }, { n: 2, beneficiaryId: "nord", amount: 6_500, reference: "INV-31" }, { n: 3, beneficiaryId: "whit", amount: 5_000, reference: "FREIGHT-3" }] }),
+    pay({ id: "PAY-1190", companyId, fromAccountId: "alpha_ops", beneficiaryId: "bulk", amount: 8_640, reference: "Supplier batch 18", initiatedBy: "alex", initiatedAt: "2026-10-27T09:00:00Z", status: "released", required: 1, approvals: [{ userId: "lee", at: "2026-10-27T10:30:00Z" }], releasedAt: "2026-10-27T10:30:00Z", releaseReference: "CORP-20261027-1190",
+      lines: [{ n: 1, beneficiaryId: "harb", amount: 4_640, reference: "PO-5500" }, { n: 2, beneficiaryId: "gulf", amount: 4_000, reference: "INV-77" }] }),
     pay({ id: "PAY-2040", companyId, fromAccountId: "alpha_ops", beneficiaryId: "harb", amount: 18_900, reference: "PO-5612", initiatedBy: "alex", initiatedAt: "2026-11-03T09:30:00Z", status: "pending_approval", required: 1, approvals: [] }),
   ] : companyId === "beta" ? [
     pay({ id: "PAY-2012", companyId, fromAccountId: "beta_ops", beneficiaryId: "nimb", amount: 3_400, reference: "INV-2204", initiatedBy: "priya", initiatedAt: "2026-10-28T09:00:00Z", status: "released", required: 1, approvals: [{ userId: "alex", at: "2026-10-28T10:00:00Z" }], releasedAt: "2026-10-28T10:00:00Z", releaseReference: "CORP-20261028-2012" }),

@@ -98,7 +98,7 @@ export function bankMutants(journey: Journey): Mutant[] {
   // starting a payment is also pricing it and creating it (the combined demo's companies); approving is also approving several at once
   const calls = (name: string) => journey.integrations.some((i) => i.adapter === `corp.payments.${name}` || (name === "initiate" && (/^corp\.(bulk|payroll)\.(check|submit)$/.test(i.adapter) || /^corp\.payments\.(quote|create)$/.test(i.adapter))) || (name === "approve" && i.adapter === "corp.payments.approveMany"));
   // a journey for the combined demo's companies (one login, several places): the permissions of the context and the approval rules of those companies apply
-  const demo = journey.integrations.some((i) => /^corp\.payments\.(quote|create|approveMany|delegate|list)$/.test(i.adapter));
+  const demo = journey.integrations.some((i) => /^corp\.payments\.(quote|create|approveMany|delegate|list|track)$/.test(i.adapter) || /^corp\.(accounts|transactions|statements|suppliers|templates|schedules)\./.test(i.adapter));
   const bulk = journey.integrations.some((i) => /^corp\.(bulk|payroll)\./.test(i.adapter));
   const payroll = journey.integrations.some((i) => /^corp\.payroll\./.test(i.adapter));
   const uses = (re: RegExp) => journey.integrations.some((i) => re.test(i.adapter));
@@ -133,7 +133,7 @@ export function bankMutants(journey: Journey): Mutant[] {
     ["sanctions", "The bank sends a payment to a payee that screening holds", uses(/^bank\.payments\.create$/)],
     ["purposeRule", "The bank takes a payment abroad without a purpose", uses(/^bank\.payments\.quote$/)],
     ["addressRule", "The bank takes a payment abroad without the payee's address when the rules ask for it", uses(/^bank\.payments\.quote$/)],
-    ["bankCode", "The bank accepts a transit number, IFSC or BSB in the wrong format", uses(/^bank\.payments\.quote$/) && uses(/^bank\.payees\.validate$/)],
+    ["bankCode", "The bank accepts a transit number, IFSC or BSB in the wrong format", (uses(/^bank\.payments\.quote$/) && uses(/^bank\.payees\.validate$/)) || uses(/^corp\.suppliers\.validate$/)],
     // paying a bill: the smallest and the largest payment, what was already paid, an amount due that changed, and the currency of the bill
     ["billMinimum", "The bank takes a bill payment below the minimum", uses(/^bank\.bills\.(quote|pay)$/)],
     ["billMaximum", "The bank takes a bill payment above the amount due", uses(/^bank\.bills\.(quote|pay)$/)],
@@ -154,13 +154,13 @@ export function bankMutants(journey: Journey): Mutant[] {
     ["payeeLimit", "The bank lets a customer save more than 50 payees", uses(/^bank\.payees\.(validate|save)$/)],
     ["payeeDuplicate", "The bank lets the same payee be saved twice", uses(/^bank\.payees\.(validate|save|update)$/)],
     ["payeeInUse", "The bank deletes a payee that a scheduled payment uses", uses(/^bank\.payees\.delete$/)],
-    ["ibanChecksum", "The bank accepts an IBAN whose check digits are wrong", uses(/^bank\.payees\.validate$/)],
-    ["sepa", "The bank accepts an IBAN from outside the SEPA area as a European payee", uses(/^bank\.payees\.validate$/)],
-    ["countryMatch", "The bank accepts an IBAN from another country than the one chosen", uses(/^bank\.payees\.validate$/)],
-    ["routingChecksum", "The bank accepts a routing number whose checksum is wrong", uses(/^bank\.payees\.validate$/)],
-    ["sortCode", "The bank accepts a sort code that is not 6 digits", uses(/^bank\.payees\.validate$/)],
-    ["bic", "The bank accepts a SWIFT/BIC of the wrong length", uses(/^bank\.payees\.validate$/)],
-    ["nameCheck", "The name check says every name matches", uses(/^bank\.payees\.check$/)],
+    ["ibanChecksum", "The bank accepts an IBAN whose check digits are wrong", uses(/^(bank\.payees|corp\.suppliers)\.validate$/)],
+    ["sepa", "The bank accepts an IBAN from outside the SEPA area as a European payee", uses(/^(bank\.payees|corp\.suppliers)\.validate$/)],
+    ["countryMatch", "The bank accepts an IBAN from another country than the one chosen", uses(/^(bank\.payees|corp\.suppliers)\.validate$/)],
+    ["routingChecksum", "The bank accepts a routing number whose checksum is wrong", uses(/^(bank\.payees|corp\.suppliers)\.validate$/)],
+    ["sortCode", "The bank accepts a sort code that is not 6 digits", uses(/^(bank\.payees|corp\.suppliers)\.validate$/)],
+    ["bic", "The bank accepts a SWIFT/BIC of the wrong length", uses(/^(bank\.payees|corp\.suppliers)\.validate$/)],
+    ["nameCheck", "The name check says every name matches", uses(/^(bank\.payees|corp\.suppliers)\.check$/)],
     ["verifiedOnMatch", "The bank marks a payee Verified whether or not the name matched", uses(/^bank\.payees\.(save|update)$/)],
     ["clockOnDetails", "Changing the bank details of a payee does not start its 24 hours again", uses(/^bank\.payees\.update$/)],
     ["nameKeepsClock", "Changing only the name of a payee starts its 24 hours again", uses(/^bank\.payees\.update$/)],
@@ -362,6 +362,47 @@ export function bankMutants(journey: Journey): Mutant[] {
     ["pubRegUsername", "The bank takes a username that is taken or not in the shape", uses(/^bank\.registration\.complete$/)],
     ["pubRegCard", "The bank takes a card number when it switched that off", uses(/^bank\.registration\.verify$/)],
     ["pubRegTrust", "The bank trusts the device when it does not offer that", uses(/^bank\.registration\.complete$/)],
+    // Business: Accounts and Payments. What a person may do with each account, the available balance and the total, the numbers to receive money, the period and the search
+    ["bizRights", "The bank ignores what a person may do with each account (see its transactions, export it, pay from it)", uses(/^corp\.(accounts\.(overview|list|get)|transactions\.list|statements\.generate)$/)],
+    ["bizAvailable", "The bank shows the ledger balance as the available balance", uses(/^corp\.accounts\.(overview|list|get)$/)],
+    ["bizTotal", "The bank adds the accounts up without converting them into the company's currency", uses(/^corp\.accounts\.overview$/)],
+    ["bizDetails", "The bank gives the numbers to receive money when the bank has switched them off", uses(/^corp\.accounts\.get$/)],
+    ["bizPeriod", "The bank ignores the period of a list of transactions", uses(/^corp\.transactions\.list$/)],
+    ["bizSearch", "The bank ignores the words typed in the search of a list of transactions", uses(/^corp\.transactions\.list$/)],
+    // statements by email
+    ["stmtRange", "The bank takes dates that are the wrong way round or more than 24 months apart", uses(/^corp\.statements\.generate$/)],
+    ["stmtFormat", "The bank takes any format, including the bank formats when they are off", uses(/^corp\.statements\.(generate|schedule)$/)],
+    ["stmtRecipients", "The bank takes no address, more than five, or addresses that are not email addresses", uses(/^corp\.statements\.(generate|schedule)$/)],
+    ["stmtExternal", "The bank sends a statement to an address outside the company when that is off", uses(/^corp\.statements\.(generate|schedule)$/)],
+    ["stmtIntraday", "The bank takes Today so far when intraday statements are off", uses(/^corp\.statements\.generate$/)],
+    ["stmtEmpty", "The bank sends a statement for a period with no booked transactions", uses(/^corp\.statements\.generate$/)],
+    ["stmtLimit", "The bank lets a company have more than ten statement schedules", uses(/^corp\.statements\.schedule$/)],
+    // asking for a supplier
+    ["supName", "The bank takes a supplier whose name is already on the list", uses(/^corp\.suppliers\.validate$/)],
+    ["supDuplicate", "The bank takes a supplier with the bank details of one it already has", uses(/^corp\.suppliers\.validate$/)],
+    ["supPending", "The bank lets more than ten suppliers wait for approval", uses(/^corp\.suppliers\.validate$/)],
+    ["supCheck", "The bank takes a supplier whose name check was not a match without the person saying they checked", uses(/^corp\.suppliers\.request$/)],
+    ["supCode", "The bank takes a request for a supplier without the one-time code", uses(/^corp\.suppliers\.request$/)],
+    // payment templates
+    ["tplName", "The bank takes a second template with the same name", uses(/^corp\.templates\.save$/)],
+    ["tplSupplier", "The bank saves a template for a supplier that is not on the approved list", uses(/^corp\.templates\.save$/)],
+    ["tplAmount", "The bank saves a template with an amount above the person's limit", uses(/^corp\.templates\.save$/)],
+    ["tplLimit", "The bank lets a company have more than twenty templates", uses(/^corp\.templates\.save$/)],
+    // scheduled supplier payments
+    ["bschSupplier", "The bank schedules a payment to a supplier that is not on the approved list", uses(/^corp\.schedules\.(check|create|update)$/)],
+    ["bschAmount", "The bank schedules an amount above the limit of the Standard speed or the person's limit", uses(/^corp\.schedules\.(check|create|update)$/)],
+    ["bschDates", "The bank takes a first date that is today, more than 12 months away or not a weekday", uses(/^corp\.schedules\.(check|create|update)$/)],
+    ["bschEnd", "The bank takes an end that is before the start, off the list, or a number of payments out of range", uses(/^corp\.schedules\.(check|create|update)$/)],
+    ["bschLimit", "The bank lets a company have more than twenty scheduled payments", uses(/^corp\.schedules\.(check|create)$/)],
+    ["bschApprovals", "The bank asks for one approver however large the payment", uses(/^corp\.schedules\.(check|create|update)$/)],
+    ["bschCode", "The bank schedules a payment from 25,000.00 without the one-time code", uses(/^corp\.schedules\.(check|create|update)$/)],
+    ["bschCutoff", "The bank changes or cancels a scheduled payment after changes closed", uses(/^corp\.schedules\.(get|check|update|cancel)$/)],
+    ["bschRunning", "The bank changes or cancels a scheduled payment on the day it runs", uses(/^corp\.schedules\.(get|check|update|cancel)$/)],
+    // withdrawing and the tracker
+    ["wdOwner", "The bank lets a person withdraw a payment somebody else started", demo && uses(/^corp\.payments\.withdraw$/)],
+    ["wdState", "The bank withdraws a payment that was released or is no longer waiting", demo && uses(/^corp\.payments\.withdraw$/)],
+    ["wdReason", "The bank takes any reason, and a note of any length", demo && uses(/^corp\.payments\.withdraw$/)],
+    ["trkSettled", "The bank calls a payment released today settled", uses(/^corp\.payments\.track$/)],
   ];
   const rules = all.filter(([, , reachable]) => reachable).map(([k, what]) => [k, what] as [keyof Flaws, string]);
   return rules.map(([k, what]) => ({ id: `bank-${k}`, what, kind: "bank" as const, flaws: { [k]: false } as Flaws }));

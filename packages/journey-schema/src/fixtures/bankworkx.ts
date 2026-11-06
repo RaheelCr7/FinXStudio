@@ -28,6 +28,15 @@ import { setupQuickLogin } from "./setup-quick-login";
 import { accounts } from "./accounts";
 import { accountDetails } from "./account-details";
 import { statement } from "./statement";
+import { paymentTracker } from "./payment-tracker";
+import { businessWithdraw } from "./business-withdraw";
+import { businessSchedules } from "./business-schedules";
+import { scheduleBusinessPayment } from "./schedule-business-payment";
+import { templates } from "./templates";
+import { paymentTemplate } from "./payment-template";
+import { addSupplier } from "./add-supplier";
+import { businessStatement } from "./business-statement";
+import { businessAccounts } from "./business-accounts";
 import { openAnotherAccount } from "./open-another-account";
 import { createBudget } from "./create-budget";
 import { budgets } from "./budgets";
@@ -74,4 +83,4 @@ export { connectAccount };
 
 
 
-export const bankworkxJourneys: Journey[] = [addMoney, addCard, connectAccount, createBudget, invest, sellInvestment, ownTransfer, manageBeneficiary, personalTransfer, internalTransfer, internationalTransfer, payBillBankworkx, mobileTopup, schedulePayment, cancelStandingOrder, supplierPayment, approvePayments, signIn, forgotUsername, resetPassword, forgotPassword, unlockAccount, changePassword, trustedDevices, changeQuickPin, setupQuickLogin, accounts, accountDetails, statement, openAnotherAccount, budgets, accountNickname, transferTypes, singleTransfer, cardsView, activateCard, cardControls, freezeCard, virtualCard, replaceCard, cardPin, disputeTransaction, saveBorrow, termDeposit, savingsGoal, applyLoan, repayLoan, updateProfile, newMessage, messagesView, serviceRequest, myRequests, loanCalculator, depositCalculator, findBranchAtm, contactSupport, trackApplication, registerDigitalBanking, openAccount];
+export const bankworkxJourneys: Journey[] = [addMoney, addCard, connectAccount, createBudget, invest, sellInvestment, ownTransfer, manageBeneficiary, personalTransfer, internalTransfer, internationalTransfer, payBillBankworkx, mobileTopup, schedulePayment, cancelStandingOrder, supplierPayment, businessAccounts, businessStatement, addSupplier, paymentTemplate, templates, scheduleBusinessPayment, businessSchedules, businessWithdraw, paymentTracker, approvePayments, signIn, forgotUsername, resetPassword, forgotPassword, unlockAccount, changePassword, trustedDevices, changeQuickPin, setupQuickLogin, accounts, accountDetails, statement, openAnotherAccount, budgets, accountNickname, transferTypes, singleTransfer, cardsView, activateCard, cardControls, freezeCard, virtualCard, replaceCard, cardPin, disputeTransaction, saveBorrow, termDeposit, savingsGoal, applyLoan, repayLoan, updateProfile, newMessage, messagesView, serviceRequest, myRequests, loanCalculator, depositCalculator, findBranchAtm, contactSupport, trackApplication, registerDigitalBanking, openAccount];

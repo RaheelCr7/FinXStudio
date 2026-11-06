@@ -47,6 +47,8 @@ export const supplierPayment: Journey = {
   dataModel: {
     "launch.supplierId": { type: "string" },
     "launch.amount": { type: "number" },
+    "launch.accountId": { type: "string" },
+    "launch.templateId": { type: "string" },
     "sp.supplierId": { type: "string", required: true },
     "sp.supplierName": { type: "string" },
     "sp.supplierLine": { type: "string" },
@@ -64,6 +66,7 @@ export const supplierPayment: Journey = {
   },
   integrations: [
     { id: "company", adapter: "corp.company.get", mode: "sandbox" },
+    { id: "templates", adapter: "corp.templates.list", mode: "sandbox" },
     { id: "quote", adapter: "corp.payments.quote", mode: "sandbox" },
     { id: "otpSend", adapter: "bank.otp.send", mode: "sandbox" },
     { id: "otpVerify", adapter: "bank.otp.verify", mode: "sandbox" },
@@ -84,7 +87,9 @@ export const supplierPayment: Journey = {
         { type: "setData", path: "sp.supplierName", value: "" },
         { type: "setData", path: "sp.supplierLine", value: "" },
         { type: "setData", path: "sp.ccy", value: "" },
-        { type: "setData", path: "sp.from", value: "{{ctx.company.defaultAccountId}}" },
+        // Pay from this account (Business accounts) passes an account of the company; otherwise the company's account in its own currency
+        { type: "setData", path: "sp.from", value: "{{has(ctx.company.accounts, launch.accountId) ? launch.accountId : ctx.company.defaultAccountId}}" },
+        { type: "setData", path: "launch.accountId", value: "" },
         { type: "setData", path: "sp.reference", value: "" },
         { type: "setData", path: "sp.purpose", value: "" },
         { type: "setData", path: "sp.speed", value: "" },
@@ -98,9 +103,31 @@ export const supplierPayment: Journey = {
         rules: [
           // the screen only hides what the context cannot use: the bank refuses it again
           { when: "!isEmpty(session.permissions) && !has(session.permissions, 'biz.payments.initiate')", to: "denied" },
+          // opened from a template (Use): its supplier, amount, reference and purpose are filled in
+          { when: "!isEmpty(launch.templateId)", to: "fromTemplate" },
           { when: "!isEmpty(sp.supplierId)", to: "chosen" },
         ],
       },
+      blocks: [],
+    },
+    {
+      // a template whose supplier is still on the list fills in the form; one whose supplier is waiting or gone sends the person to choose a supplier from the list
+      id: "fromTemplate", title: "Pay a supplier", kind: "branch",
+      onEnter: [
+        { type: "callApi", integration: "templates", saveAs: "ctx.tpls", onError: toRoute },
+        { type: "setData", path: "sp.supplierId", value: "{{has(ctx.tpls, launch.templateId) && has(ctx.company.beneficiaries, ctx.tpls[launch.templateId].beneficiaryId) ? ctx.tpls[launch.templateId].beneficiaryId : ''}}" },
+        { type: "setData", path: "sp.amount", value: "{{has(ctx.tpls, launch.templateId) && !isEmpty(sp.supplierId) && !isEmpty(ctx.tpls[launch.templateId].amount) ? ctx.tpls[launch.templateId].amount : null}}" },
+        { type: "setData", path: "sp.reference", value: "{{has(ctx.tpls, launch.templateId) && !isEmpty(sp.supplierId) ? ctx.tpls[launch.templateId].reference : ''}}" },
+        { type: "setData", path: "sp.purpose", value: "{{has(ctx.tpls, launch.templateId) && !isEmpty(sp.supplierId) ? ctx.tpls[launch.templateId].purpose : ''}}" },
+        { type: "setData", path: "launch.templateId", value: "" },
+        { type: "navigate", to: "chosen" },
+      ],
+      navigation: { rules: [{ when: "isEmpty(sp.supplierId)", to: "templateGone" }] },
+      blocks: [],
+    },
+    {
+      id: "templateGone", title: "Choose a supplier", kind: "branch",
+      onEnter: [{ type: "setData", path: "ctx.error", value: { code: "BENEFICIARY_NOT_WHITELISTED" } }, { type: "navigate", to: "supplier" }],
       blocks: [],
     },
     {
@@ -322,7 +349,7 @@ export const supplierPayment: Journey = {
       blocks: [],
       navigation: {
         rules: [
-          { when: "ctx.error.integration == 'company'", to: "start" },
+          { when: "ctx.error.integration == 'company' || ctx.error.integration == 'templates'", to: "start" },
           { when: "ctx.error.integration == 'quote'", to: "amount" },
         ],
       },

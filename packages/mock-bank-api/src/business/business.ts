@@ -1,11 +1,14 @@
 import { BankError } from "../errors";
-import type { BankConfig, HomeMarket } from "../config";
+import type { BankConfig } from "../config";
 import type { SandboxConditions } from "../index";
 import { BANKWORKX_FX, priceQuote } from "../retail/fx";
 import { PAYMENT_QUOTE_SECONDS, PURPOSES, SENDER_PAYS_ALL, money, railsFor, speedText, speedsFor, type Offer, type SendType, type SpeedClass } from "../retail/payments";
 import { dayName } from "../retail/schedules";
+import { BUSINESS_PURPOSES, DOMESTIC, supplierLine } from "./rules";
+import { SME_NEEDS, SmeSandbox } from "./sme";
 import { approvalRefusal, isDue, type ApprovalRefusal, type CorpAuditEntry, type CorpBeneficiary, type CorpCompany, type CorpPayment, type Flaws } from "./corporate";
 import type { CorporateProvider } from "./corporate-provider";
+export { BUSINESS_PURPOSES } from "./rules";
 import type { OtpState } from "../retail/retail";
 import { currencyInfo, roundMoney } from "@finx/ui-kit";
 
@@ -27,6 +30,7 @@ const NEEDS: Record<string, string> = {
   "corp.payments.approve": "biz.approvals.approve", "corp.payments.approveMany": "biz.approvals.approve", "corp.payments.reject": "biz.approvals.approve", "corp.payments.delegate": "biz.approvals.approve", "corp.payments.withdraw": "biz.payments.withdraw",
   "corp.payments.list": "biz.approvals.view",
   "corp.signatories.list": "biz.audit.view", "corp.audit.list": "biz.audit.view",
+  ...SME_NEEDS,
 };
 
 export type PaymentMeta = { speed: SpeedClass; rail: { id: string; name: string }; railReference: string; receive: { amount: number; currency: string }; rate: number | null; fee: number; purpose: string; arrives: string };
@@ -37,7 +41,10 @@ export class BusinessSandbox {
   private quotes = new Map<string, HeldQuote>();
   private audit = new Map<string, CorpAuditEntry[]>();
   private seq = 0;
-  constructor(private host: BusinessHost) {}
+  private sme: SmeSandbox;
+  constructor(private host: BusinessHost) {
+    this.sme = new SmeSandbox({ now: host.now, otp: host.otp, config: host.config, conditions: host.conditions, flaws: host.flaws, actor: host.actor, log: (corp, userId, action, outcome) => this.log(corp, userId, action, outcome) });
+  }
 
   /** The people, accounts and rules of the company the call is for. */
   private company(corp: CorporateProvider) { return corp.getCompany(); }
@@ -134,6 +141,7 @@ export class BusinessSandbox {
     const corp = this.host.provider();
     if (!corp) throw new BankError("NOT_SUPPORTED", "Not available for this customer");
     const userId = this.acting(adapter, corp, input);
+    if (this.sme.handles(adapter, !!this.host.actor())) return this.sme.call(adapter, input, corp, userId);
     const c = () => corp.getCompany();
     const done = (p: CorpPayment, what: string) => { this.log(corp, userId, `${what} ${p.id}`); return this.shown(p, c(), userId); };
     switch (adapter) {
@@ -261,6 +269,7 @@ export class BusinessSandbox {
     const sup = co.whitelist.find((b) => b.id === input.beneficiaryId);
     if (!sup) throw new BankError("BENEFICIARY_NOT_WHITELISTED", "This beneficiary is not on the company's approved list");
     if (from.currency !== co.currency) throw new BankError("CURRENCY_NOT_SUPPORTED", `Payments are limited in ${co.currency}: choose a ${co.currency} account`);
+    if (!this.sme.rights(co, from.id, userId).pay) throw new BankError("ACCOUNT_NOT_PERMITTED", "You can\u2019t pay from this account.");
     const cur = sup.currency ?? co.currency, digits = currencyInfo(cur).decimals, receive = Number(input.amount);
     if (!(receive > 0) || Math.abs(receive * 10 ** digits - Math.round(receive * 10 ** digits)) > 1e-6) throw new BankError("INVALID_AMOUNT", `Enter an amount in ${cur} with at most ${digits} decimal places`);
     if (!SUPPLIER_PURPOSES.includes(String(input.purpose ?? ""))) throw new BankError("PURPOSE_REQUIRED", "Choose a purpose for this payment.");
@@ -319,15 +328,7 @@ export class BusinessSandbox {
   }
 }
 
-/** A supplier on a line: the currency it is paid in and the last 4 digits of its account ("USD · ••8841"). */
-const supplierLine = (b: CorpBeneficiary, co: CorpCompany) => `${b.currency ?? co.currency} \u00b7 \u2022\u2022${b.maskedNumber.replace(/\D/g, "").slice(-4)}`;
-
-/** What a company can say a supplier payment is for (the spec's list), besides the personal ones the sandbox has always taken. */
-export const BUSINESS_PURPOSES = ["Goods", "Services", "Rent", "Utilities", "Taxes and duties", "Other"];
 const SUPPLIER_PURPOSES = [...BUSINESS_PURPOSES, ...PURPOSES];
-
-/** The countries a supplier can be in for the bank's home-market rails to serve the payment. */
-const DOMESTIC: Record<HomeMarket, string[]> = { us: ["US"], uk: ["GB"], eu: ["DE", "FR", "ES", "IT", "NL", "IE", "BE", "AT", "PT", "FI", "LU", "GR"], ae: ["AE"], sa: ["SA"], jo: ["JO"] };
 
 /** What the person sees for who a payment goes to: the beneficiary's name, or how many payees a bulk payment has. */
 export function shown(p: CorpPayment, company: CorpCompany): CorpPayment & { payee: string } {
