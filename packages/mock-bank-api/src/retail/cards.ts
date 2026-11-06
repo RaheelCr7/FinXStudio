@@ -134,7 +134,7 @@ export const emptyCards = (): CardsSeed => ({ cards: [], transactions: [] });
 /* ------------------------------------------------------------------------------------------------------ the bank */
 
 export type CardsHost = { now: () => number; otp: { attempts: number; verified: boolean }; conditions: () => SandboxConditions; flaws: Flaws; config: () => BankConfig };
-const ADAPTERS = /^bank\.cards\.(issued|eligible|get|transactions|verifyActivation|activate|freeze|unfreeze|block|controls\.update|virtual\.(create|delete)|replace(\.check)?|pin\.set|dispute\.(reasons|check|create|list)|check|verify|add)$/;
+const ADAPTERS = /^bank\.(cards\.(issued|eligible|get|transactions|verifyActivation|activate|freeze|unfreeze|block|controls\.update|virtual\.(create|delete)|replace(\.check)?|pin\.set|check|verify|add)|disputes\.(reasons|check|create|list))$/;
 /** Where the home market is on the three that differ for a card: the home address, the postcode of the billing address, whether a postcode is asked. */
 const HOME = { us: { address: "12 Example Street, Springfield 62704", zip: /^[0-9]{5}(-[0-9]{4})?$/, message: "Enter the 5-digit ZIP code." }, uk: { address: "12 Example Road, London SW1A 1AA", zip: /^[A-Za-z]{1,2}[0-9][A-Za-z0-9]? ?[0-9][A-Za-z]{2}$/, message: "Enter a valid postcode." }, eu: { address: "Beispielstrasse 5, Berlin 10115", zip: /^[A-Za-z0-9 -]{4,10}$/, message: "Enter a valid postcode." } } as const;
 
@@ -174,10 +174,10 @@ export class CardsApi {
       case "bank.cards.replace": return this.replace(input, false);
       case "bank.cards.replace.check": return this.replace(input, true);
       case "bank.cards.pin.set": return this.setPin(input);
-      case "bank.cards.dispute.reasons": return this.reasons();
-      case "bank.cards.dispute.check": return this.disputeCheck(input);
-      case "bank.cards.dispute.create": return this.dispute(input);
-      case "bank.cards.dispute.list": return this.disputes(input);
+      case "bank.disputes.reasons": return this.reasons();
+      case "bank.disputes.check": return this.disputeCheck(input);
+      case "bank.disputes.create": return this.dispute(input);
+      case "bank.disputes.list": return this.disputes(input);
       case "bank.cards.check": return this.checkSaved(input);
       case "bank.cards.verify": return this.verifySaved(input);
       case "bank.cards.add": return this.addSaved(input);

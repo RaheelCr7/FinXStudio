@@ -25,7 +25,7 @@ const noText = (t: string): Step => ({ expectNoText: t });
 const screen = (s: string): Step => ({ expectScreen: s });
 const error = (m: string): Step => ({ expectError: m });
 const NONE = "I don’t recognise it", TWICE = "Charged twice", AMOUNT = "Wrong amount", GOODS = "Goods or service not received", CANCELLED = "Cancelled but charged", OTHER = "Other";
-const forced = (input: Record<string, unknown>, c: string): Step => ({ expectBankError: { adapter: "bank.cards.dispute.create", input: { cardId: "card_9021", transactionId: "ct_1", reason: TWICE, details: { otherChargeDate: "2026-10-30" }, ...input }, code: c } });
+const forced = (input: Record<string, unknown>, c: string): Step => ({ expectBankError: { adapter: "bank.disputes.create", input: { cardId: "card_9021", transactionId: "ct_1", reason: TWICE, details: { otherChargeDate: "2026-10-30" }, ...input }, code: c } });
 const card = (path: string, equals: unknown): Step => ({ expectBank: { adapter: "bank.cards.get", input: { cardId: "card_9021" }, path, equals } });
 const payment = (path: string, equals: unknown): Step => ({ expectBank: { adapter: "bank.cards.transactions", input: { cardId: "card_9021" }, path, equals } });
 const balance = (): Step => ({ expectBank: { adapter: "bank.accounts.get", input: { accountId: "acc_main" }, path: "balance", equals: 8720.76 } });
@@ -38,7 +38,7 @@ const toDeclare = (): Step[] => [press("Continue"), screen("evidence"), press("C
 const send = (): Step[] => [set({ "ds.consent": true }), press("Send report")];
 /** A report of Charged twice, ready to send. */
 const twice = (): Step[] => [...reason(TWICE), set({ "ds.otherDate": "2026-10-30" }), ...toDeclare()];
-const dispute = (tx: string, reasonName = TWICE, details: Record<string, unknown> = { otherChargeDate: "2026-10-30" }) => ({ adapter: "bank.cards.dispute.create", input: { cardId: "card_9021", transactionId: tx, reason: reasonName, details } });
+const dispute = (tx: string, reasonName = TWICE, details: Record<string, unknown> = { otherChargeDate: "2026-10-30" }) => ({ adapter: "bank.disputes.create", input: { cardId: "card_9021", transactionId: tx, reason: reasonName, details } });
 
 export const disputeTransactionScenarios: NonNullable<Journey["scenarios"]> = [
   {
@@ -153,15 +153,15 @@ export const disputeTransactionScenarios: NonNullable<Journey["scenarios"]> = [
     steps: [screen("pick"), text("You’ve already reported this payment. Case DSP-9001."), noText("What went wrong?"), forced({}, "DISPUTE_EXISTS")],
   },
   {
-    id: "T-20", name: "When the bank is unavailable when the report is sent nothing is sent", covers: ["AC-9"], ...ct1, conditions: { unavailable: ["bank.cards.dispute.create"] },
+    id: "T-20", name: "When the bank is unavailable when the report is sent nothing is sent", covers: ["AC-9"], ...ct1, conditions: { unavailable: ["bank.disputes.create"] },
     steps: [...twice(), ...send(), screen("unavailable"), text("This isn’t available right now. Nothing was sent. Try again in a few minutes."), payment("items.1.status", "posted")],
   },
   {
-    id: "T-21", name: "When the bank does not answer in time nothing is sent", covers: ["AC-9"], ...ct1, conditions: { timeout: ["bank.cards.dispute.create"], latencyMs: 10000 },
+    id: "T-21", name: "When the bank does not answer in time nothing is sent", covers: ["AC-9"], ...ct1, conditions: { timeout: ["bank.disputes.create"], latencyMs: 10000 },
     steps: [...twice(), ...send(), screen("timeout"), text("This is taking longer than expected. Nothing was sent."), payment("items.1.status", "posted"), press("Try again"), screen("reason")],
   },
   {
-    id: "T-22", name: "When the payment cannot be checked nothing starts", covers: ["AC-9"], ...ct1, conditions: { unavailable: ["bank.cards.dispute.check"] },
+    id: "T-22", name: "When the payment cannot be checked nothing starts", covers: ["AC-9"], ...ct1, conditions: { unavailable: ["bank.disputes.check"] },
     steps: [screen("unavailable"), text("Nothing was sent.")],
   },
   {
@@ -169,7 +169,7 @@ export const disputeTransactionScenarios: NonNullable<Journey["scenarios"]> = [
     steps: [screen("unavailable")],
   },
   {
-    id: "T-24", name: "When the reasons cannot be read nothing starts", covers: ["AC-9"], ...ct1, conditions: { timeout: ["bank.cards.dispute.reasons"], latencyMs: 10000 },
+    id: "T-24", name: "When the reasons cannot be read nothing starts", covers: ["AC-9"], ...ct1, conditions: { timeout: ["bank.disputes.reasons"], latencyMs: 10000 },
     steps: [screen("timeout"), text("This is taking longer than expected. Nothing was sent.")],
   },
   {
@@ -196,7 +196,7 @@ export const disputeTransactionScenarios: NonNullable<Journey["scenarios"]> = [
   },
   {
     id: "T-28", name: "The bank takes a report made directly, once: a second one for the same payment is refused", covers: ["AC-7", "AC-6"], ...base, setup: [dispute("ct_4")],
-    steps: [forced({ transactionId: "ct_4" }, "DISPUTE_EXISTS"), { expectBank: { adapter: "bank.cards.dispute.list", input: { cardId: "card_9021" }, path: "DSP-9001.status", equals: "Under review" } }],
+    steps: [forced({ transactionId: "ct_4" }, "DISPUTE_EXISTS"), { expectBank: { adapter: "bank.disputes.list", input: { cardId: "card_9021" }, path: "DSP-9001.status", equals: "Under review" } }],
   },
   {
     id: "T-29", name: "A reason has to be chosen", covers: ["AC-2"], ...ct1,

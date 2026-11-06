@@ -126,7 +126,18 @@ describe("the tab screens, from the sandbox", () => {
     expect(home.hero!.value).toBe("$23,975.13");
     expect(home.sections[0]!.rows.map((r) => r.title)).toEqual(["Main", "Savings", "EUR Travel", "AED Home"]);
     const cards = await loadScreen(call, ctx("personal"), "cards");
-    expect(cards.sections[0]!.rows[0]).toMatchObject({ place: "cards.card", passes: { cardId: "card_debit" } });
+    expect(cards.sections[0]!.rows[0]).toMatchObject({ place: "cards.card", passes: { cardId: "card_9021" }, state: "active" });
+  });
+  it("the Cards tab says what state each card is in and lists the latest card spending, each payment saying whether it can be reported", async () => {
+    const { call, ctx } = await sandbox();
+    const cards = await loadScreen(call, ctx("personal"), "cards");
+    expect(cards.sections[0]!.rows.map((r) => [r.title, r.tag, r.state])).toEqual([
+      ["Everyday debit", undefined, "active"], ["Online shopping", "Virtual", "virtual-active"], ["Spare debit", "Not activated", "inactive"], ["Aurora credit", undefined, "active"],
+    ]);
+    const spending = cards.sections[1]!;
+    expect([spending.id, spending.place, spending.rows.length]).toEqual(["spending", "cards.spending", 8]);
+    expect(spending.rows[0]).toMatchObject({ title: "Brightside Coffee", tag: "Pending", place: "cards.transaction", state: "none", passes: { cardId: "card_9021", transactionId: "ct_3" } });
+    expect(spending.rows.find((r) => r.id === "ct_1")).toMatchObject({ state: "reportable", value: "−$64.20" });
   });
   it("puts no payment scheme names or codes on any screen (the owner's journey design rules)", async () => {
     const SCHEMES = /SWIFT|IBAN|\bACH\b|SEPA|sort code|\bABA\b|UETR|CHAPS|SARIE|Faster Payments/i;

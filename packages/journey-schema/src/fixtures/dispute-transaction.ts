@@ -61,10 +61,10 @@ export const disputeTransaction: Journey = {
     "ds.msg": { type: "string" },
   },
   integrations: [
-    { id: "reasons", adapter: "bank.cards.dispute.reasons", mode: "sandbox" },
+    { id: "reasons", adapter: "bank.disputes.reasons", mode: "sandbox" },
     { id: "payments", adapter: "bank.cards.transactions", mode: "sandbox" },
-    { id: "checkTx", adapter: "bank.cards.dispute.check", mode: "sandbox" },
-    { id: "create", adapter: "bank.cards.dispute.create", mode: "sandbox" },
+    { id: "checkTx", adapter: "bank.disputes.check", mode: "sandbox" },
+    { id: "create", adapter: "bank.disputes.create", mode: "sandbox" },
   ],
   screens: [
     {

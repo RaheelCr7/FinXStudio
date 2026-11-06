@@ -376,7 +376,7 @@ describe("replacing a card", () => {
 });
 
 describe("reporting a card payment", () => {
-  const report = (b: MockBank, input: Record<string, unknown> = {}) => b.call("bank.cards.dispute.create", { cardId: "card_9021", transactionId: "ct_1", reason: "Charged twice", details: { otherChargeDate: "2026-10-30" }, ...input });
+  const report = (b: MockBank, input: Record<string, unknown> = {}) => b.call("bank.disputes.create", { cardId: "card_9021", transactionId: "ct_1", reason: "Charged twice", details: { otherChargeDate: "2026-10-30" }, ...input });
   it("opens one case, marks the payment as disputed, asks for no code and moves no money", async () => {
     const b = alex();
     const before = (await b.call("bank.accounts.get", { accountId: "acc_main" })).balance;
@@ -385,11 +385,11 @@ describe("reporting a card payment", () => {
     expect((await b.call("bank.accounts.get", { accountId: "acc_main" })).balance).toBe(before);
     const t = (await b.call("bank.cards.transactions", { cardId: "card_9021" })).items.find((x: any) => x.id === "ct_1");
     expect(t).toMatchObject({ status: "disputed", statusLabel: "Disputed", disputeId: "DSP-9001", reportable: false, noticeCode: "DISPUTE_EXISTS" });
-    expect(Object.keys(await b.call("bank.cards.dispute.list", { cardId: "card_9021" }))).toEqual(["DSP-9001"]);
+    expect(Object.keys(await b.call("bank.disputes.list", { cardId: "card_9021" }))).toEqual(["DSP-9001"]);
   });
   it("only a posted payment out by card, at most 120 days old and not yet reported, with the words the customer reads", async () => {
     const b = alex();
-    const check = (id: string) => b.call("bank.cards.dispute.check", { cardId: "card_9021", transactionId: id }).then(() => "ok", (e) => `${e.code}: ${e.message}`);
+    const check = (id: string) => b.call("bank.disputes.check", { cardId: "card_9021", transactionId: id }).then(() => "ok", (e) => `${e.code}: ${e.message}`);
     expect(await check("ct_3")).toBe("TRANSACTION_PENDING: This payment is still pending. You can report a problem once it has posted.");
     expect(await check("ct_7")).toBe("NOT_A_PAYMENT_OUT: Only payments out can be reported.");
     expect(await check("ct_8")).toBe("NOT_A_CARD_PAYMENT: This payment can’t be reported here. Contact us.");
@@ -398,7 +398,7 @@ describe("reporting a card payment", () => {
     expect(await check("nope")).toMatch(/^TRANSACTION_NOT_FOUND/);
     await report(b);
     expect(await check("ct_1")).toBe("DISPUTE_EXISTS: You’ve already reported this payment. Case DSP-9001.");
-    expect(await code(b.call("bank.cards.dispute.check", { cardId: "card_3318", transactionId: "ct_1" }))).toBe("TRANSACTION_NOT_FOUND");
+    expect(await code(b.call("bank.disputes.check", { cardId: "card_3318", transactionId: "ct_1" }))).toBe("TRANSACTION_NOT_FOUND");
   });
   it("asks for what each reason needs", async () => {
     const b = alex();
@@ -424,7 +424,7 @@ describe("reporting a card payment", () => {
     expect((await issued(c)).card_9021.pill).toBe("Active");
   });
   it("lists the reasons with what they ask and the dates for the selects", async () => {
-    const r = await alex().call("bank.cards.dispute.reasons");
+    const r = await alex().call("bank.disputes.reasons");
     expect(r.reasons.map((x: any) => x.name)).toEqual(["I don’t recognise it", "Charged twice", "Wrong amount", "Goods or service not received", "Cancelled but charged", "Other"]);
     expect([Object.keys(r.days30).length, Object.keys(r.days60).length, Object.keys(r.days90).length, r.windowDays]).toEqual([30, 60, 90, 120]);
     expect(r.days30["2026-11-02"].name).toBe("Mon 2 Nov (yesterday)");
@@ -544,7 +544,7 @@ describe("who may use the card adapters", () => {
     expect(await code(without("cards.manage").call("bank.cards.freeze", { cardId: "card_9021" }))).toBe("PERMISSION_DENIED");
     expect(await code(without("cards.manage").call("bank.cards.controls.update", { cardId: "card_9021" }))).toBe("PERMISSION_DENIED");
     expect(await code(without("cards.pin").call("bank.cards.pin.set", { cardId: "card_9021", pin: "2580" }))).toBe("PERMISSION_DENIED");
-    expect(await code(without("cards.dispute").call("bank.cards.dispute.create", { cardId: "card_9021", transactionId: "ct_1" }))).toBe("PERMISSION_DENIED");
+    expect(await code(without("cards.dispute").call("bank.disputes.create", { cardId: "card_9021", transactionId: "ct_1" }))).toBe("PERMISSION_DENIED");
     expect(await code(without("payments.create").call("bank.cards.check", {}))).toBe("PERMISSION_DENIED");
     expect(await code(without("cards.manage").call("bank.cards.issued"))).toBe("ok");
   });
@@ -576,7 +576,7 @@ describe("what the virtual-card and dispute journeys read", () => {
     const r = await b.call("bank.cards.transactions", { status: "posted", limit: 12 });
     expect(r.choices.ct_1).toEqual({ id: "ct_1", name: "Northwind Market · −$64.20 · Yesterday", cardId: "card_9021" });
     expect(Object.keys(r.choices)).toHaveLength(r.shown);
-    expect(await b.call("bank.cards.dispute.create", { cardId: "card_9021", transactionId: "ct_1", reason: "Charged twice", otherChargeDate: "2026-10-30", evidenceName: "Receipt.pdf" })).toMatchObject({ evidence: ["Receipt.pdf"] });
-    expect(await code(b.call("bank.cards.dispute.create", { cardId: "card_9021", transactionId: "ct_4", reason: "Charged twice" }))).toBe("DETAILS_INVALID");
+    expect(await b.call("bank.disputes.create", { cardId: "card_9021", transactionId: "ct_1", reason: "Charged twice", otherChargeDate: "2026-10-30", evidenceName: "Receipt.pdf" })).toMatchObject({ evidence: ["Receipt.pdf"] });
+    expect(await code(b.call("bank.disputes.create", { cardId: "card_9021", transactionId: "ct_4", reason: "Charged twice" }))).toBe("DETAILS_INVALID");
   });
 });

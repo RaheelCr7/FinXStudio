@@ -23,6 +23,8 @@ export type LaunchPoint = {
   many?: boolean;
   /** Shown in the + quick actions. */
   quick?: boolean;
+  /** Drawn only on a row in one of these states (a card that is frozen, a payment that can be reported): the others are hidden, not disabled. */
+  states?: string[];
   /** Asks the person to confirm it is them again first (docs/journeys/README.md 4.3), unless a step-up from the last five minutes is still valid. */
   stepUp?: boolean;
   icon?: string;
@@ -74,14 +76,17 @@ const PERSONAL: Def[] = [
   ["payments.scheduled", "Change", "schedule-payment", "payments.schedule", ["scheduleId"]],
   ["payments.scheduled", "Cancel", "cancel-standing-order", "payments.schedule", ["scheduleId"]],
   ["payments.payment", "Repeat payment", "personal-transfer", "payments.create", ["paymentId"]],
-  ["cards", "Add a card", "add-card", "cards.manage"],
-  ["cards.card", "Activate", "activate-card", "cards.manage", ["cardId"]],
-  ["cards.card", "Freeze", "freeze-card", "cards.manage", ["cardId", "action"], { fixed: { action: "freeze" } }],
-  ["cards.card", "Limits and controls", "card-controls", "cards.manage", ["cardId"]],
-  ["cards.card", "Virtual card", "virtual-card", "cards.manage", ["cardId"]],
-  ["cards.card", "Replace card", "replace-card", "cards.manage", ["cardId", "reason"]],
-  ["cards.card", "Set PIN", "card-pin", "cards.pin", ["cardId"]],
-  ["cards.transaction", "Report a problem", "dispute-transaction", "cards.dispute", ["cardId", "transactionId"]],
+  // the view of the Cards tab as a journey a bank can switch off: no button of the shell draws this place, the command bar and the links open it
+  ["cards.overview", "Cards", "cards", "cards.view", ["cardId"]],
+  ["cards", "Add a card", "add-card", "payments.create"],
+  ["cards.card", "Activate", "activate-card", "cards.manage", ["cardId"], { states: ["inactive"] }],
+  ["cards.card", "Freeze", "freeze-card", "cards.manage", ["cardId", "action"], { fixed: { action: "freeze" }, states: ["active", "virtual-active"] }],
+  ["cards.card", "Unfreeze", "freeze-card", "cards.manage", ["cardId", "action"], { fixed: { action: "unfreeze" }, states: ["frozen", "virtual-frozen"] }],
+  ["cards.card", "Limits and controls", "card-controls", "cards.manage", ["cardId", "mode"], { states: ["active", "frozen", "virtual-active", "virtual-frozen"] }],
+  ["cards.card", "Virtual card", "virtual-card", "cards.manage", ["cardId"], { states: ["active"] }],
+  ["cards.card", "Replace card", "replace-card", "cards.manage", ["cardId", "reason"], { states: ["active", "frozen", "blocked", "expired"] }],
+  ["cards.card", "Set PIN", "card-pin", "cards.pin", ["cardId"], { states: ["active", "frozen"] }],
+  ["cards.transaction", "Report a problem", "dispute-transaction", "cards.dispute", ["cardId", "transactionId"], { states: ["reportable"] }],
   ["save.deposits", "Open a deposit", "term-deposit", "savings.manage", ["mode"], { fixed: { mode: "open" } }],
   ["save.deposit", "Renew", "term-deposit", "savings.manage", ["depositId"], { fixed: { mode: "renew" } }],
   ["save.deposit", "Close", "term-deposit", "savings.manage", ["depositId"], { fixed: { mode: "close" } }],
@@ -236,6 +241,9 @@ export function launchFromValues(journey: string, values: Record<string, unknown
 
 /** Whether opening this journey asks for a step-up (any launch point of it is marked so): the shell asks before it opens, and the bank refuses the change without one. */
 export const journeyNeedsStepUp = (journey: string) => LAUNCH_POINTS.some((lp) => lp.stepUp && (slugIs(journey, lp.journey) || (JOURNEY_ALIASES[lp.journey] ?? []).some((a) => slugIs(journey, a))));
+
+/** The buttons of a row: those that need no particular state, and those that name the row's own. */
+export const forRow = (points: LaunchPoint[], row: { state?: string }) => points.filter((lp) => !lp.states || (row.state !== undefined && lp.states.includes(row.state)));
 
 /** Whether a button belongs to one row (it needs a value the row passes in) rather than to the section or the tab. */
 export const isRowLevel = (lp: LaunchPoint) => !lp.many && lp.passes.some((p) => !(lp.fixed && p in lp.fixed));

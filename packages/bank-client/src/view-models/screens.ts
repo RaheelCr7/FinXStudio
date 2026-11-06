@@ -8,7 +8,8 @@ import { can, type ContextInfo } from "../session";
  * A row may name a launch-point place and the values it passes ("cards.card", { cardId }); the apps draw that place's buttons next to it.
  */
 export type RowTone = "positive" | "negative" | "warning" | "neutral";
-export type Row = { id: string; title: string; subtitle?: string; value?: string; tag?: string; tone?: RowTone; /** 0 to 100, drawn as a bar. */ progress?: number; /** The launch-point place of this row's buttons. */ place?: string; passes?: Record<string, string>; /** The row opens a page of the app instead of showing buttons (Settings > Security). */ go?: "security" };
+export type Row = { id: string; title: string; subtitle?: string; value?: string; tag?: string; tone?: RowTone; /** 0 to 100, drawn as a bar. */ progress?: number; /** The launch-point place of this row's buttons. */ place?: string; passes?: Record<string, string>; /** The row opens a page of the app instead of showing buttons (Settings > Security). */ go?: "security";
+  /** What state the row is in (a card: active, frozen, ...): a launch point that names `states` is drawn only on a row in one of them. */ state?: string };
 export type Section = { id: string; title: string; rows: Row[]; /** Shown instead of rows when there are none. */ empty: string; /** The launch-point place whose buttons sit in the section header. */ place?: string };
 export type Screen = { tab: ShellTab; hero?: { label: string; value: string; lines: MoneyLine[] }; sections: Section[]; /** Open items, drawn as the badge on Approvals. */ approvals?: number };
 
@@ -53,8 +54,23 @@ export async function loadPersonal(call: Call, tab: ShellTab): Promise<Screen> {
       ] };
     }
     case "cards": {
-      const cards = list<any>(await call("bank.cards.issued"));
-      return { tab, sections: [{ id: "cards", title: "Cards", empty: "No cards yet", rows: cards.map((c) => ({ id: c.id, title: c.nickname ?? c.kind, subtitle: `${c.network} •• ${c.last4} · ${c.expiry}`, tag: c.status === "active" ? undefined : String(c.status).replace(/^./, (x: string) => x.toUpperCase()), tone: c.status === "active" ? "neutral" as const : "warning" as const, place: "cards.card", passes: { cardId: c.id } })) }] };
+      const [cards, spending] = await Promise.all([call("bank.cards.issued"), call("bank.cards.transactions", { limit: 8 })]);
+      return { tab, sections: [
+        {
+          id: "cards", title: "Cards", empty: "No cards yet",
+          rows: list<any>(cards).map((c) => ({
+            id: c.id, title: c.nickname ?? c.kind, subtitle: `${c.networkName ?? c.network} •• ${c.last4} · ${c.expiry}`, tag: c.status === "active" && !c.virtual ? undefined : String(c.pill ?? c.status), tone: c.status === "active" ? "neutral" as const : "warning" as const,
+            place: "cards.card", passes: { cardId: c.id }, state: c.virtual && (c.status === "active" || c.status === "frozen") ? `virtual-${c.status}` : String(c.status),
+          })),
+        },
+        {
+          id: "spending", title: "Card spending", empty: "No card spending yet", place: "cards.spending",
+          rows: list<any>(spending.items).map((t) => ({
+            id: t.id, title: t.merchant, subtitle: `${t.cardName} · ${t.when}`, value: t.amountText, tag: t.status === "disputed" ? "Disputed" : t.pending ? "Pending" : undefined, tone: "neutral" as const,
+            place: "cards.transaction", passes: { cardId: t.cardId, transactionId: t.id }, state: t.reportable ? "reportable" : "none",
+          })),
+        },
+      ] };
     }
     case "save": {
       const [deps, goals, loans] = await Promise.all([call("bank.deposits.list"), call("bank.goals.list"), call("bank.loans.list")]);

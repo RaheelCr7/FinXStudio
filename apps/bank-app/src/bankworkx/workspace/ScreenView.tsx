@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from "react";
 import { Pressable, ScrollView, Text, View } from "react-native";
-import { isRowLevel, isSectionLevel, screenIsEmpty, type BankApp, type LaunchPoint, type Row, type Screen, type Section, type ShellTab } from "@finx/bank-client";
+import { forRow, isRowLevel, isSectionLevel, screenIsEmpty, type BankApp, type LaunchPoint, type Row, type Screen, type Section, type ShellTab } from "@finx/bank-client";
 import { Gradient, Icon, ProgressBar, useTheme } from "@finx/renderer-native";
 import { Card, tab as tabular } from "../ui";
 import { openLaunch } from "./open";
@@ -42,7 +42,7 @@ function Buttons({ points, onPress, small }: { points: LaunchPoint[]; onPress: (
 function RowView({ app, row, open }: { app: BankApp; row: Row; open: (lp: LaunchPoint, passed?: Record<string, string>) => void }) {
   const { c } = useTheme();
   const [on, setOn] = useState(false);
-  const points = row.place ? app.launchPoints({ place: row.place }).filter(isRowLevel) : [];
+  const points = row.place ? forRow(app.launchPoints({ place: row.place }).filter(isRowLevel), row) : [];
   const tone = row.tone === "positive" ? c.positive : row.tone === "negative" ? c.negative : c.text;
   const body = (
     <View style={{ flexDirection: "row", alignItems: "center", gap: 10, paddingVertical: 12 }}>

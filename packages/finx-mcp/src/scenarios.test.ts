@@ -1384,7 +1384,7 @@ describe("dispute-transaction: Report a problem with a payment", () => {
     expect(catalog.filter((c) => c.id === "dispute-transaction").map((c) => [c.madeFor, c.category])).toEqual([["bankworkx", "Cards"]]);
     expect(disputeTransaction.integrations.some((i) => /otp/.test(i.adapter))).toBe(false);
     expect(disputeTransaction.screens.some((s) => s.blocks.some((b: any) => b.type === "otp"))).toBe(false);
-    expect(disputeTransaction.integrations.map((i) => i.adapter).sort()).toEqual(["bank.cards.dispute.check", "bank.cards.dispute.create", "bank.cards.dispute.reasons", "bank.cards.transactions"]);
+    expect(disputeTransaction.integrations.map((i) => i.adapter).sort()).toEqual(["bank.cards.transactions", "bank.disputes.check", "bank.disputes.create", "bank.disputes.reasons"]);
     expect(chainTargets(disputeTransaction)).toEqual([]);
     expect(disputeTransaction.screens.some((s) => s.blocks.some((b: any) => b.type === "consent" && b.validation?.mustBeTrue))).toBe(true);
   });

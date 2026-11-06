@@ -23,7 +23,7 @@ const NO_POSTCODE = "ctx.cfg.homeMarket == 'ae' || ctx.cfg.homeMarket == 'sa' ||
 export const addCard: Journey = {
   id: "jrn_add_card",
   slug: "add-card",
-  name: "Add a card",
+  name: "Add card",
   version: 2,
   status: "published",
   channels: ["web", "mobile"],

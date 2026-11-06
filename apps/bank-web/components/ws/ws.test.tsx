@@ -96,7 +96,7 @@ describe("Personal", () => {
     expect(await screen.findByText("This service is not available right now")).toBeTruthy();
     app.bank.conditions = { ...app.bank.conditions, unavailable: [] } as typeof app.bank.conditions;
     await userEvent.click(screen.getByRole("button", { name: "Try again" }));
-    expect(await screen.findByText("Debit")).toBeTruthy();
+    expect(await screen.findByText("Everyday debit")).toBeTruthy();
   });
   it("shows an empty state for a place with nothing in it", async () => {
     shell("/bankworkx/personal/payments");
