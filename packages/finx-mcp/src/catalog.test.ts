@@ -87,7 +87,9 @@ describe("catalog stays in sync with the real schema and lint", () => {
   // bank's card), and 3 rewritten entries (issued, get, add), each cut to one short line before raising (14,055 now). The whole stays at 55,802 of 56,000, which is not raised.
   // The whole catalog is the short form (44,600 of 56,000 after this compaction, 55,802 before): blocks without their examples, personas as one line each, lint codes without their fix.
   // Each section by name is still complete, so an agent asks for what it needs. Ceilings = today's size plus what the Save & Borrow journeys add (adapters +2,500, personas +300).
-  const SECTION_CEILINGS: Record<string, number> = { overview: 1_100, journey: 2_600, blocks: 15_100, actions: 3_000, expressions: 1_900, data: 900, localization: 1_100, adapters: 16_600, personas: 1_800, lint: 2_600, patterns: 1_700 };
+  // adapters 16,600 -> 17,700: the 22 adapters of the More journeys (the profile and its changes, secure messages, service requests, connecting a bank, two for scenarios), each one short line in the index
+  // (the three older entries for messages, requests and the profile were rewritten in place). The whole is 48,217 of 56,000, which is not raised.
+  const SECTION_CEILINGS: Record<string, number> = { overview: 1_100, journey: 2_600, blocks: 15_100, actions: 3_000, expressions: 1_900, data: 900, localization: 1_100, adapters: 17_700, personas: 1_800, lint: 2_600, patterns: 1_700 };
   it("each section stays within its ceiling, and the whole stays within the size the tool returns", () => {
     const sizes = catalogSizes();
     const report = JSON.stringify(sizes);

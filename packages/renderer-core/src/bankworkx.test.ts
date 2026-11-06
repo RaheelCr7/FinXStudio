@@ -121,35 +121,46 @@ describe("Add a card", () => {
   });
 });
 
-describe("Connect an account", () => {
-  const toLogin = async (r: JourneyRunner, bankId = "northwind") => {
-    r.set("conn.accountType", "bank"); await press(r, "Continue");
-    r.set("conn.bankId", bankId); await press(r, "Continue");
+describe("Connect a bank", () => {
+  // the journey was rebuilt (docs/BANKWORKX.md, More): the other bank's sign-in is Allow or Deny, never a password typed here, and the accounts of the bank are chosen after it
+  const walk = async (r: JourneyRunner, bankId = "maple") => {
+    r.set("cx.bankId", bankId); await press(r, "Continue");
+    r.set("cx.consent", true); await press(r, "Continue");
+    await press(r, "Allow");
   };
-  it("offers account types as tiles and the banks from the sandbox", async () => {
+  it("offers the banks the sandbox has, and the other bank's own sign-in asks for no password", async () => {
     const { r } = mk(connectAccount, "sam"); await r.start();
-    expect(r.view().blocks.find((b) => b.type === "select")!.items.map((i: any) => i.name)).toEqual(["Bank account", "Credit card"]);
+    expect(r.view().blocks.find((b) => b.type === "select")!.items.map((i: any) => i.name)).toEqual(["Harbor Bank", "Maple Credit Union", "Northern Savings", "Summit Bank", "Lakeside Bank", "Oakridge Building Society", "Crown Trust", "Bayview Bank"]);
     await press(r, "Continue");
-    expect(r.current).toBe("type");
-    r.set("conn.accountType", "credit"); await press(r, "Continue");
-    expect(r.view().blocks.find((b) => b.type === "select")!.items.map((i: any) => i.name)).toEqual(["Northwind Bank", "Harbor Trust", "Apex Credit Union", "Summit Federal"]);
+    expect(r.current).toBe("bank");
+    r.set("cx.bankId", "maple"); await press(r, "Continue");
+    r.set("cx.consent", true); await press(r, "Continue");
+    expect(r.current).toBe("signin");
+    expect(r.view().blocks.some((b) => b.type === "textInput")).toBe(false);
   });
-  it("connects a bank for a new customer", async () => {
+  it("connects a bank for a new customer, read only, with the balances", async () => {
     const { r, bank } = mk(connectAccount, "sam"); await r.start();
-    await toLogin(r);
-    r.set("conn.username", "sam"); r.set("conn.password", "sandbox1"); r.set("conn.consent", true);
-    await press(r, "Connect account");
-    expect(r.current).toBe("success");
-    expect(bank.persona.finance!.linked).toHaveLength(1);
-    expect(r.view().blocks.find((b) => b.type === "result")!.meta).toBe("Balance $4,210.25");
+    await walk(r);
+    expect(r.current).toBe("accounts");
+    await press(r, "Connect");
+    expect(r.current).toBe("done");
+    expect(bank.persona.finance!.linked.map((l) => [l.bank, l.kind, l.maskedNumber, l.balance])).toEqual([["Maple Credit Union", "Current", "••1274", 2510.45], ["Maple Credit Union", "Savings", "••5422", 9620.8], ["Maple Credit Union", "Credit", "••8186", -440.15]]);
+    expect(bank.persona.accounts).toEqual([]);
   });
-  it("fails when the bank rejects the login, and the password field is hidden text", async () => {
-    const { r } = mk(connectAccount, "sam"); await r.start();
-    await toLogin(r);
-    expect(r.view().blocks.filter((b) => b.type === "textInput").map((b) => b.secure)).toEqual([undefined, true]);
-    r.set("conn.username", "sam"); r.set("conn.password", "invalid123"); r.set("conn.consent", true);
-    await press(r, "Connect account");
-    expect(r.current).toBe("failed");
+  it("needs the agreement and an account, and a bank that does not answer connects nothing", async () => {
+    const { r, bank } = mk(connectAccount, "sam"); await r.start();
+    r.set("cx.bankId", "maple"); await press(r, "Continue");
+    await press(r, "Continue");
+    expect(r.current).toBe("consent");
+    r.set("cx.consent", true); await press(r, "Continue"); await press(r, "Allow");
+    r.set("cx.on1", false); r.set("cx.on2", false); r.set("cx.on3", false);
+    await press(r, "Connect");
+    expect(r.current).toBe("accounts");
+    expect(bank.persona.finance!.linked).toHaveLength(0);
+    const lake = mk(connectAccount, "sam"); await lake.r.start();
+    await walk(lake.r, "lakeside");
+    expect(lake.r.current).toBe("unreachable");
+    expect(lake.bank.persona.finance!.linked).toHaveLength(0);
   });
 });
 

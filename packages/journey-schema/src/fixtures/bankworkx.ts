@@ -1,5 +1,11 @@
 import type { Journey } from "../schema";
 import { ownTransfer } from "./own-transfer";
+import { updateProfile } from "./update-profile";
+import { newMessage } from "./new-message";
+import { connectAccount } from "./connect-account";
+import { messagesView } from "./messages";
+import { serviceRequest } from "./service-request";
+import { myRequests } from "./my-requests";
 import { manageBeneficiary } from "./manage-beneficiary";
 import { personalTransfer } from "./personal-transfer";
 import { internalTransfer } from "./internal-transfer";
@@ -56,73 +62,9 @@ const base = { version: 1, status: "published" as const, channels: ["mobile" as 
 const done = { type: "button" as const, label: "Done", variant: "primary" as const, actions: [{ type: "exit" as const }] };
 
 
-export const connectAccount: Journey = {
-  ...base, id: "jrn_connect_account", slug: "connect-account", name: "Connect account", entryScreen: "type",
-  dataModel: {
-    "conn.accountType": { type: "string", required: true },
-    "conn.bankId": { type: "string", required: true },
-    "conn.username": { type: "string", required: true },
-    "conn.password": { type: "string", required: true },
-    "conn.consent": { type: "boolean", required: true },
-  },
-  integrations: [
-    { id: "banks", adapter: "bank.banks.list", mode: "sandbox" },
-    { id: "connectBank", adapter: "bank.accounts.connect", mode: "sandbox" },
-  ],
-  screens: [
-    {
-      id: "type", title: "Account type",
-      blocks: [
-        { type: "stepper", steps: ["type", "bank", "login"] },
-        {
-          type: "select", bind: "conn.accountType", label: "What do you want to connect?", variant: "tiles",
-          choices: [{ id: "bank", label: "Bank account", icon: "bank", text: "Savings or current" }, { id: "credit", label: "Credit card", icon: "card", text: "Cards and credit lines" }],
-        },
-        { type: "button", label: "Continue", variant: "primary", actions: [{ type: "validate" }, { type: "navigate", to: "bank" }] },
-      ],
-    },
-    {
-      id: "bank", title: "Choose your bank",
-      onEnter: [{ type: "callApi", integration: "banks", saveAs: "ctx.banks" }],
-      blocks: [
-        { type: "select", bind: "conn.bankId", label: "Your bank", variant: "tiles", source: "ctx.banks" },
-        { type: "button", label: "Continue", variant: "primary", actions: [{ type: "validate" }, { type: "navigate", to: "login" }] },
-      ],
-    },
-    {
-      id: "login", title: "Sign in to your bank",
-      blocks: [
-        { type: "alert", tone: "info", text: "Your details are encrypted and sent securely. BankWorkx only gets read-only access." },
-        { type: "textInput", bind: "conn.username", label: "Username", placeholder: "Your online banking username" },
-        { type: "textInput", bind: "conn.password", label: "Password", placeholder: "At least 6 characters", secure: true },
-        {
-          type: "consent", bind: "conn.consent", termsVersion: "connect-v1", text: "I allow BankWorkx to read my balance and transactions",
-          validation: { mustBeTrue: true, messages: { mustBeTrue: "Tick the box to continue" } },
-        },
-        {
-          type: "button", label: "Connect account", variant: "primary",
-          actions: [
-            { type: "validate" },
-            { type: "callApi", integration: "connectBank", input: { bankId: "{{conn.bankId}}", username: "{{conn.username}}", password: "{{conn.password}}", accountType: "{{conn.accountType}}" }, saveAs: "ctx.connected", onError: { navigate: "failed" } },
-            { type: "navigate", to: "success" },
-          ],
-        },
-      ],
-    },
-    {
-      id: "success", title: "Account connected", kind: "terminal",
-      blocks: [{ type: "result", tone: "success", title: "Account connected", text: "{{ctx.connected.bank}} {{ctx.connected.maskedNumber}} is now linked to BankWorkx.", meta: "Balance ${{ctx.connected.balance | money}}" }, done],
-    },
-    {
-      id: "failed", title: "Couldn't connect", kind: "terminal",
-      blocks: [
-        { type: "result", tone: "error", title: "We couldn't connect your bank", text: "Check your username and password, then try again. If it keeps failing, your bank may be unavailable." },
-        { type: "button", label: "Try again", variant: "primary", actions: [{ type: "navigate", to: "login" }] },
-      ],
-    },
-  ],
-};
+// Connect a bank was rebuilt for step 7, slice D (see connect-account.ts); the old journey asked for the other bank's username and password
+export { connectAccount };
 
 
 
-export const bankworkxJourneys: Journey[] = [addMoney, addCard, connectAccount, createBudget, invest, sellInvestment, ownTransfer, manageBeneficiary, personalTransfer, internalTransfer, internationalTransfer, payBillBankworkx, mobileTopup, schedulePayment, cancelStandingOrder, supplierPayment, approvePayments, signIn, forgotUsername, resetPassword, forgotPassword, unlockAccount, changePassword, trustedDevices, changeQuickPin, setupQuickLogin, accounts, accountDetails, statement, openAnotherAccount, budgets, accountNickname, transferTypes, singleTransfer, cardsView, activateCard, cardControls, freezeCard, virtualCard, replaceCard, cardPin, disputeTransaction, saveBorrow, termDeposit, savingsGoal, applyLoan, repayLoan];
+export const bankworkxJourneys: Journey[] = [addMoney, addCard, connectAccount, createBudget, invest, sellInvestment, ownTransfer, manageBeneficiary, personalTransfer, internalTransfer, internationalTransfer, payBillBankworkx, mobileTopup, schedulePayment, cancelStandingOrder, supplierPayment, approvePayments, signIn, forgotUsername, resetPassword, forgotPassword, unlockAccount, changePassword, trustedDevices, changeQuickPin, setupQuickLogin, accounts, accountDetails, statement, openAnotherAccount, budgets, accountNickname, transferTypes, singleTransfer, cardsView, activateCard, cardControls, freezeCard, virtualCard, replaceCard, cardPin, disputeTransaction, saveBorrow, termDeposit, savingsGoal, applyLoan, repayLoan, updateProfile, newMessage, messagesView, serviceRequest, myRequests];

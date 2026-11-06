@@ -248,8 +248,8 @@ describe("Settings > Security", () => {
     expect(more.sections.find((x: any) => x.id === "settings").rows).toEqual([expect.objectContaining({ title: "Security", go: "security" })]);
     await a.refreshCatalog();
     const labels = launchPointsFor({ context: a.context, entries: a.getState().catalog.entries, settings: a.getState().session.settings }, { place: "more.security" }).map((l) => l.label);
-    expect(labels).toEqual(["Change password", "Trusted devices", "Change quick PIN", "Quick sign-in", "Biometrics"].filter((l) => labels.includes(l)));
-    expect(labels).toEqual(expect.arrayContaining(["Change password", "Trusted devices", "Change quick PIN", "Quick sign-in", "Biometrics"]));
+    // This wasn't me opens new-message (Fraud or security), which exists since the More journeys: it is the last button of the place
+    expect(labels).toEqual(["Change password", "Trusted devices", "Change quick PIN", "Quick sign-in", "Biometrics", "This wasn't me"]);
     // Business does not have them
     await a.switchContext("alpha"); await a.beginStepUp({ secret: PASSWORD }); await a.confirmStepUp("000000");
     expect(launchPointsFor({ context: a.context, entries: a.getState().catalog.entries, settings: a.getState().session.settings }, { place: "more.security" })).toEqual([]);
