@@ -44,7 +44,8 @@ describe("catalog stays in sync with the real schema and lint", () => {
       expect(line!.match(/ \[([a-z, ]+)\]$/)?.[1] ?? "", a.adapter).toBe([a.moneyMoving ? "money" : "", a.requiresOtp ? "otp" : ""].filter(Boolean).join(", "));
     }
     // the detail is the entries of ADAPTER_CATALOG, unchanged and in the same order
-    expect((getCatalog("adapters", "bank,corp,cab,sandbox") as any).adapters.list).toEqual(ADAPTER_CATALOG);
+    for (const fam of new Set(ADAPTER_CATALOG.map((a) => a.adapter.split(".").slice(0, 2).join(".")))) expect((getCatalog("adapters", fam) as any).adapters.list, fam).toEqual(ADAPTER_CATALOG.filter((a) => a.adapter.startsWith(`${fam}.`)));
+    expect((getCatalog("adapters", "corp,cab,sandbox") as any).adapters.list).toEqual(ADAPTER_CATALOG.filter((a) => !a.adapter.startsWith("bank.")));
     expect(Object.keys(getCatalog("adapters", "bank.payees"))).toEqual(["adapters"]);
     expect((getCatalog("adapters", "bank.payees") as any).adapters.list.map((a: any) => a.adapter)).toEqual(ADAPTER_CATALOG.filter((a) => a.adapter.startsWith("bank.payees.")).map((a) => a.adapter));
     expect(adapterDetail("bank.otp.verify, bank.otp.verify,bank.otp").map((a) => a.adapter)).toEqual(["bank.otp.send", "bank.otp.verify"]);
@@ -64,6 +65,15 @@ describe("catalog stays in sync with the real schema and lint", () => {
       expect(g.split("(").length, a.adapter).toBe(g.split(")").length); // never cut inside a bracket
     }
   });
+  it("the whole catalog is the short form and each section by name is complete", () => {
+    const all = getCatalog("all") as any;
+    expect(all.blocks.every((b: any) => b.example === undefined && b.fields)).toBe(true);
+    expect(all.lint.every((r: any) => r.fix === undefined)).toBe(true);
+    expect((getCatalog("blocks") as any).blocks).toEqual(BLOCKS);
+    expect((getCatalog("lint") as any).lint).toEqual(LINT_RULES);
+    expect(all.personas.list.length).toBe((getCatalog("personas") as any).personas.list.length);
+    expect(typeof (getCatalog("personas") as any).personas.list[0]).toBe("object");
+  });
   it("sections return only what was asked for", () => {
     for (const s of SECTIONS.filter((x) => x !== "all")) expect(Object.keys(getCatalog(s))).toEqual([s]);
   });
@@ -75,7 +85,9 @@ describe("catalog stays in sync with the real schema and lint", () => {
   // spending, speeds), each cut to one short line before raising (12,796 now). The whole stays at 54,530 of 56,000.
   // adapters 12,800 -> 14,100: the 19 new adapters of the Cards journeys (choosing cards, their spending, activation, freezing, controls, virtual cards, replacing, the PIN, reporting a payment, saving another
   // bank's card), and 3 rewritten entries (issued, get, add), each cut to one short line before raising (14,055 now). The whole stays at 55,802 of 56,000, which is not raised.
-  const SECTION_CEILINGS: Record<string, number> = { overview: 900, journey: 2_600, blocks: 22_500, actions: 3_000, expressions: 1_900, data: 900, localization: 1_100, adapters: 14_100, personas: 5_800, lint: 4_300, patterns: 1_700 };
+  // The whole catalog is the short form (44,600 of 56,000 after this compaction, 55,802 before): blocks without their examples, personas as one line each, lint codes without their fix.
+  // Each section by name is still complete, so an agent asks for what it needs. Ceilings = today's size plus what the Save & Borrow journeys add (adapters +2,500, personas +300).
+  const SECTION_CEILINGS: Record<string, number> = { overview: 1_100, journey: 2_600, blocks: 15_100, actions: 3_000, expressions: 1_900, data: 900, localization: 1_100, adapters: 16_600, personas: 1_800, lint: 2_600, patterns: 1_700 };
   it("each section stays within its ceiling, and the whole stays within the size the tool returns", () => {
     const sizes = catalogSizes();
     const report = JSON.stringify(sizes);
@@ -87,6 +99,9 @@ describe("catalog stays in sync with the real schema and lint", () => {
   it("the full entries of one family fit in one small answer, and a whole domain fits in the tool's limit", () => {
     const families = new Set(ADAPTER_CATALOG.map((a) => a.adapter.split(".").slice(0, 2).join(".")));
     for (const f of families) expect(JSON.stringify(adapterDetail(f)).length, f).toBeLessThan(9_000);
-    for (const d of ["bank", "corp", "cab"]) expect(JSON.stringify(getCatalog("adapters", d)).length, d).toBeLessThan(CATALOG_MAX_CHARS);
+    for (const d of ["corp", "cab"]) expect(JSON.stringify(getCatalog("adapters", d)).length, d).toBeLessThan(CATALOG_MAX_CHARS);
+    // all of `bank` in full (about 67,000 characters since the Save & Borrow adapters) is more than one answer holds: it is refused with the families to ask for, instead of a cut-off answer that is not valid JSON
+    expect(() => getCatalog("adapters", "bank")).toThrow(/Ask for one family at a time: .*bank\.payees/);
+    expect(() => getCatalog("adapters", "bank")).toThrow(CatalogError);
   });
 });

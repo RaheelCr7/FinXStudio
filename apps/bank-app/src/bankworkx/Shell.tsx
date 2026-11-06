@@ -33,7 +33,7 @@ export function BankWorkxShell({ app }: { app: BankApp }) {
   const { screen, tab: tabId, tick, catalog, toast, paying, sheet, investView, active } = s;
 
   const actions: Actions = {
-    bank, money, money2, journeys: catalog.entries, go: (t) => app.setTab(t), openJourney: (slug, initial) => app.openJourney(slug, initial), openBudget: (id) => app.openBudget(id), paySub: (id) => app.paySubscription(id),
+    bank, money, money2, journeys: catalog.entries, go: (t) => app.setTab(t), openJourney: (slug, initial, launch) => app.openJourney(slug, initial, launch), openBudget: (id) => app.openBudget(id), paySub: (id) => app.paySubscription(id),
     menu: () => app.openSheet("menu"), notifications: () => app.openSheet("notes"), openInvest: () => app.openInvest(),
   };
 

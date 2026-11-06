@@ -284,6 +284,7 @@ const OVERVIEW = {
   workflow: ["finx_get_catalog (this)", "finx_get_example for the closest shipped journey", "finx_create_journey (new) or finx_get_journey (change)", "finx_save_draft or finx_patch_journey, until issues is empty", "finx_simulate_journey: happy path, a validation failure, a failure path, Urdu", "finx_report_run with the summary, then tell the person to review in Studio"],
   limits: { maxScreens: 30, maxJsonKilobytes: 200, advice: "Typical journeys have 3 to 8 screens." },
   scope: "Agents only write drafts. Publishing needs the person's explicit instruction.",
+  more: "This whole answer is the short form: sections blocks (an example of each), personas (accounts, payees, limits) and lint (the fix for each code) have more when asked for by name; adapters has an index, ask for inputs and results by adapter.",
 };
 
 /** A request the catalog cannot answer (an unknown adapter name, or an adapter filter on another section). The tool turns it into a readable error. */
@@ -347,6 +348,19 @@ export function adapterDetail(selector: string): AdapterInfo[] {
   return ADAPTER_CATALOG.filter((a) => picked.has(a));
 }
 
+/**
+ * The full entries a selector names, when they fit in one answer. A whole domain (all of `bank`) no longer does: a cut-off answer would not be valid JSON, so
+ * the call says so and lists the families to ask for one at a time (each family fits).
+ */
+function adapterAnswer(selector: string): AdapterInfo[] {
+  const list = adapterDetail(selector), size = JSON.stringify(list).length;
+  if (size > CATALOG_MAX_CHARS - 2_000) {
+    const families = [...new Set(list.map((a) => familyOf(a.adapter)))];
+    throw new CatalogError(`"${selector}" is ${size.toLocaleString("en-US")} characters, more than one answer holds. Ask for one family at a time: ${families.join(", ")}.`);
+  }
+  return list;
+}
+
 /** The size in characters of each part of the catalog as the tool returns it (compact JSON), to find what grew. */
 export function catalogSizes() {
   const sizes: Record<string, number> = {};
@@ -371,14 +385,14 @@ export function getCatalog(section: Section = "all", adapter?: string) {
       },
       notes: ["navigation.default is informational today: only button navigate actions and navigation.rules move the customer. Every screen except terminal ones needs a button that navigates.", "navigation.rules apply to every navigate action on that screen, so use them on a screen with one forward button.", "kind: terminal marks the end (success or failed) and hides the back arrow in the app. branch marks an alternate path such as limit exceeded. Both also change how Studio draws them and how lint reasons about the flow.", "Screen ids: lowercase letters, digits and underscores."],
     },
-    blocks: BLOCKS,
+    blocks: section === "all" ? BLOCKS.map(({ example: _example, ...b }) => b) : BLOCKS,
     actions: ACTIONS,
     expressions: EXPRESSIONS,
     data: DATA,
     localization: LOCALIZATION,
-    adapters: adapter === undefined ? adapterIndex() : { note: ADAPTER_DETAIL_NOTE, list: adapterDetail(adapter) },
-    personas: { note: "Use these in finx_simulate_journey. The code 000000 is accepted for every customer; use 999999 as a wrong code.", list: describePersonas() },
-    lint: LINT_RULES,
+    adapters: adapter === undefined ? adapterIndex() : { note: ADAPTER_DETAIL_NOTE, list: adapterAnswer(adapter) },
+    personas: { note: "Use these in finx_simulate_journey. The code 000000 is accepted for every customer; use 999999 as a wrong code.", list: section === "all" ? describePersonas().map((p) => `${p.id}: ${p.name}, code ${p.otpCode}`) : describePersonas() },
+    lint: section === "all" ? LINT_RULES.map(({ code, means }) => ({ code, means })) : LINT_RULES,
     patterns: PATTERNS,
   };
   if (section === "all") return all;

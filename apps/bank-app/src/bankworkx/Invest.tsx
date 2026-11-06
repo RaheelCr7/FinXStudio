@@ -212,12 +212,12 @@ export function InstrumentDetail({ symbol, a, onBack }: { symbol: string; a: Act
 
       <View style={{ flexDirection: "row", gap: 12 }}>
         {canSell ? (
-          <Pressable accessibilityRole="button" accessibilityLabel={`Sell ${i.symbol}`} onPress={() => a.openJourney("sell-investment", { "sell.symbol": i.symbol })} style={({ pressed }) => ({ flex: 1, minHeight: 52, borderRadius: r.lg, borderWidth: 2, borderColor: c.accent, alignItems: "center", justifyContent: "center", opacity: pressed ? 0.85 : 1 })}>
+          <Pressable accessibilityRole="button" accessibilityLabel={`Sell ${i.symbol}`} onPress={() => a.openJourney("sell-investment", undefined, { "launch.symbol": i.symbol })} style={({ pressed }) => ({ flex: 1, minHeight: 52, borderRadius: r.lg, borderWidth: 2, borderColor: c.accent, alignItems: "center", justifyContent: "center", opacity: pressed ? 0.85 : 1 })}>
             <Text style={{ color: c.accent, fontWeight: "700", fontSize: 16 }}>Sell</Text>
           </Pressable>
         ) : null}
         {canBuy ? (
-          <Pressable accessibilityRole="button" accessibilityLabel={`Buy ${i.symbol}`} onPress={() => a.openJourney("invest", { "invest.symbol": i.symbol })} style={({ pressed }) => ({ flex: 2, minHeight: 52, borderRadius: r.lg, backgroundColor: c.accent, alignItems: "center", justifyContent: "center", opacity: pressed ? 0.88 : 1 })}>
+          <Pressable accessibilityRole="button" accessibilityLabel={`Buy ${i.symbol}`} onPress={() => a.openJourney("invest", undefined, { "launch.symbol": i.symbol })} style={({ pressed }) => ({ flex: 2, minHeight: 52, borderRadius: r.lg, backgroundColor: c.accent, alignItems: "center", justifyContent: "center", opacity: pressed ? 0.88 : 1 })}>
             <Text style={{ color: c.accentOn, fontWeight: "700", fontSize: 16 }}>Buy {i.symbol}</Text>
           </Pressable>
         ) : null}

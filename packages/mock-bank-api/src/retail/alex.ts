@@ -1,5 +1,5 @@
 import { roundMoney } from "@finx/ui-kit";
-import type { AccountTxn, Application, IssuedCard, Loan, LoanInstalment, RetailData } from "./data";
+import type { AccountTxn, Application, IssuedCard, LoanInstalment, RetailData } from "./data";
 
 /** Alex Morgan, the personal side of the combined demo (docs/journeys/README.md 1.7). Dates are fixed so tests read the same every day; "today" in the prototype is 3 November 2026. */
 export const ALEX_TODAY = "2026-11-03";
@@ -55,11 +55,6 @@ export function loanSchedule(outstanding: number, ratePercent: number, n: number
   });
   return { monthlyPayment: pay, schedule };
 }
-const loans = (): Loan[] => {
-  const s = loanSchedule(7480, 8.9, 20, "2026-11-15", "USD");
-  return [{ id: "loan_personal", name: "Personal loan", principal: 12000, outstanding: 7480, currency: "USD", ratePercent: 8.9, monthlyPayment: s.monthlyPayment, nextDue: "2026-11-15", schedule: s.schedule }];
-};
-
 const applications = (): Application[] => [
   { id: "APP-1001", type: "account", status: "draft", step: "address", productId: "savings", updatedAt: "2026-11-02T18:20:00Z", data: { firstName: "Alex", lastName: "Morgan", email: "alex.morgan@example.com" } },
   { id: "APP-1002", type: "account", status: "approved", step: "status", productId: "current", updatedAt: "2026-10-30T09:05:00Z", data: { firstName: "Alex", lastName: "Morgan" } },
@@ -69,15 +64,10 @@ export const alexRetail = (): RetailData => ({
   profile: { name: "Alex Morgan", email: "alex.morgan@example.com", phone: "+1 415 555 0142", dateOfBirth: "1988-04-17", customerSince: "2019-03-12", language: "en", address: { line1: "12 Harbour Road", city: "Springfield", region: "IL", postalCode: "10001", country: "US" } },
   transactions: transactions(),
   cards: cards(),
-  deposits: [
-    { id: "td_1", name: "12-month deposit", principal: 5000, currency: "USD", ratePercent: 4.1, termMonths: 12, openedOn: "2026-03-03", maturesOn: "2027-03-03", status: "active", autoRenew: false, accountId: "acc_save" },
-    { id: "td_2", name: "6-month deposit", principal: 2000, currency: "USD", ratePercent: 3.6, termMonths: 6, openedOn: "2026-05-02", maturesOn: "2026-11-02", status: "matured", autoRenew: false, accountId: "acc_save" },
-  ],
-  goals: [
-    { id: "goal_holiday", name: "Holiday", target: 3000, saved: 1250, currency: "USD", targetDate: "2027-06-30", accountId: "acc_save" },
-    { id: "goal_reserve", name: "Emergency fund", target: 10000, saved: 6400, currency: "USD", targetDate: "2027-12-31", accountId: "acc_save" },
-  ],
-  loans: loans(),
+  // deposits, goals and loans are kept by the Save and borrow sandbox (save.ts, Persona.save)
+  deposits: [],
+  goals: [],
+  loans: [],
   messages: [
     { id: "msg_1", subject: "Your statement is ready", from: "BankWorkx", at: "2026-11-01T06:00:00Z", read: false, body: "Your October statement for Main is ready to download." },
     { id: "msg_2", subject: "Your deposit has matured", from: "BankWorkx", at: "2026-11-02T06:00:00Z", read: false, body: "Your 6-month deposit has matured. Renew it or move the money." },

@@ -66,24 +66,28 @@ describe("mock bank sandbox", () => {
     expect(ADAPTER_CATALOG.find((a) => a.adapter === "bank.otp.verify")!.suggestedId).toBe("otpVerify");
   });
   it("describes the sandbox customers with their test OTPs, per bank app", () => {
-    expect(describePersonas().map((p) => [p.id, p.otpCode])).toEqual([["ayesha", "482100"], ["bilal", "111111"], ["alex", "482100"], ["alexglobal", "482100"], ["alexpayees", "482100"], ["alexfull", "482100"], ["alexbills", "482100"], ["alextopup", "482100"], ["alexsched", "482100"], ["sam", "123456"], ["zara", "123456"], ["hina", "482100"], ["acme", "482100"], ["nour", "482100"], ["sara", "482100"], ["yasmin", "482100"], ["lina", "482100"], ["omar", "482100"], ["alexbiz", "482100"], ["alexaccounts", "482100"], ["demolocked", "482100"], ["demoexpired", "482100"], ["demoinactive", "482100"], ["demonew", "482100"], ["demolimit", "482100"]]);
+    expect(describePersonas().map((p) => [p.id, p.otpCode])).toEqual([["ayesha", "482100"], ["bilal", "111111"], ["alex", "482100"], ["alexglobal", "482100"], ["alexpayees", "482100"], ["alexfull", "482100"], ["alexbills", "482100"], ["alextopup", "482100"], ["alexsched", "482100"], ["sam", "123456"], ["zara", "123456"], ["hina", "482100"], ["acme", "482100"], ["nour", "482100"], ["sara", "482100"], ["yasmin", "482100"], ["lina", "482100"], ["omar", "482100"], ["alexbiz", "482100"], ["alexaccounts", "482100"], ["alexsave", "482100"], ["demolocked", "482100"], ["demoexpired", "482100"], ["demoinactive", "482100"], ["demonew", "482100"], ["demolimit", "482100"]]);
     expect(personasFor("meezan").map((p) => p.id)).toEqual(["ayesha", "bilal", "zara", "hina", "acme"]);
-    expect(personasFor("bankworkx").map((p) => p.id)).toEqual(["alex", "alexglobal", "alexpayees", "alexfull", "alexbills", "alextopup", "alexsched", "sam", "alexbiz", "alexaccounts", "demolocked", "demoexpired", "demoinactive", "demonew", "demolimit"]);
+    expect(personasFor("bankworkx").map((p) => p.id)).toEqual(["alex", "alexglobal", "alexpayees", "alexfull", "alexbills", "alextopup", "alexsched", "sam", "alexbiz", "alexaccounts", "alexsave", "demolocked", "demoexpired", "demoinactive", "demonew", "demolimit"]);
   });
 });
 
 
 describe("BankWorkx sandbox", () => {
-  it("adds money from a saved card and records it", async () => {
+  it("adds money from a saved card with its code and records it (the Add money rules are in save.test.ts)", async () => {
     const b = new MockBank("alex");
-    const r = await b.call("bank.deposit.create", { toAccountId: "acc_main", fromCardId: "c_5832", amount: 150 });
+    const top = { toAccountId: "acc_main", fromCardId: "c_5832", amount: 150, securityCode: "123" };
+    await expect(b.call("bank.deposit.create", top)).rejects.toMatchObject({ code: "OTP_REQUIRED" });
+    await b.call("bank.otp.send", {}); await b.call("bank.otp.verify", { code: "482100" });
+    const r = await b.call("bank.deposit.create", top);
     expect(r.newBalance).toBe(8870.76);
-    expect(b.persona.finance!.transactions[0]).toMatchObject({ title: "Added money", amount: 150 });
+    expect(b.persona.finance!.transactions[0]).toMatchObject({ title: "Card top-up", amount: 150 });
   });
-  it("limits deposits to $1 to $50,000", async () => {
+  it("limits adding money to $10 to $5,000", async () => {
     const b = new MockBank("alex");
-    await expect(b.call("bank.deposit.create", { toAccountId: "acc_main", fromCardId: "c_5832", amount: 50001 })).rejects.toMatchObject({ code: "INVALID_AMOUNT" });
-    await expect(b.call("bank.deposit.create", { toAccountId: "acc_main", fromCardId: "nope", amount: 5 })).rejects.toMatchObject({ code: "CARD_NOT_FOUND" });
+    await expect(b.call("bank.deposit.create", { toAccountId: "acc_main", fromCardId: "c_5832", amount: 5001, securityCode: "123" })).rejects.toMatchObject({ code: "LIMIT_EXCEEDED" });
+    await expect(b.call("bank.deposit.create", { toAccountId: "acc_main", fromCardId: "c_5832", amount: 5, securityCode: "123" })).rejects.toMatchObject({ code: "INVALID_AMOUNT" });
+    await expect(b.call("bank.deposit.create", { toAccountId: "acc_main", fromCardId: "nope", amount: 50, securityCode: "123" })).rejects.toMatchObject({ code: "CARD_NOT_FOUND" });
   });
   it("saves a card only when the details check out and the person proved it is theirs (the Add a card rules are in cards.test.ts)", async () => {
     const b = new MockBank("alex", { now: Date.parse("2026-11-03T10:00:00Z") });
@@ -132,6 +136,9 @@ describe("sandbox investing", () => {
   });
   it("buys into an existing holding at an average cost, and refuses bad orders", async () => {
     const b = new MockBank("alex");
+    // the older stock buy needs the one-time code too, after its own checks
+    await expect(b.call("bank.invest.buy", { symbol: "GLBX", amount: 421.8, fromAccountId: "acc_main" })).rejects.toMatchObject({ code: "OTP_REQUIRED" });
+    await b.call("bank.otp.send", {}); await b.call("bank.otp.verify", { code: "482100" });
     const out = await b.call("bank.invest.buy", { symbol: "GLBX", amount: 421.8, fromAccountId: "acc_main" });
     expect(out).toMatchObject({ shares: 10, newBalance: 8298.96 });
     const h = b.persona.finance!.invest.holdings.find((x) => x.symbol === "GLBX")!;
@@ -149,12 +156,16 @@ describe("sandbox investing", () => {
   it("sells part or all of a holding and refuses what is not owned or too much", async () => {
     const b = new MockBank("alex");
     expect(Object.keys(await b.call("bank.invest.holdings", {}))).toEqual(["LMRB", "GLBX", "ORCH", "TBND"]);
+    const code = async () => { await b.call("bank.otp.send", {}); await b.call("bank.otp.verify", { code: "482100" }); };
+    await expect(b.call("bank.invest.sell", { symbol: "GLBX", amount: 421.8, toAccountId: "acc_main" })).rejects.toMatchObject({ code: "OTP_REQUIRED" });
+    await code();
     const part = await b.call("bank.invest.sell", { symbol: "GLBX", amount: 421.8, toAccountId: "acc_main" });
     expect(part).toMatchObject({ shares: 10, proceeds: 421.8, newBalance: 9142.56 });
     expect(b.persona.finance!.invest.holdings.find((h) => h.symbol === "GLBX")!.shares).toBe(30);
     await expect(b.call("bank.invest.sell", { symbol: "APXC", amount: 10, toAccountId: "acc_main" })).rejects.toMatchObject({ code: "NOT_HELD" });
     await expect(b.call("bank.invest.sell", { symbol: "GLBX", amount: 99999, toAccountId: "acc_main" })).rejects.toMatchObject({ code: "INSUFFICIENT_HOLDING" });
     await expect(b.call("bank.invest.sell", { symbol: "GLBX", amount: 0, toAccountId: "acc_main" })).rejects.toMatchObject({ code: "INVALID_AMOUNT" });
+    await code();
     const all = await b.call("bank.invest.sell", { symbol: "GLBX", amount: 30 * 42.18, toAccountId: "acc_main" });
     expect(all.shares).toBe(30);
     expect(b.persona.finance!.invest.holdings.some((h) => h.symbol === "GLBX")).toBe(false);

@@ -32,10 +32,10 @@ describe("JourneyController", () => {
 
   it("applies initial answers after the journey opens", async () => {
     const bank = new MockBank("alex");
-    const c = new JourneyController(addMoney, { adapter: (id, i) => bank.call(id, i), initial: { "add.fromCardId": "c_5832" } });
+    const c = new JourneyController(addMoney, { adapter: (id, i) => bank.call(id, i), initial: { "am.method": "bank" } });
     await c.start();
-    expect(c.runner.get("add.fromCardId")).toBe("c_5832");
-    expect(c.layout().body.find((b) => b.type === "select")!.value).toBe("c_5832");
+    expect(c.runner.get("am.method")).toBe("bank");
+    expect(c.layout().body.find((b) => b.type === "select")!.value).toBe("bank");
   });
 
   it("steps back when it can and says to close when it cannot", async () => {

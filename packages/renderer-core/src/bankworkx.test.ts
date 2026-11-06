@@ -39,32 +39,40 @@ describe("card checks", () => {
 });
 
 describe("Add money", () => {
-  it("shows the customer's accounts and saved cards, and one-tap amounts", async () => {
+  const toCard = async () => { const m = mk(addMoney); await m.r.start(); await press(m.r, "Continue"); return m; };
+  it("offers the two ways, then the accounts, the saved cards that can be used and the amount rules", async () => {
     const { r } = mk(addMoney); await r.start();
-    const blocks = r.view().blocks;
-    expect(blocks.find((b) => b.type === "accountPicker")!.items.map((a: any) => a.id)).toEqual(["acc_main", "acc_save", "acc_eur", "acc_aed"]);
-    expect(blocks.find((b) => b.type === "select")!.items[0]).toMatchObject({ id: "c_5832", name: "Everyday ••5832" });
-    expect(blocks.find((b) => b.type === "amountInput")!.quickAmounts).toEqual([50, 100, 150, 200]);
+    expect(r.current).toBe("method");
+    expect(r.view().blocks.find((b) => b.type === "select")!.items.map((a: any) => a.id)).toEqual(["card", "bank"]);
+    await press(r, "Continue");
+    expect(r.current).toBe("card");
+    const selects = r.view().blocks.filter((b) => b.type === "select");
+    expect(selects[0]!.items.map((a: any) => a.id)).toEqual(["acc_main", "acc_save"]);
+    expect(selects[1]!.items[0]).toMatchObject({ id: "c_5832", name: "Mastercard ••5832" });
+    expect(r.view().blocks.find((b) => b.type === "amountInput")!.validation).toMatchObject({ min: 10, max: 5000 });
   });
   it("checks the amount before continuing", async () => {
-    const { r } = mk(addMoney); await r.start();
+    const { r } = await toCard();
     await press(r, "Continue");
-    expect(r.current).toBe("amount");
-    expect(Object.keys(r.errors).sort()).toEqual(["add.amount", "add.fromCardId", "add.toAccountId"]);
-    r.set("add.toAccountId", "acc_main"); r.set("add.fromCardId", "c_5832"); r.set("add.amount", 60000);
+    expect(r.current).toBe("card");
+    expect(Object.keys(r.errors)).toContain("am.amount");
+    r.set("am.amount", 60000); r.set("am.cardId", "c_5832"); r.set("am.cvv", "123");
     await press(r, "Continue");
-    expect(r.errors["add.amount"]).toBe("The most you can add at once is $50,000");
+    expect(r.errors["am.amount"]).toBe("The most you can add at once is $5,000.00.");
   });
-  it("adds money and shows a reference", async () => {
-    const { r, bank } = mk(addMoney); await r.start();
-    r.set("add.toAccountId", "acc_main"); r.set("add.fromCardId", "c_5832"); r.set("add.amount", 150);
+  it("adds money after a tick and a code and shows a reference; the account gets the amount, not the fee", async () => {
+    const { r, bank } = await toCard();
+    r.set("am.amount", 150); r.set("am.cardId", "c_5832"); r.set("am.cvv", "123");
     await press(r, "Continue");
     expect(r.current).toBe("review");
-    expect(r.view().blocks.find((b) => b.type === "reviewSummary")!.rows[2]).toEqual({ label: "You'll add", value: "$150" });
-    await press(r, "Add $150");
-    expect(r.current).toBe("success");
+    expect(r.view().blocks.find((b) => b.type === "reviewSummary" && b.rows.some((x: any) => x.label === "Card fee"))!.rows.at(-1)).toEqual({ label: "Charged to your card", value: "$152.25" });
+    r.set("am.consent", true); await press(r, "Confirm");
+    expect(r.current).toBe("code");
+    r.set("otp.code", "482100"); await press(r, "Add money");
+    expect(r.current).toBe("done");
     expect(bank.persona.accounts[0]!.balance).toBe(8870.76);
-    expect(r.view().blocks.find((b) => b.type === "result")!.meta).toMatch(/^Ref ADD-/);
+    expect(r.view().blocks.find((b) => b.type === "result")!.meta).toMatch(/^Reference ADD-/);
+    expect(r.get("am.cvv")).toBe("");
   });
 });
 
@@ -177,30 +185,72 @@ describe("Create a budget", () => {
   });
 });
 
+// Invest and Sell investment on Tuesday 3 November 2026: the funds of the Save and borrow brief; a stock from the Invest tab takes the older road (launch value symbol)
+const NOW = Date.parse("2026-11-03T10:00:00Z");
+const run = (j: Journey, launch?: Record<string, any>) => {
+  const bank = new MockBank("alex"); bank.now = () => NOW;
+  return { bank, r: new JourneyRunner(j, { adapter: (id, input) => bank.call(id, input), launch }) };
+};
+const shown = (r: JourneyRunner) => r.view().blocks.filter((b) => b.type === "select").flatMap((b) => b.items.map((i: any) => i.id));
+const alertText = (r: JourneyRunner) => r.view().blocks.filter((b) => b.type === "alert").map((b) => b.text).join(" | ");
+const code = async (r: JourneyRunner) => { r.set("otp.code", "482100"); await press(r, "Confirm"); };
+
 describe("Invest", () => {
-  it("lists the instruments and the accounts, and checks the form before continuing", async () => {
-    const { r } = mk(invest); await r.start();
-    expect(r.view().blocks.find((b) => b.type === "select")!.items.map((i: any) => i.id)).toContain("LMRB");
+  it("lists the funds and checks the form before continuing", async () => {
+    const { r } = run(invest); await r.start();
+    expect(r.current).toBe("fund");
+    expect(shown(r)).toEqual(expect.arrayContaining(["gov", "bal", "geq", "tech"]));
     await press(r, "Continue");
-    expect(r.current).toBe("buy");
-    expect(Object.keys(r.errors).sort()).toEqual(["invest.amount", "invest.fromAccountId", "invest.symbol"]);
+    expect(r.current).toBe("fund");
+    expect(Object.keys(r.errors)).toEqual(["inv.fundId"]);
   });
-  it("buys part of a share, takes the money and adds the holding", async () => {
-    const { r, bank } = mk(invest); await r.start();
-    r.set("invest.symbol", "APXC"); r.set("invest.fromAccountId", "acc_main"); r.set("invest.amount", 100);
+  it("buys a fund: asks for the tick and the code, takes the money and adds the units", async () => {
+    const { r, bank } = run(invest); await r.start();
+    r.set("inv.fundId", "bal"); await press(r, "Continue");
+    expect(r.current).toBe("amount");
     await press(r, "Continue");
+    expect(Object.keys(r.errors).sort()).toEqual(["inv.amount"]);
+    r.set("inv.amount", 100); await press(r, "Continue");
+    expect(r.current).toBe("review");
+    expect(r.view().blocks.find((b) => b.type === "reviewSummary")!.rows.find((x: any) => x.label === "Estimated units")!.value).toBe("6.25");
+    await press(r, "Invest");
+    expect(r.current).toBe("review");
+    r.set("inv.consent", true); await press(r, "Invest");
+    expect(r.current).toBe("code");
+    await code(r);
+    expect(r.current).toBe("done");
+    expect(bank.persona.accounts[0]!.balance).toBe(8620.76);
+    expect(bank.persona.save!.holdings.find((h) => h.fundId === "bal")).toMatchObject({ units: 156.25, cost: 2400 });
+    expect(r.view().blocks.find((b) => b.type === "result")!.text).toBe("$100.00 is invested in Balanced Portfolio.");
+  });
+  it("fails safely when the account cannot cover it: the bank says so and nothing is bought", async () => {
+    const { r, bank } = run(invest); await r.start();
+    r.set("inv.fundId", "bal"); await press(r, "Continue");
+    r.set("inv.amount", 9000); await press(r, "Continue");
+    expect(r.current).toBe("amount");
+    expect(alertText(r)).toBe("Not enough money in Main. Available: $8,602.36.");
+    expect(bank.persona.accounts[0]!.balance).toBe(8720.76);
+    expect(bank.persona.save!.holdings.find((h) => h.fundId === "bal")!.units).toBe(150);
+  });
+  it("buys a stock from the Invest tab the older way: part of a share, with the tick and the code", async () => {
+    const { r, bank } = run(invest, { "launch.symbol": "APXC" }); await r.start();
+    expect(r.current).toBe("stockAmount");
+    await press(r, "Continue");
+    expect(Object.keys(r.errors).sort()).toEqual(["inv.amount"]);
+    r.set("inv.amount", 100); await press(r, "Continue");
     expect(r.view().blocks.find((b) => b.type === "reviewSummary")!.rows[1]).toEqual({ label: "Amount", value: "$100" });
-    await press(r, "Buy $100");
-    expect(r.current).toBe("success");
+    r.set("inv.consent", true); await press(r, "Invest"); await code(r);
+    expect(r.current).toBe("doneStock");
     expect(bank.persona.accounts[0]!.balance).toBe(8620.76);
     expect(bank.persona.finance!.invest.holdings.find((h) => h.symbol === "APXC")).toMatchObject({ shares: 1.0368 });
     expect(r.view().blocks.find((b) => b.type === "result")!.text).toBe("You bought 1.0368 of APXC at $96.45.");
   });
-  it("fails safely when the account cannot cover it", async () => {
-    const { r, bank } = mk(invest); await r.start();
-    r.set("invest.symbol", "LMRB"); r.set("invest.fromAccountId", "acc_main"); r.set("invest.amount", 50000);
-    await press(r, "Continue"); await press(r, "Buy $50,000");
-    expect(r.current).toBe("failed");
+  it("a stock the account cannot cover is refused after the code and nothing is bought", async () => {
+    const { r, bank } = run(invest, { "launch.symbol": "LMRB" }); await r.start();
+    r.set("inv.amount", 50000); await press(r, "Continue");
+    r.set("inv.consent", true); await press(r, "Invest"); await code(r);
+    expect(r.current).toBe("stockAmount");
+    expect(alertText(r)).toBe("Insufficient funds");
     expect(bank.persona.accounts[0]!.balance).toBe(8720.76);
     expect(bank.persona.finance!.invest.holdings.some((h) => h.symbol === "LMRB" && h.shares > 6.5)).toBe(false);
   });
@@ -208,27 +258,42 @@ describe("Invest", () => {
 
 describe("Sell investment", () => {
   it("offers only what the customer owns", async () => {
-    const { r } = mk(sellInvestment); await r.start();
-    expect(r.view().blocks.find((b) => b.type === "select")!.items.map((i: any) => i.id)).toEqual(["LMRB", "GLBX", "ORCH", "TBND"]);
+    const { r } = run(sellInvestment); await r.start();
+    expect(r.current).toBe("pick");
+    expect(shown(r)).toEqual(["bal", "geq"]);
   });
-  it("sells part of a holding and pays the account", async () => {
-    const { r, bank } = mk(sellInvestment); await r.start();
-    r.set("sell.symbol", "LMRB"); r.set("sell.toAccountId", "acc_main"); r.set("sell.amount", 184.2);
-    await press(r, "Continue"); await press(r, "Sell $184.2");
-    expect(r.current).toBe("success");
-    expect(bank.persona.accounts[0]!.balance).toBe(8904.96);
-    expect(bank.persona.finance!.invest.holdings.find((h) => h.symbol === "LMRB")!.shares).toBe(5.5);
-    expect(r.view().blocks.find((b) => b.type === "result")!.text).toBe("You sold 1 of LMRB and $184.20 is in your account.");
+  it("sells part of a holding and pays the account, after the tick and the code", async () => {
+    const { r, bank } = run(sellInvestment, { "launch.holdId": "geq" }); await r.start();
+    expect(r.current).toBe("amount");
+    r.set("sl.amount", 100); await press(r, "Continue");
+    expect(r.current).toBe("review");
+    r.set("sl.consent", true); await press(r, "Sell"); await code(r);
+    expect(r.current).toBe("done");
+    expect(bank.persona.accounts[0]!.balance).toBe(8820.51);
+    expect(bank.persona.save!.holdings.find((h) => h.fundId === "geq")!.units).toBe(84.364);
+    expect(r.view().blocks.find((b) => b.type === "result")!.text).toBe("$99.75 arrives on 5 Nov 2026.");
   });
-  it("closes the holding when everything is sold, and refuses more than is owned", async () => {
-    const { r, bank } = mk(sellInvestment); await r.start();
-    r.set("sell.symbol", "TBND"); r.set("sell.toAccountId", "acc_main"); r.set("sell.amount", 600);
-    await press(r, "Continue"); await press(r, "Sell $600");
-    expect(r.current).toBe("failed");
+  it("closes the holding when everything is sold, and refuses more than is held", async () => {
+    const { r, bank } = run(sellInvestment, { "launch.holdId": "bal" }); await r.start();
+    r.set("sl.amount", 3000); await press(r, "Continue");
+    expect(r.current).toBe("amount");
+    expect(alertText(r)).toBe("You can’t sell more than $2,400.00.");
+    r.set("sl.how", "all"); await press(r, "Continue");
+    r.set("sl.consent", true); await press(r, "Sell"); await code(r);
+    expect(r.current).toBe("done");
+    expect(bank.persona.save!.holdings.some((h) => h.fundId === "bal")).toBe(false);
+    expect(bank.persona.accounts[0]!.balance).toBe(11114.76);
+  });
+  it("sells a stock from the Invest tab the older way, and a stock sold in full closes the holding", async () => {
+    const { r, bank } = run(sellInvestment, { "launch.symbol": "TBND" }); await r.start();
+    expect(r.current).toBe("stockAmount");
+    r.set("sl.amount", 600); await press(r, "Continue");
+    r.set("sl.consent", true); await press(r, "Sell"); await code(r);
+    expect(r.current).toBe("stockAmount");
     expect(bank.persona.accounts[0]!.balance).toBe(8720.76);
-    r.set("sell.amount", 491.5); await press(r, "Try again"); r.set("sell.symbol", "TBND"); r.set("sell.toAccountId", "acc_main"); r.set("sell.amount", 491.5);
-    await press(r, "Continue"); await press(r, "Sell $491.5");
-    expect(r.current).toBe("success");
+    r.set("sl.amount", 491.5); await press(r, "Continue");
+    r.set("sl.consent", true); await press(r, "Sell"); await code(r);
+    expect(r.current).toBe("doneStock");
     expect(bank.persona.finance!.invest.holdings.some((h) => h.symbol === "TBND")).toBe(false);
     expect(bank.persona.accounts[0]!.balance).toBe(9212.26);
   });

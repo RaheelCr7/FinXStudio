@@ -1,6 +1,7 @@
 import { BankError } from "./errors";
 import { alexFinance, type Category, type Finance } from "./retail/finance";
 import { alexCards, emptyCards, type CardsSeed } from "./retail/cards";
+import { alexSave, emptySave, type SaveSeed } from "./retail/save";
 import { ACME, type CorpCompany, type Flaws } from "./business/corporate";
 import { ALPHA, BETA, BETA_CAST, seedPayments } from "./business/alpha-beta";
 import { createCorporateProvider, type CorporateProvider, type ProviderId } from "./business/corporate-provider";
@@ -91,6 +92,8 @@ export type Persona = {
   finance?: Finance;
   /** The cards the bank issued (retail/cards.ts): their state, controls, limits, transactions and the cases opened on them. */
   cards?: CardsSeed;
+  /** Term deposits, savings goals, loans and the funds held (retail/save.ts). */
+  save?: SaveSeed;
   /** Everything else a retail customer has: transactions, cards, deposits, goals, loans, messages, applications. */
   retail?: RetailData;
   /** One login, several places to bank from: the companies this person acts for. Absent for a persona with a single place. */
@@ -203,6 +206,7 @@ export const personas: Record<string, Persona> = {
     finance: alexFinance(),
     retail: alexRetail(),
     cards: alexCards(),
+    save: alexSave(),
     identity: { id: "alex", name: "Alex Morgan", password: "Bwx!Demo2026", business: [{ id: "alpha", company: ALPHA, userId: "alex" }, { id: "beta", company: BETA, userId: "alex" }] },
     behaviour: { otpCode: "482100", kyc: "verified" },
   },
@@ -289,6 +293,7 @@ export const personas: Record<string, Persona> = {
     accounts: [], beneficiaries: [], limits: { daily: 50000, usedToday: 0 },
     finance: { ...alexFinance(), income: 0, expense: 0, savings: 0, balanceSeries: [], ranges: { "1W": [], "1M": [], "3M": [], "1Y": [] }, spendingByCategory: [], transactions: [], budgets: [], subscriptions: [], linked: [], cards: [], invest: { holdings: [], watchlist: [] } },
     cards: emptyCards(),
+    save: emptySave(),
     behaviour: { otpCode: "123456", kyc: "verified" },
   },
   zara: {
@@ -375,6 +380,18 @@ personas.alexbiz = {
       ],
     },
   };
+}
+
+// Alex again, for adding money from a card: the three saved cards of the Save and borrow brief (Visa 4242 of Harbor Bank, Mastercard 5100 of Crest Bank, and Visa 0019 of Lakeside Bank, which has
+// expired). Separate from Alex because the Add a card journey counts the cards he has.
+{
+  const alex = personas.alex!, finance = structuredClone(alex.finance!);
+  finance.cards = [
+    { id: "c_4242", network: "visa", last4: "4242", holder: "Alex Morgan", expiry: "09/28", nickname: "Visa", bank: "Harbor Bank", isDefault: true },
+    { id: "c_5100", network: "mastercard", last4: "5100", holder: "Alex Morgan", expiry: "03/29", nickname: "Mastercard", bank: "Crest Bank", isDefault: false },
+    { id: "c_0019", network: "visa", last4: "0019", holder: "Alex Morgan", expiry: "01/26", nickname: "Visa", bank: "Lakeside Bank", isDefault: false },
+  ];
+  personas.alexsave = { ...structuredClone(alex), id: "alexsave", testCast: true, name: "Alex Morgan (saved cards for adding money)", finance };
 }
 
 // The customers behind the sign-in cast (access.ts): people who can sign in with a username and password. They have no accounts of their own

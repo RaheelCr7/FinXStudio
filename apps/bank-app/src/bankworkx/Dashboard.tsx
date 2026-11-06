@@ -8,7 +8,7 @@ import { budgetIcon, budgetProgress, compactMoney, displayName, firstName, hasAc
 import { Card, SectionTitle, TxnRow, lift, tab, type TabId } from "./ui";
 
 export type Actions = {
-  bank: MockBank; money: (n: number) => string; money2: (n: number) => string; go: (t: TabId) => void; openJourney: (slug: string, initial?: Record<string, any>) => void;
+  bank: MockBank; money: (n: number) => string; money2: (n: number) => string; go: (t: TabId) => void; openJourney: (slug: string, initial?: Record<string, any>, launch?: Record<string, any>) => void;
   openBudget: (id: string) => void; paySub: (id: string) => void; journeys: Entry[]; menu: () => void; notifications: () => void; openInvest: () => void;
 };
 type Range = "1W" | "1M" | "3M" | "1Y";
