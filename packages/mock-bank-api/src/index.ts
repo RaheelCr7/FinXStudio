@@ -4,8 +4,10 @@ import { alexCards, emptyCards, type CardsSeed } from "./retail/cards";
 import { alexSave, emptySave, type SaveSeed } from "./retail/save";
 import { alexMore, emptyMore, type MoreSeed } from "./retail/more";
 import { PublicApi } from "./retail/public";
+import { KybApi } from "./retail/kyb";
 import { ACME, type CorpCompany, type Flaws } from "./business/corporate";
 import { ALPHA, BETA, BETA_CAST, GAMMA, seedPayments } from "./business/alpha-beta";
+import { PREVIEW_AS } from "./business/admin-data";
 import { createCorporateProvider, type CorporateProvider, type ProviderId } from "./business/corporate-provider";
 import { CAB_PROFILES, type CabProfile } from "./retail/cab";
 import { alexRetail } from "./retail/alex";
@@ -14,7 +16,7 @@ import { RetailSandbox, type OtpState } from "./retail/retail";
 import { BusinessSandbox, type Actor } from "./business/business";
 import { hit, isListAdapter } from "./conditions";
 import { DEFAULT_CONFIG, journeyEnabled, type BankConfig } from "./config";
-import { PERSONAL_PERMISSIONS, STEP_UP_SECONDS, contextsOf, personalNeeds, type IdentityDef } from "./identity";
+import { PERSONAL_PERMISSIONS, STEP_UP_SECONDS, contextsOf, permissionsOf, personalNeeds, type IdentityDef } from "./identity";
 import { ACCESS, AccessDirectory, AccessSandbox, type DeviceInfo } from "./access";
 import { assertSandboxAllowed } from "./policy";
 import { addDays, addMonths, scheduleLine, type AmountMode, type Freq, type ScheduleDetail, type ScheduleKind } from "./retail/schedules";
@@ -479,7 +481,7 @@ export const ANSWER_LIMIT_MS = 10_000;
 /** What answers before anyone is signed in: signing in, recovering, the rules of a password, the codes for them, the bank's setup. */
 const SIGNED_OUT_ADAPTERS = /^(bank\.(auth|recover)\.|bank\.device\.options$|bank\.password\.policy$|bank\.otp\.(send|verify)$|bank\.app\.config$|sandbox\.access\.inspect$)/;
 /** What the bank also answers to someone who is not signed in (public product and rate data, places, contact, opening an account, tracking an application, registering): no account data, no money (retail/public.ts). */
-export const PUBLIC_ADAPTERS = /^(bank\.(products|rates|locations|support|onboarding|registration)\.|bank\.applications\.(find|status)$|sandbox\.public\.)/;
+export const PUBLIC_ADAPTERS = /^(bank\.(products|rates|locations|support|onboarding|registration|kyb)\.|bank\.applications\.(find|status)$|sandbox\.(public|kyb)\.)/;
 const ACCESS_ADAPTERS = /^(bank\.(auth|recover)\.|bank\.device\.options$|bank\.password\.policy$|sandbox\.access\.inspect$)/;
 /** What a signed-in customer manages about their own access: devices, quick sign-in and PIN, the password, the login history. */
 const SECURITY_ADAPTERS = /^bank\.(devices\.|device\.setDefault$|password\.(check|change)$|loginHistory\.)/;
@@ -503,7 +505,7 @@ export class MockBank {
   private business!: BusinessSandbox;
   private providers = new Map<string, CorporateProvider>();
   /** The session, as a server would hold it: which context is active, whether a step-up is still valid, and whether it has ended. */
-  private session = { active: "personal", stepUpUntil: undefined as number | undefined, ended: false, audit: 0, lastActivity: undefined as number | undefined };
+  private session = { active: "personal", stepUpUntil: undefined as number | undefined, ended: false, audit: 0, lastActivity: undefined as number | undefined, preview: false };
   /** Nobody is signed in: only the sign-in and recovery adapters answer, until `bank.auth.completeSignIn` loads the customer who signed in. */
   private signedOut: boolean;
   private opts: { corpProvider?: ProviderId; corpFlaws?: Flaws };
@@ -511,6 +513,7 @@ export class MockBank {
   readonly access: AccessSandbox;
   /** Before sign-in: products, rates, places, contact, opening an account, tracking, registering. */
   private pub!: PublicApi;
+  private kyb!: KybApi;
 
   /**
    * `personaId` is the customer the bank serves; SIGNED_OUT ("signed-out") starts with nobody signed in, for a sign-in journey (the customer is loaded when it completes).
@@ -526,6 +529,7 @@ export class MockBank {
     this.config = { ...structuredClone(DEFAULT_CONFIG), ...structuredClone(options.config ?? {}) };
     this.signedOut = personaId === SIGNED_OUT;
     this.access = new AccessSandbox(options.directory ?? new AccessDirectory(), { now: () => this.now(), flaws: () => this.opts.corpFlaws ?? {}, config: () => this.config, deviceKind: () => this.conditions.device, appDevice: () => options.device, signedIn: () => !this.signedOut });
+    this.kyb = new KybApi({ now: () => this.now(), config: () => this.config, flaws: () => this.opts.corpFlaws ?? {} });
     this.pub = new PublicApi({ now: () => this.now(), config: () => this.config, conditions: () => this.conditions, flaws: () => this.opts.corpFlaws ?? {}, dir: this.access.dir, access: this.access, device: () => this.access.thisDevice().id });
     this.load(personaId);
   }
@@ -535,7 +539,7 @@ export class MockBank {
     if (!base) throw new Error(`Unknown persona ${personaId}`);
     this.p = structuredClone(base);
     this.providers.clear();
-    this.session = { active: "personal", stepUpUntil: undefined, ended: false, audit: 0, lastActivity: undefined };
+    this.session = { active: "personal", stepUpUntil: undefined, ended: false, audit: 0, lastActivity: undefined, preview: false };
     this.otp.attempts = 0; this.otp.verified = false;
     this.access.user = personaId === SIGNED_OUT ? undefined : this.access.dir.byPersona(personaId)?.username;
     const c = this.conditions;
@@ -564,13 +568,17 @@ export class MockBank {
     const id = this.p.identity;
     if (!id || this.session.active === "personal") return undefined;
     const ctx = this.contexts().find((x) => x.id === this.session.active)!;
-    return { contextId: ctx.id, userId: id.business.find((b) => b.id === ctx.id)!.userId, permissions: ctx.permissions };
+    // the administrator preview: the person acts as the company's administrator until they leave it (a prototype device of the spec; a real bank gives the role to a real person)
+    const previewAs = this.session.preview ? PREVIEW_AS[ctx.companyId ?? ""] : undefined;
+    return { contextId: ctx.id, userId: previewAs ?? id.business.find((b) => b.id === ctx.id)!.userId, permissions: ctx.permissions };
   }
   /** What the person may do in the personal context: everything, less what a scenario takes away (conditions.withoutPermissions). */
   private personalPermissions() { const without = this.conditions.withoutPermissions ?? []; return PERSONAL_PERMISSIONS.filter((p) => !without.includes(p)); }
   private contexts() {
     const id = this.p.identity!;
-    return contextsOf(id, { name: this.p.name, limits: { ...this.p.limits, currency: this.p.accounts[0]?.currency ?? "USD" }, permissions: this.personalPermissions() }, Object.fromEntries([...this.providers].map(([k, v]) => [k, v.getCompany()])));
+    const list = contextsOf(id, { name: this.p.name, limits: { ...this.p.limits, currency: this.p.accounts[0]?.currency ?? "USD" }, permissions: this.personalPermissions() }, Object.fromEntries([...this.providers].map(([k, v]) => [k, v.getCompany()])));
+    // with the administrator preview on, the active company holds an administrator's permissions (and says so)
+    return this.session.preview ? list.map((c) => (c.id === this.session.active ? { ...c, roles: ["Administrator (preview)"], permissions: permissionsOf(["admin"]), preview: true } : c)) : list;
   }
 
   /** Ends the session, as an idle timeout would: every later call answers SESSION_EXPIRED until a new MockBank (a new sign-in) is made. */
@@ -605,6 +613,7 @@ export class MockBank {
     if (this.signedOut && !SIGNED_OUT_ADAPTERS.test(adapter) && !PUBLIC_ADAPTERS.test(adapter)) throw new BankError("NOT_SIGNED_IN", "Sign in to continue.");
     // before sign-in, and signed in too: the public adapters answer for anyone and never with account data
     if (this.pub.handles(adapter)) return this.pub.call(adapter, input);
+    if (this.kyb.handles(adapter)) return this.kyb.call(adapter, input);
     if (adapter === "bank.session.keepAlive") return { expiresAt: new Date(now + (idle ?? ACCESS.idleSeconds) * 1000).toISOString() };
     if (ACCESS_ADAPTERS.test(adapter)) {
       // a sign-in or a recovery starts: the one-time code belongs to it now, not to a public flow that was going on
@@ -678,9 +687,24 @@ export class MockBank {
         // moving into a company needs a recent step-up; moving back to personal does not
         if (ctx.workspace === "business" && !stepUpValid()) throw new BankError("STEP_UP_REQUIRED", "For your security, confirm it's you first.");
         this.session.active = ctx.id;
+        this.session.preview = false;
         // a code verified in one place is not valid in another
         this.otp.verified = false; this.otp.attempts = 0;
         return { ...ctx, auditId: `aud_${++this.session.audit}` };
+      }
+      case "bank.session.preview": {
+        // the administrator preview (a prototype device): the person acts as the company's administrator in the active company until they exit, switch place or sign out
+        const ctx = this.contexts().find((x) => x.id === this.session.active)!;
+        if (ctx.workspace !== "business") throw new BankError("WRONG_CONTEXT", "This belongs to your business banking. Switch to your business to continue.");
+        const as = PREVIEW_AS[ctx.companyId ?? ""];
+        const who = () => (as ? this.providers.get(ctx.id)?.getCompany().users.find((u) => u.id === as)?.name ?? as : "");
+        // with no choice given: whether the preview is on and who it would be (the lock screen says so before the person turns it on)
+        if (input.on === undefined) return { on: this.session.preview, as: as ?? "", name: who() };
+        if (input.on === false) { this.session.preview = false; return { on: false }; }
+        if (!stepUpValid()) throw new BankError("STEP_UP_REQUIRED", "For your security, confirm it's you first.");
+        if (!as) throw new BankError("NOT_SUPPORTED", "There is no administrator to preview for this company.");
+        this.session.preview = true;
+        return { on: true, as, name: who() };
       }
       case "bank.session.stepUp": {
         const method = String(input.method ?? "password");

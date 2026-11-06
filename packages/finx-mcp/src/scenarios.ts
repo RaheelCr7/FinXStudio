@@ -98,10 +98,13 @@ export function bankMutants(journey: Journey): Mutant[] {
   // starting a payment is also pricing it and creating it (the combined demo's companies); approving is also approving several at once
   const calls = (name: string) => journey.integrations.some((i) => i.adapter === `corp.payments.${name}` || (name === "initiate" && (/^corp\.(bulk|payroll)\.(check|submit)$/.test(i.adapter) || /^corp\.payments\.(quote|create)$/.test(i.adapter))) || (name === "approve" && i.adapter === "corp.payments.approveMany"));
   // a journey for the combined demo's companies (one login, several places): the permissions of the context and the approval rules of those companies apply
-  const demo = journey.integrations.some((i) => /^corp\.payments\.(quote|create|approveMany|delegate|list|track)$/.test(i.adapter) || /^corp\.(accounts|transactions|statements|suppliers|templates|schedules)\./.test(i.adapter));
+  const demo = journey.integrations.some((i) => /^corp\.payments\.(quote|create|approveMany|delegate|list|track)$/.test(i.adapter) || /^corp\.(accounts|transactions|statements|suppliers|templates|schedules|admin|limits|changes|requests)\.|^corp\.(users\.(get|invite|update|disable|enable)|signatories\.(get|update))$/.test(i.adapter));
   const bulk = journey.integrations.some((i) => /^corp\.(bulk|payroll)\./.test(i.adapter));
   const payroll = journey.integrations.some((i) => /^corp\.payroll\./.test(i.adapter));
   const uses = (re: RegExp) => journey.integrations.some((i) => re.test(i.adapter));
+  // Business: Admin and a company applying before sign-in
+  const admU = uses(/^corp\.users\.(invite|update|disable|enable)$/), admL = uses(/^corp\.limits\.set$/), admG = uses(/^corp\.signatories\.update$/), admD = uses(/^corp\.changes\.decide$/);
+  const kyb = uses(/^bank\.kyb\./);
   // bulk payments and payroll runs of the BankWorkx sandbox (a journey with a session): the older Meezan journeys read a pasted file and meet none of these rules
   const bulkB = uses(/^corp\.bulk\.(quote|list|get)$/);
   const payB = uses(/^corp\.payroll\.register$/);
@@ -437,6 +440,36 @@ export function bankMutants(journey: Journey): Mutant[] {
     ["apprReason", "The bank rejects a payment with no reason, or a note that is too short", demo && uses(/^corp\.payments\.reject(Many)?$/)],
     ["apprRejectMany", "The bank rejects several payments even when one of them cannot be rejected", demo && uses(/^corp\.payments\.rejectMany$/)],
     ["apprReference", "The bank gives no reference for a decision", demo && (calls("approve") || uses(/^corp\.payments\.(reject|rejectMany|delegate)$/))],
+    // Business: Admin (people, limits, approval groups, the second administrator) and service requests; a company applying before sign-in
+    ["admSelf", "The bank lets an administrator change or disable themselves, or decide on their own change", admU || admD],
+    ["admLastAdmin", "The bank lets the last active administrator be disabled or demoted", uses(/^corp\.users\.(update|disable)$/)],
+    ["admLastApprover", "The bank lets the only approver left in a group be disabled or demoted", uses(/^corp\.users\.(update|disable)$/)],
+    ["admPending", "The bank changes a person who already has a change waiting", admU],
+    ["admPayments", "The bank removes the Maker role from a person who has payments waiting", uses(/^corp\.users\.update$/)],
+    ["admExists", "The bank invites an email that already has access", uses(/^corp\.users\.invite$/)],
+    ["admFields", "The bank takes any name, email, mobile number or account choice", uses(/^corp\.users\.(invite|update)$/)],
+    ["admLimit", "The bank takes a daily limit above the company's or the per-person limit", uses(/^corp\.users\.(invite|update)$/)],
+    ["admCode", "The bank changes people, limits and groups, and approves a waiting change, without the one-time code", admU || admL || admG || admD],
+    ["admSecond", "The bank applies a change that involves an administrator, or any increase or group change, without a second administrator", admU || admL || admG],
+    ["limRules", "The bank takes a limit equal to the one now, or above the company's daily limit, or below the other limits", admL],
+    ["limCeiling", "The bank takes a company limit above the bank's ceiling", admL],
+    ["limIncrease", "The bank applies an increase of a limit at once", admL],
+    ["limPending", "The bank changes a limit that already has a change waiting", admL],
+    ["grpRules", "The bank lets the group over the two-approver limit have one approver or any one", admG],
+    ["grpSeparation", "The bank lets a person who starts payments be the only approver", admG],
+    ["grpPending", "The bank changes a group that already has a change waiting", admG],
+    ["grpSnapshot", "The bank lets a change of a group reach payments that already wait", admG],
+    ["crqRules", "The bank takes a request with missing or malformed fields", uses(/^corp\.requests\.create$/)],
+    ["crqDuplicate", "The bank takes a second open request with the same kind and subject", uses(/^corp\.requests\.create$/)],
+    ["crqDaily", "The bank takes a sixth request in a day from one person", uses(/^corp\.requests\.create$/)],
+    ["crqAccount", "The bank takes a request about an account the company does not have", uses(/^corp\.requests\.create$/)],
+    ["crqConsent", "The bank takes a request without the confirmation tick", uses(/^corp\.requests\.create$/)],
+    ["kybFields", "The bank takes company details that are missing or malformed", kyb],
+    ["kybOwnership", "The bank takes owners that do not add up to 100% or have no director", kyb],
+    ["kybTax", "The bank takes a tax ID that does not fit the bank's market", kyb],
+    ["kybDocs", "The bank takes an application without the certificate or the proof of address, or a file of the wrong kind or size", kyb],
+    ["kybConsent", "The bank takes an application without both ticks", kyb],
+    ["kybDuplicate", "The bank takes a second application for the same registration number", kyb],
   ];
   const rules = all.filter(([, , reachable]) => reachable).map(([k, what]) => [k, what] as [keyof Flaws, string]);
   return rules.map(([k, what]) => ({ id: `bank-${k}`, what, kind: "bank" as const, flaws: { [k]: false } as Flaws }));

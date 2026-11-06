@@ -68,7 +68,8 @@ export function ScreenView({ tab, allowed, title }: { tab: ShellTab; allowed: bo
   const head = app.launchPoints({ place: tab }).filter(isSectionLevel);
   const hub = app.launchPoints({ place: `${tab}.hub` });
   let body: React.ReactNode;
-  if (!allowed) body = <Notice icon="lock" title="No access" text="Your role here doesn't include this." />;
+  // the Admin tab opens its view for a person without the permission too: the view says why, and offers the administrator preview
+  if (!allowed) body = <><Notice icon="lock" title="No access" text="Your role here doesn't include this." />{tab === "admin" ? <Buttons points={app.launchPoints({ place: "admin.overview" })} /> : null}</>;
   else if (view?.status === "error" && (!screen || view.code === "SESSION_EXPIRED")) {
     body = view.code === "SESSION_EXPIRED"
       ? <Notice role="alert" icon="clock" title="You were signed out" text="For your security. Sign in again to continue." action="Sign in" onAction={() => { app.expire(); router.push(`/${project.id}/login`); }} />

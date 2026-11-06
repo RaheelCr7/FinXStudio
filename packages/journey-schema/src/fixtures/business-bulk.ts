@@ -8,7 +8,8 @@ const FIX_CODES = ["LINES_NEED_FIXING", "NO_VALID_LINES", "REPAIR_NOT_ALLOWED", 
 const SPEED_CODES = ["RAIL_LIMIT", "RAIL_NOT_AVAILABLE", "DATE_NOT_WORKING_DAY", "DATE_REQUIRED"];
 const MONEY_CODES = ["LIMIT_USER_EXCEEDED", "LIMIT_COMPANY_EXCEEDED", "INSUFFICIENT_FUNDS"];
 const STEP = (n: number) => `Step {{bp.resend ? ${Math.max(1, n - 1)} : ${n}}} of {{bp.resend ? 3 : 4}} · Bulk payment`;
-const STEPPER = { type: "stepper" as const, steps: ["add", "fix", "speed", "review"] };
+/** The four steps of a new batch, and the three of a resend (which has no Add step): the stepper says "Step 2 of 3" where the line under it does. */
+const STEPPERS = [{ type: "stepper" as const, steps: ["add", "fix", "speed", "review"], visibleWhen: "!bp.resend" }, { type: "stepper" as const, steps: ["fix", "speed", "review"], visibleWhen: "bp.resend" }];
 const NOW_TEXT = "{{bp.rv.totalText}}";
 /** What the bank is asked to check: the account and the lines it handed back last time, so a screen never builds a line itself. */
 const LINES = { fromAccountId: "{{bp.from}}", lines: "{{bp.res.raw}}", repairOf: "{{bp.repairOf}}", fileKey: "{{bp.res.fileKey}}" };
@@ -104,7 +105,7 @@ export const businessBulk: Journey = {
     {
       id: "add", title: "Add payments",
       blocks: [
-        STEPPER,
+        ...STEPPERS,
         text(STEP(1), "caption"),
         text("Add payments", "title"),
         text("Upload a file or enter the payments.", "body"),
@@ -162,7 +163,7 @@ export const businessBulk: Journey = {
     {
       id: "fix", title: "Check payments",
       blocks: [
-        STEPPER,
+        ...STEPPERS,
         text(STEP(2), "caption"),
         text("Check payments", "title"),
         text("Fix or remove anything marked, then continue.", "body"),
@@ -248,7 +249,7 @@ export const businessBulk: Journey = {
     {
       id: "speed", title: "Speed and date",
       blocks: [
-        STEPPER,
+        ...STEPPERS,
         text(STEP(3), "caption"),
         text("Speed and date", "title"),
         alert("error", "{{ctx.error.message}}", is(...SPEED_CODES)),
@@ -267,7 +268,7 @@ export const businessBulk: Journey = {
     {
       id: "review", title: "Review",
       blocks: [
-        STEPPER,
+        ...STEPPERS,
         text(STEP(4), "caption"),
         text("Review", "title"),
         alert("error", "{{ctx.error.message}}", `${is(...MONEY_CODES)} || ${is("NAME_TOO_LONG")}`),

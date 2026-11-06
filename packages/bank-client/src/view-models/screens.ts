@@ -147,12 +147,27 @@ export async function loadBusiness(call: Call, ctx: ContextInfo, tab: ShellTab):
       return { tab, approvals: approvalBadge(queue), sections: [{ id: "inbox", title: "Inbox", empty: "Nothing waiting for approval", rows: queueRows(queue, "approvals.inbox") }] };
     }
     case "admin": {
+      // an administrator (or the preview) sees the company as the bank's Admin view gives it; everyone else keeps the lists their permissions allow, and a way to open the view (which says why they cannot)
+      const overview = { id: "overview", title: "Admin", empty: "", place: "admin.overview", rows: [] };
+      if (can(ctx, "biz.admin.view")) {
+        const v = await call("corp.admin.get");
+        const tone = (k: string) => (k === "active" ? "neutral" as const : k === "invited" ? "neutral" as const : "warning" as const);
+        return { tab, sections: [
+          overview,
+          { id: "waiting", title: "Waiting for a second administrator", empty: "Nothing is waiting", rows: list<any>(v.waiting).map((c) => ({ id: c.id, title: c.text, subtitle: c.sent, tag: c.mine ? "Waiting for another administrator" : undefined, tone: "warning" as const })) },
+          { id: "users", title: "People", empty: "No people", place: "admin.users", rows: list<any>(v.people).map((p) => ({ id: p.id, title: p.label, subtitle: p.roleText, value: p.limitText, tag: p.statusText, tone: tone(p.statusKey), place: "admin.users", passes: { userId: p.id }, state: p.canEdit ? "editable" : p.canEnable ? "disabled" : "none" })) },
+          { id: "limits", title: "Limits", empty: "", place: "admin.limits", rows: (v.limitRows as { label: string; value: string }[]).map((r) => ({ id: r.label, title: r.label, value: r.value })) },
+          { id: "groups", title: "Approval groups", empty: "No groups", rows: Object.values<any>(v.groups).map((g) => ({ id: g.key, title: g.title, subtitle: g.line, place: "admin.groups", passes: { group: g.key } })) },
+          { id: "audit", title: "Activity log", empty: "Nothing recorded", rows: list<any>(v.log).map((a) => ({ id: a.id, title: a.what, subtitle: `${a.who} \u00b7 ${a.when}`, tag: a.result, tone: a.result === "Refused" ? "negative" as const : "neutral" as const })) },
+        ] };
+      }
       const [users, groups, audit] = await Promise.all([
         can(ctx, "biz.admin.users") ? call("corp.users.list") : {}, can(ctx, "biz.admin.signatories") ? call("corp.signatories.list") : {}, can(ctx, "biz.audit.view") ? call("corp.audit.list") : {},
       ]);
       return { tab, sections: [
+        overview,
         { id: "users", title: "Users", empty: "No users", place: "admin.users", rows: list<any>(users).map((u) => ({ id: u.id, title: u.name, tag: u.sub, place: "admin.users", passes: { userId: u.id } })) },
-        { id: "groups", title: "Signatory groups", empty: "No groups", place: "admin.groups", rows: list<any>(groups).map((g) => ({ id: g.id, title: g.name, subtitle: `${g.mode} · ${g.required} required`, place: "admin.groups", passes: { groupId: g.id } })) },
+        { id: "groups", title: "Signatory groups", empty: "No groups", place: "admin.groups", rows: list<any>(groups).map((g) => ({ id: g.id, title: g.name, subtitle: `${g.mode} · ${g.required} required`, place: "admin.groups", passes: { group: g.id === "grp_large" ? "over" : "upto" } })) },
         { id: "audit", title: "Audit trail", empty: "Nothing recorded", rows: list<any>(audit).map((a) => ({ id: a.id, title: a.action, subtitle: `${a.userId} · ${date(a.at)}`, tag: a.outcome, tone: a.outcome === "Done" ? "neutral" as const : "negative" as const })) },
       ] };
     }

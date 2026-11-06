@@ -47,7 +47,7 @@ const BIZ_BY_ROLE: Record<CorpRole, string[]> = {
     "biz.payments.withdraw", "biz.templates.manage", "biz.suppliers.manage", "biz.approvals.view", "biz.requests.create",
   ],
   approver: ["biz.accounts.view", "biz.accounts.export", "biz.approvals.view", "biz.approvals.approve", "biz.audit.view"],
-  admin: ["biz.accounts.view", "biz.accounts.export", "biz.admin.users", "biz.admin.limits", "biz.admin.signatories", "biz.audit.view", "biz.requests.create"],
+  admin: ["biz.accounts.view", "biz.accounts.export", "biz.admin.view", "biz.admin.users", "biz.admin.limits", "biz.admin.signatories", "biz.audit.view", "biz.requests.create"],
 };
 export const permissionsOf = (roles: CorpRole[]): string[] => [...new Set(roles.flatMap((r) => BIZ_BY_ROLE[r]))];
 export const ROLE_LABEL: Record<CorpRole, string> = { initiator: "Maker", approver: "Approver", admin: "Administrator" };
@@ -69,6 +69,8 @@ export const STEP_UP_SECONDS = 300;
 export type ContextInfo = {
   id: string; label: string; workspace: ContextKind; companyId?: string; roles: string[]; permissions: string[];
   limits?: Record<string, number | string>; access: "active";
+  /** The administrator preview is on in this company (Admin). */
+  preview?: boolean;
 };
 
 /** Builds the context list from the identity and the live company data (limits change as payments are made). */

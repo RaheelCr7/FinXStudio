@@ -31,7 +31,7 @@ export const ALPHA: CorpCompany = {
     { id: "emp_2", name: "Sofia Alvarez", bank: "Wells Fargo", maskedNumber: "••1202", salary: 6_100 },
     { id: "emp_3", name: "Jonas Lindqvist", bank: "Citi", maskedNumber: "••1203", salary: 4_800 },
   ],
-  companyDailyLimit: 1_000_000, companyUsedToday: 0, dualApprovalAbove: 50_000, codeAbove: 25_000, payrollApprovals: "threshold",
+  companyDailyLimit: 1_000_000, personLimit: 250_000, companyUsedToday: 0, dualApprovalAbove: 50_000, codeAbove: 25_000, payrollApprovals: "threshold",
   cutoff: "16:00", holidays: ["2026-11-09"], paymentSeq: { prefix: "PAY", start: 2042 },
   templates: [
     { id: "tpl_packaging", name: "Monthly packaging", beneficiaryId: "harb", amount: 4_500, reference: "PO-STANDING", purpose: "Goods" },
@@ -59,7 +59,7 @@ export const BETA: CorpCompany = {
     { id: "sofia", name: "Sofia Reyes", roles: ["approver"], dailyLimit: 0, usedToday: 0 },
     { id: "priya", name: "Priya Nair", roles: ["initiator"], dailyLimit: 100_000, usedToday: 8_200 },
     { id: "omar", name: "Omar Haddad", roles: ["initiator"], dailyLimit: 100_000, usedToday: 64_500 },
-    { id: "noor", name: "Noor Saleh", roles: ["admin"], dailyLimit: 0, usedToday: 0 },
+    { id: "noor", name: "Noor Sayegh", roles: ["admin"], dailyLimit: 0, usedToday: 0 },
   ],
   whitelist: [
     { id: "nimb", name: "Nimbus Logistics", bank: "JPMorgan Chase", maskedNumber: "ABA 021000021 · ••5521", country: "US", currency: "USD" },
@@ -69,7 +69,7 @@ export const BETA: CorpCompany = {
     { id: "emp_1", name: "Grace Holloway", bank: "Chase", maskedNumber: "••3101", salary: 4_900 },
     { id: "emp_2", name: "Mateo Silva", bank: "Citi", maskedNumber: "••3102", salary: 5_400 },
   ],
-  companyDailyLimit: 1_000_000, companyUsedToday: 0, dualApprovalAbove: 50_000, codeAbove: 25_000, payrollApprovals: "threshold",
+  companyDailyLimit: 1_000_000, personLimit: 250_000, companyUsedToday: 0, dualApprovalAbove: 50_000, codeAbove: 25_000, payrollApprovals: "threshold",
   cutoff: "16:00", holidays: ["2026-11-09"], paymentSeq: { prefix: "PAY", start: 2042 },
   templates: [],
   signatoryGroups: [

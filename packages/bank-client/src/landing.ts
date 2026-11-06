@@ -26,6 +26,8 @@ export const LANDING_POINTS: LandingPoint[] = [
   { id: "deposit", group: "explore", label: "Deposit calculator", text: "Estimate a deposit", journey: "deposit-calculator", icon: "trend" },
   { id: "branch", group: "explore", label: "Find a branch or ATM", text: "Near you", journey: "find-branch-atm", icon: "mapPin" },
   { id: "contact", group: "explore", label: "Contact us", text: "Call or message us", journey: "contact-support", icon: "phone" },
+  // Landing > Business > Open a business account (step 8 slice C): a company applies before anyone signs in
+  { id: "business", group: "explore", label: "Open a business account", text: "For your company", journey: "kyb-onboarding", icon: "user" },
 ];
 
 /** The points of the Landing the app can open: the journey is there and the bank has not switched it off. Sign in is the screen itself, so it has no point. */

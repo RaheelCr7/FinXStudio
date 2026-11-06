@@ -9,6 +9,13 @@ import { supplierPayment } from "./fixtures/supplier-payment";
 import { approvePayments } from "./fixtures/approve-payments";
 import { paymentTracker } from "./fixtures/payment-tracker";
 import { businessWithdraw } from "./fixtures/business-withdraw";
+import { manageUser } from "./fixtures/manage-user";
+import { changeLimits } from "./fixtures/change-limits";
+import { editSignatoryGroup } from "./fixtures/edit-signatory-group";
+import { admin } from "./fixtures/admin";
+import { businessServiceRequest } from "./fixtures/business-service-request";
+import { businessRequests } from "./fixtures/business-requests";
+import { kybOnboarding } from "./fixtures/kyb-onboarding";
 import { bulkStatus } from "./fixtures/bulk-status";
 import { repairBulkLines } from "./fixtures/repair-bulk-lines";
 import { businessSchedules } from "./fixtures/business-schedules";
@@ -78,7 +85,7 @@ import { registerDigitalBanking } from "./fixtures/register-digital-banking";
  * The journey catalog: ready-made journeys a project can add to its own app.
  * Each entry is the journey exactly as shipped, so adding it never depends on what someone later edited in Studio.
  */
-export const CATEGORIES = ["Payments", "Accounts", "Cards", "Budgeting", "Save & Borrow", "Investing", "More", "Public", "Onboarding", "Access"] as const;
+export const CATEGORIES = ["Payments", "Accounts", "Cards", "Budgeting", "Save & Borrow", "Investing", "More", "Public", "Onboarding", "Access", "Admin"] as const;
 export type CatalogCategory = (typeof CATEGORIES)[number];
 
 export type CatalogEntry = {
@@ -487,6 +494,41 @@ export const catalog: CatalogEntry[] = [
     id: registerDigitalBanking.slug, category: "Onboarding", madeFor: "bankworkx", journey: registerDigitalBanking,
     summary: "An existing customer who never used digital banking proves who they are with a customer ID or a card number and a date of birth (or a Ready application), confirms a one-time code and chooses a username and password; may trust the device.",
     highlights: ["Same one-time code and password rules as sign-in", "Password kept only as a hash and cleared from the journey", "Three wrong checks or codes lock it for 30 minutes", "Username taken, format and strength checked by the bank", "Trust this device is a bank option"],
+  },
+  {
+    id: manageUser.slug, category: "Admin", madeFor: "bankworkx", journey: manageUser,
+    summary: "An administrator invites, edits, disables or enables a person (name, mobile, role, accounts, daily limit). Always a one-time code; an administrator, or a change to one, waits for a second administrator. The bank refuses self-changes, the last administrator and the last approver.",
+    highlights: ["Five roles; a Maker needs a limit within the company's", "Edit shows only before and after", "A Maker with payments waiting keeps the role", "Sent for approval for anything involving an administrator", "Every outcome in the activity log, masked"],
+  },
+  {
+    id: changeLimits.slug, category: "Admin", madeFor: "bankworkx", journey: changeLimits,
+    summary: "An administrator changes the limit per person, the company daily limit, the two-approver threshold or the extra-code threshold. A decrease applies at once; an increase waits for a second administrator. The bank checks the ceiling and the other limits and asks for a one-time code.",
+    highlights: ["Four settings with their amounts", "Same, above the company limit, above the bank's ceiling and below the other limits are refused", "A setting with a change waiting cannot be changed again", "Decrease: Limit changed; increase: Sent for approval"],
+  },
+  {
+    id: editSignatoryGroup.slug, category: "Admin", madeFor: "bankworkx", journey: editSignatoryGroup,
+    summary: "An administrator chooses who approves in the group over or up to the two-approver limit, and how: any one, in order, or several together. The bank enforces two approvers over the limit and that a Maker cannot be the only approver; waiting payments keep their approvers; a second administrator approves.",
+    highlights: ["Any one, In order or Several together", "Over the limit needs two approvers", "Waiting payments keep their approvers", "One change waiting per group", "Always a one-time code"],
+  },
+  {
+    id: admin.slug, category: "Admin", madeFor: "bankworkx", journey: admin,
+    summary: "The Admin view: people, limits, approval groups and the activity log; starts the three admin journeys and lets a second administrator approve or decline a change. Without the admin permission it is a lock screen with a preview as the company's administrator.",
+    highlights: ["People, Limits, Approval groups, Activity log", "Approve (with a code) or Decline another administrator's change", "Never your own change", "Preview ends on exit or on switching company"],
+  },
+  {
+    id: businessServiceRequest.slug, category: "More", madeFor: "bankworkx", journey: businessServiceRequest,
+    summary: "A person at the company asks the bank for something that is not a payment: add or close an account, update company details, a cheque book, or something else. No code; the bank refuses a duplicate, a sixth request in a day and closing the only account.",
+    highlights: ["Five kinds; Cheque book is a bank option", "Close asks where the balance goes", "Confirmation tick; phone shown masked", "Reference and Received at the top of Service requests"],
+  },
+  {
+    id: businessRequests.slug, category: "More", madeFor: "bankworkx", journey: businessRequests,
+    summary: "A view of the requests this company sent to the bank, newest first, with reference, date, type, subject and a status chip (Received, In progress, Done, Declined), and a New request button. Kept per company.",
+    highlights: ["Newest first, Today for a new one", "Empty state with New request", "Never the other company's requests"],
+  },
+  {
+    id: kybOnboarding.slug, category: "Onboarding", madeFor: "bankworkx", journey: kybOnboarding,
+    summary: "Before sign-in: a company applies for business banking: details, owners and directors (100%, a director), the business, documents, tax declaration and two ticks. The bank checks every rule for its market, refuses a registration number already applied for, keeps masks and hashes only. No code.",
+    highlights: ["Six steps and a tracker", "Tax ID, money sign and postal code follow the bank's market", "Certificate and proof of address required", "Tax ID masked, nothing typed kept", "Duplicate registration number refused"],
   },
   // Cairo Amman Bank: the access journeys from its design file
   ...(

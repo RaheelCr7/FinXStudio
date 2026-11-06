@@ -567,6 +567,7 @@ describe("before sign-in only the public adapters answer", () => {
     "bank.products.list", "bank.products.get", "bank.rates.loans", "bank.rates.deposits", "bank.locations.search", "bank.locations.details", "bank.support.hours", "bank.support.openChat", "bank.support.sendMessage",
     "bank.onboarding.begin", "bank.onboarding.start", "bank.onboarding.check", "bank.onboarding.save", "bank.onboarding.discard", "bank.onboarding.verifyIdentity", "bank.onboarding.submit",
     "bank.applications.find", "bank.applications.status", "bank.registration.verify", "bank.registration.complete", "sandbox.public.inspect", "sandbox.public.advance",
+    "bank.kyb.config", "bank.kyb.check", "bank.kyb.submit",
   ];
   it("every public adapter is in the catalog, and every other adapter still answers NOT_SIGNED_IN", async () => {
     const all = ADAPTER_CATALOG.map((a) => a.adapter);
