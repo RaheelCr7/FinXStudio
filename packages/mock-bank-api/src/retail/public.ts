@@ -26,7 +26,15 @@ const ADAPTERS = /^(bank\.(products\.(list|get)|rates\.(loans|deposits)|location
 const DAY = 86_400_000, MINUTE = 60_000;
 export const SAVE_DAYS = 30;
 const TOPICS = ["Accounts", "Cards", "Payments", "Loans and savings", "Online and app banking", "Something else"];
-const EMAIL = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+/** An email address is checked without a backtracking pattern: at most 80 characters, no spaces, one "@", and a dot inside the domain with text on both sides. */
+const isEmail = (s: string) => {
+  if (s.length === 0 || s.length > 80 || /\s/.test(s)) return false;
+  const at = s.indexOf("@");
+  if (at < 1 || at !== s.lastIndexOf("@")) return false;
+  const dot = s.lastIndexOf(".");
+  return dot > at + 1 && dot < s.length - 1;
+};
+const EMAIL = { test: isEmail };
 const digitsOf = (s: unknown) => String(s ?? "").replace(/\D/g, "");
 const norm = (s: unknown) => String(s ?? "").trim();
 const ymd = (t: number) => new Date(t).toISOString().slice(0, 10).replace(/-/g, "");
