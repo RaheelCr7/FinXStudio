@@ -60,7 +60,7 @@ export const alexSave = (): SaveSeed => ({
 export const emptySave = (): SaveSeed => ({ deposits: [], goals: [], loans: [], holdings: [] });
 
 export type SaveHost = { now: () => number; otp: { attempts: number; verified: boolean }; conditions: () => SandboxConditions; flaws: Flaws; config: () => BankConfig };
-const ADAPTERS = /^bank\.(accounts\.payFrom|deposits\.(list|terms|quote|open|renew(\.quote)?|close(\.quote)?)|goals\.(list|months|plan|create|update|contribute|withdraw)|schedule\.list|loans\.(list|get|quote|eligibility|apply|repay|settle|settlement\.quote)|funds\.(list|get|holdings|portfolio|buy|sell)|cards\.forTopup|deposit\.create)$/;
+const ADAPTERS = /^bank\.(accounts\.payFrom|deposits\.(list|terms|quote|open|renew(\.quote)?|close(\.quote)?)|goals\.(list|months|plan|create|update|contribute|withdraw)|schedule\.list|loans\.(list|get|quote|eligibility|apply|repay|settle|settlement\.quote)|funds\.(list|get|holdings|portfolio|buy|sell)|deposit\.(create|cards))$/;
 /** Answered only for a customer who has a savings seed: the older records answer for the rest. */
 const NEEDS_SEED = /^bank\.(deposits|goals|loans)\.(list|get)$/;
 
@@ -135,12 +135,12 @@ export class SaveApi {
       case "bank.loans.settle": return this.settle(input);
       case "bank.loans.settlement.quote": return this.settlement(this.loan(input.loanId), input.settleFee !== false);
       case "bank.funds.list": return this.fundList(input);
-      case "bank.funds.get": return this.fundView(this.fund(input.fundId));
-      case "bank.funds.holdings": return this.holdings();
+      case "bank.funds.get": return this.fundGet(input);
+      case "bank.funds.holdings": return this.pick(this.holdings(), input);
       case "bank.funds.portfolio": return this.portfolio();
       case "bank.funds.buy": return this.buy(input);
       case "bank.funds.sell": return this.sell(input);
-      case "bank.cards.forTopup": return this.topupCards();
+      case "bank.deposit.cards": return this.topupCards();
       case "bank.deposit.create": return this.topup(input);
     }
     throw new BankError("UNKNOWN_ADAPTER", `No sandbox handler for ${adapter}`);
@@ -570,6 +570,13 @@ export class SaveApi {
   private fundList(input: Record<string, any>) {
     const shown = FUNDS.filter((f) => input.allowHigh !== false || f.risk !== "high"), by = (r: string) => Object.fromEntries(shown.filter((f) => !r || f.risk === r).map((f) => [f.id, this.fundView(f)]));
     return { funds: { all: by(""), low: by("low"), medium: by("medium"), high: by("high") }, count: shown.length };
+  }
+  /** One fund. With an amount (and `fromAccountId`) it is also the check of a purchase, with `sell: true` the check of a sale: every rule applied, nothing bought or sold, no code. */
+  private fundGet(input: Record<string, any>) {
+    const f = this.fund(input.fundId);
+    if (input.sell === true) return this.sell({ ...input, dryRun: true });
+    if (input.amount !== undefined || input.fromAccountId !== undefined) return this.buy({ ...input, dryRun: true });
+    return this.fundView(f);
   }
   private valueOf(h: HoldingRec) { const f = this.fund(h.fundId); return this.major(Math.round(h.units * this.minor(f.price))); }
   private holdings() {

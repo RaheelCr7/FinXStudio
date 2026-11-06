@@ -73,11 +73,12 @@ export async function loadPersonal(call: Call, tab: ShellTab): Promise<Screen> {
       ] };
     }
     case "save": {
-      const [deps, goals, loans] = await Promise.all([call("bank.deposits.list"), call("bank.goals.list"), call("bank.loans.list")]);
+      const [deps, goals, loans, funds] = await Promise.all([call("bank.deposits.list"), call("bank.goals.list"), call("bank.loans.list"), call("bank.funds.holdings")]);
       return { tab, sections: [
-        { id: "deposits", title: "Deposits", empty: "No deposits yet", place: "save.deposits", rows: list<any>(deps).map((d) => ({ id: d.id, title: d.name, subtitle: `${d.ratePercent}% · matures ${d.maturesOn}`, value: money(d.principal, d.currency), tag: d.status === "matured" ? "Matured" : undefined, tone: d.status === "matured" ? "warning" as const : "neutral" as const, place: "save.deposit", passes: { depositId: d.id } })) },
-        { id: "goals", title: "Savings goals", empty: "No goals yet", place: "save.goals", rows: list<any>(goals).map((g) => ({ id: g.id, title: g.name, subtitle: `${money(g.saved, g.currency)} of ${money(g.target, g.currency)}`, progress: Math.min(100, Math.round((g.saved / g.target) * 100)), place: "save.goal", passes: { goalId: g.id } })) },
-        { id: "loans", title: "Loans", empty: "No loans", place: "save.loans", rows: list<any>(loans).map((l) => ({ id: l.id, title: l.name, subtitle: `Next payment ${l.nextDue}`, value: money(l.outstanding, l.currency), place: "save.loan", passes: { loanId: l.id } })) },
+        { id: "goals", title: "Savings goals", empty: "No goals yet", place: "save.goals", rows: list<any>(goals).map((g) => ({ id: g.id, title: g.name, subtitle: `${g.savedText} ${g.ofText} · ${g.line}`, progress: g.pct, place: "save.goal", passes: { goalId: g.id } })) },
+        { id: "deposits", title: "Term deposits", empty: "No deposits yet", place: "save.deposits", rows: list<any>(deps).map((d) => ({ id: d.id, title: d.title ?? d.name, subtitle: `${d.line}${d.renewalText ? ` · ${d.renewalText}` : ""}`, value: money(d.principal, d.currency), place: "save.deposit", passes: { depositId: d.id } })) },
+        { id: "loans", title: "Loans", empty: "No loans", place: "save.loans", rows: list<any>(loans).map((l) => ({ id: l.id, title: l.name, subtitle: `${l.nextText} · ${l.pctText}`, value: money(l.outstanding, l.currency), progress: l.pct, place: "save.loan", passes: { loanId: l.id } })) },
+        { id: "investments", title: "Investments", empty: "No investments yet", place: "save.investments", rows: list<any>(funds).map((h) => ({ id: h.id, title: h.name, subtitle: `${h.unitsText} units`, value: h.valueText, place: "save.holding", passes: { fundId: h.id, holdId: h.id } })) },
       ] };
     }
     default: {

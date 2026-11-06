@@ -44,7 +44,8 @@ describe("catalog stays in sync with the real schema and lint", () => {
       expect(line!.match(/ \[([a-z, ]+)\]$/)?.[1] ?? "", a.adapter).toBe([a.moneyMoving ? "money" : "", a.requiresOtp ? "otp" : ""].filter(Boolean).join(", "));
     }
     // the detail is the entries of ADAPTER_CATALOG, unchanged and in the same order
-    expect((getCatalog("adapters", "bank,corp,cab,sandbox") as any).adapters.list).toEqual(ADAPTER_CATALOG);
+    for (const fam of new Set(ADAPTER_CATALOG.map((a) => a.adapter.split(".").slice(0, 2).join(".")))) expect((getCatalog("adapters", fam) as any).adapters.list, fam).toEqual(ADAPTER_CATALOG.filter((a) => a.adapter.startsWith(`${fam}.`)));
+    expect((getCatalog("adapters", "corp,cab,sandbox") as any).adapters.list).toEqual(ADAPTER_CATALOG.filter((a) => !a.adapter.startsWith("bank.")));
     expect(Object.keys(getCatalog("adapters", "bank.payees"))).toEqual(["adapters"]);
     expect((getCatalog("adapters", "bank.payees") as any).adapters.list.map((a: any) => a.adapter)).toEqual(ADAPTER_CATALOG.filter((a) => a.adapter.startsWith("bank.payees.")).map((a) => a.adapter));
     expect(adapterDetail("bank.otp.verify, bank.otp.verify,bank.otp").map((a) => a.adapter)).toEqual(["bank.otp.send", "bank.otp.verify"]);
@@ -98,6 +99,9 @@ describe("catalog stays in sync with the real schema and lint", () => {
   it("the full entries of one family fit in one small answer, and a whole domain fits in the tool's limit", () => {
     const families = new Set(ADAPTER_CATALOG.map((a) => a.adapter.split(".").slice(0, 2).join(".")));
     for (const f of families) expect(JSON.stringify(adapterDetail(f)).length, f).toBeLessThan(9_000);
-    for (const d of ["bank", "corp", "cab"]) expect(JSON.stringify(getCatalog("adapters", d)).length, d).toBeLessThan(CATALOG_MAX_CHARS);
+    for (const d of ["corp", "cab"]) expect(JSON.stringify(getCatalog("adapters", d)).length, d).toBeLessThan(CATALOG_MAX_CHARS);
+    // all of `bank` in full (about 67,000 characters since the Save & Borrow adapters) is more than one answer holds: it is refused with the families to ask for, instead of a cut-off answer that is not valid JSON
+    expect(() => getCatalog("adapters", "bank")).toThrow(/Ask for one family at a time: .*bank\.payees/);
+    expect(() => getCatalog("adapters", "bank")).toThrow(CatalogError);
   });
 });

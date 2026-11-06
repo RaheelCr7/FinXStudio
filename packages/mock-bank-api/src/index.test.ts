@@ -136,6 +136,9 @@ describe("sandbox investing", () => {
   });
   it("buys into an existing holding at an average cost, and refuses bad orders", async () => {
     const b = new MockBank("alex");
+    // the older stock buy needs the one-time code too, after its own checks
+    await expect(b.call("bank.invest.buy", { symbol: "GLBX", amount: 421.8, fromAccountId: "acc_main" })).rejects.toMatchObject({ code: "OTP_REQUIRED" });
+    await b.call("bank.otp.send", {}); await b.call("bank.otp.verify", { code: "482100" });
     const out = await b.call("bank.invest.buy", { symbol: "GLBX", amount: 421.8, fromAccountId: "acc_main" });
     expect(out).toMatchObject({ shares: 10, newBalance: 8298.96 });
     const h = b.persona.finance!.invest.holdings.find((x) => x.symbol === "GLBX")!;
@@ -153,12 +156,16 @@ describe("sandbox investing", () => {
   it("sells part or all of a holding and refuses what is not owned or too much", async () => {
     const b = new MockBank("alex");
     expect(Object.keys(await b.call("bank.invest.holdings", {}))).toEqual(["LMRB", "GLBX", "ORCH", "TBND"]);
+    const code = async () => { await b.call("bank.otp.send", {}); await b.call("bank.otp.verify", { code: "482100" }); };
+    await expect(b.call("bank.invest.sell", { symbol: "GLBX", amount: 421.8, toAccountId: "acc_main" })).rejects.toMatchObject({ code: "OTP_REQUIRED" });
+    await code();
     const part = await b.call("bank.invest.sell", { symbol: "GLBX", amount: 421.8, toAccountId: "acc_main" });
     expect(part).toMatchObject({ shares: 10, proceeds: 421.8, newBalance: 9142.56 });
     expect(b.persona.finance!.invest.holdings.find((h) => h.symbol === "GLBX")!.shares).toBe(30);
     await expect(b.call("bank.invest.sell", { symbol: "APXC", amount: 10, toAccountId: "acc_main" })).rejects.toMatchObject({ code: "NOT_HELD" });
     await expect(b.call("bank.invest.sell", { symbol: "GLBX", amount: 99999, toAccountId: "acc_main" })).rejects.toMatchObject({ code: "INSUFFICIENT_HOLDING" });
     await expect(b.call("bank.invest.sell", { symbol: "GLBX", amount: 0, toAccountId: "acc_main" })).rejects.toMatchObject({ code: "INVALID_AMOUNT" });
+    await code();
     const all = await b.call("bank.invest.sell", { symbol: "GLBX", amount: 30 * 42.18, toAccountId: "acc_main" });
     expect(all.shares).toBe(30);
     expect(b.persona.finance!.invest.holdings.some((h) => h.symbol === "GLBX")).toBe(false);

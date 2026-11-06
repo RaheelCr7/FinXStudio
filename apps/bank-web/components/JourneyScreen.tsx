@@ -14,7 +14,8 @@ export function JourneyScreen() {
   const router = useRouter();
   // the stock someone was looking at, when they came from its page. Only a known symbol is accepted from the address.
   const symbol = useSearchParams().get("symbol");
-  const initial = symbol && instrumentOf(symbol) ? (slugIs(slug, "invest") ? { "invest.symbol": symbol } : slugIs(slug, "sell-investment") ? { "sell.symbol": symbol } : undefined) : undefined;
+  // it reaches the journey as a launch value (launch.symbol): Invest and Sell investment take the older stock road for it
+  const stock = symbol && instrumentOf(symbol) && (slugIs(slug, "invest") || slugIs(slug, "sell-investment")) ? { "launch.symbol": symbol } : undefined;
   const [live, setLive] = useState<Live | null | "loading">("loading");
   useEffect(() => {
     let alive = true;
@@ -24,7 +25,7 @@ export function JourneyScreen() {
   }, [app, slug]);
 
   // values another journey gave this one (navigate.toJourney), set by the app before the address changed
-  const launch = app.launchFor(slug);
+  const launch = stock ? { ...app.launchFor(slug), ...stock } : app.launchFor(slug);
   // a journey asked to open another: the address changes, the values wait in the app until the next journey loads
   const openOther = (r: { journey: string; launch: Record<string, any> }) => { app.setLaunch(r.journey, r.launch); router.replace(`/${project.id}/j/${app.resolveSlug(r.journey)}`); };
   const leave = () => { app.clearLaunch(); app.bump(); router.push(`/${project.id}/${project.shell === "bankworkx" ? "dashboard" : "home"}`); };
@@ -33,7 +34,7 @@ export function JourneyScreen() {
   return (
     <main className="wb-journey">
       <div className="wb-journey-card">
-        <JourneyPlayer key={live.journey.slug} journey={live.journey} adapter={app.adapter} lang={s.lang} initial={initial} launch={launch} onOpenJourney={openOther} onClose={leave} onExit={leave} look={project.look} brandName={project.name} />
+        <JourneyPlayer key={live.journey.slug} journey={live.journey} adapter={app.adapter} lang={s.lang} launch={launch} onOpenJourney={openOther} onClose={leave} onExit={leave} look={project.look} brandName={project.name} />
       </div>
     </main>
   );

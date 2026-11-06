@@ -348,6 +348,19 @@ export function adapterDetail(selector: string): AdapterInfo[] {
   return ADAPTER_CATALOG.filter((a) => picked.has(a));
 }
 
+/**
+ * The full entries a selector names, when they fit in one answer. A whole domain (all of `bank`) no longer does: a cut-off answer would not be valid JSON, so
+ * the call says so and lists the families to ask for one at a time (each family fits).
+ */
+function adapterAnswer(selector: string): AdapterInfo[] {
+  const list = adapterDetail(selector), size = JSON.stringify(list).length;
+  if (size > CATALOG_MAX_CHARS - 2_000) {
+    const families = [...new Set(list.map((a) => familyOf(a.adapter)))];
+    throw new CatalogError(`"${selector}" is ${size.toLocaleString("en-US")} characters, more than one answer holds. Ask for one family at a time: ${families.join(", ")}.`);
+  }
+  return list;
+}
+
 /** The size in characters of each part of the catalog as the tool returns it (compact JSON), to find what grew. */
 export function catalogSizes() {
   const sizes: Record<string, number> = {};
@@ -377,7 +390,7 @@ export function getCatalog(section: Section = "all", adapter?: string) {
     expressions: EXPRESSIONS,
     data: DATA,
     localization: LOCALIZATION,
-    adapters: adapter === undefined ? adapterIndex() : { note: ADAPTER_DETAIL_NOTE, list: adapterDetail(adapter) },
+    adapters: adapter === undefined ? adapterIndex() : { note: ADAPTER_DETAIL_NOTE, list: adapterAnswer(adapter) },
     personas: { note: "Use these in finx_simulate_journey. The code 000000 is accepted for every customer; use 999999 as a wrong code.", list: section === "all" ? describePersonas().map((p) => `${p.id}: ${p.name}, code ${p.otpCode}`) : describePersonas() },
     lint: section === "all" ? LINT_RULES.map(({ code, means }) => ({ code, means })) : LINT_RULES,
     patterns: PATTERNS,

@@ -22,7 +22,7 @@ describe("journey catalog", () => {
 
   it("says what a journey needs, from the journey itself", () => {
     const money = cat.describeEntry(catalog.find((c) => c.id === "add-money")!);
-    expect(money).toMatchObject({ name: "Add money", screens: 4, languages: ["en"], currencies: ["USD"] });
+    expect(money).toMatchObject({ name: "Add money", screens: 14, languages: ["en"], currencies: ["USD"] });
   });
 
   it("marks what a project already has, and nothing else", async () => {

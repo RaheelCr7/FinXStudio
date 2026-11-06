@@ -1054,6 +1054,8 @@ export class RetailSandbox {
         const from = this.p.accounts.find((a) => a.id === input.fromAccountId);
         if (!from) throw new BankError("ACCOUNT_NOT_FOUND", "Account not found");
         if (amount > spendable(from)) throw new BankError("INSUFFICIENT_FUNDS", "Insufficient funds");
+        if (!this.otp.verified) throw new BankError("OTP_REQUIRED", "OTP not verified");
+        this.otp.verified = false;
         const shares = Math.round((amount / inst.price) * 10000) / 10000;
         const held = fin.invest.holdings.find((h) => h.symbol === inst.symbol);
         if (held) { held.avgCost = (held.avgCost * held.shares + amount) / (held.shares + shares); held.shares = Math.round((held.shares + shares) * 10000) / 10000; }
@@ -1080,6 +1082,8 @@ export class RetailSandbox {
         if (!to) throw new BankError("ACCOUNT_NOT_FOUND", "Account not found");
         const value = held.shares * inst.price;
         if (amount > value + 0.005) throw new BankError("INSUFFICIENT_HOLDING", `You only hold $${(Math.floor(value * 100) / 100).toFixed(2)} of ${inst.symbol}`);
+        if (!this.otp.verified) throw new BankError("OTP_REQUIRED", "OTP not verified");
+        this.otp.verified = false;
         // selling the whole value sells every share, so no rounding crumbs are left behind
         const all = value - amount < 0.01;
         const shares = all ? held.shares : Math.round((amount / inst.price) * 10000) / 10000;

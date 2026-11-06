@@ -32,6 +32,7 @@ describe("signing in and out", () => {
     a.login();
     expect(a.getState()).toMatchObject({ screen: "app", tab: "dashboard" });
     a.openBudget("b_food"); a.openInvest(); a.openSheet("fab");
+    await a.bank.call("bank.otp.send", {}); await a.bank.call("bank.otp.verify", { code: a.persona.behaviour.otpCode });
     await a.bank.call("bank.invest.buy", { symbol: "GLBX", amount: 100, fromAccountId: "acc_main" });
     const bankBefore = a.bank;
     a.logout();
@@ -79,10 +80,10 @@ describe("journeys", () => {
     const copy = { ...addMoney, slug: "add-money-acme", id: "jrn_add_money_acme" };
     const a = make("bankworkx", studio([{ slug: "add-money-acme", name: "Add money", publishedVersion: 1, apps: ["bankworkx"] }], { "/api/journeys/add-money-acme?env=published": copy }));
     a.login(); await vi.waitFor(() => expect(a.getState().catalog.source).toBe("studio"));
-    const opening = a.openJourney("add-money", { "add.toAccountId": "acc_main" });
+    const opening = a.openJourney("add-money", { "am.to": "acc_main" });
     expect(a.getState().opening).toBe("add-money-acme");
     await opening;
-    expect(a.getState()).toMatchObject({ screen: "journey", opening: null, active: { source: "studio", initial: { "add.toAccountId": "acc_main" } } });
+    expect(a.getState()).toMatchObject({ screen: "journey", opening: null, active: { source: "studio", initial: { "am.to": "acc_main" } } });
     const tick = a.getState().tick;
     a.closeJourney();
     expect(a.getState()).toMatchObject({ screen: "app", active: null });

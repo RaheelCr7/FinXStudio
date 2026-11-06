@@ -501,11 +501,11 @@ describe("adding money from a card", () => {
   const add = (b: MockBank, over: Record<string, unknown> = {}) => b.call("bank.deposit.create", { ...top, ...over });
   const saved = () => bank(undefined, { persona: "alexsave" });
   it("lists the cards that can be used, with their bank and expiry, and the expired ones apart", async () => {
-    const c = await saved().call("bank.cards.forTopup");
+    const c = await saved().call("bank.deposit.cards");
     expect(Object.values<any>(c.cards).map((x) => [x.id, x.name, x.sub])).toEqual([["c_4242", "Visa ••4242", "Harbor Bank · expires 09/28"], ["c_5100", "Mastercard ••5100", "Crest Bank · expires 03/29"]]);
     expect(c).toMatchObject({ count: 2, firstId: "c_4242", hasExpired: true, expired: ["Visa ••0019 · Expired"], expiredText: "Visa ••0019 · Expired" });
-    expect(Object.values<any>((await bank().call("bank.cards.forTopup")).cards)[0]).toMatchObject({ name: "Mastercard ••5832", sub: "Everyday · expires 11/28" });
-    expect(await new MockBank("sam").call("bank.cards.forTopup")).toMatchObject({ count: 0, hasExpired: false });
+    expect(Object.values<any>((await bank().call("bank.deposit.cards")).cards)[0]).toMatchObject({ name: "Mastercard ••5832", sub: "Everyday · expires 11/28" });
+    expect(await new MockBank("sam").call("bank.deposit.cards")).toMatchObject({ count: 0, hasExpired: false });
   });
   it("charges 203.00 for 200.00 (a 1.5% fee) and credits the 200.00 only, after the code; Activity says Card top-up", async () => {
     const b = saved();

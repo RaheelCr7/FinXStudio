@@ -29,7 +29,8 @@ const toReview = (amount: number, extra: Record<string, unknown> = {}): Step[] =
 const confirm: Step[] = [set({ "pt.consent": true }), press("Confirm and send code")];
 const code = (c = "482100"): Step[] => [set({ "otp.code": c })];
 /** Money in the account so that a large amount can be reached (the checks on the amount come before the checks on the balance). */
-const richMain = [{ adapter: "bank.deposit.create", input: { toAccountId: "acc_main", amount: 50000, fromCardId: "c_5832" } }];
+// 50,000.00 more in Main, put there the way a customer does it: ten card top-ups of the most the bank takes at once (5,000.00), each with its code and security code
+const richMain = Array.from({ length: 10 }, () => [{ adapter: "bank.otp.send" }, { adapter: "bank.otp.verify", input: { code: "482100" } }, { adapter: "bank.deposit.create", input: { toAccountId: "acc_main", amount: 5000, fromCardId: "c_5832", securityCode: "123" } }]).flat();
 const base = { persona: "alexpayees", now: NOW };
 
 export const internationalTransferScenarios: NonNullable<Journey["scenarios"]> = [
