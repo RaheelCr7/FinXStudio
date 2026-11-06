@@ -298,6 +298,27 @@ export function bankMutants(journey: Journey): Mutant[] {
     ["topupFee", "The bank takes no card fee", uses(/^bank\.deposit\.create$/)],
     ["topupCode", "The bank charges a card without the one-time code", uses(/^bank\.deposit\.create$/)],
     ["topupCvv", "The bank takes a security code that is not 3 digits", uses(/^bank\.deposit\.create$/)],
+    // Personal: More. Contact details, secure messages, service requests and the banks a customer connects
+    ["contactCode", "The bank changes a contact detail without the one-time code", uses(/^bank\.profile\.update$/)],
+    ["contactRules", "The bank takes a mobile number, an email, a postal code or an address that does not follow the rules of its home market", uses(/^bank\.profile\.(update|sendContactCode|verifyContact)$/)],
+    ["contactSame", "The bank takes the number or email the customer already has, an address that does not differ, or a number or email that belongs to someone else", uses(/^bank\.profile\.(update|sendContactCode)$/)],
+    ["contactPending", "The bank takes a second change to an item that already waits to be confirmed", uses(/^bank\.profile\.update$/)],
+    ["contactNewNumber", "The bank saves a new mobile number before the code sent to it was right, and lets wrong codes go on after the third", uses(/^bank\.profile\.(update|verifyContact)$/)],
+    ["contactProof", "The bank takes an address change without the proof of address it asks for, or with a file that is not a PDF, JPG or PNG", uses(/^bank\.profile\.update$/)],
+    ["contactNotify", "The bank tells neither the old contact nor the new one about a change", uses(/^bank\.profile\.update$/)],
+    ["messageRules", "The bank takes a message without a topic, with a short subject or text, or with text that is too long", uses(/^bank\.messages\.send$/)],
+    ["messageFile", "The bank takes an attachment that is not a PDF, JPG or PNG or is over 5 MB", uses(/^bank\.messages\.send$/)],
+    ["replyRules", "The bank takes a reply that is empty or too long, and a reply to a conversation that is closed", uses(/^bank\.messages\.reply$/)],
+    ["requestRules", "The bank takes a service request with the fields of its kind missing or wrong, and a lost card as a request", uses(/^bank\.requests\.create$/)],
+    ["requestDuplicate", "The bank takes a second cheque book request for an account that has one open", uses(/^bank\.requests\.create$/)],
+    ["requestTypeChange", "The bank offers, and takes, the account type the account already has", uses(/^bank\.requests\.(options|create)$/)],
+    ["requestCancel", "The bank cancels a request that has already started", uses(/^bank\.requests\.cancel$/)],
+    ["requestOptions", "The bank takes a kind of request that it switched off", uses(/^bank\.requests\.(options|create)$/)],
+    ["connectConsent", "The bank connects accounts without the customer having agreed to share", uses(/^bank\.connections\.finish$/)],
+    ["connectBank", "The bank connects a bank that is already connected, and one that is not answering", uses(/^bank\.connections\.(start|finish)$/)],
+    ["connectPick", "The bank connects with no account chosen", uses(/^bank\.connections\.finish$/)],
+    ["connectPeriod", "The bank shares for 365 days whatever the market, and shows every amount with the dollar sign", uses(/^bank\.connections\.(banks|start|finish)$/)],
+    ["connectReadOnly", "The bank lets a connected account be one the customer can pay from", uses(/^bank\.connections\.finish$/)],
   ];
   const rules = all.filter(([, , reachable]) => reachable).map(([k, what]) => [k, what] as [keyof Flaws, string]);
   return rules.map(([k, what]) => ({ id: `bank-${k}`, what, kind: "bank" as const, flaws: { [k]: false } as Flaws }));

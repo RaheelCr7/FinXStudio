@@ -1,6 +1,6 @@
 import React from "react";
 import { describe, expect, it, vi } from "vitest";
-import { render } from "@testing-library/react";
+import { fireEvent, render } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { axe } from "vitest-axe";
 import * as matchers from "vitest-axe/matchers";
@@ -85,6 +85,13 @@ describe("behaviour", () => {
     await userEvent.click(getByRole("button"));
     expect(n).toBe(0);
     expect(getByRole("button").getAttribute("aria-busy")).toBe("true");
+  });
+  it("a plain button pressed in a form never submits it, even when the screen it changes puts a submit button in its place", () => {
+    // Cancel request, then Yes, cancel in the same place: the browser finishes the click after the new screen is drawn, so the press must cancel the click's own default action
+    let submitted = 0, pressed = 0;
+    const { getByRole } = render(<form onSubmit={(e) => { e.preventDefault(); submitted += 1; }}><Button label="Cancel request" onPress={() => pressed++} /></form>);
+    const notCancelled = fireEvent.click(getByRole("button", { name: "Cancel request" }));
+    expect([notCancelled, pressed, submitted]).toEqual([false, 1, 0]);
   });
   it("a keypad reports the key and a delete", async () => {
     const keys: string[] = [];

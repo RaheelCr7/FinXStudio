@@ -50,12 +50,17 @@ import { saveBorrow } from "./fixtures/save-borrow";
 import { savingsGoal } from "./fixtures/savings-goal";
 import { applyLoan } from "./fixtures/apply-loan";
 import { repayLoan } from "./fixtures/repay-loan";
+import { updateProfile } from "./fixtures/update-profile";
+import { newMessage } from "./fixtures/new-message";
+import { messagesView } from "./fixtures/messages";
+import { serviceRequest } from "./fixtures/service-request";
+import { myRequests } from "./fixtures/my-requests";
 
 /**
  * The journey catalog: ready-made journeys a project can add to its own app.
  * Each entry is the journey exactly as shipped, so adding it never depends on what someone later edited in Studio.
  */
-export const CATEGORIES = ["Payments", "Accounts", "Cards", "Budgeting", "Save & Borrow", "Investing", "Access"] as const;
+export const CATEGORIES = ["Payments", "Accounts", "Cards", "Budgeting", "Save & Borrow", "Investing", "More", "Access"] as const;
 export type CatalogCategory = (typeof CATEGORIES)[number];
 
 export type CatalogEntry = {
@@ -173,9 +178,9 @@ export const catalog: CatalogEntry[] = [
     highlights: ["Alias of Send money for one type", "Standard and Priority speeds", "Switched off with the same option", "One-time code"],
   },
   {
-    id: connectAccount.slug, category: "Accounts", madeFor: "bankworkx", journey: connectAccount,
-    summary: "Link an account from another bank: pick the bank, sign in, choose accounts.",
-    highlights: ["Bank tiles", "Hidden password field", "Failure path for a bad sign-in"],
+    id: connectAccount.slug, category: "More", madeFor: "bankworkx", journey: connectAccount,
+    summary: "See accounts held at another bank, read only: choose the bank, agree to share, allow it on the other bank's own sign-in (no password is typed here), choose the accounts. Sharing ends after the period of the bank's home market; a connected bank can be disconnected.",
+    highlights: ["Read only, never a source of payment", "Agreement before anything is shared", "Allow or Deny on the other bank's own sign-in", "Credit card only when allowed", "Sharing period and currency follow the market", "Disconnect with a confirmation", "Timeout and unavailable screens"],
   },
   {
     id: addCard.slug, category: "Cards", madeFor: "bankworkx", journey: addCard,
@@ -301,6 +306,31 @@ export const catalog: CatalogEntry[] = [
     id: repayLoan.slug, category: "Save & Borrow", madeFor: "bankworkx", journey: repayLoan,
     summary: "Pay the next instalment, another amount, or settle a loan in full with the settlement figure shown first; confirm with a one-time code.",
     highlights: ["Next instalment lowers the balance by its principal", "Another amount from 10.00", "Settlement with interest to date and the early fee", "One-time code", "Timeout and unavailable screens"],
+  },
+  {
+    id: updateProfile.slug, category: "More", madeFor: "bankworkx", journey: updateProfile,
+    summary: "Change the mobile number, the email or the address held by the bank. Every change needs a one-time code sent to the number on file; a new number gets a code too; an email and an address can wait for the bank's check. The old contact is told.",
+    highlights: ["One-time code to the number on file", "Second code to a new mobile number", "Email and address can show as Pending", "Rules of the home market for number and postal code", "Proof of address when the bank asks", "Old and new contact told, values shown masked"],
+  },
+  {
+    id: newMessage.slug, category: "More", madeFor: "bankworkx", journey: newMessage,
+    summary: "Send a secure message to the bank with a topic, a subject, the text and one optional file (PDF, JPG or PNG up to 5 MB). No money moves and no code is asked; the reply arrives in Messages.",
+    highlights: ["Topic, subject and message checked", "Warning to call for fraud or security", "One optional file up to 5 MB", "Text shown as text, never as markup", "The text is kept when the bank does not answer"],
+  },
+  {
+    id: messagesView.slug, category: "More", madeFor: "bankworkx", journey: messagesView,
+    summary: "The secure conversations with the bank: the latest activity first, an unread mark, a thread with every message in order, a reply box for an open conversation and a new message for a closed one.",
+    highlights: ["Preview, date and unread mark", "Opening a conversation marks it read", "Reply of at least 2 characters", "Closed conversations offer a new message", "Empty state with New message"],
+  },
+  {
+    id: serviceRequest.slug, category: "More", madeFor: "bankworkx", journey: serviceRequest,
+    summary: "Ask the bank for something and get a reference: order a cheque book, request a letter, change an account type or send another request. A lost card goes to the card controls instead.",
+    highlights: ["Only the kinds the bank offers", "Branch asked only when collecting", "Account types without the current one", "One open cheque book request per account", "Reference and status Received"],
+  },
+  {
+    id: myRequests.slug, category: "More", madeFor: "bankworkx", journey: myRequests,
+    summary: "The service requests the customer has sent, newest first, each with its status (Received, In progress, Done, Cancelled); a request opens to what was asked, and one that is only Received can be cancelled after a confirmation.",
+    highlights: ["Title, date, reference and status", "Detail with the rows as sent", "Cancel only while Received", "Keep it changes nothing", "Empty state with New request"],
   },
   {
     id: signIn.slug, category: "Access", madeFor: "bankworkx", journey: signIn,

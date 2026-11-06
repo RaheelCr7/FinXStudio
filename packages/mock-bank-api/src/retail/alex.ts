@@ -68,16 +68,13 @@ export const alexRetail = (): RetailData => ({
   deposits: [],
   goals: [],
   loans: [],
-  messages: [
-    { id: "msg_1", subject: "Your statement is ready", from: "BankWorkx", at: "2026-11-01T06:00:00Z", read: false, body: "Your October statement for Main is ready to download." },
-    { id: "msg_2", subject: "Your deposit has matured", from: "BankWorkx", at: "2026-11-02T06:00:00Z", read: false, body: "Your 6-month deposit has matured. Renew it or move the money." },
-    { id: "msg_3", subject: "Welcome to BankWorkx", from: "BankWorkx", at: "2019-03-12T10:00:00Z", read: true, body: "Thanks for banking with us." },
-  ],
+  // messages and service requests are kept by the More sandbox (more.ts, Persona.more); the shell reads them through bank.messages.list and bank.requests.list
+  messages: [],
   notifications: [
     { id: "n_1", context: "beta", text: "Payment awaiting your approval: USD 8,200.00 to Nimbus Logistics", at: "2026-11-03T09:12:00Z", read: false, topic: "approval" },
     { id: "n_2", context: "personal", text: "Salary received: $4,200.00", at: "2026-11-01T06:00:00Z", read: true, topic: "account" },
     { id: "n_3", context: "alpha", text: "Payment PAY-1187 settled", at: "2026-10-30T14:00:00Z", read: true, topic: "payment" },
   ],
-  requests: [{ id: "REQ-5001", type: "Card", summary: "Replacement card sent", status: "in progress", openedAt: "2026-10-29T10:00:00Z" }],
+  requests: [],
   applications: applications(),
 });

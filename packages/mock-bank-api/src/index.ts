@@ -2,6 +2,7 @@ import { BankError } from "./errors";
 import { alexFinance, type Category, type Finance } from "./retail/finance";
 import { alexCards, emptyCards, type CardsSeed } from "./retail/cards";
 import { alexSave, emptySave, type SaveSeed } from "./retail/save";
+import { alexMore, emptyMore, type MoreSeed } from "./retail/more";
 import { ACME, type CorpCompany, type Flaws } from "./business/corporate";
 import { ALPHA, BETA, BETA_CAST, seedPayments } from "./business/alpha-beta";
 import { createCorporateProvider, type CorporateProvider, type ProviderId } from "./business/corporate-provider";
@@ -94,6 +95,8 @@ export type Persona = {
   cards?: CardsSeed;
   /** Term deposits, savings goals, loans and the funds held (retail/save.ts). */
   save?: SaveSeed;
+  /** The profile changes asked for, secure conversations, service requests and the notices the bank sent (retail/more.ts). */
+  more?: MoreSeed;
   /** Everything else a retail customer has: transactions, cards, deposits, goals, loans, messages, applications. */
   retail?: RetailData;
   /** One login, several places to bank from: the companies this person acts for. Absent for a persona with a single place. */
@@ -207,6 +210,7 @@ export const personas: Record<string, Persona> = {
     retail: alexRetail(),
     cards: alexCards(),
     save: alexSave(),
+    more: alexMore(),
     identity: { id: "alex", name: "Alex Morgan", password: "Bwx!Demo2026", business: [{ id: "alpha", company: ALPHA, userId: "alex" }, { id: "beta", company: BETA, userId: "alex" }] },
     behaviour: { otpCode: "482100", kyc: "verified" },
   },
@@ -294,6 +298,7 @@ export const personas: Record<string, Persona> = {
     finance: { ...alexFinance(), income: 0, expense: 0, savings: 0, balanceSeries: [], ranges: { "1W": [], "1M": [], "3M": [], "1Y": [] }, spendingByCategory: [], transactions: [], budgets: [], subscriptions: [], linked: [], cards: [], invest: { holdings: [], watchlist: [] } },
     cards: emptyCards(),
     save: emptySave(),
+    more: emptyMore(),
     behaviour: { otpCode: "123456", kyc: "verified" },
   },
   zara: {
@@ -526,7 +531,7 @@ export class MockBank {
     const clock = (prov: CorporateProvider) => { prov.now = () => this.now(); return prov; };
     if (this.p.identity) for (const b of this.p.identity.business) { const prov = clock(createCorporateProvider(options.corpProvider ?? "reference", b.company, options.corpFlaws)); seedPayments(b.id, prov, !!this.p.identity.cast); this.providers.set(b.id, prov); }
     else if (this.p.corp) this.providers.set(this.p.corp.id, clock(createCorporateProvider(options.corpProvider ?? "reference", this.p.corp, options.corpFlaws)));
-    this.retail = new RetailSandbox(this.p, { now: () => this.now(), otp: this.otp, conditions: () => this.conditions, flaws: options.corpFlaws ?? {}, config: () => this.config, setNow: (fn) => { this.now = fn; } });
+    this.retail = new RetailSandbox(this.p, { contact: (field, value) => { const u = this.access.me(); if (u) { if (field === "mobile") u.phone = value; else u.email = value; } }, now: () => this.now(), otp: this.otp, conditions: () => this.conditions, flaws: options.corpFlaws ?? {}, config: () => this.config, setNow: (fn) => { this.now = fn; } });
     this.business = new BusinessSandbox({
       now: () => this.now(), otp: this.otp, transferFails: () => !!this.p.behaviour.transferFails, config: () => this.config, conditions: () => this.conditions,
       provider: () => this.activeProvider(), actor: () => this.actor(), flaws: () => options.corpFlaws ?? {},

@@ -35,13 +35,15 @@ export async function loadPersonal(call: Call, tab: ShellTab): Promise<Screen> {
       ] };
     }
     case "accounts": {
-      const [accounts, budgets] = await Promise.all([call("bank.accounts.list"), call("bank.budgets.list")]);
+      // the accounts at other banks the customer connected are listed apart, read only (a list that cannot be read leaves the section empty)
+      const [accounts, budgets, linked] = await Promise.all([call("bank.accounts.list"), call("bank.budgets.list"), call("bank.accounts.linked").catch(() => ({}))]);
       const accs = list<RawAccount>(accounts);
       const first = accs[0];
       const tx = first ? list<any>(await call("bank.transactions.list", { accountId: first.id })) : [];
       return { tab, sections: [
         { id: "accounts", title: "Accounts", empty: "No accounts yet", rows: accs.map((a) => ({ id: a.id, title: a.name, subtitle: `${a.maskedNumber} · ${a.currency}`, value: money(a.balance, a.currency), tag: a.kind === "savings" ? "Savings" : undefined, place: "accounts.detail", passes: { accountId: a.id } })) },
         { id: "transactions", title: first ? `${first.name} activity` : "Activity", empty: "No transactions yet", rows: tx.map((t) => ({ id: t.id, title: t.title, subtitle: `${t.date} · ${t.category}`, value: money(t.amount, t.currency), tone: t.amount > 0 ? "positive" as const : "neutral" as const, tag: t.status === "pending" ? "Pending" : undefined, place: "accounts.transaction", passes: { transactionId: t.id } })) },
+        ...(Object.keys(linked).length ? [{ id: "linked", title: "At other banks", empty: "", rows: list<any>(linked).map((l) => ({ id: l.id, title: l.title, subtitle: `${l.line} · ${l.maskedNumber}`, value: l.balanceText })) }] : []),
         { id: "budgets", title: "Budgets", empty: "No budgets yet", place: "accounts.budgets", rows: list<RawBudget>(budgets).map((b) => ({ id: b.id, title: b.name, subtitle: `${money(b.spent, first?.currency ?? "USD")} of ${money(b.limit, first?.currency ?? "USD")}`, progress: b.limit > 0 ? Math.min(100, Math.round((b.spent / b.limit) * 100)) : 0, tone: b.spent > b.limit ? "negative" as const : "neutral" as const, place: "accounts.budget", passes: { budgetId: b.id } })) },
       ] };
     }
@@ -82,11 +84,21 @@ export async function loadPersonal(call: Call, tab: ShellTab): Promise<Screen> {
       ] };
     }
     default: {
-      const [profile, messages, requests] = await Promise.all([call("bank.profile.get"), call("bank.messages.list"), call("bank.requests.list")]);
+      // the counts are a courtesy: a list that cannot be read leaves its section empty, it does not take the tab down
+      const soft = (p: Promise<any>) => p.catch(() => ({}));
+      const [profile, messages, requests, linked] = await Promise.all([call("bank.profile.get"), soft(call("bank.messages.list")), soft(call("bank.requests.list")), soft(call("bank.accounts.linked"))]);
+      const address = profile.addressText ?? (profile.address ? [profile.address.line1, profile.address.city, [profile.address.region, profile.address.postalCode].filter(Boolean).join(" ")].filter(Boolean).join(", ") : "");
+      const waiting = (k: "mobile" | "email" | "address") => (profile.pending?.[k] ? "Pending" : undefined);
       return { tab, sections: [
-        { id: "profile", title: "Profile", empty: "", place: "more.profile", rows: [{ id: "name", title: profile.name, subtitle: profile.email }, { id: "phone", title: profile.phone, subtitle: "Mobile" }] },
-        { id: "messages", title: "Messages", empty: "No messages", place: "more.messages", rows: list<any>(messages).map((m) => ({ id: m.id, title: m.subject, subtitle: date(m.at), tag: m.read ? undefined : "New" })) },
-        { id: "requests", title: "Requests", empty: "No open requests", place: "more.requests", rows: list<any>(requests).map((r) => ({ id: r.id, title: r.summary, subtitle: r.type, tag: r.status })) },
+        { id: "profile", title: "Profile", empty: "", place: "more.profile", rows: [
+          { id: "name", title: profile.name, subtitle: "Full name. To change it, send a service request." },
+          { id: "phone", title: profile.phone, subtitle: "Mobile number", tag: waiting("mobile"), tone: "warning" as const, place: "more.profile", passes: { field: "phone" } },
+          { id: "email", title: profile.email, subtitle: "Email", tag: waiting("email"), tone: "warning" as const, place: "more.profile", passes: { field: "email" } },
+          ...(address ? [{ id: "address", title: address, subtitle: "Home address", tag: waiting("address"), tone: "warning" as const, place: "more.profile", passes: { field: "address" } }] : []),
+        ] },
+        { id: "messages", title: "Messages", empty: "No messages", place: "more.messages", rows: list<any>(messages).map((m) => ({ id: m.id, title: m.subject, subtitle: m.preview ? `${m.preview} · ${m.dateText}` : date(m.at), tag: (m.unread ?? !m.read) ? "New" : undefined })) },
+        { id: "requests", title: "Requests", empty: "No requests", place: "more.requests", rows: list<any>(requests).map((r) => ({ id: r.id, title: r.title ?? r.summary, subtitle: r.line ?? r.type, tag: r.status })) },
+        { id: "linked", title: "Linked banks", empty: "You haven't connected another bank yet. Connect one to see all your money in one place.", place: "more.linked", rows: list<any>(linked).map((l) => ({ id: l.id, title: l.title, subtitle: `${l.line} · ${l.maskedNumber}`, value: l.balanceText })) },
         { id: "settings", title: "Settings", empty: "", rows: [{ id: "security", title: "Security", subtitle: "Password, quick sign-in, devices and your recent sign-ins", go: "security" }] },
       ] };
     }

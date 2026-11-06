@@ -87,9 +87,10 @@ describe("the rest of Alex's relationship", () => {
     expect((await b.call("bank.loans.get", { loanId: "ln1" })).outstanding).toBe(9600);
     expect(await code(b.call("bank.loans.get", { loanId: "x" }))).toBe("LOAN_NOT_FOUND");
     expect(await b.call("bank.profile.get")).toMatchObject({ name: "Alex Morgan", email: "alex.morgan@example.com" });
-    expect(Object.keys(await b.call("bank.messages.list"))).toHaveLength(3);
+    // the conversations and the requests are the More sandbox's (more.ts, more.test.ts): two of each
+    expect(Object.keys(await b.call("bank.messages.list"))).toEqual(["thr_card", "thr_fee"]);
     expect(Object.values(await b.call("bank.notifications.list", { context: "beta" })).map((n: any) => n.id)).toEqual(["n_1"]);
-    expect(Object.keys(await b.call("bank.requests.list"))).toEqual(["REQ-5001"]);
+    expect(Object.keys(await b.call("bank.requests.list"))).toEqual(["SR-204118", "SR-203077"]);
   });
   it("records are for customers that have them", async () => {
     expect(await code(new MockBank("ayesha").call("bank.cards.issued"))).toBe("NOT_SUPPORTED");

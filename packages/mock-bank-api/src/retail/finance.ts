@@ -6,7 +6,9 @@ export type Category = "food" | "income" | "shopping" | "coffee" | "rent" | "tra
 export type Txn = { id: string; title: string; category: Category; /** negative = money out */ amount: number; daysAgo: number; time?: string };
 export type Budget = { id: string; name: string; category: Category; limit: number; spent: number; /** Tell the customer at 80% and at 100% of the limit; on unless said otherwise. */ alert80?: boolean; alert100?: boolean };
 export type Subscription = { id: string; name: string; amount: number; nextInDays: number; color: string };
-export type LinkedBank = { id: string; bank: string; kind: "Savings" | "Current" | "Credit"; maskedNumber: string; balance: number };
+export type LinkedBank = { id: string; bank: string; kind: "Savings" | "Current" | "Credit"; maskedNumber: string; balance: number;
+  /** Kept by retail/more.ts for a bank connected with connect-account: the account's own name, the bank's id, when it was connected (ISO), until when the sharing lasts (YYYY-MM-DD) and its currency. */
+  name?: string; bankId?: string; connectedAt?: string; until?: string; currency?: string };
 export type SavedCard = { id: string; network: "mastercard" | "visa" | "amex"; last4: string; holder: string; expiry: string; nickname: string; isDefault: boolean; /** the bank that issued it, when the customer said so */ bank?: string; /** what the customer uses it for (set when it was saved with the Add a card journey) */ uses?: { addMoney: boolean; pay: boolean } };
 export type Finance = {
   currency: string;
@@ -72,7 +74,7 @@ export const alexFinance = (): Finance => ({
     { id: "s_video", name: "StreamPlus", amount: 27, nextInDays: 9, color: "#E5484D" },
     { id: "s_music", name: "TuneBox", amount: 11, nextInDays: 14, color: "#1AA37A" },
   ],
-  linked: [{ id: "l_summit", bank: "Summit Federal", kind: "Savings", maskedNumber: "••9876", balance: 9876.54 }],
+  linked: [{ id: "l_summit", bank: "Summit Federal", kind: "Savings", maskedNumber: "••9876", balance: 9876.54, connectedAt: "2026-03-01T09:00:00.000Z", until: "2027-03-01" }],
   invest: alexInvest(),
   cards: [{ id: "c_5832", network: "mastercard", last4: "5832", holder: "Alex Morgan", expiry: "11/28", nickname: "Everyday", isDefault: true }],
 });

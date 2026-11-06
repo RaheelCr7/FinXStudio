@@ -17,6 +17,7 @@ import { retailRecords } from "./records";
 import { AccountsApi } from "./accounts";
 import { CardsApi } from "./cards";
 import { SaveApi } from "./save";
+import { MoreApi } from "./more";
 
 const hour = 3600 * 1000;
 
@@ -35,7 +36,7 @@ type PayQuote = {
   receive: number; rate: number | null; pay: number; fee: number; total: number; currency: string; expiresAt: string;
   coolingOff: boolean; speedName: string; arrives: string;
 };
-export type RetailHost = { now: () => number; otp: OtpState; conditions: () => SandboxConditions; flaws: Flaws; config: () => BankConfig; /** moves the sandbox clock on (a scheduler run, a slow answer) */ setNow: (fn: () => number) => void };
+export type RetailHost = { /** the bank's record of how to reach the customer changed (the access directory follows it) */ contact?: (field: "mobile" | "email", value: string) => void; now: () => number; otp: OtpState; conditions: () => SandboxConditions; flaws: Flaws; config: () => BankConfig; /** moves the sandbox clock on (a scheduler run, a slow answer) */ setNow: (fn: () => number) => void };
 
 /**
  * The personal adapters (`bank.*` apart from the session, the one-time code and the bank's configuration): accounts, moving money,
@@ -74,6 +75,8 @@ export class RetailSandbox {
   private cards: CardsApi;
   /** Term deposits, savings goals, loans, the funds and topping up from a card (save.ts). */
   private save: SaveApi;
+  /** Contact details, secure messages, service requests and the banks a customer links (more.ts). */
+  private more: MoreApi;
   constructor(private p: Persona, private host: RetailHost) {
     this.schedules = p.schedules ?? [];
     this.savedBillers = p.savedBillers ?? [];
@@ -83,6 +86,7 @@ export class RetailSandbox {
     this.accounts = new AccountsApi(p, { now: () => host.now(), otp: host.otp, conditions: () => host.conditions(), flaws: host.flaws, config: host.config });
     this.cards = new CardsApi(p, { now: () => host.now(), otp: host.otp, conditions: () => host.conditions(), flaws: host.flaws, config: host.config });
     this.save = new SaveApi(p, { now: () => host.now(), otp: host.otp, conditions: () => host.conditions(), flaws: host.flaws, config: host.config });
+    this.more = new MoreApi(p, { now: () => host.now(), otp: host.otp, conditions: () => host.conditions(), flaws: host.flaws, config: host.config, contact: host.contact });
     this.cab = new CabSandbox(p, { otpVerified: () => host.otp.verified, clearOtp: () => { host.otp.verified = false; }, now: () => host.now() });
   }
   private get otp(): OtpState { return this.host.otp; }
@@ -749,6 +753,8 @@ export class RetailSandbox {
     if (this.cards.handles(adapter)) return this.cards.call(adapter, input);
     // term deposits, savings goals, loans, the funds and adding money from a card
     if (this.save.handles(adapter)) return this.save.call(adapter, input);
+    // the profile and the changes asked for, secure messages, service requests, and the accounts at other banks
+    if (this.more.handles(adapter)) return this.more.call(adapter, input);
     // a BankWorkx customer pays bills from the bank's own directory (bills.ts); the Meezan customers keep the older billers below
     if (this.p.brand === "bankworkx" && /^bank\.bill(er)?s\./.test(adapter)) return this.bankworkxBills(adapter, input);
     // a BankWorkx customer tops up from the bank's own operators (topup.ts); the Meezan customers keep the carriers and the 50 to 5,000 rule below
