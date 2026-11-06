@@ -1,4 +1,4 @@
-import { MOVES_MONEY, type Journey } from "@finx/journey-schema";
+import { changesSecurity, movesMoney as isMoneyMoving, type Journey } from "@finx/journey-schema";
 import { lintAll } from "@finx/renderer-core";
 import type { ProviderId } from "@finx/mock-bank-api";
 import { runScenarios, type ScenarioReport } from "./scenarios";
@@ -44,7 +44,8 @@ const eachAction = (j: Journey, fn: (a: any, screen: string) => void) => {
 export async function complianceReport(journey: Journey, banks: ProviderId[] = ["reference", "bank-b"]): Promise<ComplianceReport> {
   const issues = lintAll(journey);
   const by = (...codes: string[]) => issues.filter((i) => codes.includes(i.code));
-  const movesMoney = journey.integrations.some((i) => MOVES_MONEY.test(i.adapter));
+  const movesMoney = journey.integrations.some((i) => isMoneyMoving(i.adapter));
+  const securityChange = journey.integrations.some((i) => changesSecurity(i.adapter));
   const corporate = journey.integrations.some((i) => i.adapter.startsWith("corp."));
   const checks: ComplianceCheck[] = [];
   const add = (id: string, title: string, applies: boolean, bad: { message: string; screen?: string }[], ok: string) =>
@@ -52,19 +53,20 @@ export async function complianceReport(journey: Journey, banks: ProviderId[] = [
 
   add("consent", "The customer confirms before money moves", movesMoney, by("consent_before_submit"), "A confirmation block is on the way to the money-moving call");
   add("otp", "A one-time code is verified before money moves", movesMoney, by("otp_before_money"), "The code is checked before the money-moving call");
+  add("step-up", "A one-time code is verified before a security setting changes", securityChange, by("step_up_before_security_change"), "The code is checked before the call that changes who or what is protected");
 
   // a money-moving call with no error path leaves the customer on a screen that does nothing when the bank refuses
   const silent: { message: string; screen?: string }[] = [];
   eachAction(journey, (a, screen) => {
     const integ = journey.integrations.find((i) => i.id === a.integration);
-    if (a.type === "callApi" && integ && MOVES_MONEY.test(integ.adapter) && !a.onError) silent.push({ message: `${integ.adapter} has no error path`, screen });
+    if (a.type === "callApi" && integ && isMoneyMoving(integ.adapter) && !a.onError) silent.push({ message: `${integ.adapter} has no error path`, screen });
   });
   add("failure-paths", "A refusal from the bank is explained to the customer", movesMoney, silent, "Every money-moving call has an error path");
 
   add("authorisation", "Only the right role can use it", corporate, by("authorisation_missing", "authorisation_denied_missing"), "The journey names the role and sends everyone else to a denied screen");
   add("currency", "Every amount has a currency", true, by("amount_no_currency", "amount_currency_invalid", "currency_mismatch", "mixed_currency"), "Amounts carry one declared currency");
   add("translations", "Every text is translated", true, by("translation_gap"), `All texts exist in ${journey.locale.supported.join(", ")}`);
-  const other = issues.filter((i) => !["consent_before_submit", "otp_before_money", "authorisation_missing", "authorisation_denied_missing", "amount_no_currency", "amount_currency_invalid", "currency_mismatch", "mixed_currency", "translation_gap"].includes(i.code));
+  const other = issues.filter((i) => !["consent_before_submit", "otp_before_money", "step_up_before_security_change", "authorisation_missing", "authorisation_denied_missing", "amount_no_currency", "amount_currency_invalid", "currency_mismatch", "mixed_currency", "translation_gap"].includes(i.code));
   add("lint", "No other lint findings (reachability, data, references)", true, other, "The journey is lint clean");
 
   // the trace: criteria to scenarios to screens, on every bank API the journey runs on

@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { Journey, bulkPayment, corporatePayment, payBill, payrollRun } from "@finx/journey-schema";
+import { Journey, bulkPayment, corporatePayment, payBill, payrollRun, trustedDevices } from "@finx/journey-schema";
 import { complianceReport } from "./compliance";
 
 const status = (r: Awaited<ReturnType<typeof complianceReport>>, id: string) => r.checks.find((c) => c.id === id)!.status;
@@ -36,5 +36,16 @@ describe("compliance report", () => {
     const r2 = await complianceReport(Journey.parse(k));
     expect(status(r2, "failure-paths")).toBe("fail");
     expect(r2.checks.find((c) => c.id === "failure-paths")!.detail).toContain("corp.bulk.submit has no error path");
+  });
+
+  it("a journey that changes a security setting is checked for the code, and one that does not is not", async () => {
+    expect(status(await complianceReport(Journey.parse(trustedDevices)), "step-up")).toBe("pass");
+    expect(status(await complianceReport(Journey.parse(payBill)), "step-up")).toBe("n/a");
+    const j: any = structuredClone(trustedDevices);
+    for (const s of j.screens) s.blocks = s.blocks.filter((b: any) => b.type !== "otp");
+    const r = await complianceReport(Journey.parse(j));
+    expect(status(r, "step-up")).toBe("fail");
+    // the new code is a check of its own, not one more "other finding"
+    expect(r.checks.find((c) => c.id === "lint")!.status).toBe("pass");
   });
 });

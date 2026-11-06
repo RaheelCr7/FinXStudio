@@ -1,7 +1,52 @@
 import type { Journey } from "./schema";
 
-/** The adapters that move money. A journey that calls one needs consent and a verified one-time code first. */
-export const MOVES_MONEY = /transfers\.(create|own)|fx\.convert|payments\.create|bills\.pay|topup\.create|schedules\.(create|update)|statements\.issue|cards\.replace$|deposits\.(open|close)$|loans\.(apply|repay|settle)$|funds\.(buy|sell)$|invest\.(buy|sell)$|deposit\.create$|corp\.payments\.(initiate|approve)|corp\.(bulk|payroll)\.submit/;
+/**
+ * The adapters that move money or commit the customer to a financial obligation. A journey that calls one needs a consent block and a
+ * one-time code verified before the call (`consent_before_submit`, `otp_before_money`). An explicit list on purpose: a pattern would
+ * either miss a new adapter silently or match one by accident, and the sandbox catalog test (renderer-core) fails when the two drift apart.
+ */
+export const MOVES_MONEY: ReadonlySet<string> = new Set([
+  // payments and transfers
+  "bank.transfers.create", "bank.transfers.own", "bank.payments.create", "bank.fx.convert", "bank.bills.pay", "bank.topup.create", "bank.subscriptions.pay",
+  "bank.schedules.create", "bank.schedules.update",
+  // statements that carry a fee, cards ordered for a fee
+  "bank.statements.issue", "bank.cards.replace",
+  // save, borrow and invest (term deposit open/renew/close, card top-up, loans, funds, stocks)
+  "bank.deposit.create", "bank.deposits.open", "bank.deposits.renew", "bank.deposits.close",
+  "bank.loans.apply", "bank.loans.repay", "bank.loans.settle",
+  "bank.funds.buy", "bank.funds.sell", "bank.invest.buy", "bank.invest.sell",
+  // business: a payment, a scheduled payment, an approval that releases money, a batch, a payroll run
+  "corp.payments.initiate", "corp.payments.create", "corp.payments.approve", "corp.payments.approveMany",
+  "corp.schedules.create", "corp.schedules.update", "corp.bulk.submit", "corp.payroll.submit",
+]);
+
+/**
+ * The adapters that change how a customer or a business is protected: card controls and PIN, who may be paid, contact details,
+ * passwords and devices, and the administration of a company (people, limits, approval groups). A journey that calls one needs a one-time
+ * code verified before the call (`step_up_before_security_change`). It does not need a consent block unless it also moves money.
+ */
+export const CHANGES_SECURITY: ReadonlySet<string> = new Set([
+  // cards: loosening a card (unfreeze, a higher limit, a control turned on), a PIN, a new virtual card number
+  "bank.cards.unfreeze", "bank.cards.controls.update", "bank.cards.pin.set", "bank.cards.virtual.create",
+  // who may be paid
+  "bank.payees.save", "corp.suppliers.request",
+  // how the person is reached and how they get in
+  "bank.profile.update", "bank.password.change", "bank.recover.resetPassword", "cab.recover.resetPassword", "bank.recover.unlock",
+  "bank.devices.remove", "bank.devices.setQuickSignIn", "bank.device.setDefault",
+  // administration of a company: people, limits, approval groups, the decision on a waiting change, who approves in your place
+  "corp.users.invite", "corp.users.update", "corp.users.disable", "corp.users.enable",
+  "corp.limits.set", "corp.signatories.update", "corp.changes.decide", "corp.payments.delegate",
+]);
+
+/**
+ * Adapters that only protect or only read, so they need no code: freezing or blocking a card has to be one tap in an emergency
+ * (spec: freeze needs no code, unfreeze does), removing a virtual card only reduces risk. Not used by the lint; the sandbox catalog test
+ * reads it to prove that every adapter that asks for a code is either gated or listed here with its reason.
+ */
+export const PROTECTIVE_ONLY: ReadonlySet<string> = new Set(["bank.cards.freeze", "bank.cards.block", "bank.cards.virtual.delete"]);
+
+export const movesMoney = (adapter: string): boolean => MOVES_MONEY.has(adapter);
+export const changesSecurity = (adapter: string): boolean => CHANGES_SECURITY.has(adapter);
 export type LintIssue = { code: string; message: string; screen?: string };
 
 /** Every action a block can run: a button's, a code's resend, and those of menu rows, shortcut icons and a heading's link. */
@@ -89,20 +134,30 @@ export function lintJourney(j: Journey): LintIssue[] {
 
   // consent before submit: any screen that calls a money-moving integration must be preceded by a screen with consent
   const hasConsent = j.screens.some((s) => s.blocks.some((b) => b.type === "consent"));
-  const moves = j.integrations.some((i) => MOVES_MONEY.test(i.adapter));
+  const moves = j.integrations.some((i) => movesMoney(i.adapter));
   if (moves && !hasConsent) issues.push({ code: "consent_before_submit", message: "Money-moving journey has no consent block" });
 
-  // OTP before money moves
+  // OTP before money moves, and before a change to how the customer or business is protected (that alone needs no consent)
   const otpScreen = j.screens.find((s) => s.blocks.some((b) => b.type === "otp"));
-  const verifyIdx = (s: typeof j.screens[number]) =>
-    s.blocks.flatMap((b: any) => (b.type === "button" ? b.actions : [])).findIndex((a: any) => a.type === "callApi" && /otpVerify/.test(a.integration));
-  const moveIdx = (s: typeof j.screens[number]) =>
-    s.blocks.flatMap((b: any) => (b.type === "button" ? b.actions : [])).findIndex((a: any) => a.type === "callApi" && j.integrations.find((i) => i.id === a.integration && MOVES_MONEY.test(i.adapter)));
-  if (moves) {
-    if (!otpScreen) issues.push({ code: "otp_before_money", message: "Money-moving journey has no OTP screen" });
-    else if (verifyIdx(otpScreen) < 0 || (moveIdx(otpScreen) >= 0 && verifyIdx(otpScreen) > moveIdx(otpScreen))) {
-      issues.push({ code: "otp_before_money", message: "OTP must be verified before the money-moving call", screen: otpScreen.id });
-    }
+  const buttonCalls = (s: typeof j.screens[number]) => s.blocks.flatMap((b: any) => (b.type === "button" ? b.actions : []));
+  const verifyIdx = (s: typeof j.screens[number]) => buttonCalls(s).findIndex((a: any) => a.type === "callApi" && /otpVerify/.test(a.integration));
+  const gatedIdx = (s: typeof j.screens[number], gated: (adapter: string) => boolean) =>
+    buttonCalls(s).findIndex((a: any) => a.type === "callApi" && j.integrations.find((i) => i.id === a.integration && gated(i.adapter)));
+  /** What is wrong with the code in front of a call, or undefined when it is checked first. */
+  const codeProblem = (gated: (adapter: string) => boolean): { noScreen: boolean; screen?: string } | undefined => {
+    if (!otpScreen) return { noScreen: true };
+    const at = gatedIdx(otpScreen, gated);
+    if (verifyIdx(otpScreen) < 0 || (at >= 0 && verifyIdx(otpScreen) > at)) return { noScreen: false, screen: otpScreen.id };
+    return undefined;
+  };
+  const money = moves ? codeProblem(movesMoney) : undefined;
+  if (money) issues.push(money.noScreen ? { code: "otp_before_money", message: "Money-moving journey has no OTP screen" } : { code: "otp_before_money", message: "OTP must be verified before the money-moving call", screen: money.screen });
+  // a journey that also moves money was already told about its code
+  if (!money && j.integrations.some((i) => changesSecurity(i.adapter))) {
+    const step = codeProblem(changesSecurity);
+    if (step) issues.push(step.noScreen
+      ? { code: "step_up_before_security_change", message: "A journey that changes how the customer or business is protected has no OTP screen" }
+      : { code: "step_up_before_security_change", message: "OTP must be verified before the call that changes security settings", screen: step.screen });
   }
 
   // inputs bound to dataModel

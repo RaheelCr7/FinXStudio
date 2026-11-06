@@ -95,7 +95,7 @@ describe("catalog stays in sync with the real schema and lint", () => {
   // line in the index (the older lists of suppliers and templates were rewritten in place). The whole is 52,146 of 56,000, which is not raised.
   // adapters 21,400 -> 21,800: the 5 adapters of the Business journeys of Bulk and payroll and Approvals (the bulk quote, list and get, the payroll register, rejecting several), each one short line in the index
   // (the older entries of the bulk and payroll checks and submits, and of approving and rejecting, were rewritten in place). The whole is 52,606 of 56,000, which is not raised.
-  const SECTION_CEILINGS: Record<string, number> = { overview: 1_100, journey: 2_600, blocks: 15_100, actions: 3_000, expressions: 1_900, data: 900, localization: 1_100, adapters: 23_400, personas: 1_800, lint: 2_600, patterns: 1_700 };
+  const SECTION_CEILINGS: Record<string, number> = { overview: 1_100, journey: 2_600, blocks: 15_100, actions: 3_000, expressions: 1_900, data: 900, localization: 1_100, adapters: 23_400, personas: 1_800, lint: 2_700, patterns: 1_700 };
   it("each section stays within its ceiling, and the whole stays within the size the tool returns", () => {
     const sizes = catalogSizes();
     const report = JSON.stringify(sizes);
