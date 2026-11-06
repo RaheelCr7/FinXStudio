@@ -40,7 +40,10 @@ const norm = (s: unknown) => String(s ?? "").trim();
 const ymd = (t: number) => new Date(t).toISOString().slice(0, 10).replace(/-/g, "");
 const seq4 = (n: number) => String(n).padStart(4, "0");
 const maskLast4 = (last4: string) => `••• ${last4}`;
-const maskEmail = (e: string) => e.replace(/^(.).*(@.*)$/, "$1•••$2");
+const maskEmail = (e: string) => {
+  const at = e.lastIndexOf("@");
+  return at < 1 ? e : `${e[0]}•••${e.slice(at)}`;
+};
 const group = (n: number) => String(n).replace(/\B(?=(\d{3})+(?!\d))/g, ",");
 /** Cents as money: the symbol, whole units grouped by thousands, two decimals. Whole numbers only: no float is ever formatted. */
 export const moneyText = (cents: number, sym: string) => `${sym}${group(Math.floor(cents / 100))}.${String(cents % 100).padStart(2, "0")}`;
