@@ -17,6 +17,11 @@ export const approvePaymentsAcceptance: NonNullable<Journey["acceptance"]> = [
   { id: "AC-10", text: "An unavailable bank or a timeout approves nothing and says so; a timeout says to check Payments first." },
   { id: "AC-11", text: "Several payments that can be approved together are approved with one code, all or none; the ones with a name to check, the ones you started and the ones out of turn are not offered, and the bank refuses them if forced." },
   { id: "AC-12", text: "The history lists what was released or rejected and opens its details; a payment that is gone, or no longer waiting, says so." },
+  { id: "AC-13", text: "With the bank's option stepUp off no code is asked at any amount, for one payment or several; with it on the code is asked from the company's threshold, and the bank follows the option." },
+  { id: "AC-14", text: "Reject several: the person ticks payments and gives one reason (a note of at least 10 characters for Other), and all are rejected with one reference or none; one that cannot be rejected stops the whole group, and the bank refuses a rejection with no reason or a short note." },
+  { id: "AC-15", text: "The details name the rule behind the approvers, any of them in any order or one after the other, and show when each approver approved." },
+  { id: "AC-16", text: "Every decision (approving, rejecting, passing on, approving or rejecting several) ends with its APR reference." },
+  { id: "AC-17", text: "A batch or a payroll run shows who is paid how much under its details, and never an account number." },
 ];
 
 // Alex Morgan at Beta Services Ltd (an Approver), working in the company from the start. Today is Tuesday 3 November 2026, 10:42 UTC; the cut-off is 16:00.
@@ -68,7 +73,7 @@ export const approvePaymentsScenarios: NonNullable<Journey["scenarios"]> = [
   C("T-3", "PAY-2044, which Alex started: the sentence instead of the buttons, and the bank refuses it if forced", ["AC-2"], [
     screen("inbox"), text("Waiting for others"), text("Started by you"), press("PAY-2044"), screen("detail"), text("$9,800.00 to Nimbus Logistics"),
     text("You started this payment. Another approver must approve it."), noText("Approve $9,800.00"), noText("Reject"), noText("Pass to someone"),
-    refused("corp.payments.approve", "SELF_APPROVAL", { paymentId: "PAY-2044" }), refused("corp.payments.reject", "NOT_AUTHORISED", { paymentId: "PAY-2044" }),
+    refused("corp.payments.approve", "SELF_APPROVAL", { paymentId: "PAY-2044" }), refused("corp.payments.reject", "NOT_AUTHORISED", { paymentId: "PAY-2044", reason: "Wrong amount" }),
     payment("PAY-2044", "status", "pending_approval"), balance(310_000),
   ]),
   C("T-4", "PAY-2047, which Lee Park must approve first: \"Waiting for Lee Park to approve first.\" and no button; the bank refuses an approval out of turn", ["AC-3"], [
@@ -109,7 +114,7 @@ export const approvePaymentsScenarios: NonNullable<Journey["scenarios"]> = [
     screen("denied"), text("You don’t have access to the approvals inbox"), text("The bank checks this on its side too"), text("Your requests waiting for approval"), text("PAY-2040 · 0 of 1 approved"), text("Harbour Packaging"),
     noText("Approve $"), noText("Reject"),
     ...withCode, refused("corp.payments.approve", "PERMISSION_DENIED", { paymentId: "PAY-2040" }), refused("corp.payments.approve", "PERMISSION_DENIED", { paymentId: "PAY-2040", userId: "dana" }),
-    refused("corp.payments.reject", "PERMISSION_DENIED", { paymentId: "PAY-2040", reason: "x" }), refused("corp.payments.approveMany", "PERMISSION_DENIED", { paymentIds: ["PAY-2040"] }),
+    refused("corp.payments.reject", "PERMISSION_DENIED", { paymentId: "PAY-2040", reason: "Wrong amount" }), refused("corp.payments.approveMany", "PERMISSION_DENIED", { paymentIds: ["PAY-2040"] }),
     refused("corp.payments.delegate", "PERMISSION_DENIED", { paymentId: "PAY-2040", toUserId: "dana" }),
     payment("PAY-2040", "status", "pending_approval"), payment("PAY-2040", "approvals", []),
     { expectBank: { adapter: "corp.company.get", path: "accounts.alpha_ops.balance", equals: 480_000 } },
@@ -209,7 +214,7 @@ export const approvePaymentsScenarios: NonNullable<Journey["scenarios"]> = [
   ], { launch: launch("PAY-9999") }),
   T("T-36", "A payment that was rejected by someone else after the list was shown: the approval is refused and says it is no longer waiting", ["AC-12", "AC-10"], [
     screen("detail"), ...toConfirm("$8,200.00"), ticked,
-    { expectBank: { adapter: "corp.payments.reject", input: { paymentId: "PAY-2041", reason: "x" }, path: "status", equals: "rejected" } },
+    { expectBank: { adapter: "corp.payments.reject", input: { paymentId: "PAY-2041", reason: "Wrong amount" }, path: "status", equals: "rejected" } },
     press("Approve $8,200.00"), screen("problem"), text("This payment is no longer waiting for approval."), text("Nothing was approved."), press("Back to approvals"), screen("inbox"), noText("PAY-2041"),
   ], { launch: launch("PAY-2041") }),
   T("T-37", "The inbox cannot be read: the sheet, and Try again asks again; the payment cannot be read: back to the inbox", ["AC-10"], [
@@ -248,10 +253,85 @@ export const approvePaymentsScenarios: NonNullable<Journey["scenarios"]> = [
   ], { context: "alpha", conditions: { unavailable: ["corp.payments.pending"] } }),
   T("T-46", "Forced approvals the bank refuses even for a payment Alex may approve: a payment already released, and a payment that does not exist", ["AC-2", "AC-12"], [
     screen("detail"), ...toConfirm("$8,200.00"), ticked, press("Approve $8,200.00"), screen("approved"),
-    refused("corp.payments.approve", "PAYMENT_NOT_PENDING", { paymentId: "PAY-2041" }), refused("corp.payments.approve", "PAYMENT_NOT_FOUND", { paymentId: "PAY-0000" }), refused("corp.payments.reject", "PAYMENT_NOT_PENDING", { paymentId: "PAY-2041", reason: "x" }),
+    refused("corp.payments.approve", "PAYMENT_NOT_PENDING", { paymentId: "PAY-2041" }), refused("corp.payments.approve", "PAYMENT_NOT_FOUND", { paymentId: "PAY-0000" }), refused("corp.payments.reject", "PAYMENT_NOT_PENDING", { paymentId: "PAY-2041", reason: "Wrong amount" }),
     balance(301_800),
   ], { launch: launch("PAY-2041") }),
   T("T-47", "Back from the details and Cancel from the confirmation return without approving anything", ["AC-4"], [
     screen("detail"), ...toConfirm("$8,200.00"), press("Cancel"), screen("detail"), press("Back"), screen("inbox"), payment("PAY-2041", "status", "pending_approval"), balance(310_000),
   ], { launch: launch("PAY-2041") }),
+];
+
+const arrange = (payment: Record<string, unknown>) => ({ adapter: "corp.sandbox.arrange", input: { op: "payment", payment } });
+const pay = (id: string, extra: Record<string, unknown>) => ({ id, companyId: "beta", fromAccountId: "beta_ops", beneficiaryId: "nimb", amount: 1000, currency: "USD", reference: "X", status: "pending_approval", initiatedBy: "priya", initiatedAt: "2026-11-03T09:00:00Z", valueDate: "2026-11-03", afterCutoff: false, required: 1, approvals: [], ...extra });
+const BATCH = pay("PAY-7200", { beneficiaryId: "bulk", amount: 7_200, reference: "Supplier batch 7", lines: [{ n: 1, beneficiaryId: "nimb", amount: 4_200, reference: "INV-2330" }, { n: 2, beneficiaryId: "rhine", amount: 3_000, reference: "INV-2332" }] });
+const RUN = pay("PAY-7201", { beneficiaryId: "payroll", amount: 9_000, reference: "Payroll 2026-11", period: "2026-11", lines: [{ n: 1, beneficiaryId: "emp_1", amount: 4_500, reference: "Payroll 2026-11" }, { n: 2, beneficiaryId: "emp_2", amount: 4_500, reference: "Payroll 2026-11" }] });
+const picked = (...ids: string[]) => set({ "ap.picked": ids });
+
+export const approvePaymentsScenariosB: NonNullable<Journey["scenarios"]> = [
+  T("T-51", "stepUp off: PAY-2039 (64,500.00) is approved with no code, and the details do not say a code will be asked", ["AC-13"], [
+    screen("detail"), noText("You’ll be asked for a code."), ...toConfirm("$64,500.00"), ticked, press("Approve $64,500.00"), screen("approved"), noText("Code sent"), text("Sent to the bank"), payment("PAY-2039", "status", "released"), balance(245_500),
+  ], { launch: { ...launch("PAY-2039"), "opt.stepUp": false } }),
+  T("T-52", "stepUp on (the default): the same payment asks for a code, and the bank refuses it without one", ["AC-13", "AC-4"], [
+    screen("detail"), text("You’ll be asked for a code."), ...toConfirm("$64,500.00"), ticked, press("Approve $64,500.00"), screen("otp"), refused("corp.payments.approve", "OTP_REQUIRED", { paymentId: "PAY-2039", acknowledged: true }), payment("PAY-2039", "status", "pending_approval"), balance(310_000),
+  ], { launch: launch("PAY-2039") }),
+  C("T-53", "stepUp off for several: PAY-2041 and PAY-2039 are approved together with no code", ["AC-13", "AC-11"], [
+    screen("inbox"), press("Approve several"), screen("many"), picked("PAY-2041", "PAY-2039"), set({ "ap.ack": true }), press("Approve 2"), screen("manyDone"), noText("Code sent"), text("2 payments approved"), payment("PAY-2039", "status", "released"), payment("PAY-2041", "status", "released"),
+  ], { launch: { "opt.stepUp": false } }),
+  C("T-54", "Reject several: two payments, no reason first (Choose a reason.), then Wrong payee: both rejected with one reference, and nothing was sent", ["AC-14", "AC-16"], [
+    screen("inbox"), press("Reject several"), screen("rejectMany"), text("Reject several"), picked("PAY-2041", "PAY-2046"), press("Reject 2"), screen("rejectMany"), text("Choose a reason."),
+    set({ "ap.reason": "Wrong payee" }), press("Reject 2"), screen("manyRejected"), text("2 payments rejected"), text("$64,200.00 in total. Nothing was sent."), text("Wrong payee"), text("APR-20261103-0001"),
+    payment("PAY-2041", "status", "rejected"), payment("PAY-2046", "status", "rejected"), payment("PAY-2041", "rejectReason", "Wrong payee"), balance(310_000), released(0), press("Back to approvals"), screen("inbox"), noText("PAY-2041"),
+  ]),
+  C("T-55", "Reject several with Other needs a note of at least 10 characters", ["AC-14"], [
+    screen("inbox"), press("Reject several"), picked("PAY-2041", "PAY-2046"), set({ "ap.reason": "Other", "ap.note": "short" }), press("Reject 2"), screen("rejectMany"), error("ap.note"), payment("PAY-2041", "status", "pending_approval"),
+    set({ "ap.note": "Duplicate of an invoice we paid" }), press("Reject 2"), screen("manyRejected"), payment("PAY-2046", "rejectReason", "Duplicate of an invoice we paid"),
+  ]),
+  C("T-56", "Opened in reject mode with payments (the inbox's Reject {n}): they are ticked, and Alex's own payment stops the whole group", ["AC-14"], [
+    screen("rejectMany"), text("Reject 2"), set({ "ap.reason": "Duplicate" }), press("Reject 2"), screen("manyRejected"), payment("PAY-2041", "status", "rejected"), payment("PAY-2043", "status", "rejected"),
+    refused("corp.payments.rejectMany", "NOT_AUTHORISED", { paymentIds: ["PAY-2039", "PAY-2044"], reason: "Duplicate" }), payment("PAY-2039", "status", "pending_approval"),
+  ], { launch: { "launch.mode": "reject", "launch.paymentIds": ["PAY-2041", "PAY-2043"] } }),
+  C("T-57", "The bank refuses a rejection with no reason or a short note, a group with nothing in it, a payment no longer waiting, and a Maker", ["AC-14", "AC-7"], [
+    screen("inbox"), refused("corp.payments.reject", "REASON_REQUIRED", { paymentId: "PAY-2041", reason: "" }), refused("corp.payments.reject", "REASON_REQUIRED", { paymentId: "PAY-2041", reason: "too short" }),
+    refused("corp.payments.rejectMany", "REASON_REQUIRED", { paymentIds: ["PAY-2041"], reason: "" }), refused("corp.payments.rejectMany", "EMPTY_BATCH", { paymentIds: [], reason: "Duplicate" }),
+    refused("corp.payments.rejectMany", "PAYMENT_NOT_FOUND", { paymentIds: ["PAY-0000"], reason: "Duplicate" }), payment("PAY-2041", "status", "pending_approval"),
+    { expectBank: { adapter: "corp.payments.reject", input: { paymentId: "PAY-2041", reason: "Wrong amount" }, path: "status", equals: "rejected" } },
+    refused("corp.payments.rejectMany", "PAYMENT_NOT_PENDING", { paymentIds: ["PAY-2041", "PAY-2043"], reason: "Duplicate" }), payment("PAY-2043", "status", "pending_approval"),
+  ]),
+  T("T-58", "A Maker cannot reject several: the bank refuses it", ["AC-14", "AC-1"], [screen("denied"), refused("corp.payments.rejectMany", "PERMISSION_DENIED", { paymentIds: ["PAY-2040"], reason: "Duplicate" })], { context: "alpha" }),
+  T("T-59", "The details of PAY-2039 name the order (Lee Park, then Alex Morgan) and show when Lee Park approved", ["AC-15"], [
+    screen("detail"), text("In this order: Lee Park, then Alex Morgan."), text("Lee Park"), text("Approved"), text("2 Nov 17:40"), text("Next"),
+  ], { launch: launch("PAY-2039") }),
+  C("T-60", "PAY-2046 needs two approvers in any order: the details say so, and nobody has approved yet", ["AC-15"], [
+    screen("detail"), text("Any 2 approvers, in any order."), text("Can approve"), noText("In this order"), text("0 of 2 approved"),
+  ], { launch: launch("PAY-2046") }),
+  T("T-61", "Approving ends with an APR reference, besides the release reference of the payment", ["AC-16"], [
+    screen("detail"), ...toConfirm("$8,200.00"), ticked, press("Approve $8,200.00"), screen("approved"), text("APR-20261103-0001"), text("CORP-20261103-2041"),
+  ], { launch: launch("PAY-2041") }),
+  C("T-62", "Rejecting ends with an APR reference", ["AC-16", "AC-7"], [
+    screen("detail"), press("Reject"), screen("reject"), set({ "ap.reason": "Wrong amount" }), press("Reject payment"), screen("rejected"), text("APR-20261103-0001"),
+  ], { launch: launch("PAY-2048") }),
+  C("T-63", "Passing on ends with an APR reference", ["AC-16", "AC-8"], [
+    screen("detail"), press("Pass to someone"), set({ "ap.to": "lee" }), press("Pass on"), screen("passed"), text("APR-20261103-0001"),
+  ], { launch: { ...launch("PAY-2041"), "opt.delegation": true } }),
+  C("T-64", "Approving several ends with one APR reference", ["AC-16", "AC-11"], [
+    screen("inbox"), press("Approve several"), picked("PAY-2041", "PAY-2046"), set({ "ap.ack": true }), press("Approve 2"), screen("otpMany"), ...code(), press("Approve 2"), screen("manyDone"), text("APR-20261103-0001"),
+  ]),
+  C("T-65", "A batch shows its payments under its details: who is paid how much and the reference, and no account number", ["AC-17"], [
+    screen("detail"), text("2 payments"), text("Supplier batch 7"), text("Nimbus Logistics"), text("$4,200.00"), text("INV-2330"), text("Rhine Freight GmbH"), text("$3,000.00"), noText("5521"), noText("021000021"),
+  ], { launch: launch("PAY-7200"), setup: [arrange(BATCH)] }),
+  C("T-66", "A payroll run shows how many employees it pays under its details, and a payment with no lines shows no table", ["AC-17"], [
+    screen("detail"), text("2 employees"), text("Payroll 2026-11"), text("$4,500.00"),
+  ], { launch: launch("PAY-7201"), setup: [arrange(RUN)] }),
+  C("T-67", "A single payment shows no batch table", ["AC-17"], [screen("detail"), noText("Payments in this batch"), noText("employees")], { launch: launch("PAY-2041") }),
+  C("T-68", "Reject several when the bank is unavailable: nothing is rejected, and Try again returns to the list", ["AC-14", "AC-10"], [
+    screen("inbox"), press("Reject several"), picked("PAY-2041", "PAY-2046"), set({ "ap.reason": "Duplicate" }), press("Reject 2"), screen("unavailable"), payment("PAY-2041", "status", "pending_approval"), payment("PAY-2046", "status", "pending_approval"), press("Try again"), screen("rejectMany"),
+  ], { conditions: { unavailable: ["corp.payments.rejectMany"] } }),
+  C("T-69", "Reject several when the bank does not answer: Check Payments first", ["AC-14", "AC-10"], [
+    screen("inbox"), press("Reject several"), picked("PAY-2041", "PAY-2046"), set({ "ap.reason": "Duplicate" }), press("Reject 2"), screen("timeout"), text("Check Payments before you try again, so you don’t approve twice."),
+  ], { conditions: { timeout: ["corp.payments.rejectMany"], latencyMs: 10_000 } }),
+  C("T-70", "A payment that was rejected by someone else while the group was ticked stops the whole group: none is rejected and the screen says why", ["AC-14"], [
+    screen("inbox"), press("Reject several"), picked("PAY-2041", "PAY-2043"), set({ "ap.reason": "Duplicate" }),
+    { expectBank: { adapter: "corp.payments.reject", input: { paymentId: "PAY-2043", reason: "Wrong amount" }, path: "status", equals: "rejected" } },
+    press("Reject 2"), screen("rejectMany"), text("This payment is already rejected"), payment("PAY-2041", "status", "pending_approval"),
+  ]),
 ];

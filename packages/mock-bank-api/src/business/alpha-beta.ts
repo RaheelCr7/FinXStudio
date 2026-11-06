@@ -1,5 +1,6 @@
 import type { CorpCompany, CorpPayment } from "./corporate";
 import type { CorporateProvider } from "./corporate-provider";
+import { seedLines, seedTotal } from "./bulk-data";
 
 /**
  * The two companies of the combined demo (docs/journeys/02-sme.md, seed values). Alex Morgan is Maker at Alpha Trading LLC (starts
@@ -30,7 +31,7 @@ export const ALPHA: CorpCompany = {
     { id: "emp_2", name: "Sofia Alvarez", bank: "Wells Fargo", maskedNumber: "••1202", salary: 6_100 },
     { id: "emp_3", name: "Jonas Lindqvist", bank: "Citi", maskedNumber: "••1203", salary: 4_800 },
   ],
-  companyDailyLimit: 1_000_000, companyUsedToday: 0, dualApprovalAbove: 50_000, codeAbove: 25_000,
+  companyDailyLimit: 1_000_000, companyUsedToday: 0, dualApprovalAbove: 50_000, codeAbove: 25_000, payrollApprovals: "threshold",
   cutoff: "16:00", holidays: ["2026-11-09"], paymentSeq: { prefix: "PAY", start: 2042 },
   templates: [
     { id: "tpl_packaging", name: "Monthly packaging", beneficiaryId: "harb", amount: 4_500, reference: "PO-STANDING", purpose: "Goods" },
@@ -68,7 +69,7 @@ export const BETA: CorpCompany = {
     { id: "emp_1", name: "Grace Holloway", bank: "Chase", maskedNumber: "••3101", salary: 4_900 },
     { id: "emp_2", name: "Mateo Silva", bank: "Citi", maskedNumber: "••3102", salary: 5_400 },
   ],
-  companyDailyLimit: 1_000_000, companyUsedToday: 0, dualApprovalAbove: 50_000, codeAbove: 25_000,
+  companyDailyLimit: 1_000_000, companyUsedToday: 0, dualApprovalAbove: 50_000, codeAbove: 25_000, payrollApprovals: "threshold",
   cutoff: "16:00", holidays: ["2026-11-09"], paymentSeq: { prefix: "PAY", start: 2042 },
   templates: [],
   signatoryGroups: [
@@ -87,7 +88,7 @@ const pay = (p: Partial<CorpPayment> & Pick<CorpPayment, "id" | "companyId" | "f
 export const GAMMA: CorpCompany = {
   id: "gamma", name: "Gamma Works Inc", currency: "USD", accounts: [],
   users: [{ id: "alex", name: "Alex Morgan", roles: ["initiator"], dailyLimit: 250_000, usedToday: 0 }, { id: "kim", name: "Kim Ortega", roles: ["approver"], dailyLimit: 0, usedToday: 0 }],
-  whitelist: [], companyDailyLimit: 1_000_000, companyUsedToday: 0, dualApprovalAbove: 50_000, codeAbove: 25_000, cutoff: "16:00", holidays: ["2026-11-09"], paymentSeq: { prefix: "PAY", start: 3001 }, templates: [], signatoryGroups: [], audit: [],
+  whitelist: [], companyDailyLimit: 1_000_000, companyUsedToday: 0, dualApprovalAbove: 50_000, codeAbove: 25_000, payrollApprovals: "threshold", cutoff: "16:00", holidays: ["2026-11-09"], paymentSeq: { prefix: "PAY", start: 3001 }, templates: [], signatoryGroups: [], audit: [],
 };
 
 /**
@@ -103,11 +104,9 @@ export const BETA_CAST: CorpCompany = {
 export function seedPayments(companyId: string, corp: CorporateProvider, cast = false) {
   const list: CorpPayment[] = companyId === "alpha" ? [
     pay({ id: "PAY-1187", companyId, fromAccountId: "alpha_ops", beneficiaryId: "harb", amount: 12_450, reference: "PO-5581", initiatedBy: "alex", initiatedAt: "2026-10-30T10:00:00Z", status: "released", required: 1, approvals: [{ userId: "dana", at: "2026-10-30T11:00:00Z" }], releasedAt: "2026-10-30T11:00:00Z", releaseReference: "CORP-20261030-1187" }),
-    // two supplier batches that were paid in October, long enough ago to have settled
-    pay({ id: "PAY-1180", companyId, fromAccountId: "alpha_ops", beneficiaryId: "bulk", amount: 21_300, reference: "Supplier batch 17", initiatedBy: "alex", initiatedAt: "2026-10-23T09:00:00Z", status: "released", required: 1, approvals: [{ userId: "dana", at: "2026-10-23T10:00:00Z" }], releasedAt: "2026-10-23T10:00:00Z", releaseReference: "CORP-20261023-1180",
-      lines: [{ n: 1, beneficiaryId: "harb", amount: 9_800, reference: "PO-5400" }, { n: 2, beneficiaryId: "nord", amount: 6_500, reference: "INV-31" }, { n: 3, beneficiaryId: "whit", amount: 5_000, reference: "FREIGHT-3" }] }),
-    pay({ id: "PAY-1190", companyId, fromAccountId: "alpha_ops", beneficiaryId: "bulk", amount: 8_640, reference: "Supplier batch 18", initiatedBy: "alex", initiatedAt: "2026-10-27T09:00:00Z", status: "released", required: 1, approvals: [{ userId: "lee", at: "2026-10-27T10:30:00Z" }], releasedAt: "2026-10-27T10:30:00Z", releaseReference: "CORP-20261027-1190",
-      lines: [{ n: 1, beneficiaryId: "harb", amount: 4_640, reference: "PO-5500" }, { n: 2, beneficiaryId: "gulf", amount: 4_000, reference: "INV-77" }] }),
+    // two supplier batches that were paid in October, long enough ago to have settled; the second had a payment the bank returned (see bulk-data.ts)
+    pay({ id: "PAY-1180", companyId, fromAccountId: "alpha_ops", beneficiaryId: "bulk", amount: seedTotal("alpha", "PAY-1180"), reference: "Supplier batch 18", initiatedBy: "alex", initiatedAt: "2026-10-23T09:00:00Z", status: "released", required: 1, approvals: [{ userId: "dana", at: "2026-10-23T10:00:00Z" }], releasedAt: "2026-10-23T10:00:00Z", releaseReference: "CORP-20261023-1180", lines: seedLines("alpha", "PAY-1180") }),
+    pay({ id: "PAY-1190", companyId, fromAccountId: "alpha_ops", beneficiaryId: "bulk", amount: seedTotal("alpha", "PAY-1190"), reference: "Supplier batch 19", initiatedBy: "alex", initiatedAt: "2026-10-27T09:00:00Z", status: "released", required: 1, approvals: [{ userId: "lee", at: "2026-10-27T10:30:00Z" }], releasedAt: "2026-10-27T10:30:00Z", releaseReference: "CORP-20261027-1190", lines: seedLines("alpha", "PAY-1190") }),
     pay({ id: "PAY-2040", companyId, fromAccountId: "alpha_ops", beneficiaryId: "harb", amount: 18_900, reference: "PO-5612", initiatedBy: "alex", initiatedAt: "2026-11-03T09:30:00Z", status: "pending_approval", required: 1, approvals: [] }),
   ] : companyId === "beta" ? [
     pay({ id: "PAY-2012", companyId, fromAccountId: "beta_ops", beneficiaryId: "nimb", amount: 3_400, reference: "INV-2204", initiatedBy: "priya", initiatedAt: "2026-10-28T09:00:00Z", status: "released", required: 1, approvals: [{ userId: "alex", at: "2026-10-28T10:00:00Z" }], releasedAt: "2026-10-28T10:00:00Z", releaseReference: "CORP-20261028-2012" }),

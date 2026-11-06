@@ -173,8 +173,9 @@ export class SmeSandbox {
   }
   /** The accounts as a map; `for: "export"` lists only those the person may export. */
   private accounts(corp: CorporateProvider, co: CorpCompany, s: State, userId: string, input: Record<string, any>) {
-    const rows = co.accounts.map((a) => this.row(corp, co, s, a, userId)).filter((r) => input.for !== "export" || r.rights.export);
-    return Object.fromEntries(rows.map((r) => [r.id, { ...r, option: `${r.name} ${r.maskedNumber} · ${r.currency}` }]));
+    const rows = co.accounts.map((a) => this.row(corp, co, s, a, userId)).filter((r) => (input.for !== "export" || r.rights.export) && (input.for !== "pay" || r.rights.pay));
+    // to pay from: the name a select shows is the account with its number and what can be paid from it
+    return Object.fromEntries(rows.map((r) => [r.id, { ...r, option: `${r.name} ${r.maskedNumber} · ${r.currency}`, ...(input.for === "pay" ? { accountName: r.name, name: `${r.name} ${r.maskedNumber} · ${r.availableText}` } : {}) }]));
   }
   private account(corp: CorporateProvider, co: CorpCompany, s: State, userId: string, input: Record<string, any>) {
     const a = co.accounts.find((x) => x.id === input.accountId) ?? fail("ACCOUNT_NOT_FOUND", "We can’t find that account.");

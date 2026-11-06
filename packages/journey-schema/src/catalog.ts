@@ -9,6 +9,8 @@ import { supplierPayment } from "./fixtures/supplier-payment";
 import { approvePayments } from "./fixtures/approve-payments";
 import { paymentTracker } from "./fixtures/payment-tracker";
 import { businessWithdraw } from "./fixtures/business-withdraw";
+import { bulkStatus } from "./fixtures/bulk-status";
+import { repairBulkLines } from "./fixtures/repair-bulk-lines";
 import { businessSchedules } from "./fixtures/business-schedules";
 import { scheduleBusinessPayment } from "./fixtures/schedule-business-payment";
 import { templates } from "./fixtures/templates";
@@ -218,6 +220,19 @@ export const catalog: CatalogEntry[] = [
     summary: "A Maker takes back a payment they started while it still waits for approval: pick it (or open it from the tracker), an optional reason (Other adds a note), and the payment becomes Withdrawn. Nothing was sent and no code is asked; the bank refuses another person's payment and one already released.",
     highlights: ["Only your own pending payments", "Optional reason; Other adds a note of up to 100 characters", "Released or no longer pending payments are refused", "The amount is given back to the daily limit", "Check Payments message on a timeout; unavailable sheet", "Refused by the bank for a role without the permission"],
   },
+
+  // (Bulk payment and Payroll run of BankWorkx share their slugs with the Meezan journeys above, and the catalog holds one entry for each id: they ship in bankworkxJourneys, the app's own list)
+  {
+    id: repairBulkLines.slug, category: "Payments", madeFor: "bankworkx", journey: repairBulkLines,
+    summary: "Opens Bulk payment at a batch that was paid with returned payments, to fix those lines and send them again. A thin entry: it has no screen, rule or bank call of its own, and a bank switches it off only together with Bulk payment.",
+    highlights: ["Alias of Bulk payment in resend mode", "The old paymentId or repairOf link opens the right batch", "Switched off with Bulk payment"],
+  },
+  {
+    id: bulkStatus.slug, category: "Payments", madeFor: "bankworkx", journey: bulkStatus,
+    summary: "One bulk batch: its name, total, status (Waiting for approval, Sent to bank, Paid, Partly paid, Rejected, Withdrawn), the status of every payment with the bank's sentence for one that was returned, a report, Fix and resend, and the company's other batches. Nothing here moves money.",
+    highlights: ["A chip for the batch and one per payment", "Fix and resend only while a payment failed and was not sent again", "Report with a row per payment", "Empty state with New bulk payment", "Refused by the bank for a role without the permission"],
+  },
+
   {
     id: paymentTracker.slug, category: "Payments", madeFor: "bankworkx", journey: paymentTracker,
     summary: "Every payment the company started, newest first, with its status (Pending approval, Released to bank, Settled, Rejected, Withdrawn) and a status timeline: who started it, who approved, the cut-off and, for a withdrawn payment, the reason. Withdraw opens for the Maker's own pending payment. Nothing here moves money.",

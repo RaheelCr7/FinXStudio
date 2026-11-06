@@ -311,7 +311,7 @@ describe("the tracker and withdrawing", () => {
     expect(Object.keys(t.rows)).toEqual(["PAY-2040", "PAY-1187", "PAY-1190", "PAY-1180"]);
     expect(t).toMatchObject({ count: 4, role: "Maker", canStart: true });
     expect(t.rows["PAY-2040"]).toMatchObject({ started: "Today 09:30", to: "Harbour Packaging", amountText: "$18,900.00", statusKey: "pending_approval", statusText: "Pending approval", canWithdraw: true });
-    expect(t.rows["PAY-1180"]).toMatchObject({ to: "Bulk · 3 payments", statusKey: "settled", statusText: "Settled", canWithdraw: false });
+    expect(t.rows["PAY-1180"]).toMatchObject({ to: "Bulk · 6 payments", statusKey: "settled", statusText: "Settled", canWithdraw: false });
     expect(Object.keys((await b.call("corp.payments.track", { status: "settled" })).rows)).toEqual(["PAY-1187", "PAY-1190", "PAY-1180"]);
     expect((await b.call("corp.payments.track", { status: "rejected" })).count).toBe(0);
     const { b: beta } = await at("beta");
