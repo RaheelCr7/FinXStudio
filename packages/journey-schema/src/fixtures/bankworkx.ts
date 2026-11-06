@@ -52,6 +52,13 @@ import { saveBorrow } from "./save-borrow";
 import { savingsGoal } from "./savings-goal";
 import { applyLoan } from "./apply-loan";
 import { repayLoan } from "./repay-loan";
+import { loanCalculator } from "./loan-calculator";
+import { depositCalculator } from "./deposit-calculator";
+import { findBranchAtm } from "./find-branch-atm";
+import { contactSupport } from "./contact-support";
+import { trackApplication } from "./track-application";
+import { registerDigitalBanking } from "./register-digital-banking";
+import { openAccount } from "./open-account";
 export { addMoney, invest, sellInvestment };
 
 // Create a budget is its own file (accounts and budgets belong together); it is still exported from here, where it always was
@@ -67,4 +74,4 @@ export { connectAccount };
 
 
 
-export const bankworkxJourneys: Journey[] = [addMoney, addCard, connectAccount, createBudget, invest, sellInvestment, ownTransfer, manageBeneficiary, personalTransfer, internalTransfer, internationalTransfer, payBillBankworkx, mobileTopup, schedulePayment, cancelStandingOrder, supplierPayment, approvePayments, signIn, forgotUsername, resetPassword, forgotPassword, unlockAccount, changePassword, trustedDevices, changeQuickPin, setupQuickLogin, accounts, accountDetails, statement, openAnotherAccount, budgets, accountNickname, transferTypes, singleTransfer, cardsView, activateCard, cardControls, freezeCard, virtualCard, replaceCard, cardPin, disputeTransaction, saveBorrow, termDeposit, savingsGoal, applyLoan, repayLoan, updateProfile, newMessage, messagesView, serviceRequest, myRequests];
+export const bankworkxJourneys: Journey[] = [addMoney, addCard, connectAccount, createBudget, invest, sellInvestment, ownTransfer, manageBeneficiary, personalTransfer, internalTransfer, internationalTransfer, payBillBankworkx, mobileTopup, schedulePayment, cancelStandingOrder, supplierPayment, approvePayments, signIn, forgotUsername, resetPassword, forgotPassword, unlockAccount, changePassword, trustedDevices, changeQuickPin, setupQuickLogin, accounts, accountDetails, statement, openAnotherAccount, budgets, accountNickname, transferTypes, singleTransfer, cardsView, activateCard, cardControls, freezeCard, virtualCard, replaceCard, cardPin, disputeTransaction, saveBorrow, termDeposit, savingsGoal, applyLoan, repayLoan, updateProfile, newMessage, messagesView, serviceRequest, myRequests, loanCalculator, depositCalculator, findBranchAtm, contactSupport, trackApplication, registerDigitalBanking, openAccount];

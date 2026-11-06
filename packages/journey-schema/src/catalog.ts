@@ -55,12 +55,19 @@ import { newMessage } from "./fixtures/new-message";
 import { messagesView } from "./fixtures/messages";
 import { serviceRequest } from "./fixtures/service-request";
 import { myRequests } from "./fixtures/my-requests";
+import { loanCalculator } from "./fixtures/loan-calculator";
+import { depositCalculator } from "./fixtures/deposit-calculator";
+import { findBranchAtm } from "./fixtures/find-branch-atm";
+import { contactSupport } from "./fixtures/contact-support";
+import { openAccount } from "./fixtures/open-account";
+import { trackApplication } from "./fixtures/track-application";
+import { registerDigitalBanking } from "./fixtures/register-digital-banking";
 
 /**
  * The journey catalog: ready-made journeys a project can add to its own app.
  * Each entry is the journey exactly as shipped, so adding it never depends on what someone later edited in Studio.
  */
-export const CATEGORIES = ["Payments", "Accounts", "Cards", "Budgeting", "Save & Borrow", "Investing", "More", "Access"] as const;
+export const CATEGORIES = ["Payments", "Accounts", "Cards", "Budgeting", "Save & Borrow", "Investing", "More", "Public", "Onboarding", "Access"] as const;
 export type CatalogCategory = (typeof CATEGORIES)[number];
 
 export type CatalogEntry = {
@@ -376,6 +383,41 @@ export const catalog: CatalogEntry[] = [
     id: changeQuickPin.slug, category: "Access", madeFor: "bankworkx", journey: changeQuickPin,
     summary: "Change the 6-digit PIN used for quick sign-in on this device: the current PIN, then a new one with no repeats or runs. Three wrong PINs turn quick sign-in off.",
     highlights: ["Current PIN is the proof, no code", "Tries left, then quick sign-in off", "PIN rules with their own messages", "Step-up first"],
+  },
+  {
+    id: loanCalculator.slug, category: "Public", madeFor: "bankworkx", journey: loanCalculator,
+    summary: "Before signing in: choose a personal, car or home loan, set the amount and the term and read the monthly payment, the total interest and the total to repay. An estimate only; nothing is applied for.",
+    highlights: ["The bank's table: ranges, steps and rates", "Figures in whole cents, no float", "The box follows the amount and the term", "Start application carries the amount and the term", "Symbol of the bank's home market", "Works with no sign-in and keeps nothing"],
+  },
+  {
+    id: depositCalculator.slug, category: "Public", madeFor: "bankworkx", journey: depositCalculator,
+    summary: "Before signing in: choose an amount, a term (3, 6, 12, 24 or 60 months) and when interest is paid, and read the interest and what comes back. An estimate only; nothing is opened.",
+    highlights: ["Simple interest in whole cents", "Interest at the end or every month", "Rates by term from the bank's table", "Start application carries the amount and the term", "Works with no sign-in and keeps nothing"],
+  },
+  {
+    id: findBranchAtm.slug, category: "Public", madeFor: "bankworkx", journey: findBranchAtm,
+    summary: "Before signing in: find branches and cash machines by area or street, by kind and by open now, on a simple map and in a list nearest first, with hours, services and a hand-over to the maps app.",
+    highlights: ["Open or closed from the hours and the clock", "Miles or kilometres by market", "Seven opening-hours rows and the services", "Cash machines and Open now are bank options", "No location asked for, nothing kept"],
+  },
+  {
+    id: contactSupport.slug, category: "Public", madeFor: "bankworkx", journey: contactSupport,
+    summary: "Before signing in: reach the bank by chat, by phone or by a written message, each with its own opening hours; a signed-in customer can use secure messages.",
+    highlights: ["Chat, Call and Message with open or closed chips", "Chat and Call are bank options", "A topic, an email and a message checked by the bank", "Five messages an hour from one device", "The bank keeps a count and a masked address, never the words"],
+  },
+  {
+    id: openAccount.slug, category: "Onboarding", madeFor: "bankworkx", journey: openAccount,
+    summary: "New-customer onboarding: verify a mobile with a one-time code, give details and an address, show an ID and a selfie, describe work and money, make the tax declaration, choose an account, read and sign the terms. Creates an application; the bank decides. Save and finish later keeps the answers for 30 days.",
+    highlights: ["ID format, proof of address, postcode and tax wording by market", "Simulated ID and selfie capture, nothing kept", "Save and resume without the photos, the code, the ID number or the tax ID", "Terms read to the end and signed with the name given", "Income over 1M goes to manual review", "Declined and unavailable paths"],
+  },
+  {
+    id: trackApplication.slug, category: "Public", madeFor: "bankworkx", journey: trackApplication,
+    summary: "Before signing in: find an application with its number and the last digits of the mobile, confirm a one-time code and see where it is (Received, Checking your ID, Ready); a Ready application goes on to Register for digital banking.",
+    highlights: ["Code before any status, at the bank too", "One miss never says which part was wrong", "Three wrong tries lock it for 30 minutes", "Ready shows the account number", "Hands over to registration"],
+  },
+  {
+    id: registerDigitalBanking.slug, category: "Onboarding", madeFor: "bankworkx", journey: registerDigitalBanking,
+    summary: "An existing customer who never used digital banking proves who they are with a customer ID or a card number and a date of birth (or a Ready application), confirms a one-time code and chooses a username and password; may trust the device.",
+    highlights: ["Same one-time code and password rules as sign-in", "Password kept only as a hash and cleared from the journey", "Three wrong checks or codes lock it for 30 minutes", "Username taken, format and strength checked by the bank", "Trust this device is a bank option"],
   },
   // Cairo Amman Bank: the access journeys from its design file
   ...(

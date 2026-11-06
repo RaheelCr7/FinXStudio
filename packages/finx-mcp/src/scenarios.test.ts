@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { bankworkxJourneys, chainTargets, chainWarnings, bulkPayment, catalog, corporateApproval, corporatePayment, Journey, withdrawPayment, payrollRun, ownTransfer, manageBeneficiary, personalTransfer, internalTransfer, internationalTransfer, payBillBankworkx, mobileTopup, schedulePayment, cancelStandingOrder, supplierPayment, approvePayments, signIn, forgotUsername, resetPassword, forgotPassword, unlockAccount, changePassword, trustedDevices, setupQuickLogin, changeQuickPin, accounts, accountDetails, statement, accountNickname, openAnotherAccount, budgets, createBudget, transferTypes, singleTransfer, cardPin, cardsView, activateCard, cardControls, freezeCard, virtualCard, replaceCard, disputeTransaction, addCard, termDeposit, savingsGoal, saveBorrow, applyLoan, repayLoan, invest, sellInvestment, addMoney, updateProfile, newMessage, messagesView, serviceRequest, myRequests, connectAccount } from "@finx/journey-schema";
+import { bankworkxJourneys, chainTargets, chainWarnings, bulkPayment, catalog, corporateApproval, corporatePayment, Journey, withdrawPayment, payrollRun, ownTransfer, manageBeneficiary, personalTransfer, internalTransfer, internationalTransfer, payBillBankworkx, mobileTopup, schedulePayment, cancelStandingOrder, supplierPayment, approvePayments, signIn, forgotUsername, resetPassword, forgotPassword, unlockAccount, changePassword, trustedDevices, setupQuickLogin, changeQuickPin, accounts, accountDetails, statement, accountNickname, openAnotherAccount, budgets, createBudget, transferTypes, singleTransfer, cardPin, cardsView, activateCard, cardControls, freezeCard, virtualCard, replaceCard, disputeTransaction, addCard, termDeposit, savingsGoal, saveBorrow, applyLoan, repayLoan, invest, sellInvestment, addMoney, updateProfile, newMessage, messagesView, serviceRequest, myRequests, connectAccount, loanCalculator, depositCalculator, findBranchAtm, contactSupport, openAccount, trackApplication, registerDigitalBanking } from "@finx/journey-schema";
 import { lintAll } from "@finx/renderer-core";
 import { MockBank } from "@finx/mock-bank-api";
 import { mutationCheck, runScenarios } from "./scenarios";
@@ -1977,5 +1977,308 @@ describe("connect-account: Connect a bank", () => {
     await bank.call("bank.connections.finish", { state: s.state, consent: true, pick1: true, pick2: true, pick3: true });
     for (const adapter of ["bank.accounts.list", "bank.accounts.payFrom"]) expect(JSON.stringify(await bank.call(adapter, {})), adapter).not.toContain("maple");
     for (const id of ["l_maple_current", "l_maple_savings", "l_maple_credit"]) await expect(bank.call("bank.transfers.own", { fromAccountId: id, toAccountId: "acc_main", amount: 1 })).rejects.toBeDefined();
+  });
+});
+
+/* --------------------------------------------------------------------------------------------------------------------------------------------------------------------- */
+/* Step 7, slice E: before sign-in (calculators, branch finder, contact, onboarding, tracking, registering). They run for the visitor (persona "signed-out") on Tuesday 3 November 2026, 18:45 UTC. */
+const PUB_NOW = Date.parse("2026-11-03T18:45:00Z");
+const PUB_MEMBERS = (j: Journey) => [j.apps, j.channels];
+const SAME_FIRST = (what: string) => `${what}: the first call of the same adapter fails first under a sandbox condition (the condition covers the whole walk), so only that first error path can be proved`;
+const NO_PIN = "A scenario cannot press a pin of the schematic map; the list of the same places below it has the same action and its error path is proved";
+const RETRY_FIRST = "When the very first call is down, Try again asks again and fails again on the same screen the person is already on, so a scenario cannot tell the fallback rule from no rule";
+const SIGN_IN_PUB = ["bank-credentials", "bank-signInLock", "bank-usernameHiding", "bank-newDeviceCode", "bank-expiredPassword", "bank-codeLock", "bank-deviceLimit", "bank-pinRules"];
+const PASSWORD_PUB = ["bank-passwordLength", "bank-passwordUsername", "bank-passwordCommon", "bank-passwordBreach", "bank-passwordReuse"];
+const SUPPORT_RULES = ["bank-pubSupportHours", "bank-pubSupportWays", "bank-pubSupportRules", "bank-pubSupportRate"];
+const REG_RULES = ["bank-pubRegMatch", "bank-pubRegAlready", "bank-pubRegLock", "bank-pubRegCode", "bank-pubRegUsername", "bank-pubRegCard", "bank-pubRegTrust"];
+
+describe("loan-calculator: Loan calculator", () => {
+  const j = Journey.parse(loanCalculator);
+  const ACC: Record<string, string> = {
+    ...linked(["bank-saveCredit", "bank-loanLimit", "bank-loanRange", "bank-loanIncome", "bank-loanAffordability", "bank-loanReferral", "bank-loanRateRise", "bank-loanCode", "bank-loanOffer"], "apply-loan"),
+  };
+  it("is lint clean, every scenario passes and every acceptance criterion is proved", async () => {
+    expect(lintAll(j)).toEqual([]);
+    const r = await runScenarios(j);
+    expect(REPORT(r)).toEqual([]);
+    expect(r.coverage.map((c) => [c.id, c.status])).toEqual((j.acceptance ?? []).map((a) => [a.id, "proved"]));
+    expect([r.passed, r.total, r.coverage.length]).toEqual([24, 24, 10]);
+  });
+  it("the tests notice when the journey or the bank's rules are broken (mutation check)", async () => {
+    const m = await mutationCheck(j, ACC);
+    expect(m.survived.map((s) => `${s.id}: ${s.what}`)).toEqual([]);
+    expect([m.total, m.killed, m.accepted.length]).toEqual([27, 18, 9]);
+    for (const id of ["bank-pubLoanRange", "bank-pubLoanFormula", "bank-pubSymbol", "bank-pubTermText"]) expect(m.results.find((x) => x.id === id)?.killed, id).toBe(true);
+  }, 240_000);
+  it("is for BankWorkx only, needs no permission and no code, asks for no personal data, moves no money and opens apply-loan", () => {
+    expect(PUB_MEMBERS(loanCalculator)).toEqual([["bankworkx"], ["web", "mobile"]]);
+    expect(MORE_CAT("loan-calculator")).toEqual([["bankworkx", "Public"]]);
+    expect(bankworkxJourneys.map((x) => x.slug)).toContain("loan-calculator");
+    expect(loanCalculator.integrations.map((i) => i.adapter)).toEqual(["bank.rates.loans", "bank.rates.loans"]);
+    expect(JSON.stringify(loanCalculator.screens)).not.toMatch(/"otp"|"secure":true|textInput/);
+    expect(JSON.stringify(loanCalculator)).not.toContain("session.permissions");
+    expect(chainTargets(loanCalculator)).toEqual(["apply-loan"]);
+    expect(chainWarnings(loanCalculator, bankworkxJourneys.map((x) => x.slug))).toEqual([]);
+  });
+  it("the figures are the bank's, in whole cents: the result holds integers and the money is never a float in the journey", async () => {
+    const r = await simulate({ journey: j, persona: "signed-out", lang: "en", now: PUB_NOW, steps: [{ set: { "lc.amount": 35_000, "lc.term": "84" } }, { press: "Show summary" }] });
+    expect(r.finalScreen).toBe("done");
+    const q = (r.data as any).lc.res.quote;
+    for (const k of ["amountCents", "paymentCents", "interestCents", "totalCents"]) expect(Number.isInteger(q[k]), k).toBe(true);
+    expect(q).toMatchObject({ paymentText: "$579.23", interestText: "$13,655.71", totalText: "$48,655.71" });
+  });
+});
+
+describe("deposit-calculator: Deposit calculator", () => {
+  const j = Journey.parse(depositCalculator);
+  const ACC: Record<string, string> = {
+    ...linked(["bank-saveFunds", "bank-saveDebit", "bank-saveCredit", "bank-depositRange", "bank-depositTerm", "bank-depositCode", "bank-depositCharge", "bank-depositEarly"], "term-deposit"),
+  };
+  it("is lint clean, every scenario passes and every acceptance criterion is proved", async () => {
+    expect(lintAll(j)).toEqual([]);
+    const r = await runScenarios(j);
+    expect(REPORT(r)).toEqual([]);
+    expect(r.coverage.map((c) => [c.id, c.status])).toEqual((j.acceptance ?? []).map((a) => [a.id, "proved"]));
+    expect([r.passed, r.total, r.coverage.length]).toEqual([25, 25, 10]);
+  });
+  it("the tests notice when the journey or the bank's rules are broken (mutation check)", async () => {
+    const m = await mutationCheck(j, ACC);
+    expect(m.survived.map((s) => `${s.id}: ${s.what}`)).toEqual([]);
+    expect([m.total, m.killed, m.accepted.length]).toEqual([25, 17, 8]);
+    for (const id of ["bank-pubDepositRate", "bank-pubDepositRange", "bank-pubDepositFormula", "bank-pubSymbol", "bank-pubTermText"]) expect(m.results.find((x) => x.id === id)?.killed, id).toBe(true);
+  }, 240_000);
+  it("is for BankWorkx only, needs no permission and no code, asks for no personal data, moves no money and opens term-deposit", () => {
+    expect(PUB_MEMBERS(depositCalculator)).toEqual([["bankworkx"], ["web", "mobile"]]);
+    expect(MORE_CAT("deposit-calculator")).toEqual([["bankworkx", "Public"]]);
+    expect(bankworkxJourneys.map((x) => x.slug)).toContain("deposit-calculator");
+    expect(depositCalculator.integrations.map((i) => i.adapter)).toEqual(["bank.rates.deposits", "bank.rates.deposits"]);
+    expect(JSON.stringify(depositCalculator.screens)).not.toMatch(/"otp"|"secure":true|textInput/);
+    expect(chainTargets(depositCalculator)).toEqual(["term-deposit"]);
+    expect(chainWarnings(depositCalculator, bankworkxJourneys.map((x) => x.slug))).toEqual([]);
+  });
+});
+
+describe("find-branch-atm: Find a branch or ATM", () => {
+  const j = Journey.parse(findBranchAtm);
+  const ACC: Record<string, string> = {
+    "no-error-path-12": SAME_FIRST("The search of the Search button"),
+    "no-error-path-23": SAME_FIRST("The search of the Show details button"),
+    "no-error-path-16": NO_PIN,
+  };
+  it("is lint clean, every scenario passes and every acceptance criterion is proved", async () => {
+    expect(lintAll(j)).toEqual([]);
+    const r = await runScenarios(j);
+    expect(REPORT(r)).toEqual([]);
+    expect(r.coverage.map((c) => [c.id, c.status])).toEqual((j.acceptance ?? []).map((a) => [a.id, "proved"]));
+    expect([r.passed, r.total, r.coverage.length]).toEqual([34, 34, 10]);
+  });
+  it("the tests notice when the journey or the bank's rules are broken (mutation check)", async () => {
+    const m = await mutationCheck(j, ACC);
+    expect(m.survived.map((s) => `${s.id}: ${s.what}`)).toEqual([]);
+    expect([m.total, m.killed, m.accepted.length]).toEqual([18, 15, 3]);
+    for (const id of ["bank-pubPlaceHours", "bank-pubPlaceSort", "bank-pubPlaceUnit", "bank-pubPlaceAtm", "bank-pubPlaceOpen", "bank-pubPlaceSearch"]) expect(m.results.find((x) => x.id === id)?.killed, id).toBe(true);
+  }, 240_000);
+  it("is for BankWorkx only, needs no permission, asks for no location or personal data and moves no money", () => {
+    expect(PUB_MEMBERS(findBranchAtm)).toEqual([["bankworkx"], ["web", "mobile"]]);
+    expect(MORE_CAT("find-branch-atm")).toEqual([["bankworkx", "Public"]]);
+    expect(bankworkxJourneys.map((x) => x.slug)).toContain("find-branch-atm");
+    expect(findBranchAtm.integrations.map((i) => i.adapter)).toEqual(["bank.locations.search", "bank.locations.details"]);
+    expect(JSON.stringify(findBranchAtm)).not.toMatch(/geolocation|"otp"|"secure":true/);
+    expect(chainTargets(findBranchAtm)).toEqual([]);
+  });
+});
+
+describe("contact-support: Contact us", () => {
+  const j = Journey.parse(contactSupport);
+  const ACC: Record<string, string> = {
+    "no-rule-timeout-2": RETRY_FIRST, "no-rule-unavailable-2": RETRY_FIRST,
+    ...linked(["bank-messageRules", "bank-messageFile"], "new-message"),
+  };
+  it("is lint clean, every scenario passes and every acceptance criterion is proved", async () => {
+    expect(lintAll(j)).toEqual([]);
+    const r = await runScenarios(j);
+    expect(REPORT(r)).toEqual([]);
+    expect(r.coverage.map((c) => [c.id, c.status])).toEqual((j.acceptance ?? []).map((a) => [a.id, "proved"]));
+    expect([r.passed, r.total, r.coverage.length]).toEqual([30, 30, 9]);
+  });
+  it("the tests notice when the journey or the bank's rules are broken (mutation check)", async () => {
+    const m = await mutationCheck(j, ACC);
+    expect(m.survived.map((s) => `${s.id}: ${s.what}`)).toEqual([]);
+    expect([m.total, m.killed, m.accepted.length]).toEqual([25, 21, 4]);
+    for (const id of SUPPORT_RULES) expect(m.results.find((x) => x.id === id)?.killed, id).toBe(true);
+  }, 240_000);
+  it("is for BankWorkx only, needs no permission, no code and moves no money; the secure-message button needs a signed-in person; what is written is cleared once sent", async () => {
+    expect(PUB_MEMBERS(contactSupport)).toEqual([["bankworkx"], ["web", "mobile"]]);
+    expect(MORE_CAT("contact-support")).toEqual([["bankworkx", "Public"]]);
+    expect(bankworkxJourneys.map((x) => x.slug)).toContain("contact-support");
+    expect(contactSupport.integrations.map((i) => i.adapter)).toEqual(["bank.support.hours", "bank.support.openChat", "bank.support.sendMessage"]);
+    expect(chainTargets(contactSupport)).toEqual(["new-message"]);
+    expect(JSON.stringify(contactSupport.screens.find((s) => s.id === "message")!.blocks.filter((b: any) => b.label === "Send us a message"))).toContain("session.permissions");
+    const r = await simulate({
+      journey: j, persona: "signed-out", lang: "en", now: PUB_NOW,
+      steps: [{ set: { "cs.way": "message" } }, { press: "Continue" }, { set: { "cs.topic": "Accounts", "cs.email": "alex.morgan@example.com", "cs.text": "Please help me with my account number 4000 0000 0000 0002." } }, { press: "Send" }],
+    });
+    expect(r.finalScreen).toBe("messageDone");
+    expect((r.data as any).cs.text).toBe("");
+    expect(JSON.stringify((r.data as any).cs)).not.toContain("4000");
+  });
+  it("shows what was written as text: no block of the journey renders markup", () => {
+    expect([...new Set(j.screens.flatMap((s) => s.blocks.map((b: any) => b.type)))].filter((t) => /html|markdown|rich/i.test(t))).toEqual([]);
+    expect(JSON.stringify(j)).not.toMatch(/dangerouslySetInnerHTML|innerHTML/);
+  });
+});
+
+describe("open-account: Open an account", () => {
+  const j = Journey.parse(openAccount);
+  const ACC: Record<string, string> = {
+    "no-validate-158": "The account is always chosen (the first one is preselected), so the field can never be empty when Continue is pressed",
+    "no-rule-stepFail-4": "An application the bank no longer knows, or one that was not verified, is reached only by a forged call or a second tab (T-57 proves the bank's refusal); no screen can send the journey there",
+    "no-rule-back-6": "A failure at Work and money needs a call that fails there: the step is checked by the same adapter as the first step, which fails first under a sandbox condition; Address, the proof, the ID, Tax and the selfie each have their own scenario",
+    ...linked(SIGN_IN_PUB.concat(PASSWORD_PUB.filter((x) => x !== "bank-passwordReuse")), "sign-in"),
+    "bank-passwordReuse": LINKED("sign-in"),
+    ...linked(SUPPORT_RULES, "contact-support"),
+    ...linked(["bank-pubTrackMatch", "bank-pubTrackLock", "bank-pubTrackCode"], "track-application"),
+  };
+  it("is lint clean, every scenario passes and every acceptance criterion is proved", async () => {
+    expect(lintAll(j)).toEqual([]);
+    const r = await runScenarios(j);
+    expect(REPORT(r)).toEqual([]);
+    expect(r.coverage.map((c) => [c.id, c.status])).toEqual((j.acceptance ?? []).map((a) => [a.id, "proved"]));
+    expect([r.passed, r.total, r.coverage.length]).toEqual([73, 73, 16]);
+  });
+  it("the tests notice when the journey or the bank's rules are broken (mutation check)", async () => {
+    const m = await mutationCheck(j, ACC);
+    expect(m.survived.map((s) => `${s.id}: ${s.what}`)).toEqual([]);
+    expect([m.total, m.killed, m.accepted.length]).toEqual([101, 78, 23]);
+    for (const id of ["bank-pubOnbContact", "bank-pubOnbDuplicate", "bank-pubOnbVerified", "bank-pubOnbAge", "bank-pubOnbId", "bank-pubOnbPoa", "bank-pubOnbPhotos", "bank-pubOnbMatch", "bank-pubOnbTax", "bank-pubOnbPostcode", "bank-pubOnbConsent", "bank-pubOnbReview", "bank-pubOnbKeep", "bank-pubOnbExpiry", "bank-pubOnbProduct", "bank-resendLimit", "bank-codeExpiry"]) expect(m.results.find((x) => x.id === id)?.killed, id).toBe(true);
+  }, 600_000);
+  it("is for BankWorkx only, needs no permission, moves no money, asks for the one-time code before anything is saved, and the terms are read and signed before it is sent", () => {
+    expect(PUB_MEMBERS(openAccount)).toEqual([["bankworkx"], ["web", "mobile"]]);
+    expect(MORE_CAT("open-account")).toEqual([["bankworkx", "Onboarding"]]);
+    expect(bankworkxJourneys.map((x) => x.slug)).toContain("open-account");
+    expect(openAccount.integrations.map((i) => i.adapter).sort()).toEqual(["bank.onboarding.begin", "bank.onboarding.check", "bank.onboarding.discard", "bank.onboarding.save", "bank.onboarding.start", "bank.onboarding.submit", "bank.onboarding.verifyIdentity", "bank.otp.send", "bank.otp.verify"]);
+    expect(chainTargets(openAccount).sort()).toEqual(["contact-support", "open-account", "sign-in", "track-application"]);
+    const blocks = openAccount.screens.find((s) => s.id === "sign")!.blocks.map((b: any) => b.type);
+    expect(blocks).toEqual(expect.arrayContaining(["documentViewer", "signature"]));
+    expect(JSON.stringify(openAccount.screens.find((s) => s.id === "sign")!.blocks.find((b: any) => b.type === "signature"))).toContain("oa.name");
+    // the ID number and the tax ID are hidden fields everywhere they are typed
+    for (const s of openAccount.screens) for (const b of s.blocks as any[]) if (b.bind === "oa.idNumber" || b.bind === "oa.taxId") expect(b.secure, `${s.id} ${b.bind}`).toBe(true);
+    // the photos are never sent to the bank: no call carries them but the check (a reference to what was taken)
+    expect(JSON.stringify(openAccount.screens.flatMap((s) => (s.onEnter ?? []).concat(s.blocks.flatMap((b: any) => (b.type === "button" ? b.actions : [])))).filter((a: any) => a.integration === "save" || a.integration === "submit"))).not.toMatch(/idPhotos|selfie|proof/);
+  });
+  it("keeps no ID number, tax ID, code or photo in the journey once the application is sent, and no ID number in any transcript", async () => {
+    const steps: any[] = [
+      { set: { "oa.mobile": "5550104410", "oa.email": "alex.morgan@example.org" } }, { press: "Continue" }, { set: { "oa.code": "482100" } }, { press: "Continue" },
+      { set: { "oa.name": "Alex Morgan", "oa.dob": "14/03/1990", "oa.nationality": "United States", "oa.idNumber": "123456789" } }, { press: "Continue" },
+      { set: { "oa.line1": "12 Harbour Road", "oa.city": "Springfield", "oa.postcode": "10001" } }, { press: "Continue" },
+      { set: { "oa.idDocument": "national-id", "oa.idPhotos": { front: { ref: "SIM-FRONT-1" }, back: { ref: "SIM-BACK-1" } } } }, { press: "Continue" },
+      { set: { "oa.selfie": { selfie: { ref: "SIM-SELFIE-1" } } } }, { press: "Continue" },
+      { set: { "oa.employment": "Employed", "oa.income": "50-100", "oa.source": "Salary", "oa.deposits": "2-10" } }, { press: "Continue" }, { set: { "oa.taxOnly": "no", "oa.taxCountry": "Germany", "oa.taxId": "DE 4455" } }, { press: "Continue" },
+      { press: "Continue" }, { set: { "oa.terms": true, "oa.taxConfirm": true } }, { press: "Continue" }, { set: { "oa.read": true, "oa.sig": { mode: "type", name: "Alex Morgan" } } }, { press: "Submit" },
+    ];
+    const r = await simulate({ journey: j, persona: "signed-out", lang: "en", now: PUB_NOW, steps });
+    expect(r.finalScreen).toBe("status");
+    const oa = (r.data as any).oa;
+    expect([oa.idNumber, oa.taxId, oa.code, oa.idPhotos, oa.selfie, oa.proof, oa.sig, oa.mobile, oa.email, oa.dob, oa.line1]).toEqual(["", "", "", null, null, null, null, "", "", "", ""]);
+    // a hidden field is never written into a transcript; what the journey holds after sending is the reference and the account, no number, code, contact or photo
+    for (const secret of ["123456789", "DE 4455"]) expect(JSON.stringify(r.frames).includes(secret), secret).toBe(false);
+    for (const secret of ["123456789", "DE 4455", "482100", "5550104410", "alex.morgan@example.org", "SIM-FRONT", "SIM-SELFIE"]) expect(JSON.stringify(r.data).includes(secret), secret).toBe(false);
+    expect(oa.res).toMatchObject({ reference: "APP-100236", status: "checking" });
+  });
+});
+
+describe("track-application: Track my application", () => {
+  const j = Journey.parse(trackApplication);
+  const ACC: Record<string, string> = {
+    "bank-resendLimit": "The tracker has no Resend button (the spec's open point), so the limit of codes asked for again belongs to register-digital-banking, whose scenarios prove it",
+    "bank-tokenExpiry": LINKED("register-digital-banking"),
+    ...linked(PASSWORD_PUB, "register-digital-banking"), ...linked(REG_RULES, "register-digital-banking"), ...linked(SUPPORT_RULES, "contact-support"),
+  };
+  it("is lint clean, every scenario passes and every acceptance criterion is proved", async () => {
+    expect(lintAll(j)).toEqual([]);
+    const r = await runScenarios(j);
+    expect(REPORT(r)).toEqual([]);
+    expect(r.coverage.map((c) => [c.id, c.status])).toEqual((j.acceptance ?? []).map((a) => [a.id, "proved"]));
+    expect([r.passed, r.total, r.coverage.length]).toEqual([29, 29, 9]);
+  });
+  it("the tests notice when the journey or the bank's rules are broken (mutation check)", async () => {
+    const m = await mutationCheck(j, ACC);
+    expect(m.survived.map((s) => `${s.id}: ${s.what}`)).toEqual([]);
+    expect([m.total, m.killed, m.accepted.length]).toEqual([45, 27, 18]);
+    for (const id of ["bank-pubTrackMatch", "bank-pubTrackLock", "bank-pubTrackCode", "bank-codeExpiry"]) expect(m.results.find((x) => x.id === id)?.killed, id).toBe(true);
+  }, 240_000);
+  it("is for BankWorkx only, needs no permission and moves no money; the status is asked for only after the code; it opens registration and contact", () => {
+    expect(PUB_MEMBERS(trackApplication)).toEqual([["bankworkx"], ["web", "mobile"]]);
+    expect(MORE_CAT("track-application")).toEqual([["bankworkx", "Public"]]);
+    expect(bankworkxJourneys.map((x) => x.slug)).toContain("track-application");
+    expect(trackApplication.integrations.map((i) => i.adapter)).toEqual(["bank.applications.find", "bank.otp.send", "bank.otp.verify", "bank.applications.status"]);
+    expect(chainTargets(trackApplication).sort()).toEqual(["contact-support", "register-digital-banking"]);
+    // the status is read only on the way out of the code screen (or straight after the details when the bank asks for no code)
+    const readers = trackApplication.screens.filter((s) => JSON.stringify(s.onEnter ?? []).includes('"integration":"status"')).map((s) => s.id);
+    expect(readers).toEqual(["show"]);
+  });
+  it("keeps neither the mobile number nor the code once the bank has them", async () => {
+    const r = await simulate({ journey: j, persona: "signed-out", lang: "en", now: PUB_NOW, steps: [{ set: { "ta.reference": "APP-100234", "ta.mobile": "5550100123" } }, { press: "Continue" }, { set: { "ta.code": "482100" } }, { press: "Continue" }] });
+    expect(r.finalScreen).toBe("checking");
+    const ta = (r.data as any).ta;
+    expect([ta.mobile, ta.code]).toEqual(["", ""]);
+    expect(JSON.stringify(r.data)).not.toContain("5550100123");
+  });
+});
+
+describe("register-digital-banking: Register for digital banking", () => {
+  const j = Journey.parse(registerDigitalBanking);
+  const ACC: Record<string, string> = {
+    ...linked(SIGN_IN_PUB.filter((x) => x !== "bank-credentials"), "sign-in"),
+    "bank-passwordReuse": "A customer who registers has no earlier password, so the used-before rule cannot be reached here; reset-password and change-password prove it",
+    ...linked(SUPPORT_RULES, "contact-support"),
+  };
+  it("is lint clean, every scenario passes and every acceptance criterion is proved", async () => {
+    expect(lintAll(j)).toEqual([]);
+    const r = await runScenarios(j);
+    expect(REPORT(r)).toEqual([]);
+    expect(r.coverage.map((c) => [c.id, c.status])).toEqual((j.acceptance ?? []).map((a) => [a.id, "proved"]));
+    expect([r.passed, r.total, r.coverage.length]).toEqual([39, 39, 12]);
+  });
+  it("the tests notice when the journey or the bank's rules are broken (mutation check)", async () => {
+    const m = await mutationCheck(j, ACC);
+    expect(m.survived.map((s) => `${s.id}: ${s.what}`)).toEqual([]);
+    expect([m.total, m.killed, m.accepted.length]).toEqual([61, 49, 12]);
+    for (const id of [...REG_RULES, "bank-codeExpiry", "bank-resendLimit", "bank-tokenExpiry", "bank-passwordLength", "bank-passwordUsername", "bank-passwordCommon", "bank-passwordBreach"]) expect(m.results.find((x) => x.id === id)?.killed, id).toBe(true);
+  }, 240_000);
+  it("is for BankWorkx only, needs no permission and moves no money, uses the sign-in's one-time code and password rules, and the profile is made only after the code", () => {
+    expect(PUB_MEMBERS(registerDigitalBanking)).toEqual([["bankworkx"], ["web", "mobile"]]);
+    expect(MORE_CAT("register-digital-banking")).toEqual([["bankworkx", "Onboarding"]]);
+    expect(bankworkxJourneys.map((x) => x.slug)).toContain("register-digital-banking");
+    expect(registerDigitalBanking.integrations.map((i) => i.adapter)).toEqual(["bank.registration.verify", "bank.otp.send", "bank.otp.verify", "bank.registration.complete", "bank.registration.complete"]);
+    expect(registerDigitalBanking.integrations.find((i) => i.adapter === "bank.otp.verify")!.id).toBe("otpVerify");
+    expect(chainTargets(registerDigitalBanking).sort()).toEqual(["contact-support", "sign-in"]);
+    for (const s of registerDigitalBanking.screens) for (const b of s.blocks as any[]) if (b.bind === "rg.password" || b.bind === "rg.confirm" || b.bind === "rg.card") expect(b.secure, `${s.id} ${b.bind}`).toBe(true);
+  });
+  it("clears the password, the code and the token once the bank has them, and no secret is in any transcript or answer", async () => {
+    const PW = "Granite-Lemon-92-River";
+    const r = await simulate({
+      journey: j, persona: "signed-out", lang: "en", now: PUB_NOW,
+      steps: [
+        { set: { "rg.customerId": "20481993", "rg.day": "1", "rg.month": "1", "rg.year": "1990" } }, { press: "Continue" }, { set: { "rg.code": "482100" } }, { press: "Continue" },
+        { set: { "rg.username": "jordan.l.1990", "rg.password": PW, "rg.confirm": PW, "rg.terms": true } }, { press: "Continue" }, { press: "Finish" },
+      ],
+    });
+    expect(r.finalScreen).toBe("registered");
+    const rg = (r.data as any).rg;
+    expect([rg.password, rg.confirm, rg.code, rg.customerId, rg.card]).toEqual(["", "", "", "", ""]);
+    expect((r.data as any).found.registrationToken).toBe("");
+    expect(JSON.stringify(r.frames).includes(PW)).toBe(false);
+    for (const secret of [PW, "482100", "20481993"]) expect(JSON.stringify(r.data).includes(secret), secret).toBe(false);
+  });
+  it("a refused password is cleared on every way out: a failure, a token that ran out, a bank that did not answer", async () => {
+    const PW = "Granite-Lemon-92-River";
+    for (const conditions of [{ unavailable: ["bank.registration.complete"] }, { timeout: ["bank.registration.complete"], latencyMs: 10_000 }]) {
+      const r = await simulate({
+        journey: j, persona: "signed-out", lang: "en", now: PUB_NOW, conditions,
+        steps: [{ set: { "rg.customerId": "20481993", "rg.day": "1", "rg.month": "1", "rg.year": "1990" } }, { press: "Continue" }, { set: { "rg.code": "482100" } }, { press: "Continue" }, { set: { "rg.username": "jordan.l.1990", "rg.password": PW, "rg.confirm": PW, "rg.terms": true } }, { press: "Continue" }],
+      });
+      expect([(r.data as any).rg.password, (r.data as any).rg.confirm]).toEqual(["", ""]);
+    }
   });
 });

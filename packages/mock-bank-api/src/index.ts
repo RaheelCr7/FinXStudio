@@ -3,6 +3,7 @@ import { alexFinance, type Category, type Finance } from "./retail/finance";
 import { alexCards, emptyCards, type CardsSeed } from "./retail/cards";
 import { alexSave, emptySave, type SaveSeed } from "./retail/save";
 import { alexMore, emptyMore, type MoreSeed } from "./retail/more";
+import { PublicApi } from "./retail/public";
 import { ACME, type CorpCompany, type Flaws } from "./business/corporate";
 import { ALPHA, BETA, BETA_CAST, seedPayments } from "./business/alpha-beta";
 import { createCorporateProvider, type CorporateProvider, type ProviderId } from "./business/corporate-provider";
@@ -401,7 +402,7 @@ personas.alexbiz = {
 
 // The customers behind the sign-in cast (access.ts): people who can sign in with a username and password. They have no accounts of their own
 // (what a screen shows after signing in is the new-customer start), so they are not offered at the sign-in picker; scenarios and the demo use them.
-for (const [id, name, phone] of [["demolocked", "Jamie Locke (locked profile)", "+1 415 555 0177"], ["demoexpired", "Omar Nassar (password expired)", "+1 415 555 0150"], ["demoinactive", "Yasmin Khoury (not active)", "+1 415 555 0163"], ["demonew", "Noor Hayes (temporary password)", "+1 415 555 0121"], ["demolimit", "Riley Park (five trusted devices)", "+1 415 555 0188"]] as const) {
+for (const [id, name, phone] of [["demolocked", "Jamie Locke (locked profile)", "+1 415 555 0177"], ["demoexpired", "Omar Nassar (password expired)", "+1 415 555 0150"], ["demoinactive", "Yasmin Khoury (not active)", "+1 415 555 0163"], ["demonew", "Noor Hayes (temporary password)", "+1 415 555 0121"], ["demolimit", "Riley Park (five trusted devices)", "+1 415 555 0188"], ["jordan", "Jordan Lee (registered for digital banking)", "+1 415 555 0177"], ["demoapplicant", "New customer (registered from an application)", "+1 000 000 0124"]] as const) {
   personas[id] = { ...structuredClone(personas.sam!), id, testCast: true, name, phone, behaviour: { otpCode: "482100", kyc: "verified" } };
 }
 
@@ -458,6 +459,8 @@ export type SandboxConditions = {
   idleTimeoutSeconds?: number;
   /** Personal permissions the person lacks (for example "payments.create"): the personal context no longer lists them and the bank refuses what needs them with PERMISSION_DENIED. */
   withoutPermissions?: string[];
+  /** How the photos of opening an account turn out (the first photo of that kind fails, a retake passes): the ID unreadable or expired, the selfie too dark or not live, the proof of address too old, the details not matching; `decline` refuses every application. */
+  onboarding?: { id?: "unreadable" | "expired"; selfie?: "dark" | "notLive"; poa?: "old"; match?: "mismatch"; decline?: boolean };
   /** Pins the sandbox clock to this date and time (ISO, for example 2026-11-03T10:42:00Z): value dates, cut-offs, "today" and references follow it, not the day the test runs. */
   now?: string;
 };
@@ -469,6 +472,8 @@ export const ANSWER_LIMIT_MS = 10_000;
 
 /** What answers before anyone is signed in: signing in, recovering, the rules of a password, the codes for them, the bank's setup. */
 const SIGNED_OUT_ADAPTERS = /^(bank\.(auth|recover)\.|bank\.device\.options$|bank\.password\.policy$|bank\.otp\.(send|verify)$|bank\.app\.config$|sandbox\.access\.inspect$)/;
+/** What the bank also answers to someone who is not signed in (public product and rate data, places, contact, opening an account, tracking an application, registering): no account data, no money (retail/public.ts). */
+export const PUBLIC_ADAPTERS = /^(bank\.(products|rates|locations|support|onboarding|registration)\.|bank\.applications\.(find|status)$|sandbox\.public\.)/;
 const ACCESS_ADAPTERS = /^(bank\.(auth|recover)\.|bank\.device\.options$|bank\.password\.policy$|sandbox\.access\.inspect$)/;
 /** What a signed-in customer manages about their own access: devices, quick sign-in and PIN, the password, the login history. */
 const SECURITY_ADAPTERS = /^bank\.(devices\.|device\.setDefault$|password\.(check|change)$|loginHistory\.)/;
@@ -498,6 +503,8 @@ export class MockBank {
   private opts: { corpProvider?: ProviderId; corpFlaws?: Flaws };
   /** Usernames, passwords (as hashes), devices and history: what the bank remembers about who can sign in. Shared by the banks of one app, so a trusted device or a new password outlasts a sign-out. */
   readonly access: AccessSandbox;
+  /** Before sign-in: products, rates, places, contact, opening an account, tracking, registering. */
+  private pub!: PublicApi;
 
   /**
    * `personaId` is the customer the bank serves; SIGNED_OUT ("signed-out") starts with nobody signed in, for a sign-in journey (the customer is loaded when it completes).
@@ -513,6 +520,7 @@ export class MockBank {
     this.config = { ...structuredClone(DEFAULT_CONFIG), ...structuredClone(options.config ?? {}) };
     this.signedOut = personaId === SIGNED_OUT;
     this.access = new AccessSandbox(options.directory ?? new AccessDirectory(), { now: () => this.now(), flaws: () => this.opts.corpFlaws ?? {}, config: () => this.config, deviceKind: () => this.conditions.device, appDevice: () => options.device, signedIn: () => !this.signedOut });
+    this.pub = new PublicApi({ now: () => this.now(), config: () => this.config, conditions: () => this.conditions, flaws: () => this.opts.corpFlaws ?? {}, dir: this.access.dir, access: this.access, device: () => this.access.thisDevice().id });
     this.load(personaId);
   }
   /** Sets the bank up for one customer: their accounts, their companies and a fresh session. Also what signing in does for the customer who signed in. */
@@ -588,9 +596,13 @@ export class MockBank {
     }
     this.session.lastActivity = now;
     // before sign-in only the sign-in and recovery adapters answer
-    if (this.signedOut && !SIGNED_OUT_ADAPTERS.test(adapter)) throw new BankError("NOT_SIGNED_IN", "Sign in to continue.");
+    if (this.signedOut && !SIGNED_OUT_ADAPTERS.test(adapter) && !PUBLIC_ADAPTERS.test(adapter)) throw new BankError("NOT_SIGNED_IN", "Sign in to continue.");
+    // before sign-in, and signed in too: the public adapters answer for anyone and never with account data
+    if (this.pub.handles(adapter)) return this.pub.call(adapter, input);
     if (adapter === "bank.session.keepAlive") return { expiresAt: new Date(now + (idle ?? ACCESS.idleSeconds) * 1000).toISOString() };
     if (ACCESS_ADAPTERS.test(adapter)) {
+      // a sign-in or a recovery starts: the one-time code belongs to it now, not to a public flow that was going on
+      if (/^bank\.(auth\.(signIn|quickSignIn)|recover\.verifyUser)$/.test(adapter)) this.pub.endFlow();
       const out = this.access.call(adapter, input);
       if (adapter === "bank.auth.signOut" && !this.signedOut) this.session.ended = true;
       // a finished sign-in: the bank now serves the customer who signed in (the same object, so a journey holding it keeps working)
@@ -602,6 +614,7 @@ export class MockBank {
     switch (adapter) {
       case "bank.app.config": return { homeMarket: this.config.homeMarket, disabled: [...this.config.disabled], options: structuredClone(this.config.options) };
       case "bank.otp.send":
+        if (this.pub.ownsCodes) return this.pub.codeCall(adapter, input);
         if (this.access.ownsCodes) return this.access.codeCall(adapter, input);
         // a signed-in customer's own change (Settings > Security) asks for the strict code: 000000 is wrong, 999999 expired, three wrong end the attempt
         if (input.strict === true && this.access.me()) return this.access.securityCode(adapter, input, this.otp);
@@ -609,6 +622,7 @@ export class MockBank {
         this.otp.verified = false;
         return { sent: true, maskedPhone: maskPhone(this.p.phone), channel: input.channel ?? "sms" };
       case "bank.otp.verify": {
+        if (this.pub.ownsCodes) return this.pub.codeCall(adapter, input);
         if (this.access.ownsCodes) return this.access.codeCall(adapter, input);
         if (input.strict === true && this.access.me()) return this.access.securityCode(adapter, input, this.otp);
         this.otp.attempts += 1;

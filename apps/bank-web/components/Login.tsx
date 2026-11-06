@@ -2,11 +2,12 @@
 import { useRouter, useSearchParams } from "next/navigation";
 import { useEffect, useState } from "react";
 import { JourneyPlayer } from "@finx/renderer-web";
-import { personaSummary, slugIs, type Live } from "@finx/bank-client";
+import { isPublicJourney, landingPointsFor, personaSummary, slugIs, type Live } from "@finx/bank-client";
 import { formatMoney } from "@finx/ui-kit";
 import { safeNext } from "@/lib/safe-next";
 import { useApp, useAppState } from "./AppProvider";
 import { SignInStage } from "./login/SignInStage";
+import { Landing } from "./login/Landing";
 
 /**
  * Sign in. A bank with a real sign-in (BankWorkx) runs the sign-in journey here: the journey signs the customer in at the sandbox bank and
@@ -36,6 +37,10 @@ function SignInJourney({ onSignedIn }: { onSignedIn: () => void }) {
   // which journey is on screen and the values it was opened with; n makes a journey that is opened again start again
   const [run, setRun] = useState<{ slug: string; launch?: Record<string, any>; n: number }>({ slug: "sign-in", n: 0 });
   const [live, setLive] = useState<Live | null | "loading">("loading");
+  // where the journey is: the Landing shows only on the first screen the person sees (the sign-in form), not on the steps after the password
+  // an event says which journey it came from: the screen it shows first is the sign-in form, and only while it is on that screen is the Landing under it
+  const [at, setAt] = useState<{ slug?: string; first?: string; now?: string }>({});
+  const onEvent = (e: { type: string; screen?: string; kind?: string; slug?: string }) => { if (e.type === "screen" && e.kind !== "branch") setAt((cur) => (cur.slug === e.slug ? { ...cur, now: e.screen } : { slug: e.slug, first: e.screen, now: e.screen })); };
   // signed out for their security: the sign-in journey says so (expired); a lock says it here
   const reason = s.notice === "expired" ? { "launch.reason": "expired" } : undefined;
   useEffect(() => {
@@ -45,7 +50,8 @@ function SignInJourney({ onSignedIn }: { onSignedIn: () => void }) {
     return () => { alive = false; };
   }, [app, run]);
 
-  const open = (r: { journey: string; launch: Record<string, any> }) => setRun((cur) => ({ slug: app.resolveSlug(r.journey), launch: r.launch, n: cur.n + 1 }));
+  // a journey that needs a customer (apply for the loan a calculator estimated, open the deposit) cannot start before sign-in: the person is taken to the sign-in
+  const open = (r: { journey: string; launch: Record<string, any> }) => setRun((cur) => ({ slug: isPublicJourney(r.journey) ? app.resolveSlug(r.journey) : "sign-in", launch: isPublicJourney(r.journey) ? r.launch : undefined, n: cur.n + 1 }));
   // a journey ended: when the bank now serves a customer the app opens it, otherwise the sign-in starts again
   const ended = () => { if (app.finishSignIn()) onSignedIn(); else setRun((cur) => ({ slug: "sign-in", n: cur.n + 1 })); };
 
@@ -55,16 +61,19 @@ function SignInJourney({ onSignedIn }: { onSignedIn: () => void }) {
     <div className="wb-journey-card" data-handover={slugIs(run.slug, "sign-in") ? undefined : "true"}>
       {s.notice === "locked" ? <p className="wb-note" role="alert">Sign-in is locked to protect your account. Unlock it to continue.</p> : null}
       {live ? (
-        <JourneyPlayer key={`${run.slug}:${run.n}`} journey={live.journey} adapter={app.adapter} lang={s.lang} launch={run.launch ?? reason} onOpenJourney={open} onClose={ended} onExit={ended} look={project.look} brandName={project.name} />
+        <JourneyPlayer key={`${run.slug}:${run.n}`} journey={live.journey} adapter={app.adapter} lang={s.lang} launch={run.launch ?? reason} onOpenJourney={open} onEvent={onEvent} onClose={ended} onExit={ended} look={project.look} brandName={project.name} />
       ) : (
         <div className="wb-pad"><h1>Sign in is not available right now</h1><p className="wb-muted">The sign-in journey could not be loaded. You can still use the sandbox customer picker.</p></div>
       )}
     </div>
   );
   const picker = <p className="wb-fine wb-signin-fine"><button type="button" className="wb-link" onClick={() => app.showPicker(true)}>Use the sandbox customer picker</button></p>;
+  // the Landing sits under the sign-in itself, not under the journeys it hands over to
+  const landing = slugIs(run.slug, "sign-in") && live && slugIs(at.slug ?? "", "sign-in") && at.now === at.first && !app.bank.signedIn ? <Landing points={landingPointsFor(s.catalog.entries)} onOpen={(p) => open({ journey: p.journey, launch: {} })} /> : null;
+  const below = <>{landing}{picker}</>;
   // the bank chooses on Studio's Design page: the plain page, or the dark stage around the journey
-  if (project.look?.signIn === "stage") return <SignInStage bank={project.name} after={picker}>{card}</SignInStage>;
-  return <main className="wb-journey">{card}{picker}</main>;
+  if (project.look?.signIn === "stage") return <SignInStage bank={project.name} after={below}>{card}</SignInStage>;
+  return <main className="wb-journey">{card}{below}</main>;
 }
 
 function Picker({ onLogin }: { onLogin: () => void }) {

@@ -170,18 +170,18 @@ export function bankMutants(journey: Journey): Mutant[] {
     ["usernameHiding", "The bank answers differently for a username it does not know", uses(/^bank\.auth\.signIn$/)],
     ["newDeviceCode", "The bank signs in from a new device without a code", uses(/^bank\.auth\.signIn$/)],
     ["expiredPassword", "The bank lets an expired password sign in without a new one", uses(/^bank\.auth\.signIn$/)],
-    ["codeExpiry", "The bank accepts a one-time code that has run out", uses(/^bank\.(auth\.signIn|recover\.verifyUser|password\.change|devices\.(remove|setQuickSignIn))$/)],
+    ["codeExpiry", "The bank accepts a one-time code that has run out", uses(/^bank\.(auth\.signIn|recover\.verifyUser|password\.change|devices\.(remove|setQuickSignIn)|registration\.verify|onboarding\.start|applications\.find)$/)],
     ["codeLock", "The bank never locks a sign-in after wrong codes", uses(/^bank\.(auth\.signIn|password\.change|devices\.(remove|setQuickSignIn))$/)],
-    ["resendLimit", "The bank sends as many codes as are asked for", uses(/^bank\.(auth\.signIn|recover\.verifyUser|password\.change|devices\.(remove|setQuickSignIn))$/)],
+    ["resendLimit", "The bank sends as many codes as are asked for", uses(/^bank\.(auth\.signIn|recover\.verifyUser|password\.change|devices\.(remove|setQuickSignIn)|registration\.verify|onboarding\.start|applications\.find)$/)],
     ["recoveryLock", "The bank never locks a recovery after wrong tries", uses(/^bank\.recover\.verifyUser$/)],
-    ["tokenExpiry", "The bank accepts a recovery token that has run out", uses(/^bank\.recover\.(sendUsername|resetPassword|unlock)$/)],
+    ["tokenExpiry", "The bank accepts a recovery or registration token that has run out", uses(/^bank\.(recover\.(sendUsername|resetPassword|unlock)|registration\.complete)$/)],
     ["resetNeedsCode", "The bank acts on a recovery without the one-time code", uses(/^bank\.recover\.(sendUsername|resetPassword|unlock)$/)],
     ["resetClearsLock", "A reset leaves the profile locked", uses(/^bank\.recover\.resetPassword$/)],
-    ["passwordLength", "The bank takes a new password that is too short or too long", uses(/^bank\.(auth\.changePassword|recover\.resetPassword|password\.change)$/)],
-    ["passwordUsername", "The bank takes a new password that contains the username", uses(/^bank\.(auth\.changePassword|recover\.resetPassword|password\.change)$/)],
-    ["passwordCommon", "The bank takes a new password with a common word in it", uses(/^bank\.(auth\.changePassword|recover\.resetPassword|password\.change)$/)],
-    ["passwordBreach", "The bank takes a new password that is in a known breach", uses(/^bank\.(auth\.changePassword|recover\.resetPassword|password\.change)$/)],
-    ["passwordReuse", "The bank takes a new password the person used before", uses(/^bank\.(auth\.changePassword|recover\.resetPassword|password\.change)$/)],
+    ["passwordLength", "The bank takes a new password that is too short or too long", uses(/^bank\.(auth\.changePassword|recover\.resetPassword|password\.change|registration\.complete)$/)],
+    ["passwordUsername", "The bank takes a new password that contains the username", uses(/^bank\.(auth\.changePassword|recover\.resetPassword|password\.change|registration\.complete)$/)],
+    ["passwordCommon", "The bank takes a new password with a common word in it", uses(/^bank\.(auth\.changePassword|recover\.resetPassword|password\.change|registration\.complete)$/)],
+    ["passwordBreach", "The bank takes a new password that is in a known breach", uses(/^bank\.(auth\.changePassword|recover\.resetPassword|password\.change|registration\.complete)$/)],
+    ["passwordReuse", "The bank takes a new password the person used before", uses(/^bank\.(auth\.changePassword|recover\.resetPassword|password\.change|registration\.complete)$/)],
     ["deviceLimit", "The bank trusts more than five devices", uses(/^bank\.auth\.trustDevice$/)],
     ["pinRules", "The bank takes a quick PIN that is easy to guess or part of the phone number", uses(/^bank\.(auth\.setQuickSignIn|devices\.(setQuickSignIn|changePin))$/)],
     // Settings > Security: the step-up before a change, the code and the current password or PIN as proof, the device in hand, the PIN lock
@@ -319,6 +319,49 @@ export function bankMutants(journey: Journey): Mutant[] {
     ["connectPick", "The bank connects with no account chosen", uses(/^bank\.connections\.finish$/)],
     ["connectPeriod", "The bank shares for 365 days whatever the market, and shows every amount with the dollar sign", uses(/^bank\.connections\.(banks|start|finish)$/)],
     ["connectReadOnly", "The bank lets a connected account be one the customer can pay from", uses(/^bank\.connections\.finish$/)],
+    // Before sign-in: the loan and deposit tables, the places, the ways to reach the bank, opening an account, tracking an application and registering for digital banking
+    ["pubLoanRange", "The bank quotes a loan amount, step or term outside the table of its loan type", uses(/^bank\.rates\.loans$/)],
+    ["pubLoanFormula", "The bank adds the interest of a loan in a lump (rate times years) instead of working it month by month", uses(/^bank\.rates\.loans$/)],
+    ["pubDepositRate", "The bank pays the 12-month rate whatever the term", uses(/^bank\.rates\.deposits$/)],
+    ["pubDepositRange", "The bank takes a deposit outside 500 to 100,000 or off the step of 500", uses(/^bank\.rates\.deposits$/)],
+    ["pubDepositFormula", "The bank pays a full year of interest whatever the term", uses(/^bank\.rates\.deposits$/)],
+    ["pubSymbol", "The bank shows every amount with the dollar sign whatever its home market", uses(/^bank\.rates\.(loans|deposits)$/)],
+    ["pubTermText", "The bank writes every term in months", uses(/^bank\.rates\.(loans|deposits)$/)],
+    ["pubPlaceHours", "The bank says every place is open, whatever its hours and the clock", uses(/^bank\.locations\.(search|details)$/)],
+    ["pubPlaceSort", "The bank lists places by name, not nearest first", uses(/^bank\.locations\.search$/)],
+    ["pubPlaceUnit", "The bank shows every distance in kilometres, whatever its market", uses(/^bank\.locations\.(search|details)$/)],
+    ["pubPlaceAtm", "The bank lists cash machines when it shows none", uses(/^bank\.locations\.search$/)],
+    ["pubPlaceOpen", "The bank lists places that are closed when only those open now are asked for", uses(/^bank\.locations\.search$/)],
+    ["pubPlaceSearch", "The bank ignores the words typed in the search", uses(/^bank\.locations\.search$/)],
+    ["pubSupportHours", "The bank says every way to reach it is open", uses(/^bank\.support\.hours$/)],
+    ["pubSupportWays", "The bank offers chat and call when it switched them off", uses(/^bank\.support\.hours$/)],
+    ["pubSupportRules", "The bank takes a chat or a message with no topic, a short text, a long text or an email that is not one", uses(/^bank\.support\.(openChat|sendMessage)$/)],
+    ["pubSupportRate", "The bank takes any number of messages from one device in an hour", uses(/^bank\.support\.sendMessage$/)],
+    ["pubOnbContact", "The bank starts an application with an email that is not an email", uses(/^bank\.onboarding\.start$/)],
+    ["pubOnbDuplicate", "The bank starts a second application for a mobile or an email that has one", uses(/^bank\.onboarding\.start$/)],
+    ["pubOnbVerified", "The bank checks, saves or sends an application before the mobile number was verified with the code", uses(/^bank\.onboarding\.(check|save|verifyIdentity|submit)$/)],
+    ["pubOnbAge", "The bank takes a date of birth that is in the future, over 110 years ago or under 18", uses(/^bank\.onboarding\.(check|verifyIdentity|submit)$/)],
+    ["pubOnbId", "The bank takes a national ID number that is not in the format of its market", uses(/^bank\.onboarding\.(check|submit)$/)],
+    ["pubOnbPoa", "The bank takes a proof of address that is older than 3 months", uses(/^bank\.onboarding\.check$/)],
+    ["pubOnbPhotos", "The bank takes an ID it cannot read or that has expired, and a selfie that is dark or not live", uses(/^bank\.onboarding\.(check|verifyIdentity)$/)],
+    ["pubOnbMatch", "The bank takes an ID whose details do not match what was entered (the birth year of a Market D ID number)", uses(/^bank\.onboarding\.verifyIdentity$/)],
+    ["pubOnbTax", "The bank takes a tax declaration without a country and a tax ID, or a tax ID in the wrong shape", uses(/^bank\.onboarding\.(check|submit)$/)],
+    ["pubOnbPostcode", "The bank takes a postcode that is not in the right shape", uses(/^bank\.onboarding\.(check|submit)$/)],
+    ["pubOnbConsent", "The bank takes an application without both ticks and the signature", uses(/^bank\.onboarding\.submit$/)],
+    ["pubOnbReview", "The bank sends income over 1M to the checks like any other application", uses(/^bank\.onboarding\.submit$/)],
+    ["pubOnbKeep", "The bank keeps the photos' references, the file and the code in a saved application", uses(/^bank\.onboarding\.save$/)],
+    ["pubOnbExpiry", "The bank keeps a saved application for ever", uses(/^bank\.onboarding\.begin$/)],
+    ["pubOnbProduct", "The bank takes an account it does not offer", uses(/^bank\.onboarding\.submit$/)],
+    ["pubTrackMatch", "The bank finds an application by its number alone", uses(/^bank\.applications\.find$/)],
+    ["pubTrackLock", "The bank never locks the tracker after wrong tries", uses(/^bank\.applications\.find$/)],
+    ["pubTrackCode", "The bank shows the status of an application without the one-time code", uses(/^bank\.applications\.status$/)],
+    ["pubRegMatch", "The bank finds a customer by the customer ID alone, whatever the date of birth", uses(/^bank\.registration\.verify$/)],
+    ["pubRegAlready", "The bank registers a customer who is already registered", uses(/^bank\.registration\.verify$/)],
+    ["pubRegLock", "The bank never locks the registration after wrong checks and codes", uses(/^bank\.registration\.verify$/)],
+    ["pubRegCode", "The bank makes the profile before the one-time code was right", uses(/^bank\.registration\.complete$/)],
+    ["pubRegUsername", "The bank takes a username that is taken or not in the shape", uses(/^bank\.registration\.complete$/)],
+    ["pubRegCard", "The bank takes a card number when it switched that off", uses(/^bank\.registration\.verify$/)],
+    ["pubRegTrust", "The bank trusts the device when it does not offer that", uses(/^bank\.registration\.complete$/)],
   ];
   const rules = all.filter(([, , reachable]) => reachable).map(([k, what]) => [k, what] as [keyof Flaws, string]);
   return rules.map(([k, what]) => ({ id: `bank-${k}`, what, kind: "bank" as const, flaws: { [k]: false } as Flaws }));
@@ -338,7 +381,9 @@ export async function mutationCheck(journey: Journey, accepted: Record<string, s
     if (m.journey) target = m.journey(journey);
     if (!target) continue;
     let report;
-    try { report = await runScenarios(target, { flaws: m.flaws, journeys }); } catch { results.push({ id: m.id, what: m.what, kind: m.kind, killed: true, caughtBy: ["(the broken journey could not run)"] }); continue; }
+    // a journey that opens itself again (Continue now, in open-account) must meet its own broken copy there, not the shipped one
+    const worlds = m.journey ? journeys.map((x) => (x.slug === journey.slug ? target! : x)) : journeys;
+    try { report = await runScenarios(target, { flaws: m.flaws, journeys: worlds }); } catch { results.push({ id: m.id, what: m.what, kind: m.kind, killed: true, caughtBy: ["(the broken journey could not run)"] }); continue; }
     const caught = report.results.filter((r) => !r.ok).map((r) => r.id);
     results.push({ id: m.id, what: m.what, kind: m.kind, killed: caught.length > 0, caughtBy: caught });
   }

@@ -3,6 +3,7 @@ import type { Flaws } from "./business/corporate";
 import type { BankConfig } from "./config";
 import { secretHash } from "./hash";
 import { maskPhone } from "./retail/phone";
+import { PublicDirectory } from "./retail/public-data";
 
 /**
  * Signing in, recovering and the devices a customer uses, as a bank holds them (docs/BANKWORKX.md, "Signing in and security").
@@ -43,6 +44,26 @@ export const FIXED_CODE = "482100";
 /** The code that is always expired, the way 000000 is always wrong. */
 export const EXPIRED_CODE = "999999";
 const DAY = 86_400_000, MINUTE = 60_000;
+/** One one-time code in progress: how many were sent, when the last went out, whether it was right, and how many wrong ones were tried. */
+export type Otp = { sends: number; sentAt: number; verified: boolean; wrong: number };
+export const freshOtp = (): Otp => ({ sends: 0, sentAt: 0, verified: false, wrong: 0 });
+/**
+ * Sending a code, or sending it again: at most `ACCESS.maxResends` more after the first, and the new code makes the old one useless. Shared by the sign-in, the recovery and the public
+ * journeys (registering, opening an account, tracking an application), so a code behaves the same everywhere.
+ */
+export function sendCode(otp: Otp, now: number, f: Flaws, after = "Try again later."): Otp {
+  if (otp.sends >= 1 + ACCESS.maxResends && f.resendLimit !== false) throw new BankError("OTP_RESEND_LIMIT", `You have asked for the maximum number of codes. ${after}`);
+  return { sends: otp.sends + 1, sentAt: now, verified: false, wrong: otp.wrong };
+}
+/** Checks a code: 482100 for the first send, 482101 for the next ..., 000000 is wrong, 999999 is expired and so is a code older than five minutes. Throws OTP_REQUIRED / OTP_EXPIRED; a wrong one is counted and returned. */
+export function judgeCode(otp: Otp, code: string, now: number, f: Flaws): "ok" | "wrong" {
+  if (otp.sends === 0) throw new BankError("OTP_REQUIRED", "Ask for a code first.");
+  if (f.codeExpiry !== false && (code === EXPIRED_CODE || now - otp.sentAt > ACCESS.codeSeconds * 1000)) throw new BankError("OTP_EXPIRED", "That code has expired. Ask for a new one.");
+  if (code !== String(Number(FIXED_CODE) + otp.sends - 1)) { otp.wrong += 1; return "wrong"; }
+  otp.verified = true;
+  return "ok";
+}
+
 
 export type DeviceKind = "phone" | "tablet" | "laptop" | "browser";
 /** The device a session is on (the apps tell the sandbox which one they are). */
@@ -85,6 +106,9 @@ export const PASSWORD_RULES_BWX = { minLength: 12, maxLength: 64 };
 /** A short sandbox sample of what a bank would check against. The common words are matched inside the password; the breached ones whole. */
 const COMMON_WORDS = ["password", "qwerty", "letmein", "welcome", "iloveyou", "admin", "123456"];
 const BREACHED = ["winter2024!winter", "sunshine!2020abc", "spring2023!spring", "football!2019abc"];
+/** The usernames nobody can register, whatever the directory holds, and the shape of one. */
+const RESERVED_USERNAMES = ["admin", "administrator", "bankworkx", "jordan.lee", "alex.morgan", "sam.rivera", "customer", "support"];
+export const USERNAME_FORMAT = /^[A-Za-z0-9._-]{6,30}$/;
 export type PasswordProblem = "PASSWORD_SAME" | "MIN_LENGTH" | "MAX_LENGTH" | "PASSWORD_CONTAINS_USERNAME" | "PASSWORD_COMMON" | "PASSWORD_BREACHED" | "PASSWORD_REUSED";
 
 /** The problems of a new password, in the order the screen reports them (the first is the one it shows). `used` says whether the person had it before. */
@@ -168,6 +192,8 @@ export class AccessDirectory {
   readonly users = new Map<string, AccessUser>();
   /** What the bank sent to a customer (the message that carries a recovered username). For tests: the apps never read it. */
   readonly outbox: { to: string; kind: "username"; text: string }[] = [];
+  /** What the bank remembers before anyone signs in (applications, customers who may register): kept here so it outlasts the bank made for one sign-in. */
+  readonly pub = new PublicDirectory();
   constructor() {
     for (const s of SEEDS) this.users.set(s.username, userOf(s));
     const alex = this.users.get("alex.morgan")!;
@@ -191,7 +217,6 @@ export type AccessHost = {
 };
 type SignInFlow = { username: string; how: "password" | "pin" | "biometric"; needsCode: boolean; needsPassword: boolean; reason?: "expired" | "temporary"; changed: boolean; trusted: boolean; quick?: QuickMethod | "off"; remember: boolean };
 type RecoverFlow = { username: string; purpose: "username" | "password"; contact: "mobile" | "email"; token: string; expiresAt: number; used: boolean };
-type Otp = { sends: number; sentAt: number; verified: boolean; wrong: number };
 
 /** One bank session's view of the directory: who is signed in, the sign-in or recovery in progress, and the codes. */
 export class AccessSandbox {
@@ -278,17 +303,12 @@ export class AccessSandbox {
     if (!who || !kind) throw new BankError("VERIFY_FIRST", "Start with your username first.");
     if (kind === "recover") this.recoveryToken(this.recover!.token, false);
     if (adapter === "bank.otp.send") {
-      if (this.otp.sends >= 1 + ACCESS.maxResends && f.resendLimit !== false) throw new BankError("OTP_RESEND_LIMIT", "You have asked for the maximum number of codes. Wait 15 minutes or choose another way.");
-      this.otp = { sends: this.otp.sends + 1, sentAt: this.now, verified: false, wrong: this.otp.wrong };
+      this.otp = sendCode(this.otp, this.now, f, "Wait 15 minutes or choose another way.");
       const where = kind === "recover" && this.recover!.contact === "email" ? maskEmail(who.email) : kind === "recover" ? maskLast4(who.phone) : maskPhone(who.phone);
       return { sent: true, maskedPhone: where, channel: input.channel ?? "sms", resendsLeft: Math.max(0, ACCESS.maxResends + 1 - this.otp.sends) };
     }
-    if (this.otp.sends === 0) throw new BankError("OTP_REQUIRED", "Ask for a code first.");
-    const code = String(input.code ?? ""), expired = f.codeExpiry !== false && (code === EXPIRED_CODE || this.now - this.otp.sentAt > ACCESS.codeSeconds * 1000);
-    if (expired) throw new BankError("OTP_EXPIRED", "That code has expired. Ask for a new one.");
     // a resend gives a new code, and the one before is useless: 482100, then 482101, 482102, 482103
-    if (code !== String(Number(FIXED_CODE) + this.otp.sends - 1)) {
-      this.otp.wrong += 1;
+    if (judgeCode(this.otp, String(input.code ?? ""), this.now, f) === "wrong") {
       if (kind === "signin") {
         if (this.otp.wrong >= ACCESS.maxWrongCodes && f.codeLock !== false) { this.lock(who); this.log(who, "locked"); this.signin = undefined; throw new BankError("ACCOUNT_LOCKED", "Too many wrong codes.", this.otp.wrong); }
       } else if (this.recoverFail(who.username) === "locked") throw new BankError("ID_LOCKED", "Too many tries.", this.otp.wrong);
@@ -543,6 +563,39 @@ export class AccessSandbox {
     r.user.failedSignIns = 0; r.user.lockedUntil = undefined; if (r.user.status === "locked") r.user.status = "active"; this.failed.delete(r.user.username);
     this.done();
     return { ok: true as const, wasLocked, username: r.user.username };
+  }
+
+  /* ---------------------------------------------------------------------------------------- registering */
+
+  /**
+   * The rules for the sign-in details of a customer who registers for digital banking, with nothing saved: the username (6 to 30 letters, numbers, dots, dashes or underscores, not one that is
+   * taken), the two passwords the same, and the password rules of every other place (length, not the username, not common, not breached). Outcomes are data, as at sign-in.
+   */
+  checkRegistration(input: { username: string; password: string; confirm?: string }) {
+    const f = this.flaws(), username = String(input.username ?? "").trim(), pw = String(input.password ?? "");
+    // a name that is taken says so first (the reserved ones are short, so a screen that checked the shape first would never say it)
+    if (f.pubRegUsername !== false) {
+      if (RESERVED_USERNAMES.includes(username.toLowerCase()) || this.dir.find(username)) return { ok: false as const, code: "USERNAME_TAKEN" };
+      if (!USERNAME_FORMAT.test(username)) return { ok: false as const, code: "USERNAME_INVALID" };
+    }
+    if (input.confirm !== undefined && input.confirm !== pw) return { ok: false as const, code: "MISMATCH" };
+    const problems = bwxPasswordProblems(pw, username, false, f);
+    if (problems.length) return { ok: false as const, code: problems[0]!, problems };
+    return { ok: true as const };
+  }
+  /**
+   * Makes the profile of a customer who registered: the same record sign-in reads (the password as a salted hash, the one it had kept so it cannot come back later, status active) and,
+   * when asked, this device trusted for 90 days under the name given. Call `checkRegistration` first.
+   */
+  registerUser(r: { username: string; password: string; personaId: string; firstName: string; lastName: string; email: string; phone: string; dob: string; trustDevice: boolean; deviceName: string }) {
+    const username = r.username.trim(), h = hashOf(r.password, username), d = this.thisDevice();
+    const u: AccessUser = {
+      username, personaId: r.personaId, firstName: r.firstName, lastName: r.lastName, email: r.email, phone: r.phone, dob: r.dob, status: "active", passwordHash: h, passwordChangedAt: this.now,
+      usedHashes: [h], failedSignIns: 0, devices: [], history: [],
+    };
+    if (r.trustDevice) u.devices.push({ id: d.id, name: r.deviceName.trim(), kind: d.kind, trusted: true, trustedUntil: this.now + ACCESS.trustDays * DAY, lastUsed: this.now, default: "password", pinFails: 0, biometricAvailable: d.kind === "phone" || d.kind === "tablet", remembered: false });
+    this.dir.users.set(norm(username), u);
+    return { deviceTrusted: r.trustDevice };
   }
 
   /* ---------------------------------------------------------------------------------------------- passwords */
