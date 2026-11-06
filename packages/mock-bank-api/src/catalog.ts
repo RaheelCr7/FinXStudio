@@ -430,17 +430,17 @@ export const ADAPTER_CATALOG: AdapterInfo[] = [
   },
   {
     adapter: "bank.cards.eligible", suggestedId: "eligibleCards", description: "The cards a journey offers to choose from, and the first it can use",
-    input: { for: "activate (waiting cards) | controls | pin | replace | virtual (active physical cards)" }, returns: "{ count, usable, firstId ('' when none), cards: map of the cards as bank.cards.issued shows them (use as a select source) }. A card offered but not usable says why when chosen.", errors: ["NOT_SUPPORTED"],
+    input: { for: "view (all, first one) | activate (waiting cards) | controls | pin | replace | virtual (active physical cards)" }, returns: "{ count, usable, firstId ('' when none), cards: map of the cards as bank.cards.issued shows them (use as a select source) }. A card offered but not usable says why when chosen.", errors: ["NOT_SUPPORTED"],
   },
   { adapter: "bank.cards.get", suggestedId: "issuedCard", description: "One issued card.", input: { cardId: "id" }, returns: "The card as bank.cards.issued shows it.", errors: ["CARD_NOT_FOUND", "NOT_SUPPORTED"] },
   {
     adapter: "bank.cards.transactions", suggestedId: "cardActivity", description: "A card's spending, newest first, pending first in a day",
     input: { cardId: "optional: all cards", status: "pending | posted | disputed", q: "merchant", limit: "default 10, to 100" },
-    returns: "{ items [ { id, cardId, cardName, merchant, amount, amountText, status, statusLabel, pending, when, date, time, channel, channelLabel, country, reference, disputeId, reportable, notice, noticeCode, line } ], total, shown, more, empty }.", errors: ["CARD_NOT_FOUND"],
+    returns: "{ items [ { id, cardId, cardName, merchant, amount, amountText, status, statusLabel, pending, when, date, time, channel, channelLabel, country, reference, disputeId, reportable, notice, noticeCode, line } ], choices (the same as a map of { id, name 'merchant · amount · when', cardId } for a select), total, shown, more, empty }.", errors: ["CARD_NOT_FOUND"],
   },
   {
     adapter: "bank.cards.verifyActivation", suggestedId: "verifyActivation", description: "Checks the last 4 digits, expiry and security code of a card to activate; counts wrong tries",
-    input: { cardId: "id", last4: "4 digits", expiry: "MM/YY", securityCode: "3 digits, optional (000 never matches)" }, returns: "{ verified, code '' | ACTIVATION_MISMATCH | ACTIVATION_LOCKED, triesLeft, locked }: a wrong try is an answer, not an error. The third wrong try locks the card.", errors: ["CARD_NOT_FOUND", "CARD_ALREADY_ACTIVE", "CARD_BLOCKED"],
+    input: { cardId: "id", last4: "4 digits", expiry: "MM/YY", securityCode: "3 digits, optional (000 never matches)" }, returns: "{ verified, code '' | ACTIVATION_MISMATCH | ACTIVATION_LOCKED, triesLeft, locked }: a wrong try is an answer, not an error. The third wrong try locks the card.", errors: ["CARD_NOT_FOUND", "CARD_ALREADY_ACTIVE", "CARD_BLOCKED", "CARD_EXPIRED (a past date, no try used)"],
   },
   {
     adapter: "bank.cards.activate", suggestedId: "activateCard", description: "Activates a card whose details were checked, and sets its PIN if one is given",
@@ -452,7 +452,7 @@ export const ADAPTER_CATALOG: AdapterInfo[] = [
   { adapter: "bank.cards.block", suggestedId: "blockCard", description: "Blocks a card for good; no code, it only protects", input: { cardId: "id", reason: "lost | stolen | fraud" }, returns: "{ cardId, status 'blocked', statusLabel, reference BLK-..., name }", errors: ["CARD_NOT_FOUND", "CARD_ALREADY_BLOCKED", "CARD_NOT_ACTIVE", "REASON_INVALID"] },
   {
     adapter: "bank.cards.controls.update", suggestedId: "updateControls", description: "Freezes or unfreezes, sets limits, where the card works, a trip and alerts; a code only to loosen",
-    input: { cardId: "id", status: "frozen | active", limits: "{ perTransaction, dailyPurchases, monthly, dailyAtm } numbers: not above the card's ceiling, each not above the next", controls: "{ contactless, online, abroad, atm } booleans", trip: "{ country, from, to } YYYY-MM-DD, up to 90 days, from today to 120 days ahead; null clears it", alerts: "{ every, large, largeFrom 1 to 100000, online }", dryRun: "true: apply every rule and change nothing (no code needed)" },
+    input: { cardId: "id", status: "frozen | active", limits: "{ perTransaction, dailyPurchases, monthly, dailyAtm } numbers: not above the card's ceiling, each not above the next", controls: "{ contactless, online, abroad, atm } booleans", trip: "{ country, from, to } YYYY-MM-DD, up to 90 days, from today to 120 days ahead; null clears it", alerts: "{ every, large, largeFrom 1 to 100000, online }", dryRun: "true: apply every rule and change nothing (no code needed)", "plain values instead of the objects": "perTransaction, dailyPurchases, monthly, dailyAtm, allowContactless, allowOnline, allowAbroad, allowAtm, tripCountry, tripFrom, tripTo (all empty clears), alertEvery, alertLarge, alertFrom, alertOnline" },
     returns: "{ cardId, name, changes [ { key, label, before, after } ], loosened, needsCode, kind freeze|unfreeze|changes, changed, status, statusLabel }. Loosening: unfreezing, a higher limit, a control turned on, a trip.", requiresOtp: true,
     errors: ["CARD_NOT_FOUND", "CARD_NOT_ACTIVATED", "CARD_NOT_ACTIVE", "CARD_FROZEN", "LIMIT_INVALID", "LIMIT_ABOVE_CEILING", "TRIP_INVALID", "ALERT_INVALID", "NOTHING_CHANGED", "OTP_REQUIRED (only to loosen)"],
   },
@@ -465,7 +465,7 @@ export const ADAPTER_CATALOG: AdapterInfo[] = [
   { adapter: "bank.cards.virtual.delete", suggestedId: "deleteVirtual", description: "Deletes (blocks) a virtual card", input: { cardId: "id" }, returns: "{ cardId, status 'blocked' }", errors: ["CARD_NOT_FOUND", "CARD_ALREADY_BLOCKED"] },
   {
     adapter: "bank.cards.replace", suggestedId: "replaceCard", description: "Orders a replacement card, after the code; takes the fee of express delivery",
-    input: { cardId: "id", reason: "lost | stolen (block the card first) | damaged | expired (only an expired card or 60 days or fewer left)", speed: "standard (free, 5 working days) | express (2 days; 15.00 unless fee is false)", address: "'home' or { line, city, postcode (not asked in market D) }", fee: "false when the bank charges none for express" },
+    input: { cardId: "id", reason: "lost | stolen (block the card first) | damaged | expired (only an expired card or 60 days or fewer left)", speed: "standard (free, 5 working days) | express (2 days; 15.00 unless fee is false)", where: "home | other", line: "other: 3 to 60 characters", city: "other: 2 to 40", postcode: "other: 3 to 10 letters, digits, spaces, hyphens (not asked in market D)", fee: "false when the bank charges none for express" },
     returns: "{ cardId, name, reason, speed, fee, feeText, deliveryText, deliverTo, deliveryBy, needsCode, oldCard, reference RPL-..., newCardId, last4, newStatus, arrivesBy }. The fee is taken from the card's account.", moneyMoving: true, requiresOtp: true,
     errors: ["CARD_NOT_FOUND", "CARD_VIRTUAL", "REPLACEMENT_PENDING", "CARD_REPLACED", "CARD_NOT_ACTIVATED", "REASON_INVALID", "CARD_NOT_BLOCKED", "ADDRESS_INVALID", "DELIVERY_INVALID", "INSUFFICIENT_FUNDS", "OTP_REQUIRED"],
   },
@@ -482,7 +482,7 @@ export const ADAPTER_CATALOG: AdapterInfo[] = [
   },
   {
     adapter: "bank.cards.dispute.create", suggestedId: "createDispute", description: "Reports a card payment: one case per payment; no money moves and no code",
-    input: { cardId: "id", transactionId: "id", reason: "from dispute.reasons", details: "{ cardInPossession yes|no, otherChargeDate, expectedAmount (not the amount charged), ordered (3+), arrivedBy, contacted yes|no, cancelledOn, cancellationRef, text (10+) } by reason", blockCard: "true: block the card (only for 'I don’t recognise it' on an active card)", evidence: "optional [ { name } ]" },
+    input: { cardId: "id", transactionId: "id", reason: "from dispute.reasons", details: "{ cardInPossession yes|no, otherChargeDate, expectedAmount (not the amount charged), ordered (3+), arrivedBy, contacted yes|no, cancelledOn, cancellationRef, text (10+) } by reason, as an object or as the same keys beside reason", blockCard: "true: block the card (only for 'I don’t recognise it' on an active card)", evidence: "optional [ { name } ]", evidenceName: "or one file name" },
     returns: "{ disputeId DSP-..., status 'under_review', statusLabel, replyBy, cardBlocked, merchant, amountText, reason, evidence }", errors: ["CARD_NOT_FOUND", "TRANSACTION_NOT_FOUND", "TRANSACTION_PENDING", "NOT_A_PAYMENT_OUT", "NOT_A_CARD_PAYMENT", "DISPUTE_EXISTS", "DISPUTE_WINDOW_CLOSED", "REASON_INVALID", "DETAILS_INVALID", "DISPUTE_AMOUNT_INVALID"],
   },
   { adapter: "bank.cards.dispute.list", suggestedId: "disputes", description: "The cases the customer opened on card payments", input: { cardId: "optional" }, returns: "Map by case id: { id, cardId, transactionId, reason, amountText, status, cardBlocked }." },

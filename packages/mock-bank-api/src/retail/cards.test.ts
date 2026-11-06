@@ -159,6 +159,23 @@ describe("limits and controls", () => {
   });
 });
 
+describe("limits and controls sent as plain values", () => {
+  it("are the same as the objects: limits, where the card works, a trip (all empty clears it) and alerts", async () => {
+    const b = alex();
+    const r = await b.call("bank.cards.controls.update", {
+      cardId: "card_9021", status: "active", perTransaction: 2000, dailyPurchases: 2500, monthly: 15000, dailyAtm: 800, allowContactless: true, allowOnline: false, allowAbroad: true, allowAtm: true,
+      tripCountry: "", tripFrom: "", tripTo: "", alertEvery: false, alertLarge: true, alertFrom: 500, alertOnline: true,
+    });
+    expect(r.changes.map((c: any) => c.label)).toEqual(["Daily", "Online", "Large transactions", "Online purchases"]);
+    await otp(b);
+    expect(await b.call("bank.cards.controls.update", { cardId: "card_9021", tripCountry: "Spain", tripFrom: "2026-12-05", tripTo: "2026-12-12" })).toMatchObject({ changes: [{ label: "Trip", after: "Spain, 5 Dec to 12 Dec" }] });
+    expect((await issued(b)).card_9021).toMatchObject({ hasTrip: true });
+    expect(await b.call("bank.cards.controls.update", { cardId: "card_9021", tripCountry: "", tripFrom: "", tripTo: "" })).toMatchObject({ changes: [{ label: "Trip", after: "None" }], loosened: false });
+    expect((await issued(b)).card_9021).toMatchObject({ hasTrip: false });
+    expect(await msg(b.call("bank.cards.controls.update", { cardId: "card_9021", tripCountry: "Spain" }))).toBe("Add the country and both dates, or clear them.");
+  });
+});
+
 describe("activating a card", () => {
   const verify = (b: MockBank, input: Record<string, unknown> = {}) => b.call("bank.cards.verifyActivation", { cardId: "card_7745", last4: "7745", expiry: "11/29", securityCode: "123", ...input });
   it("takes the right last four digits, expiry and security code, then activates with a PIN kept as a hash", async () => {
@@ -502,6 +519,25 @@ describe("saving a card from another bank", () => {
   });
 });
 
+describe("what the activate and replace journeys read", () => {
+  it("a date that has gone by is its own refusal and uses no try", async () => {
+    const b = alex();
+    expect(await msg(b.call("bank.cards.verifyActivation", { cardId: "card_7745", last4: "7745", expiry: "09/26" }))).toBe("This card has expired.");
+    expect((await b.call("bank.cards.get", { cardId: "card_7745" })).triesLeft).toBe(3);
+  });
+  it("the card says where the home address is and whether a postcode is asked, by home market", async () => {
+    expect(await alex().call("bank.cards.get", { cardId: "card_9021" })).toMatchObject({ homeAddress: "12 Example Street, Springfield 62704", askPostcode: true });
+    expect(await alex({ config: { homeMarket: "ae" } }).call("bank.cards.get", { cardId: "card_9021" })).toMatchObject({ homeAddress: "Example Tower, Flat 1204, Dubai", askPostcode: false });
+  });
+  it("an order takes the address as separate values (where, line, city, postcode) as well as an object", async () => {
+    const b = alex();
+    const r = await b.call("bank.cards.replace.check", { cardId: "card_9021", reason: "damaged", where: "other", line: "5 Elm Road", city: "Springfield", postcode: "62704" });
+    expect(r.deliverTo).toBe("5 Elm Road, Springfield 62704");
+    expect(await code(b.call("bank.cards.replace.check", { cardId: "card_9021", reason: "damaged", where: "other", line: "5 Elm Road", city: "Springfield", postcode: "1" }))).toBe("ADDRESS_INVALID");
+    expect((await b.call("bank.cards.replace.check", { cardId: "card_9021", reason: "damaged", where: "home", line: "x" })).deliverTo).toBe("12 Example Street, Springfield 62704");
+  });
+});
+
 describe("who may use the card adapters", () => {
   it("a customer without the permission is refused, whatever the screen shows", async () => {
     const without = (p: string) => alex({ conditions: { withoutPermissions: [p] } });
@@ -525,5 +561,22 @@ describe("every rule can be switched off, one at a time, for the mutation check"
     await b.call("bank.cards.freeze", { cardId: "card_9021" });
     expect(await code(b.call("bank.cards.unfreeze", { cardId: "card_9021" }))).toBe("ok");
     expect(await code(b.call("bank.cards.controls.update", { cardId: "card_9021", limits: { dailyPurchases: 4000 } }))).toBe("ok");
+  });
+});
+
+describe("what the virtual-card and dispute journeys read", () => {
+  it("a virtual card on a credit card shows what it can spend, not the credit of its parent", async () => {
+    const b = alex();
+    await otp(b);
+    const made = await b.call("bank.cards.virtual.create", { cardId: "card_3318", purpose: "One-time purchase", limit: 40 });
+    expect((await issued(b))[made.id]).toMatchObject({ pill: "Virtual", lineLabel: "Available", lineValue: "$40.00", lineExtra: "" });
+  });
+  it("the payments come as a map for a select, with the card each belongs to; a report takes its details beside the reason", async () => {
+    const b = alex();
+    const r = await b.call("bank.cards.transactions", { status: "posted", limit: 12 });
+    expect(r.choices.ct_1).toEqual({ id: "ct_1", name: "Northwind Market · −$64.20 · Yesterday", cardId: "card_9021" });
+    expect(Object.keys(r.choices)).toHaveLength(r.shown);
+    expect(await b.call("bank.cards.dispute.create", { cardId: "card_9021", transactionId: "ct_1", reason: "Charged twice", otherChargeDate: "2026-10-30", evidenceName: "Receipt.pdf" })).toMatchObject({ evidence: ["Receipt.pdf"] });
+    expect(await code(b.call("bank.cards.dispute.create", { cardId: "card_9021", transactionId: "ct_4", reason: "Charged twice" }))).toBe("DETAILS_INVALID");
   });
 });

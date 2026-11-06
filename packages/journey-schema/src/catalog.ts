@@ -17,7 +17,8 @@ import { manageBeneficiary } from "./fixtures/manage-beneficiary";
 import { personalTransfer } from "./fixtures/personal-transfer";
 import { internalTransfer } from "./fixtures/internal-transfer";
 import { internationalTransfer } from "./fixtures/international-transfer";
-import { addMoney, addCard, connectAccount, createBudget, invest, sellInvestment } from "./fixtures/bankworkx";
+import { addMoney, connectAccount, createBudget, invest, sellInvestment } from "./fixtures/bankworkx";
+import { addCard } from "./fixtures/add-card";
 import { cabJourneys } from "./fixtures/cab";
 import { signIn } from "./fixtures/sign-in";
 import { forgotUsername } from "./fixtures/forgot-username";
@@ -173,8 +174,8 @@ export const catalog: CatalogEntry[] = [
   },
   {
     id: addCard.slug, category: "Cards", madeFor: "bankworkx", journey: addCard,
-    summary: "Add a debit or credit card with a live card number check and clear field errors.",
-    highlights: ["Card number and expiry checks", "Per-field errors", "Review before saving"],
+    summary: "Save a card from another bank to add money or pay: the bank checks the details, a text message code or a small test charge proves the person holds it, then a nickname, what it is used for and a tick. Up to 5 cards.",
+    highlights: ["Number, type, expiry, security code and postcode checked", "A code before the card is saved", "Three wrong codes end it", "Same card never twice", "Only the last four digits are kept"],
   },
   {
     id: createBudget.slug, category: "Budgeting", madeFor: "bankworkx", journey: createBudget,

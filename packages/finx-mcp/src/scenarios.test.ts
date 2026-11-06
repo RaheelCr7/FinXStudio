@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
-import { bankworkxJourneys, chainTargets, chainWarnings, bulkPayment, catalog, corporateApproval, corporatePayment, Journey, withdrawPayment, payrollRun, ownTransfer, manageBeneficiary, personalTransfer, internalTransfer, internationalTransfer, payBillBankworkx, mobileTopup, schedulePayment, cancelStandingOrder, supplierPayment, approvePayments, signIn, forgotUsername, resetPassword, forgotPassword, unlockAccount, changePassword, trustedDevices, setupQuickLogin, changeQuickPin, accounts, accountDetails, statement, accountNickname, openAnotherAccount, budgets, createBudget, transferTypes, singleTransfer, cardPin } from "@finx/journey-schema";
+import { bankworkxJourneys, chainTargets, chainWarnings, bulkPayment, catalog, corporateApproval, corporatePayment, Journey, withdrawPayment, payrollRun, ownTransfer, manageBeneficiary, personalTransfer, internalTransfer, internationalTransfer, payBillBankworkx, mobileTopup, schedulePayment, cancelStandingOrder, supplierPayment, approvePayments, signIn, forgotUsername, resetPassword, forgotPassword, unlockAccount, changePassword, trustedDevices, setupQuickLogin, changeQuickPin, accounts, accountDetails, statement, accountNickname, openAnotherAccount, budgets, createBudget, transferTypes, singleTransfer, cardPin, cardsView, activateCard, cardControls, freezeCard, virtualCard, replaceCard, disputeTransaction, addCard } from "@finx/journey-schema";
 import { lintAll } from "@finx/renderer-core";
+import { MockBank } from "@finx/mock-bank-api";
 import { mutationCheck, runScenarios } from "./scenarios";
 import { simulate } from "./simulate";
 
@@ -1132,5 +1133,299 @@ describe("card-pin: Set or change a card PIN", () => {
     expect(r.finalScreen).toBe("done");
     expect(JSON.stringify([r.data, r.frames])).not.toContain("2580");
     expect(JSON.stringify(r.data)).not.toContain("482100");
+  });
+});
+
+describe("cards: Cards", () => {
+  const j = Journey.parse(cardsView);
+  const ACC: Record<string, string> = {
+    "no-error-path-14": "The reload after a freeze can only fail if the call that has just worked fails: a sandbox condition applies to the whole walk, so the first load fails first (the error path of the first load is proved)",
+    "no-error-path-25": "A refresh of the cards can only fail if the first load fails: a sandbox condition applies to the whole walk (the error path of the first load is proved)",
+    ...linked(["bank-lastVisible", "bank-nameRules", "bank-nameTaken", "bank-closeHolds", "bank-closeOverdrawn", "bank-closeNeedsCode", "bank-reportPending", "bank-reportDuplicate", "bank-reportOutgoing", "bank-txFilter", "bank-pendingFirst"], "account-details"),
+    ...linked(["bank-loosenCode", "bank-limitRules", "bank-limitCeiling", "bank-tripRules", "bank-alertRules"], "card-controls"),
+    ...linked(["bank-activateLock"], "activate-card"),
+    ...linked(["bank-lostBlocked", "bank-replaceFee", "bank-replaceCode", "bank-replaceFunds", "bank-replaceOnce", "bank-replaceEligible", "bank-replaceExpired", "bank-replaceAddress"], "replace-card"),
+    ...linked(["bank-pinCode", "bank-pinStrength"], "card-pin"),
+    ...linked(["bank-cardNumber", "bank-cardExpiry", "bank-cardCvv", "bank-cardPostcode", "bank-cardDuplicate", "bank-cardLimit", "bank-cardVerify", "bank-cardDecline"], "add-card"),
+  };
+  it("is lint clean, every scenario passes and every acceptance criterion is proved", async () => {
+    expect(lintAll(j)).toEqual([]);
+    const r = await runScenarios(j);
+    expect(r.results.filter((x) => !x.ok).map((x) => `${x.id} ${x.name}: ${x.failures.join(" | ")}`)).toEqual([]);
+    expect(r.coverage.map((c) => [c.id, c.status])).toEqual((j.acceptance ?? []).map((a) => [a.id, "proved"]));
+    expect([r.passed, r.total, r.coverage.length]).toEqual([30, 30, 12]);
+  });
+  it("the tests notice when the journey or the bank's rules are broken (mutation check)", async () => {
+    const m = await mutationCheck(j, ACC);
+    expect(m.survived.map((s) => `${s.id}: ${s.what}`)).toEqual([]);
+    expect([m.total, m.killed, m.accepted.length]).toEqual([62, 25, 37]);
+  }, 240_000);
+  it("is a view for BankWorkx only: it changes nothing itself but a freeze, and opens the card journeys", () => {
+    expect([cardsView.apps, cardsView.channels]).toEqual([["bankworkx"], ["web", "mobile"]]);
+    expect(catalog.filter((c) => c.id === "cards").map((c) => [c.madeFor, c.category])).toEqual([["bankworkx", "Cards"]]);
+    expect(cardsView.integrations.map((i) => i.adapter)).toEqual(["bank.cards.eligible", "bank.cards.freeze", "bank.cards.transactions"]);
+    expect(chainTargets(cardsView).sort()).toEqual(["account-details", "activate-card", "add-card", "card-controls", "card-pin", "replace-card"]);
+    expect(chainWarnings(cardsView, bankworkxJourneys.map((x) => x.slug))).toEqual([]);
+  });
+});
+
+describe("activate-card: Activate a card", () => {
+  const j = Journey.parse(activateCard);
+  const ACC: Record<string, string> = {
+    ...linked(["bank-cardState", "bank-pinCode"], "card-pin"),
+    "no-rule-fail-2": "The bank answers ACTIVATION_LOCKED as an error only when the card was locked after its details were checked, which one session cannot arrange (a locked card is caught by the answer of the check itself, T-2); the bank's refusal is proved by T-24",
+  };
+  it("is lint clean, every scenario passes and every acceptance criterion is proved", async () => {
+    expect(lintAll(j)).toEqual([]);
+    const r = await runScenarios(j);
+    expect(r.results.filter((x) => !x.ok).map((x) => `${x.id} ${x.name}: ${x.failures.join(" | ")}`)).toEqual([]);
+    expect(r.coverage.map((c) => [c.id, c.status])).toEqual((j.acceptance ?? []).map((a) => [a.id, "proved"]));
+    expect([r.passed, r.total, r.coverage.length]).toEqual([26, 26, 11]);
+  });
+  it("the tests notice when the journey or the bank's rules are broken (mutation check)", async () => {
+    const m = await mutationCheck(j, ACC);
+    expect(m.survived.map((s) => `${s.id}: ${s.what}`)).toEqual([]);
+    expect([m.total, m.killed, m.accepted.length]).toEqual([28, 25, 3]);
+    for (const id of ["bank-activateMatch", "bank-activateLock", "bank-pinStrength"]) expect(m.results.find((x) => x.id === id)?.killed, id).toBe(true);
+  }, 240_000);
+  it("is for BankWorkx only, asks for no code (holding the card is the proof), opens card-pin and never keeps the security code or the PIN once the bank has them", async () => {
+    expect([activateCard.apps, activateCard.channels]).toEqual([["bankworkx"], ["web", "mobile"]]);
+    expect(catalog.filter((c) => c.id === "activate-card").map((c) => [c.madeFor, c.category])).toEqual([["bankworkx", "Cards"]]);
+    expect(activateCard.integrations.some((i) => /otp/.test(i.adapter))).toBe(false);
+    expect(chainTargets(activateCard)).toEqual(["card-pin"]);
+    // the security code is cleared right after the call that sends it, the PIN in the screen that sends it
+    const details = activateCard.screens.find((s) => s.id === "details")!.blocks.flatMap((b: any) => (b.type === "button" ? b.actions : [])) as any[];
+    const sent = details.filter((a) => a.type === "callApi" || (a.type === "setData" && a.path === "act.cvv")).map((a) => a.integration ?? a.path);
+    expect(sent.slice(0, 2)).toEqual(["verify", "act.cvv"]);
+    expect(JSON.stringify(activateCard.screens.find((s) => s.id === "activate")!.onEnter)).toContain('"path":"act.pin","value":""');
+    // a run to the end leaves neither in what the journey holds nor in any screen it showed
+    const r = await simulate({
+      journey: j, persona: "alex", lang: "en", now: Date.parse("2026-11-03T10:00:00Z"), launch: { "launch.cardId": "card_7745" },
+      steps: [{ set: { "act.last4": "7745", "act.expiry": "11/29", "act.cvv": "123" } }, { press: "Continue" }, { set: { "act.pin": "7391", "act.repeat": "7391" } }, { press: "Activate card" }],
+    });
+    expect(r.finalScreen).toBe("done");
+    expect(JSON.stringify([r.data, r.frames])).not.toContain("7391");
+    expect(JSON.stringify(r.data)).not.toContain("\"cvv\":\"1");
+    expect(JSON.stringify(r.data.act)).not.toContain("123");
+  });
+});
+
+describe("replace-card: Replace a card", () => {
+  const j = Journey.parse(replaceCard);
+  const ACC: Record<string, string> = {
+    "no-validate-25": "The button is drawn only while Lost or Stolen is chosen, so the reason is never empty there; the validation of the Continue button, which is drawn for the other reasons and for none, is proved by T-33",
+    "no-error-path-49": RESEND,
+    "no-rule-fail-3": "The bank asks for the code again only if the code it accepted was used in between, which one session cannot arrange; the bank's own refusal is proved by T-27",
+  };
+  it("is lint clean, every scenario passes and every acceptance criterion is proved", async () => {
+    expect(lintAll(j)).toEqual([]);
+    const r = await runScenarios(j);
+    expect(r.results.filter((x) => !x.ok).map((x) => `${x.id} ${x.name}: ${x.failures.join(" | ")}`)).toEqual([]);
+    expect(r.coverage.map((c) => [c.id, c.status])).toEqual((j.acceptance ?? []).map((a) => [a.id, "proved"]));
+    expect([r.passed, r.total, r.coverage.length]).toEqual([35, 35, 10]);
+  });
+  it("the tests notice when the journey or the bank's rules are broken (mutation check)", async () => {
+    const m = await mutationCheck(j, ACC);
+    expect(m.survived.map((s) => `${s.id}: ${s.what}`)).toEqual([]);
+    expect([m.total, m.killed, m.accepted.length]).toEqual([38, 35, 3]);
+    for (const id of ["bank-lostBlocked", "bank-replaceFee", "bank-replaceCode", "bank-replaceFunds", "bank-replaceOnce", "bank-replaceEligible", "bank-replaceExpired", "bank-replaceAddress", "bank-cardState"]) expect(m.results.find((x) => x.id === id)?.killed, id).toBe(true);
+  }, 240_000);
+  it("is for BankWorkx only, orders only after the confirmation and a verified one-time code, and blocks a lost or stolen card before the delivery is chosen", () => {
+    expect([replaceCard.apps, replaceCard.channels]).toEqual([["bankworkx"], ["web", "mobile"]]);
+    expect(catalog.filter((c) => c.id === "replace-card").map((c) => [c.madeFor, c.category])).toEqual([["bankworkx", "Cards"]]);
+    expect(replaceCard.screens.some((s) => s.blocks.some((b: any) => b.type === "consent" && b.validation?.mustBeTrue))).toBe(true);
+    const calls = replaceCard.screens.find((s) => s.id === "code")!.blocks.flatMap((b: any) => (b.type === "button" ? b.actions : [])).filter((a: any) => a.type === "callApi").map((a: any) => a.integration);
+    expect(calls).toEqual(["otpVerify", "replace"]);
+    // the block of a lost or stolen card asks for no code (it only protects) and comes before the delivery step
+    const block = replaceCard.screens.find((s) => s.id === "blockCard")!;
+    expect(JSON.stringify(block.onEnter)).toContain('"integration":"block"');
+    expect(JSON.stringify(block.onEnter)).not.toContain("otp");
+    expect(JSON.stringify(block.onEnter)).toContain('"navigate","to":"delivery"');
+  });
+});
+
+const CONTROL_RULES = ["bank-cardState", "bank-loosenCode", "bank-limitRules", "bank-limitCeiling", "bank-tripRules", "bank-alertRules"];
+describe("card-controls: Card limits and controls", () => {
+  const j = Journey.parse(cardControls);
+  const ACC: Record<string, string> = {
+    "no-error-path-61": RESEND,
+    "no-rule-fail-4": "The screen stops an alert amount below 1.00 or above 100,000.00 before the bank is asked, so the bank's ALERT_INVALID is reached only by a forged call (T-54)",
+  };
+  it("is lint clean, every scenario passes and every acceptance criterion is proved", async () => {
+    expect(lintAll(j)).toEqual([]);
+    const r = await runScenarios(j);
+    expect(r.results.filter((x) => !x.ok).map((x) => `${x.id} ${x.name}: ${x.failures.join(" | ")}`)).toEqual([]);
+    expect(r.coverage.map((c) => [c.id, c.status])).toEqual((j.acceptance ?? []).map((a) => [a.id, "proved"]));
+    expect([r.passed, r.total, r.coverage.length]).toEqual([56, 56, 13]);
+  });
+  it("the tests notice when the journey or the bank's rules are broken (mutation check)", async () => {
+    const m = await mutationCheck(j, ACC);
+    expect(m.survived.map((s) => `${s.id}: ${s.what}`)).toEqual([]);
+    expect([m.total, m.killed, m.accepted.length]).toEqual([51, 49, 2]);
+    for (const id of CONTROL_RULES) expect(m.results.find((x) => x.id === id)?.killed, id).toBe(true);
+  }, 240_000);
+  it("is for BankWorkx only, for the web and the phone, and asks for a code before it loosens a card", async () => {
+    expect([cardControls.apps, cardControls.channels]).toEqual([["bankworkx"], ["web", "mobile"]]);
+    expect(catalog.filter((c) => c.id === "card-controls").map((c) => [c.madeFor, c.category])).toEqual([["bankworkx", "Cards"]]);
+    expect(bankworkxJourneys.map((x) => x.slug)).toContain("card-controls");
+    expect(cardControls.integrations.filter((i) => /otp/.test(i.adapter)).map((i) => i.id)).toEqual(["otpSend", "otpVerify"]);
+    // the save that follows the code comes after otpVerify in the same button
+    const code = cardControls.screens.find((s) => s.id === "code")!.blocks.flatMap((b: any) => (b.type === "button" ? b.actions : [])).filter((a: any) => a.type === "callApi").map((a: any) => a.integration);
+    expect(code.slice(0, 2)).toEqual(["otpVerify", "save"]);
+    // the review that saves without a code is only offered when the bank said no code is needed
+    const review = cardControls.screens.find((s) => s.id === "review")!.blocks.filter((b: any) => b.type === "button" && b.label === "Save changes");
+    expect(review.map((b: any) => b.visibleWhen)).toEqual(["ctx.prev.changed && !ctx.prev.needsCode"]);
+    expect(chainTargets(cardControls)).toEqual([]);
+  });
+  it("keeps no code after the bank has it and sends no card number, PIN or code to a log", async () => {
+    const r = await simulate({
+      journey: j, persona: "alex", lang: "en", now: Date.parse("2026-11-03T10:00:00Z"), launch: { "launch.cardId": "card_9021", "launch.mode": "limits" },
+      steps: [{ set: { "cc.lim.daily": 4000 } }, { press: "Continue" }, { press: "Continue" }, { set: { "otp.code": "482100" } }, { press: "Save changes" }],
+    });
+    expect(r.finalScreen).toBe("done");
+    expect(JSON.stringify(r.data)).not.toContain("482100");
+    expect((r.data as any).otp?.code).toBe("");
+  });
+});
+
+describe("freeze-card: Freeze a card (opens card-controls)", () => {
+  const j = Journey.parse(freezeCard);
+  const ACC = linked(CONTROL_RULES, "card-controls");
+  it("is lint clean, every scenario passes and every acceptance criterion is proved", async () => {
+    expect(lintAll(j)).toEqual([]);
+    const r = await runScenarios(j);
+    expect(r.results.filter((x) => !x.ok).map((x) => `${x.id} ${x.name}: ${x.failures.join(" | ")}`)).toEqual([]);
+    expect(r.coverage.map((c) => [c.id, c.status])).toEqual((j.acceptance ?? []).map((a) => [a.id, "proved"]));
+    expect([r.passed, r.total, r.coverage.length]).toEqual([5, 5, 4]);
+  });
+  it("is a thin entry: no bank calls and two screens of its own, and it opens card-controls", () => {
+    expect(j.integrations).toEqual([]);
+    expect(j.screens.map((s) => s.id)).toEqual(["start", "off"]);
+    expect(chainTargets(j)).toEqual(["card-controls"]);
+    expect(chainWarnings(j, bankworkxJourneys.map((x) => x.slug))).toEqual([]);
+    expect([j.apps, catalog.find((c) => c.id === "freeze-card")?.madeFor]).toEqual([["bankworkx"], "bankworkx"]);
+  });
+  it("the tests notice when the entry is broken (mutation check)", async () => {
+    const m = await mutationCheck(j, ACC);
+    expect(m.survived.map((s) => `${s.id}: ${s.what}`)).toEqual([]);
+    expect([m.total, m.killed, m.accepted.length]).toEqual([10, 4, 6]);
+    expect(m.results.filter((x) => x.kind === "journey" && !x.killed)).toEqual([]);
+  }, 240_000);
+});
+
+describe("virtual-card: Virtual card", () => {
+  const j = Journey.parse(virtualCard);
+  const SCREEN_FIRST = "The screen checks the limit and offers only the purposes first, so the bank's own refusal of it is reached only by a forged call (T-21)";
+  const ACC: Record<string, string> = {
+    "no-error-path-36": RESEND,
+    "no-rule-fail-3": SCREEN_FIRST,
+    "no-rule-fail-4": SCREEN_FIRST,
+  };
+  it("is lint clean, every scenario passes and every acceptance criterion is proved", async () => {
+    expect(lintAll(j)).toEqual([]);
+    const r = await runScenarios(j);
+    expect(r.results.filter((x) => !x.ok).map((x) => `${x.id} ${x.name}: ${x.failures.join(" | ")}`)).toEqual([]);
+    expect(r.coverage.map((c) => [c.id, c.status])).toEqual((j.acceptance ?? []).map((a) => [a.id, "proved"]));
+    expect([r.passed, r.total, r.coverage.length]).toEqual([26, 26, 10]);
+  });
+  it("the tests notice when the journey or the bank's rules are broken (mutation check)", async () => {
+    const m = await mutationCheck(j, ACC);
+    expect(m.survived.map((s) => `${s.id}: ${s.what}`)).toEqual([]);
+    expect([m.total, m.killed, m.accepted.length]).toEqual([28, 25, 3]);
+    for (const id of ["bank-virtualCap", "bank-virtualRange", "bank-virtualCode", "bank-virtualParent"]) expect(m.results.find((x) => x.id === id)?.killed, id).toBe(true);
+  }, 240_000);
+  it("is for BankWorkx only, asks for a code before the card is made and keeps neither the number nor the security code after the person leaves", async () => {
+    expect([virtualCard.apps, virtualCard.channels]).toEqual([["bankworkx"], ["web", "mobile"]]);
+    expect(catalog.filter((c) => c.id === "virtual-card").map((c) => [c.madeFor, c.category])).toEqual([["bankworkx", "Cards"]]);
+    expect(chainTargets(virtualCard)).toEqual([]);
+    const code = virtualCard.screens.find((s) => s.id === "code")!.blocks.flatMap((b: any) => (b.type === "button" ? b.actions : [])).filter((a: any) => a.type === "callApi").map((a: any) => a.integration);
+    expect(code.slice(0, 2)).toEqual(["otpVerify", "create"]);
+    // a run to the end and out: the details were on the result, and are in neither the journey's data nor the bank's dump afterwards
+    const bank = new MockBank("alex", { now: Date.parse("2026-11-03T10:00:00Z") });
+    const steps = [{ set: { "vc.purpose": "Online shopping" } }, { press: "Continue" }, { set: { "vc.limit": 200 } }, { press: "Continue" }, { set: { "vc.life": "3y" } }, { press: "Continue" }, { press: "Continue" }, { set: { "otp.code": "482100" } }, { press: "Create card" }];
+    const shown = await simulate({ journey: j, persona: "alex", lang: "en", now: Date.parse("2026-11-03T10:00:00Z"), launch: { "launch.cardId": "card_9021" }, steps });
+    expect(shown.finalScreen).toBe("done");
+    expect(JSON.stringify(shown.data)).toContain("4000 0010 0007 9194");
+    const out = await simulate({ journey: j, persona: "alex", lang: "en", now: Date.parse("2026-11-03T10:00:00Z"), launch: { "launch.cardId": "card_9021" }, steps: [...steps, { press: "Go to cards" }] });
+    expect(out.exited).toBe(true);
+    const left = JSON.stringify(out.data);
+    for (const secret of ["4000 0010 0007 9194", "4000001000079194", "137"]) expect(left, secret).not.toContain(secret);
+    expect(out.frames.filter((f) => f.step < steps.length).length).toBeGreaterThan(0);
+    // the bank: only the last four digits, the expiry and what the card is for
+    await bank.call("bank.otp.send", {});
+    await bank.call("bank.otp.verify", { code: "482100" });
+    const made = await bank.call("bank.cards.virtual.create", { cardId: "card_9021", purpose: "Online shopping", limit: 200 });
+    const dump = JSON.stringify([bank.persona.cards, await bank.call("bank.cards.issued")]);
+    expect(dump).not.toContain(made.number);
+    expect(dump).not.toContain(made.number.replace(/ /g, ""));
+    expect(dump).not.toContain(`"cvv"`);
+    expect(dump).toContain("•••• •••• •••• 9194");
+  });
+});
+
+describe("dispute-transaction: Report a problem with a payment", () => {
+  const j = Journey.parse(disputeTransaction);
+  const ACC: Record<string, string> = {};
+  it("is lint clean, every scenario passes and every acceptance criterion is proved", async () => {
+    expect(lintAll(j)).toEqual([]);
+    const r = await runScenarios(j);
+    expect(r.results.filter((x) => !x.ok).map((x) => `${x.id} ${x.name}: ${x.failures.join(" | ")}`)).toEqual([]);
+    expect(r.coverage.map((c) => [c.id, c.status])).toEqual((j.acceptance ?? []).map((a) => [a.id, "proved"]));
+    expect([r.passed, r.total, r.coverage.length]).toEqual([30, 30, 10]);
+  });
+  it("the tests notice when the journey or the bank's rules are broken (mutation check)", async () => {
+    const m = await mutationCheck(j, ACC);
+    expect(m.survived.map((s) => `${s.id}: ${s.what}`)).toEqual([]);
+    expect([m.total, m.killed, m.accepted.length]).toEqual([24, 24, 0]);
+    for (const id of ["bank-disputeWindow", "bank-disputeOnce", "bank-disputeEligible", "bank-disputeDetails", "bank-disputeBlock"]) expect(m.results.find((x) => x.id === id)?.killed, id).toBe(true);
+  }, 240_000);
+  it("is for BankWorkx only, asks for no code and moves no money, and keeps no card number", async () => {
+    expect([disputeTransaction.apps, disputeTransaction.channels]).toEqual([["bankworkx"], ["web", "mobile"]]);
+    expect(catalog.filter((c) => c.id === "dispute-transaction").map((c) => [c.madeFor, c.category])).toEqual([["bankworkx", "Cards"]]);
+    expect(disputeTransaction.integrations.some((i) => /otp/.test(i.adapter))).toBe(false);
+    expect(disputeTransaction.screens.some((s) => s.blocks.some((b: any) => b.type === "otp"))).toBe(false);
+    expect(disputeTransaction.integrations.map((i) => i.adapter).sort()).toEqual(["bank.cards.dispute.check", "bank.cards.dispute.create", "bank.cards.dispute.reasons", "bank.cards.transactions"]);
+    expect(chainTargets(disputeTransaction)).toEqual([]);
+    expect(disputeTransaction.screens.some((s) => s.blocks.some((b: any) => b.type === "consent" && b.validation?.mustBeTrue))).toBe(true);
+  });
+});
+
+describe("add-card: Add a card", () => {
+  const j = Journey.parse(addCard);
+  const ACC: Record<string, string> = {
+    "no-rule-fail-4": "The screen stops a nickname of one character first, so the bank's NICKNAME_INVALID is reached only by a forged call (T-33)",
+    "no-rule-fail-5": "The screens always verify the card they save, so the bank's VERIFY_REQUIRED at the end is reached only by a forged call (T-32)",
+  };
+  it("is lint clean, every scenario passes and every acceptance criterion is proved", async () => {
+    expect(lintAll(j)).toEqual([]);
+    const r = await runScenarios(j);
+    expect(r.results.filter((x) => !x.ok).map((x) => `${x.id} ${x.name}: ${x.failures.join(" | ")}`)).toEqual([]);
+    expect(r.coverage.map((c) => [c.id, c.status])).toEqual((j.acceptance ?? []).map((a) => [a.id, "proved"]));
+    expect([r.passed, r.total, r.coverage.length]).toEqual([33, 33, 10]);
+  });
+  it("the tests notice when the journey or the bank's rules are broken (mutation check)", async () => {
+    const m = await mutationCheck(j, ACC);
+    expect(m.survived.map((s) => `${s.id}: ${s.what}`)).toEqual([]);
+    expect([m.total, m.killed, m.accepted.length]).toEqual([24, 22, 2]);
+  }, 240_000);
+  it("is for BankWorkx only, saves a card only after a code and never keeps the number or the security code once the bank has them", async () => {
+    expect([addCard.apps, addCard.channels]).toEqual([["bankworkx"], ["web", "mobile"]]);
+    expect(catalog.filter((c) => c.id === "add-card").map((c) => [c.madeFor, c.category])).toEqual([["bankworkx", "Cards"]]);
+    expect(bankworkxJourneys.map((x) => x.slug)).toContain("add-card");
+    expect(addCard.integrations.map((i) => i.adapter)).toEqual(["bank.app.config", "bank.cards.check", "bank.otp.send", "bank.cards.verify", "bank.cards.add"]);
+    const r = await simulate({
+      journey: j, persona: "alex", lang: "en", now: Date.parse("2026-11-03T10:00:00Z"),
+      steps: [
+        { set: { "ac.number": "4242 4242 4242 4242", "ac.expiry": "12/29", "ac.cvv": "123", "ac.holder": "Alex Morgan", "ac.postcode": "62704" } }, { press: "Continue" },
+        { set: { "ac.code": "482100" } }, { press: "Continue" }, { set: { "ac.consent": true } }, { press: "Save card" },
+      ],
+    });
+    expect(r.finalScreen).toBe("done");
+    const data = r.data as { ac: Record<string, unknown> };
+    expect([data.ac.number, data.ac.cvv, data.ac.code]).toEqual(["", "", ""]);
+    expect(JSON.stringify(r.data)).not.toContain("4242 4242 4242 4242");
+    expect(JSON.stringify(r.data)).not.toContain("4242424242424242");
+    expect(JSON.stringify(r.data)).not.toContain("482100");
+    expect(JSON.stringify(r.frames)).not.toContain("123");
   });
 });

@@ -155,7 +155,7 @@ export class CardsApi {
   private market = () => { const m = this.host.config().homeMarket; return m === "us" ? "A" : m === "uk" ? "B" : m === "eu" ? "C" : "D"; };
 
   /** Whether this class answers the adapter: the issued cards only for a customer who has them (the older records answer for the rest). */
-  handles = (adapter: string) => ADAPTERS.test(adapter) && (!/^bank\.cards\.(issued|eligible|get)$/.test(adapter) || !!this.p.cards);
+  handles = (adapter: string) => ADAPTERS.test(adapter) && (!/^bank\.cards\.(issued|get)$/.test(adapter) || !!this.p.cards);
 
   call(adapter: string, input: Record<string, any>): any {
     switch (adapter) {
@@ -204,13 +204,16 @@ export class CardsApi {
   private virtualsOf = (c: CardRecord) => this.data.cards.filter((v) => v.parentCardId === c.id && v.status !== "blocked" && v.status !== "replaced");
   private daysLeft = (c: CardRecord) => Math.floor((expiryEnd(c.expiry) - this.now()) / DAY);
 
+  /** The address on file, by home market (synthetic). */
+  private homeAddress = () => { const m = this.market(); return m === "A" ? HOME.us.address : m === "B" ? HOME.uk.address : m === "C" ? HOME.eu.address : "Example Tower, Flat 1204, Dubai"; };
+
   private view(c: CardRecord) {
     const status = this.statusOf(c), cur = this.currency(c), acc = this.account(c);
     const virtual = !!c.virtual, usable = status === "active" || status === "frozen";
     let lineLabel: string, lineValue = "", lineExtra = "";
     if (status === "inactive") lineLabel = this.locked(c) ? "Activation is locked. Please call us." : "Activate this card to start using it.";
     else if (!usable) lineLabel = "This card can’t be used.";
-    else if (c.kind === "credit") { lineLabel = "Available credit"; lineValue = money(c.availableCredit ?? 0, cur); lineExtra = `Minimum due ${money(c.minimumDue ?? 0, cur)} by ${longDay(Date.parse(`${c.dueDate}T00:00:00Z`))}`; }
+    else if (c.kind === "credit" && !virtual) { lineLabel = "Available credit"; lineValue = money(c.availableCredit ?? 0, cur); lineExtra = `Minimum due ${money(c.minimumDue ?? 0, cur)} by ${longDay(Date.parse(`${c.dueDate}T00:00:00Z`))}`; }
     else if (virtual) { lineLabel = "Available"; lineValue = money(roundMoney(Math.max(c.limits.monthly - c.used.monthly, 0), cur), cur); }
     else { lineLabel = "Available balance"; lineValue = acc ? money(spendable(acc), acc.currency) : ""; }
     const parent = c.parentCardId ? this.data.cards.find((x) => x.id === c.parentCardId) : undefined;
@@ -227,6 +230,7 @@ export class CardsApi {
       allowsCash: c.ceilings.dailyAtm > 0, pinSet: c.pinSet, locked: this.locked(c), triesLeft: Math.max(ACTIVATION_TRIES - c.activation.tries, 0),
       ceilingText: { perTransaction: `Up to ${money(c.ceilings.perTransaction, cur)}`, dailyPurchases: `Up to ${money(c.ceilings.dailyPurchases, cur)}`, monthly: `Up to ${money(c.ceilings.monthly, cur)}`, dailyAtm: `Up to ${money(c.ceilings.dailyAtm, cur)}` },
       limitText: { perTransaction: money(c.limits.perTransaction, cur), dailyPurchases: money(c.limits.dailyPurchases, cur), monthly: money(c.limits.monthly, cur), dailyAtm: money(c.limits.dailyAtm, cur) },
+      homeAddress: this.homeAddress(), askPostcode: this.market() !== "D",
       replacement: c.replacement ? { reference: c.replacement.reference, newCardId: c.replacement.newCardId, arrivesBy: c.replacement.arrivesBy } : null,
       can: {
         freeze: status === "active", unfreeze: status === "frozen", controls: manageable, pin: status === "active" && !virtual, activate: status === "inactive" && !this.locked(c) && !virtual,
@@ -252,6 +256,7 @@ export class CardsApi {
     const physical = all.filter((v) => !v.virtual && v.status !== "replaced");
     const [shown, usable] = ((): [typeof all, typeof all] => {
       switch (scope) {
+        case "view": return [all, all];
         case "activate": { const w = all.filter((v) => v.status === "inactive" && !v.virtual); return [w, w.filter((v) => v.can.activate)]; }
         case "pin": return [physical, physical.filter((v) => v.status === "active" || v.status === "frozen")];
         case "replace": return [physical, physical.filter((v) => (v.status === "blocked" || v.status === "expired") && !v.replacement)];
@@ -285,7 +290,9 @@ export class CardsApi {
       .sort((a, b) => a.daysAgo - b.daysAgo || Number(b.status === "pending") - Number(a.status === "pending") || b.time.localeCompare(a.time) || b.id.localeCompare(a.id));
     const limit = Math.min(Math.max(Number(input.limit) || 10, 1), 100);
     const items = list.slice(0, limit).map((t) => this.txnView(t));
-    return { items, total: list.length, shown: items.length, more: list.length > items.length, empty: this.data.transactions.filter((t) => !input.cardId || t.cardId === input.cardId).length === 0 };
+    // the same payments as a map, for a select block: the words of a row and the card it belongs to
+    const choices = Object.fromEntries(items.map((t) => [t.id, { id: t.id, name: `${t.merchant} · ${t.amountText} · ${t.when}`, cardId: t.cardId }]));
+    return { items, choices, total: list.length, shown: items.length, more: list.length > items.length, empty: this.data.transactions.filter((t) => !input.cardId || t.cardId === input.cardId).length === 0 };
   }
 
   /* ----------------------------------------------------------------------------------- freezing, blocking */
@@ -353,8 +360,29 @@ export class CardsApi {
   }
   private tripText = (t: { country: string; from: string; to: string } | undefined) => (t ? `${t.country}, ${shortDay(Date.parse(`${t.from}T00:00:00Z`))} to ${shortDay(Date.parse(`${t.to}T00:00:00Z`))}` : "None");
 
+  /** A journey sends plain values (the engine does not fill in nested objects): perTransaction, dailyPurchases, monthly, dailyAtm, allowContactless, allowOnline, allowAbroad, allowAtm, tripCountry, tripFrom, tripTo (all empty clears the trip), alertEvery, alertLarge, alertFrom, alertOnline. They are the same as limits, controls, trip and alerts. */
+  private flat(input: Record<string, any>): Record<string, any> {
+    const out: Record<string, any> = { ...input };
+    const has = (k: string) => input[k] !== undefined;
+    const limits: Record<string, any> = { ...(input.limits ?? {}) };
+    for (const k of ["perTransaction", "dailyPurchases", "monthly", "dailyAtm"]) if (has(k)) limits[k] = input[k];
+    const controls: Record<string, any> = { ...(input.controls ?? {}) };
+    for (const [from, to] of [["allowContactless", "contactless"], ["allowOnline", "online"], ["allowAbroad", "abroad"], ["allowAtm", "atm"]] as const) if (has(from)) controls[to] = input[from];
+    const alerts: Record<string, any> = { ...(input.alerts ?? {}) };
+    for (const [from, to] of [["alertEvery", "every"], ["alertLarge", "large"], ["alertFrom", "largeFrom"], ["alertOnline", "online"]] as const) if (has(from)) alerts[to] = input[from];
+    if (Object.keys(limits).length) out.limits = limits;
+    if (Object.keys(controls).length) out.controls = controls;
+    if (Object.keys(alerts).length) out.alerts = alerts;
+    if (has("tripCountry") || has("tripFrom") || has("tripTo")) out.trip = { country: input.tripCountry ?? "", from: input.tripFrom ?? "", to: input.tripTo ?? "" };
+    const t = out.trip;
+    // a trip with nothing in it is no trip
+    if (t && typeof t === "object" && !String(t.country ?? "").trim() && !String(t.from ?? "") && !String(t.to ?? "")) out.trip = null;
+    return out;
+  }
+
   /** Freezing, unfreezing, limits, where the card works, a trip and alerts, in one call. Only what loosens the card needs the code. `dryRun` applies every rule and changes nothing. */
-  private update(input: Record<string, any>) {
+  private update(raw: Record<string, any>) {
+    const input = this.flat(raw);
     const c = this.card(input.cardId), s = this.manageable(c), cur = this.currency(c), dry = input.dryRun === true;
     const onOff = (b: boolean) => (b ? "On" : "Off");
     const changes: { key: string; label: string; before: string; after: string }[] = [];
@@ -433,6 +461,8 @@ export class CardsApi {
     const lock = () => ({ verified: false as const, code: "ACTIVATION_LOCKED", triesLeft: 0, locked: true });
     if (this.locked(c) && this.f.activateLock !== false) return lock();
     const expiry = String(input.expiry ?? "").trim(), cvv = input.securityCode;
+    // a date that has already gone by is not a wrong try: the card is not the one on the screen
+    if (/^(0[1-9]|1[0-2])\/[0-9]{2}$/.test(expiry) && expiryEnd(expiry) < this.now()) throw new BankError("CARD_EXPIRED", "This card has expired.");
     const right = String(input.last4 ?? "") === c.last4 && expiry === c.expiry && (cvv === undefined || cvv === "" || (/^[0-9]{3}$/.test(String(cvv)) && String(cvv) !== "000"));
     if (!right && this.f.activateMatch !== false) {
       c.activation.tries += 1; c.activation.verified = false;
@@ -553,10 +583,11 @@ export class CardsApi {
     this.replaceProblem(c, reason);
     // a card reported lost or stolen has to be blocked before anything is ordered
     if ((reason === "lost" || reason === "stolen") && this.f.lostBlocked !== false && this.statusOf(c) !== "blocked") throw new BankError("CARD_NOT_BLOCKED", "Block the card first.");
-    const home = input.address === undefined || input.address === "home" || input.address?.home === true, market = this.market();
-    let addressText = market === "A" ? HOME.us.address : market === "B" ? HOME.uk.address : market === "C" ? HOME.eu.address : "Example Tower, Flat 1204, Dubai";
-    if (!home && this.f.replaceAddress !== false) { const a = this.addressProblem(input.address); addressText = `${a.line}, ${a.city}${a.post ? ` ${a.post}` : ""}`; }
-    else if (!home) addressText = String(input.address?.line ?? "");
+    const flat = input.where !== undefined, address = flat ? { line: input.line, city: input.city, postcode: input.postcode } : input.address;
+    const home = flat ? input.where !== "other" : address === undefined || address === "home" || address?.home === true;
+    let addressText = this.homeAddress();
+    if (!home && this.f.replaceAddress !== false) { const a = this.addressProblem(address); addressText = `${a.line}, ${a.city}${a.post ? ` ${a.post}` : ""}`; }
+    else if (!home) addressText = String(address?.line ?? "");
     const speed = String(input.speed ?? "standard");
     if (speed !== "standard" && speed !== "express") throw new BankError("DELIVERY_INVALID", "Choose how fast.");
     const fee = speed === "express" && input.fee !== false && this.f.replaceFee !== false ? EXPRESS_FEE : 0;
@@ -621,7 +652,8 @@ export class CardsApi {
     const { c, t } = this.disputeTxn(input);
     const reason = String(input.reason ?? "");
     if (!DISPUTE_REASONS.includes(reason)) throw new BankError("REASON_INVALID", "Choose a reason.");
-    const d = (input.details ?? {}) as Record<string, any>, cur = t.currency;
+    // the details come as an object or as the same keys beside the reason (a journey cannot build an object from its answers)
+    const d = { ...input, ...(input.details ?? {}) } as Record<string, any>, cur = t.currency;
     if (this.f.disputeDetails !== false) {
       if (reason === "Charged twice" && !String(d.otherChargeDate ?? "")) throw new BankError("DETAILS_INVALID", "Choose when the other charge was.");
       if (reason === "Wrong amount") {
@@ -643,7 +675,7 @@ export class CardsApi {
     const id = `DSP-${9000 + this.cases}`;
     t.disputeId = id;
     (this.data.disputes ??= []).push({ id, cardId: c.id, transactionId: t.id, reason, amount: Math.abs(t.amount), at: this.now(), cardBlocked: block });
-    return { disputeId: id, caseRef: id, status: "under_review", statusLabel: "Under review", reference: id, replyBy: longDay(this.now() + 45 * DAY), cardBlocked: block, merchant: t.merchant, amountText: money(Math.abs(t.amount), cur), reason, evidence: Array.isArray(input.evidence) ? input.evidence.map((e: any) => String(e?.name ?? e).slice(0, 80)) : [] };
+    return { disputeId: id, caseRef: id, status: "under_review", statusLabel: "Under review", reference: id, replyBy: longDay(this.now() + 45 * DAY), cardBlocked: block, merchant: t.merchant, amountText: money(Math.abs(t.amount), cur), reason, evidence: Array.isArray(input.evidence) ? input.evidence.map((e: any) => String(e?.name ?? e).slice(0, 80)) : input.evidenceName ? [String(input.evidenceName).slice(0, 80)] : [] };
   }
   private disputes(input: Record<string, any>) {
     const list = (this.data.disputes ?? []).filter((x) => !input.cardId || x.cardId === input.cardId);
