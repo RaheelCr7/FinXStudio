@@ -15,6 +15,7 @@ export const supplierPaymentAcceptance: NonNullable<Journey["acceptance"]> = [
   { id: "AC-7", text: "The result is \"Sent for approval\" with a waiting chip and the payment id; the payment waits, no money leaves the account and the company's limit is not used." },
   { id: "AC-8", text: "A timeout shows the \"Check Payments\" message and creates no payment; an unavailable bank shows the sheet and creates no payment; a price that ran out is renewed and confirmed again." },
   { id: "AC-9", text: "A person whose role has no pay.create permission (an Approver) is not offered the journey, and the bank refuses the same calls when they are forced." },
+  { id: "AC-10", text: "Opened from a template (launch.templateId, from Templates) the supplier, amount, reference and purpose are filled in, and a template whose supplier is waiting for approval or gone sends the person to choose a supplier from the list; opened from an account (launch.accountId, from Business accounts) the payment is from that account, and the bank refuses an account the person may not pay from." },
 ];
 
 // Alex Morgan at Alpha Trading LLC (a Maker), working in the company from the start. Today is Tuesday 3 November 2026, 10:42 UTC; the cut-off is 16:00.
@@ -194,6 +195,20 @@ export const supplierPaymentScenarios: NonNullable<Journey["scenarios"]> = [
   T("T-33", "Before the cut-off the payment is dated today and waits for approval", ["AC-7"], [
     ...toTheReview("Harbour Packaging", 12_500), ...send, screen("result"), started("afterCutoff", false), started("valueDate", "2026-11-03"),
   ]),
+  T("T-34", "Opened from a template (Use): the supplier, the amount, the reference and the purpose are filled in and the amount step is next", ["AC-10"], [
+    screen("amount"), text("Harbour Packaging"), text("PO-STANDING"), press("Review"), screen("speed"), text("$4,500.00"), ...toReview, text("PO-STANDING"), ...send, screen("result"), started("reference", "PO-STANDING"), started("amount", 4_500),
+  ], { launch: { "launch.templateId": "tpl_packaging" } }),
+  T("T-35", "A template whose supplier is waiting for approval sends the person to choose a supplier from the list", ["AC-10"], [
+    screen("supplier"), text("Choose a supplier from your list."), noText("Whitby Logistics"), text("Harbour Packaging"),
+  ], { launch: { "launch.templateId": "tpl_freight" }, setup: [{ adapter: "corp.sandbox.arrange", input: { op: "waitSupplier", id: "whit" } }] }),
+  T("T-36", "A template that is not there sends the person to choose a supplier", ["AC-10"], [screen("supplier"), text("Choose a supplier from your list.")], { launch: { "launch.templateId": "tpl_nobody" } }),
+  T("T-37", "Opened from an account (Pay from this account) the payment is from that account, which the review shows", ["AC-10"], [
+    ...pick("Harbour Packaging"), text("Operating ••2001"), ...fill(1_000), ...toReview, ...send, screen("result"), started("fromAccountId", "alpha_ops"),
+  ], { launch: { "launch.accountId": "alpha_ops" } }),
+  T("T-38", "An account in another currency (Reserve) cannot pay a supplier: the bank refuses and nothing is started", ["AC-10"], [
+    ...pick("Harbour Packaging"), text("Reserve ••2044"), set({ "sp.amount": 1_000, "sp.reference": "INV-1", "sp.purpose": "Goods" }), press("Review"), screen("problem"), text("We can’t send this payment yet"), nothingStarted, ...unmoved,
+  ], { launch: { "launch.accountId": "alpha_res" } }),
+  T("T-39", "The templates not loading shows the sheet and Try again asks again", ["AC-10"], [screen("unavailable"), press("Try again"), screen("unavailable"), nothingStarted], { launch: { "launch.templateId": "tpl_packaging" }, conditions: { unavailable: ["corp.templates.list"] } }),
   T("T-27", "A price used twice, as a screen could not do it, is refused by the bank; the first payment stands", ["AC-7"], [
     ...toTheReview("Harbour Packaging", 12_500), ...send, screen("result"),
     { expectBankError: { adapter: "corp.payments.create", input: { quoteId: "{{ctx.quote.quoteId}}" }, code: "QUOTE_USED" } },

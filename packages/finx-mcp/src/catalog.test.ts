@@ -91,7 +91,9 @@ describe("catalog stays in sync with the real schema and lint", () => {
   // (the three older entries for messages, requests and the profile were rewritten in place). The whole is 48,217 of 56,000, which is not raised.
   // adapters 17,700 -> 19,600: the 22 adapters of the Public journeys (public products and rates, places, contact, opening an account, tracking, registering, two for scenarios), each one short line in the index.
   // The whole is 50,319 of 56,000, which is not raised.
-  const SECTION_CEILINGS: Record<string, number> = { overview: 1_100, journey: 2_600, blocks: 15_100, actions: 3_000, expressions: 1_900, data: 900, localization: 1_100, adapters: 19_600, personas: 1_800, lint: 2_600, patterns: 1_700 };
+  // adapters 19,600 -> 21,400: the 23 adapters of the Business journeys of Accounts and Payments (accounts, transactions, statements, suppliers, templates, schedules, the tracker, one for scenarios), each one short
+  // line in the index (the older lists of suppliers and templates were rewritten in place). The whole is 52,146 of 56,000, which is not raised.
+  const SECTION_CEILINGS: Record<string, number> = { overview: 1_100, journey: 2_600, blocks: 15_100, actions: 3_000, expressions: 1_900, data: 900, localization: 1_100, adapters: 21_400, personas: 1_800, lint: 2_600, patterns: 1_700 };
   it("each section stays within its ceiling, and the whole stays within the size the tool returns", () => {
     const sizes = catalogSizes();
     const report = JSON.stringify(sizes);

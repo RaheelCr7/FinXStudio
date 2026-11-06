@@ -5,7 +5,7 @@ import { alexSave, emptySave, type SaveSeed } from "./retail/save";
 import { alexMore, emptyMore, type MoreSeed } from "./retail/more";
 import { PublicApi } from "./retail/public";
 import { ACME, type CorpCompany, type Flaws } from "./business/corporate";
-import { ALPHA, BETA, BETA_CAST, seedPayments } from "./business/alpha-beta";
+import { ALPHA, BETA, BETA_CAST, GAMMA, seedPayments } from "./business/alpha-beta";
 import { createCorporateProvider, type CorporateProvider, type ProviderId } from "./business/corporate-provider";
 import { CAB_PROFILES, type CabProfile } from "./retail/cab";
 import { alexRetail } from "./retail/alex";
@@ -32,7 +32,7 @@ export { createCorporateProvider, MappedCorporateProvider, PROVIDERS, PROVIDER_I
 export { BankBApi, ApiError } from "./business/corporate-b";
 export { applyRule, build, mapError, type MappingSpec } from "./business/mapping";
 export { MAX_BULK_LINES, SALARY_CAP_FACTOR, type CorpEmployee, type BatchCheck, type BulkLineInput, type BulkLineResult, ACME, CorporateSandbox, type CorporateBankAdapter, type CorpCompany, type Flaws, type CorpPayment, type CorpUser, type CorpRole, type InitiateInput, type CorpBeneficiary, type CorpTemplate, type CorpSignatoryGroup, type CorpAuditEntry } from "./business/corporate";
-export { ALPHA, BETA, BETA_CAST } from "./business/alpha-beta";
+export { ALPHA, BETA, BETA_CAST, GAMMA } from "./business/alpha-beta";
 export { parseBulkFile } from "./business/business";
 export { PER_USD, FX_SPREAD, FX_FEE_RATE, QUOTE_TTL_SECONDS, DEFAULT_FX, BANKWORKX_FX, midRate, customerRate, type FxConfig, type Quote } from "./retail/fx";
 export { BILLERS, CARRIERS } from "./retail/retail";
@@ -359,6 +359,12 @@ export const personas: Record<string, Persona> = {
 personas.alexbiz = {
   ...structuredClone(personas.alex!), id: "alexbiz", testCast: true, name: "Alex Morgan (business cast)",
   identity: { id: "alex", name: "Alex Morgan", password: "Bwx!Demo2026", cast: true, business: [{ id: "alpha", company: ALPHA, userId: "alex" }, { id: "beta", company: BETA_CAST, userId: "alex" }] },
+};
+
+// Alex again, for the empty states of the Business journeys: a company that has no accounts, suppliers, templates, schedules or payments yet.
+personas.alexempty = {
+  ...structuredClone(personas.alex!), id: "alexempty", testCast: true, name: "Alex Morgan (new company)",
+  identity: { id: "alex", name: "Alex Morgan", password: "Bwx!Demo2026", business: [{ id: "gamma", company: GAMMA, userId: "alex" }] },
 };
 
 // Alex again, for the Accounts journeys: six accounts (the fifth dormant, the sixth overdrawn by $5.00, so it cannot pay the fee of an official statement or be closed) and a budget in every

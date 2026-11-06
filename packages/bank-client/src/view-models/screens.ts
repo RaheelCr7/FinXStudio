@@ -131,10 +131,12 @@ export async function loadBusiness(call: Call, ctx: ContextInfo, tab: ShellTab):
       return { tab, sections: [{ id: "accounts", title: "Accounts", empty: "No accounts", rows: list<RawCorpAccount>(company.accounts).map((a) => ({ id: a.id, title: a.name, subtitle: `${a.maskedNumber} · ${a.currency}`, value: money(a.balance, a.currency), place: "accounts.detail", passes: { accountId: a.id } })) }] };
     }
     case "payments": {
-      const [pend, suppliers, templates] = await Promise.all([call("corp.payments.pending"), call("corp.suppliers.list"), call("corp.templates.list")]);
+      // the scheduled payments are a courtesy: a list that cannot be read leaves its section empty, it does not take the tab down
+      const [pend, suppliers, templates, scheduled] = await Promise.all([call("corp.payments.pending"), call("corp.suppliers.list"), call("corp.templates.list"), call("corp.schedules.list").catch(() => ({}))]);
       return { tab, sections: [
         { id: "tracker", title: "In progress", empty: "No payments in progress", rows: payments(pend).map((p) => ({ id: p.id, title: p.payee ?? "Payment", subtitle: `${p.id} · value date ${p.valueDate ?? ""}`, value: money(p.amount, p.currency), tag: `${p.approvals.length} of ${p.required} approved`, place: "payments.payment", passes: { paymentId: p.id } })) },
-        { id: "templates", title: "Templates", empty: "No templates yet", place: "payments.templates", rows: list<any>(templates).map((t) => ({ id: t.id, title: t.name, subtitle: t.reference, value: t.amount !== undefined ? money(t.amount, company.currency) : undefined, place: "payments.templates", passes: { templateId: t.id } })) },
+        { id: "scheduled", title: "Scheduled", empty: "Nothing scheduled", place: "payments.scheduled", rows: list<any>(scheduled).map((x) => ({ id: x.id, title: `${x.supplierName} \u00b7 ${x.reference}`, subtitle: x.line, tag: x.badge, tone: x.statusKey === "awaiting" ? "warning" as const : "neutral" as const, place: "payments.scheduled", passes: { scheduleId: x.id } })) },
+        { id: "templates", title: "Templates", empty: "No templates yet", place: "payments.templates", rows: list<any>(templates).map((t) => ({ id: t.id, title: t.name, subtitle: t.reference, value: t.amountText ?? (t.amount !== undefined ? money(t.amount, company.currency) : undefined), tag: t.status === "waiting" ? "Waiting for approval" : t.status === "unavailable" ? "Unavailable" : undefined, place: "payments.templates", passes: { templateId: t.id } })) },
         { id: "suppliers", title: "Suppliers", empty: "No suppliers yet", place: "payments.suppliers", rows: list<any>(suppliers).map((s) => ({ id: s.id, title: s.name, subtitle: `${s.bank} · ${s.currency}`, place: "payments.suppliers", passes: { supplierId: s.id } })) },
       ] };
     }

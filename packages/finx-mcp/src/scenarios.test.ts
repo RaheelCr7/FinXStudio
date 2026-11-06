@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { bankworkxJourneys, chainTargets, chainWarnings, bulkPayment, catalog, corporateApproval, corporatePayment, Journey, withdrawPayment, payrollRun, ownTransfer, manageBeneficiary, personalTransfer, internalTransfer, internationalTransfer, payBillBankworkx, mobileTopup, schedulePayment, cancelStandingOrder, supplierPayment, approvePayments, signIn, forgotUsername, resetPassword, forgotPassword, unlockAccount, changePassword, trustedDevices, setupQuickLogin, changeQuickPin, accounts, accountDetails, statement, accountNickname, openAnotherAccount, budgets, createBudget, transferTypes, singleTransfer, cardPin, cardsView, activateCard, cardControls, freezeCard, virtualCard, replaceCard, disputeTransaction, addCard, termDeposit, savingsGoal, saveBorrow, applyLoan, repayLoan, invest, sellInvestment, addMoney, updateProfile, newMessage, messagesView, serviceRequest, myRequests, connectAccount, loanCalculator, depositCalculator, findBranchAtm, contactSupport, openAccount, trackApplication, registerDigitalBanking } from "@finx/journey-schema";
+import { bankworkxJourneys, chainTargets, chainWarnings, bulkPayment, catalog, corporateApproval, corporatePayment, Journey, withdrawPayment, payrollRun, ownTransfer, manageBeneficiary, personalTransfer, internalTransfer, internationalTransfer, payBillBankworkx, mobileTopup, schedulePayment, cancelStandingOrder, supplierPayment, approvePayments, signIn, forgotUsername, resetPassword, forgotPassword, unlockAccount, changePassword, trustedDevices, setupQuickLogin, changeQuickPin, accounts, accountDetails, statement, accountNickname, openAnotherAccount, budgets, createBudget, transferTypes, singleTransfer, cardPin, cardsView, activateCard, cardControls, freezeCard, virtualCard, replaceCard, disputeTransaction, addCard, termDeposit, savingsGoal, saveBorrow, applyLoan, repayLoan, invest, sellInvestment, addMoney, updateProfile, newMessage, messagesView, serviceRequest, myRequests, connectAccount, loanCalculator, depositCalculator, findBranchAtm, contactSupport, openAccount, trackApplication, registerDigitalBanking, businessAccounts, businessStatement, addSupplier, paymentTemplate, templates, scheduleBusinessPayment, businessSchedules, businessWithdraw, paymentTracker } from "@finx/journey-schema";
 import { lintAll } from "@finx/renderer-core";
 import { MockBank } from "@finx/mock-bank-api";
 import { mutationCheck, runScenarios } from "./scenarios";
@@ -481,14 +481,17 @@ describe("cancel-standing-order: Cancel a standing order", () => {
  * customer with several places is always served by the reference bank. Survivors of the mutation check are listed with the reason each cannot be
  * reached from a screen.
  */
+const SUPPLIER_RULES_SP = ["bank-bankCode", "bank-ibanChecksum", "bank-sepa", "bank-countryMatch", "bank-routingChecksum", "bank-sortCode", "bank-bic", "bank-nameCheck", "bank-supName", "bank-supDuplicate", "bank-supPending", "bank-supCheck", "bank-supCode"];
+
 describe("supplier-payment: Pay a supplier", () => {
   const j = Journey.parse(supplierPayment);
   const SUP_ACCEPTED: Record<string, string> = {
-    "no-error-path-55": "Resending the code is a button of the code field that a scenario cannot press; the first send has the same error path and is proved (T-25)",
+    "no-error-path-65": "Resending the code is a button of the code field that a scenario cannot press; the first send has the same error path and is proved (T-25)",
     "bank-roles": OTHER_LAYER("The context's permissions are checked before the company's own roles, and only a Maker holds the permission to price or start a payment"),
     "bank-whitelist": OTHER_LAYER("The price (quote) already refuses a supplier that is not on the company's list before the payment is started, and the bank's unit tests start one directly"),
     "bank-userLimit": OTHER_LAYER("The price (quote) already refuses an amount over the person's day before the payment is started (T-6, T-7)"),
     "bank-companyLimit": "The company's limit (1,000,000.00) is above everything a Maker can send in a day (250,000.00 each), and the company's count only moves when a payment is released, which this journey never does",
+    ...linked(SUPPLIER_RULES_SP, "add-supplier (which Request a new supplier opens)"),
   };
 
   it("is lint clean, every scenario passes and every acceptance criterion is proved", async () => {
@@ -496,21 +499,21 @@ describe("supplier-payment: Pay a supplier", () => {
     const r = await runScenarios(j);
     expect(r.results.filter((x) => !x.ok).map((x) => `${x.id} ${x.name}: ${x.failures.join(" | ")}`)).toEqual([]);
     expect(r.coverage.map((c) => [c.id, c.status])).toEqual((j.acceptance ?? []).map((a) => [a.id, "proved"]));
-    expect([r.passed, r.total, r.coverage.length]).toEqual([33, 33, 9]);
+    expect([r.passed, r.total, r.coverage.length]).toEqual([39, 39, 10]);
     expect(r.ok).toBe(true);
   });
 
   it("the tests notice when the journey or the bank's rules are broken (mutation check)", async () => {
     const m = await mutationCheck(j, SUP_ACCEPTED);
     expect(m.survived.map((s) => `${s.id}: ${s.what}`)).toEqual([]);
-    expect([m.total, m.killed, m.accepted.length]).toEqual([35, 30, 5]);
+    expect([m.total, m.killed, m.accepted.length]).toEqual([51, 33, 18]);
     expect(m.ok).toBe(true);
   }, 240_000);
 
   it("the permission and approval rules of the bank are each checked by a mutant, and the permissions one is caught by a screen", async () => {
     const m = await mutationCheck(j, SUP_ACCEPTED);
     const bank = m.results.filter((x) => x.kind === "bank");
-    expect(bank.map((x) => x.id).sort()).toEqual(["bank-companyLimit", "bank-cutoff", "bank-dualApproval", "bank-permissions", "bank-roles", "bank-userLimit", "bank-whitelist"]);
+    expect(bank.map((x) => x.id).sort()).toEqual(["bank-companyLimit", "bank-cutoff", "bank-dualApproval", "bank-permissions", "bank-roles", "bank-userLimit", "bank-whitelist", ...SUPPLIER_RULES_SP].sort());
     expect(bank.filter((x) => x.killed).map((x) => x.id).sort()).toEqual(["bank-cutoff", "bank-dualApproval", "bank-permissions"]);
   }, 240_000);
 
@@ -2280,5 +2283,318 @@ describe("register-digital-banking: Register for digital banking", () => {
       });
       expect([(r.data as any).rg.password, (r.data as any).rg.confirm]).toEqual(["", ""]);
     }
+  });
+});
+
+/* ------------------------------------------------------------------------------------------ BankWorkx Business: Accounts and Payments (step 8, slice A) */
+
+const PAY_RULES = ["bank-roles", "bank-whitelist", "bank-userLimit", "bank-companyLimit", "bank-dualApproval", "bank-cutoff"];
+const SUPPLIER_RULES = ["bank-bankCode", "bank-ibanChecksum", "bank-sepa", "bank-countryMatch", "bank-routingChecksum", "bank-sortCode", "bank-bic", "bank-nameCheck", "bank-supName", "bank-supDuplicate", "bank-supPending", "bank-supCheck", "bank-supCode"];
+const STATEMENT_BIZ_RULES = ["bank-stmtRange", "bank-stmtFormat", "bank-stmtRecipients", "bank-stmtExternal", "bank-stmtIntraday", "bank-stmtEmpty", "bank-stmtLimit"];
+const TEMPLATE_RULES = ["bank-tplName", "bank-tplSupplier", "bank-tplAmount", "bank-tplLimit"];
+const SCHEDULE_BIZ_RULES = ["bank-bschSupplier", "bank-bschAmount", "bank-bschDates", "bank-bschEnd", "bank-bschLimit", "bank-bschApprovals", "bank-bschCode", "bank-bschCutoff", "bank-bschRunning"];
+const WITHDRAW_RULES = ["bank-wdOwner", "bank-wdState", "bank-wdReason"];
+const SCREEN_RULE = (what: string) => `The screen's own permission rule sends a person without ${what} to the same no-access card, and no role of a company lacks it; the bank's refusal is proved by forced calls from Personal`;
+const EVERY_ROLE = (permission: string) => `Every role of a company holds ${permission}, so no role can be refused here; the permission table is proved by the journeys whose permission only some roles hold (add-supplier, payment-template, schedule-business-payment)`;
+const SAME_FIRST_BIZ = (what: string) => `${what}: the same adapter as the call before it, which fails first under a sandbox condition (a condition covers the whole walk), so only that first error path can be proved`;
+
+describe("business-accounts: Business accounts", () => {
+  const j = Journey.parse(businessAccounts);
+  const ACC: Record<string, string> = {
+    "no-rule-start-0": SCREEN_RULE("biz.accounts.view"),
+    "bank-permissions": EVERY_ROLE("biz.accounts.view"),
+    ...linked(PAY_RULES, "supplier-payment (which Pay from this account opens)"), ...linked(STATEMENT_BIZ_RULES, "business-statement (which Export opens)"),
+  };
+  it("is lint clean, every scenario passes and every acceptance criterion is proved", async () => {
+    expect(lintAll(j)).toEqual([]);
+    const r = await runScenarios(j);
+    expect(r.results.filter((x) => !x.ok).map((x) => `${x.id} ${x.name}: ${x.failures.join(" | ")}`)).toEqual([]);
+    expect(r.coverage.map((c) => [c.id, c.status])).toEqual((j.acceptance ?? []).map((a) => [a.id, "proved"]));
+    expect([r.passed, r.total, r.coverage.length]).toEqual([20, 20, 8]);
+    expect(r.ok).toBe(true);
+  });
+  it("the tests notice when the journey or the bank's rules are broken (mutation check)", async () => {
+    const m = await mutationCheck(j, ACC);
+    expect(m.survived.map((s) => `${s.id}: ${s.what}`)).toEqual([]);
+    expect([m.total, m.killed, m.accepted.length]).toEqual([35, 20, 15]);
+    expect(m.ok).toBe(true);
+  }, 240_000);
+  it("what a person may do with each account is checked by the bank and caught by a screen: the rights, the available balance, the total, the numbers, the period and the search", async () => {
+    const m = await mutationCheck(j, ACC);
+    const killed = m.results.filter((x) => x.kind === "bank" && x.killed).map((x) => x.id).sort();
+    expect(killed).toEqual(["bank-bizAvailable", "bank-bizDetails", "bank-bizPeriod", "bank-bizRights", "bank-bizSearch", "bank-bizTotal"]);
+  }, 240_000);
+  it("is for BankWorkx only, for the web and the phone, and asks for no code (it moves no money)", () => {
+    expect(catalog.filter((c) => c.id === "business-accounts").map((c) => [c.madeFor, c.category])).toEqual([["bankworkx", "Accounts"]]);
+    expect([businessAccounts.apps, businessAccounts.channels]).toEqual([["bankworkx"], ["web", "mobile"]]);
+    expect(bankworkxJourneys.map((x) => x.slug)).toContain("business-accounts");
+    expect(chainTargets(businessAccounts).sort()).toEqual(["business-statement", "supplier-payment"]);
+    expect(businessAccounts.screens.some((s) => s.blocks.some((b: any) => b.type === "otp" || b.type === "consent"))).toBe(false);
+  });
+});
+
+describe("business-statement: Statements and reports", () => {
+  const j = Journey.parse(businessStatement);
+  const ST: Record<string, string> = {
+    "no-rule-start-0": SCREEN_RULE("biz.accounts.view"),
+    "bank-permissions": EVERY_ROLE("biz.accounts.export"),
+    "bank-bizAvailable": "This journey lists accounts by name and number; the available balance is not shown here (Business accounts proves it)",
+  };
+  it("is lint clean, every scenario passes and every acceptance criterion is proved", async () => {
+    expect(lintAll(j)).toEqual([]);
+    const r = await runScenarios(j);
+    expect(r.results.filter((x) => !x.ok).map((x) => `${x.id} ${x.name}: ${x.failures.join(" | ")}`)).toEqual([]);
+    expect(r.coverage.map((c) => [c.id, c.status])).toEqual((j.acceptance ?? []).map((a) => [a.id, "proved"]));
+    expect([r.passed, r.total, r.coverage.length]).toEqual([29, 29, 9]);
+    expect(r.ok).toBe(true);
+  });
+  it("the tests notice when the journey or the bank's rules are broken (mutation check)", async () => {
+    const m = await mutationCheck(j, ST);
+    expect(m.survived.map((s) => `${s.id}: ${s.what}`)).toEqual([]);
+    expect([m.total, m.killed, m.accepted.length]).toEqual([26, 23, 3]);
+    expect(m.ok).toBe(true);
+  }, 240_000);
+  it("each rule of the statement is checked by a mutant and caught by a screen: the dates, the formats, the recipients, outside addresses, today so far, an empty period, ten schedules", async () => {
+    const m = await mutationCheck(j, ST);
+    expect(m.results.filter((x) => x.kind === "bank" && x.killed).map((x) => x.id).sort()).toEqual(["bank-bizRights", ...STATEMENT_BIZ_RULES].sort());
+  }, 240_000);
+  it("is for BankWorkx only; it moves no money and asks for no code, and only writes to the company's addresses unless the bank allows others", () => {
+    expect(catalog.filter((c) => c.id === "business-statement").map((c) => [c.madeFor, c.category])).toEqual([["bankworkx", "Accounts"]]);
+    expect([businessStatement.apps, businessStatement.channels]).toEqual([["bankworkx"], ["web", "mobile"]]);
+    expect(bankworkxJourneys.map((x) => x.slug)).toContain("business-statement");
+    expect(businessStatement.screens.some((s) => s.blocks.some((b: any) => b.type === "otp"))).toBe(false);
+    expect(businessStatement.integrations.map((i) => i.adapter).sort()).toEqual(["corp.accounts.list", "corp.statements.check", "corp.statements.generate", "corp.statements.list", "corp.statements.schedule"]);
+  });
+});
+
+describe("add-supplier: Add a supplier", () => {
+  const j = Journey.parse(addSupplier);
+  const AS: Record<string, string> = {
+    "no-error-path-61": "Resending the code is a button of the code field that a scenario cannot press; the first send has the same error path and is proved (T-19)",
+    "no-rule-route-3": SCREEN_RULE("biz.suppliers.manage"),
+    "no-rule-route-6": "The form stops it first: the address fields are required, so the bank never sees a request without an address (the spec says the same); the bank's refusal is ADDRESS_REQUIRED",
+    "no-rule-route-7": "The name screen cannot be left without the Add anyway tick, so the bank never sees a request without it; the forced call is refused (T-13)",
+  };
+  it("is lint clean, every scenario passes and every acceptance criterion is proved", async () => {
+    expect(lintAll(j)).toEqual([]);
+    const r = await runScenarios(j);
+    expect(r.results.filter((x) => !x.ok).map((x) => `${x.id} ${x.name}: ${x.failures.join(" | ")}`)).toEqual([]);
+    expect(r.coverage.map((c) => [c.id, c.status])).toEqual((j.acceptance ?? []).map((a) => [a.id, "proved"]));
+    expect([r.passed, r.total, r.coverage.length]).toEqual([30, 30, 8]);
+    expect(r.ok).toBe(true);
+  });
+  it("the tests notice when the journey or the bank's rules are broken (mutation check)", async () => {
+    const m = await mutationCheck(j, AS);
+    expect(m.survived.map((s) => `${s.id}: ${s.what}`)).toEqual([]);
+    expect([m.total, m.killed, m.accepted.length]).toEqual([46, 42, 4]);
+    expect(m.ok).toBe(true);
+  }, 240_000);
+  it("the rules of a supplier request are each checked by a mutant and caught by a screen: the name, the details of every market, the name check, the code, ten waiting, the permissions", async () => {
+    const m = await mutationCheck(j, AS);
+    expect(m.results.filter((x) => x.kind === "bank").map((x) => x.id).sort()).toEqual(["bank-bankCode", "bank-bic", "bank-countryMatch", "bank-ibanChecksum", "bank-nameCheck", "bank-permissions", "bank-routingChecksum", "bank-sepa", "bank-sortCode", "bank-supCheck", "bank-supCode", "bank-supDuplicate", "bank-supName", "bank-supPending"]);
+    expect(m.results.filter((x) => x.kind === "bank" && !x.killed)).toEqual([]);
+  }, 240_000);
+  it("is for BankWorkx only; the code is always asked, before the request, after the confirmation tick", () => {
+    expect(catalog.filter((c) => c.id === "add-supplier").map((c) => [c.madeFor, c.category])).toEqual([["bankworkx", "Payments"]]);
+    expect([addSupplier.apps, addSupplier.channels]).toEqual([["bankworkx"], ["web", "mobile"]]);
+    expect(bankworkxJourneys.map((x) => x.slug)).toContain("add-supplier");
+    const otp = addSupplier.screens.find((s) => s.id === "otp")!;
+    expect(otp.blocks.flatMap((b: any) => (b.type === "button" ? b.actions : [])).filter((a: any) => a.type === "callApi").map((a: any) => a.integration)).toEqual(["otpVerify", "request"]);
+    expect(addSupplier.screens.some((s) => s.blocks.some((b: any) => b.type === "consent" && b.validation?.mustBeTrue && b.bind === "as.consent"))).toBe(true);
+  });
+});
+
+describe("payment-template: Payment templates", () => {
+  const j = Journey.parse(paymentTemplate);
+  const PT: Record<string, string> = {
+    "no-rule-route-5": "A supplier taken off the list between choosing it and saving cannot be arranged within one walk; the bank's refusal is proved by a forced call (T-13)",
+    "no-rule-route-6": "A supplier that is not approved is stopped when it is chosen (only approved suppliers are listed), so the bank's refusal never reaches the supplier step; proved by a forced call (T-13)",
+    "no-rule-route-7": "A template deleted between reading the list and deleting it cannot be arranged within one walk; the bank's refusal is proved (T-9)",
+    "no-rule-retry-1": SAME_FIRST_BIZ("The retry after the real save"),
+    ...linked(PAY_RULES, "supplier-payment (which Use opens)"), ...linked(SUPPLIER_RULES, "add-supplier (which an empty list of suppliers opens)"),
+  };
+  it("is lint clean, every scenario passes and every acceptance criterion is proved", async () => {
+    expect(lintAll(j)).toEqual([]);
+    const r = await runScenarios(j);
+    expect(r.results.filter((x) => !x.ok).map((x) => `${x.id} ${x.name}: ${x.failures.join(" | ")}`)).toEqual([]);
+    expect(r.coverage.map((c) => [c.id, c.status])).toEqual((j.acceptance ?? []).map((a) => [a.id, "proved"]));
+    expect([r.passed, r.total, r.coverage.length]).toEqual([27, 27, 8]);
+    expect(r.ok).toBe(true);
+  });
+  it("the tests notice when the journey or the bank's rules are broken (mutation check)", async () => {
+    const m = await mutationCheck(j, PT);
+    expect(m.survived.map((s) => `${s.id}: ${s.what}`)).toEqual([]);
+    expect([m.total, m.killed, m.accepted.length]).toEqual([53, 30, 23]);
+    expect(m.ok).toBe(true);
+  }, 240_000);
+  it("the rules of a template are each checked by a mutant and caught by a screen: the name, the supplier, the amount, twenty at most", async () => {
+    const m = await mutationCheck(j, PT);
+    const killed = m.results.filter((x) => x.kind === "bank" && x.killed).map((x) => x.id).sort();
+    expect(killed).toEqual(["bank-permissions", ...TEMPLATE_RULES].sort());
+  }, 240_000);
+  it("is for BankWorkx only; it moves no money and asks for no code, and Use hands the template to Pay a supplier", () => {
+    expect(catalog.filter((c) => c.id === "payment-template").map((c) => [c.madeFor, c.category])).toEqual([["bankworkx", "Payments"]]);
+    expect([paymentTemplate.apps, paymentTemplate.channels]).toEqual([["bankworkx"], ["web", "mobile"]]);
+    expect(bankworkxJourneys.map((x) => x.slug)).toContain("payment-template");
+    expect(chainTargets(paymentTemplate).sort()).toEqual(["add-supplier", "supplier-payment", "templates"]);
+    expect(paymentTemplate.screens.some((s) => s.blocks.some((b: any) => b.type === "otp"))).toBe(false);
+  });
+});
+
+describe("templates: Templates", () => {
+  const j = Journey.parse(templates);
+  const TP: Record<string, string> = {
+    "no-rule-start-0": SCREEN_RULE("biz.accounts.view"),
+    "bank-permissions": EVERY_ROLE("biz.accounts.view"),
+    ...linked(PAY_RULES, "supplier-payment (which Use opens)"), ...linked(TEMPLATE_RULES, "payment-template (which Delete and Save a template open)"),
+  };
+  it("is lint clean, every scenario passes and every acceptance criterion is proved", async () => {
+    expect(lintAll(j)).toEqual([]);
+    const r = await runScenarios(j);
+    expect(r.results.filter((x) => !x.ok).map((x) => `${x.id} ${x.name}: ${x.failures.join(" | ")}`)).toEqual([]);
+    expect(r.coverage.map((c) => [c.id, c.status])).toEqual((j.acceptance ?? []).map((a) => [a.id, "proved"]));
+    expect([r.passed, r.total, r.coverage.length]).toEqual([12, 12, 5]);
+    expect(r.ok).toBe(true);
+  });
+  it("the tests notice when the journey or the bank's rules are broken (mutation check)", async () => {
+    const m = await mutationCheck(j, TP);
+    expect(m.survived.map((s) => `${s.id}: ${s.what}`)).toEqual([]);
+    expect([m.total, m.killed, m.accepted.length]).toEqual([20, 8, 12]);
+    expect(m.ok).toBe(true);
+  }, 240_000);
+  it("is for BankWorkx only; it moves no money, and Use, Delete and Save a template open the journeys that do the work", () => {
+    expect(catalog.filter((c) => c.id === "templates").map((c) => [c.madeFor, c.category])).toEqual([["bankworkx", "Payments"]]);
+    expect([templates.apps, templates.channels]).toEqual([["bankworkx"], ["web", "mobile"]]);
+    expect(bankworkxJourneys.map((x) => x.slug)).toContain("templates");
+    expect(chainTargets(templates).sort()).toEqual(["payment-template", "supplier-payment"]);
+    expect(templates.screens.some((s) => s.blocks.some((b: any) => b.type === "otp"))).toBe(false);
+  });
+});
+
+describe("schedule-business-payment: Schedule a supplier payment", () => {
+  const j = Journey.parse(scheduleBusinessPayment);
+  const SC: Record<string, string> = {
+    "no-error-path-41": SAME_FIRST_BIZ("The check when the last payment is chosen"),
+    "no-error-path-59": "Resending the code is a button of the code field that a scenario cannot press; the first send has the same error path and is proved (T-39)",
+    "no-rule-route-7": "A supplier taken off the list between choosing it and sending cannot be arranged within one walk; the bank's refusal is proved by forced calls (T-13)",
+  };
+  it("is lint clean, every scenario passes and every acceptance criterion is proved", async () => {
+    expect(lintAll(j)).toEqual([]);
+    const r = await runScenarios(j);
+    expect(r.results.filter((x) => !x.ok).map((x) => `${x.id} ${x.name}: ${x.failures.join(" | ")}`)).toEqual([]);
+    expect(r.coverage.map((c) => [c.id, c.status])).toEqual((j.acceptance ?? []).map((a) => [a.id, "proved"]));
+    expect([r.passed, r.total, r.coverage.length]).toEqual([46, 46, 9]);
+    expect(r.ok).toBe(true);
+  });
+  it("the tests notice when the journey or the bank's rules are broken (mutation check)", async () => {
+    const m = await mutationCheck(j, SC);
+    expect(m.survived.map((s) => `${s.id}: ${s.what}`)).toEqual([]);
+    expect([m.total, m.killed, m.accepted.length]).toEqual([56, 53, 3]);
+    expect(m.ok).toBe(true);
+  }, 240_000);
+  it("the rules of a schedule are each checked by a mutant and caught by a screen: the supplier, the amount, the dates, the end, twenty at most, the approvers, the code, when changes close, a payment running now, the permissions", async () => {
+    const m = await mutationCheck(j, SC);
+    expect(m.results.filter((x) => x.kind === "bank").map((x) => x.id).sort()).toEqual(["bank-permissions", ...SCHEDULE_BIZ_RULES].sort());
+    expect(m.results.filter((x) => x.kind === "bank" && !x.killed)).toEqual([]);
+  }, 240_000);
+  it("is for BankWorkx only; the confirmation tick is required and a code is verified before a schedule is made or changed (never to cancel)", () => {
+    expect(catalog.filter((c) => c.id === "schedule-business-payment").map((c) => [c.madeFor, c.category])).toEqual([["bankworkx", "Payments"]]);
+    expect([scheduleBusinessPayment.apps, scheduleBusinessPayment.channels]).toEqual([["bankworkx"], ["web", "mobile"]]);
+    expect(bankworkxJourneys.map((x) => x.slug)).toContain("schedule-business-payment");
+    const otp = scheduleBusinessPayment.screens.find((s) => s.id === "otp")!;
+    const calls = otp.blocks.flatMap((b: any) => (b.type === "button" ? [b.actions.filter((a: any) => a.type === "callApi").map((a: any) => a.integration)] : []));
+    expect(calls).toEqual([["otpVerify", "create"], ["otpVerify", "update"]]);
+    expect(scheduleBusinessPayment.screens.find((s) => s.id === "cancelCard")!.blocks.some((b: any) => b.type === "otp")).toBe(false);
+    expect(scheduleBusinessPayment.screens.some((s) => s.blocks.some((b: any) => b.type === "consent" && b.validation?.mustBeTrue))).toBe(true);
+  });
+});
+
+describe("business-schedules: Scheduled supplier payments", () => {
+  const j = Journey.parse(businessSchedules);
+  const BS: Record<string, string> = {
+    "no-rule-start-0": SCREEN_RULE("biz.accounts.view"),
+    "bank-permissions": EVERY_ROLE("biz.accounts.view"),
+    ...linked(SCHEDULE_BIZ_RULES, "schedule-business-payment (which Schedule a payment, Change and Cancel open)"),
+  };
+  it("is lint clean, every scenario passes and every acceptance criterion is proved", async () => {
+    expect(lintAll(j)).toEqual([]);
+    const r = await runScenarios(j);
+    expect(r.results.filter((x) => !x.ok).map((x) => `${x.id} ${x.name}: ${x.failures.join(" | ")}`)).toEqual([]);
+    expect(r.coverage.map((c) => [c.id, c.status])).toEqual((j.acceptance ?? []).map((a) => [a.id, "proved"]));
+    expect([r.passed, r.total, r.coverage.length]).toEqual([13, 13, 6]);
+    expect(r.ok).toBe(true);
+  });
+  it("the tests notice when the journey or the bank's rules are broken (mutation check)", async () => {
+    const m = await mutationCheck(j, BS);
+    expect(m.survived.map((s) => `${s.id}: ${s.what}`)).toEqual([]);
+    expect([m.total, m.killed, m.accepted.length]).toEqual([20, 9, 11]);
+    expect(m.ok).toBe(true);
+  }, 240_000);
+  it("is for BankWorkx only; it moves no money, and Change, Cancel and Schedule a payment open the schedule journey", () => {
+    expect(catalog.filter((c) => c.id === "business-schedules").map((c) => [c.madeFor, c.category])).toEqual([["bankworkx", "Payments"]]);
+    expect([businessSchedules.apps, businessSchedules.channels]).toEqual([["bankworkx"], ["web", "mobile"]]);
+    expect(bankworkxJourneys.map((x) => x.slug)).toContain("business-schedules");
+    expect(chainTargets(businessSchedules)).toEqual(["schedule-business-payment"]);
+    expect(businessSchedules.screens.some((s) => s.blocks.some((b: any) => b.type === "otp"))).toBe(false);
+  });
+});
+
+describe("withdraw-payment: Withdraw a payment", () => {
+  const j = Journey.parse(businessWithdraw);
+  const WD: Record<string, string> = linked(PAY_RULES, "supplier-payment (which New supplier payment opens)");
+  it("is lint clean, every scenario passes and every acceptance criterion is proved", async () => {
+    expect(lintAll(j)).toEqual([]);
+    const r = await runScenarios(j);
+    expect(r.results.filter((x) => !x.ok).map((x) => `${x.id} ${x.name}: ${x.failures.join(" | ")}`)).toEqual([]);
+    expect(r.coverage.map((c) => [c.id, c.status])).toEqual((j.acceptance ?? []).map((a) => [a.id, "proved"]));
+    expect([r.passed, r.total, r.coverage.length]).toEqual([22, 22, 6]);
+    expect(r.ok).toBe(true);
+  });
+  it("the tests notice when the journey or the bank's rules are broken (mutation check)", async () => {
+    const m = await mutationCheck(j, WD);
+    expect(m.survived.map((s) => `${s.id}: ${s.what}`)).toEqual([]);
+    expect([m.total, m.killed, m.accepted.length]).toEqual([26, 20, 6]);
+    expect(m.ok).toBe(true);
+  }, 240_000);
+  it("the rules of a withdrawal are each checked by a mutant and caught by a screen: only your own, only while it waits, the reason, the permissions", async () => {
+    const m = await mutationCheck(j, WD);
+    expect(m.results.filter((x) => x.kind === "bank" && x.killed).map((x) => x.id).sort()).toEqual(["bank-permissions", "bank-trkSettled", ...WITHDRAW_RULES].sort());
+  }, 240_000);
+  it("is for BankWorkx only, asks for no code (nothing is sent), and the old name opens it", () => {
+    expect(catalog.filter((c) => c.id === "withdraw-payment").map((c) => [c.madeFor, c.category])).toEqual([["bankworkx", "Payments"]]);
+    expect([businessWithdraw.apps, businessWithdraw.channels]).toEqual([["bankworkx"], ["web", "mobile"]]);
+    expect(bankworkxJourneys.map((x) => x.slug)).toContain("withdraw-payment");
+    expect(businessWithdraw.screens.some((s) => s.blocks.some((b: any) => b.type === "otp"))).toBe(false);
+    expect(chainTargets(businessWithdraw).sort()).toEqual(["payment-tracker", "supplier-payment"]);
+  });
+});
+
+describe("payment-tracker: Payment tracker", () => {
+  const j = Journey.parse(paymentTracker);
+  const PTR: Record<string, string> = {
+    "no-rule-route-0": SCREEN_RULE("biz.accounts.view"),
+    "bank-permissions": EVERY_ROLE("biz.accounts.view"),
+    ...linked(PAY_RULES, "supplier-payment (which New supplier payment opens)"), ...linked(WITHDRAW_RULES, "withdraw-payment (which Withdraw opens)"),
+  };
+  it("is lint clean, every scenario passes and every acceptance criterion is proved", async () => {
+    expect(lintAll(j)).toEqual([]);
+    const r = await runScenarios(j);
+    expect(r.results.filter((x) => !x.ok).map((x) => `${x.id} ${x.name}: ${x.failures.join(" | ")}`)).toEqual([]);
+    expect(r.coverage.map((c) => [c.id, c.status])).toEqual((j.acceptance ?? []).map((a) => [a.id, "proved"]));
+    expect([r.passed, r.total, r.coverage.length]).toEqual([17, 17, 8]);
+    expect(r.ok).toBe(true);
+  });
+  it("the tests notice when the journey or the bank's rules are broken (mutation check)", async () => {
+    const m = await mutationCheck(j, PTR);
+    expect(m.survived.map((s) => `${s.id}: ${s.what}`)).toEqual([]);
+    expect([m.total, m.killed, m.accepted.length]).toEqual([20, 9, 11]);
+    expect(m.ok).toBe(true);
+  }, 240_000);
+  it("is for BankWorkx only; it moves no money, and Withdraw and New supplier payment open the journeys that do the work", () => {
+    expect(catalog.filter((c) => c.id === "payment-tracker").map((c) => [c.madeFor, c.category])).toEqual([["bankworkx", "Payments"]]);
+    expect([paymentTracker.apps, paymentTracker.channels]).toEqual([["bankworkx"], ["web", "mobile"]]);
+    expect(bankworkxJourneys.map((x) => x.slug)).toContain("payment-tracker");
+    expect(chainTargets(paymentTracker).sort()).toEqual(["supplier-payment", "withdraw-payment"]);
+    expect(paymentTracker.screens.some((s) => s.blocks.some((b: any) => b.type === "otp"))).toBe(false);
   });
 });

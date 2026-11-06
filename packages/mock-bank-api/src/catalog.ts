@@ -170,7 +170,7 @@ export const ADAPTER_CATALOG: AdapterInfo[] = [
   },
   {
     adapter: "corp.payments.withdraw", suggestedId: "withdrawPayment", description: "The person who started a payment takes it back while it waits for approval. Only them; their daily limit is given back. Moves no money.",
-    input: { userId: "the initiator who started it", paymentId: "from corp.payments.pending with as: 'initiator'" }, returns: "The payment, 'rejected' with reason 'Withdrawn by the person who started it'. Errors: NOT_AUTHORISED (not theirs), PAYMENT_NOT_PENDING, PAYMENT_NOT_FOUND.",
+    input: { userId: "the initiator who started it", paymentId: "from corp.payments.pending with as: 'initiator'", reason: "with a session: Wrong amount | Wrong supplier | Wrong reference | Not needed any more | Other", note: "with Other, up to 100 characters" }, returns: "The payment, 'rejected' with reason 'Withdrawn by the person who started it'. With a session the answer is the tracker row (statusKey 'withdrawn', withdrawReason). Errors: NOT_AUTHORISED (not theirs), PAYMENT_NOT_PENDING, PAYMENT_NOT_FOUND; with a session NOT_YOUR_PAYMENT, PAYMENT_RELEASED, INVALID_REASON.",
   },
   {
     adapter: "corp.payments.get", suggestedId: "getPayment", description: "One payment by id: status, amounts, who started it, who approved, value date, release reference or rejection reason. With a session, the context must allow viewing accounts (PERMISSION_DENIED); with a userId, that user must work for the company (NOT_AUTHORISED).",
@@ -352,8 +352,8 @@ export const ADAPTER_CATALOG: AdapterInfo[] = [
     input: { quoteId: "from corp.payments.quote" }, returns: "The payment: { id, status 'pending_approval', required, rail, speed, receive, rate, fee, purpose, railReference, … }.", moneyMoving: true, requiresOtp: true,
     errors: ["PERMISSION_DENIED", "QUOTE_NOT_FOUND", "QUOTE_USED", "QUOTE_EXPIRED", "RAIL_NOT_AVAILABLE", "OTP_REQUIRED", "STEP_UP_FAILED", "LIMIT_USER_EXCEEDED", "LIMIT_COMPANY_EXCEEDED", "INSUFFICIENT_FUNDS"],
   },
-  { adapter: "corp.suppliers.list", suggestedId: "suppliers", description: "The company's approved suppliers.", input: {}, returns: "Map by id: { id, name, displayName, line, bank, maskedNumber, country?, currency? }.", errors: ["PERMISSION_DENIED"] },
-  { adapter: "corp.templates.list", suggestedId: "templates", description: "Saved payment templates.", input: {}, returns: "Map by id: { id, name, beneficiaryId, amount?, reference, purpose }.", errors: ["PERMISSION_DENIED"] },
+  { adapter: "corp.suppliers.list", suggestedId: "suppliers", description: "The company's approved suppliers; include 'all' adds the ones waiting for approval.", input: { include: "optional: 'all'" }, returns: "Map by id: { id, name, displayName, line 'USD · ••8841', bank, maskedNumber, country?, currency?, status 'approved' | 'waiting_approval', statusText }.", errors: ["PERMISSION_DENIED"] },
+  { adapter: "corp.templates.list", suggestedId: "templates", description: "The company's payment templates, each with the state of its supplier.", input: {}, returns: "Map by id: { id, name, beneficiaryId, supplierName, amount?, amountText ('$4,500.00' | 'Amount each time'), currency, reference, purpose, line, status 'ready' | 'waiting' | 'unavailable', statusText }.", errors: ["PERMISSION_DENIED"] },
   {
     adapter: "corp.payments.list", suggestedId: "paymentsList", description: "Payments for an approvals inbox, each as the signed-in person sees it (you, statusKey, note, signatories, nameResult, cutoffText, delegates).",
     input: { status: "'pending' | 'ready' (approvable together) | 'history'" }, returns: "Map by payment id.",
@@ -369,6 +369,99 @@ export const ADAPTER_CATALOG: AdapterInfo[] = [
   },
   { adapter: "corp.signatories.list", suggestedId: "signatories", description: "Signatory groups: who approves, in order (sequential) or any order (parallel), above which amount.", input: {}, returns: "Map by id: { id, name, mode, members, required, above }.", errors: ["PERMISSION_DENIED"] },
   { adapter: "corp.audit.list", suggestedId: "audit", description: "The audit trail, newest first, including what this session did and was refused.", input: {}, returns: "Map by position: { id, at, userId, action, outcome 'Done'|'Refused' }.", errors: ["PERMISSION_DENIED"] },
+  // ---- Business: Accounts and Payments (BankWorkx; one session in a company, the active context decides who acts) ----
+  {
+    adapter: "corp.accounts.overview", suggestedId: "companyAccounts", description: "The company's accounts with the total in its currency; each row has the person's rights on it.",
+    input: {}, returns: "{ company, currency, count, total, totalText, note, exportable, accounts: map by id { id, name, maskedNumber, currency, type, ledgerBalance, availableBalance (less pending and waiting payments), ledgerText, availableText, chip 'View only' | '', nameText, rights { transactions, export, pay } } }.",
+    errors: ["PERMISSION_DENIED", "WRONG_CONTEXT"],
+  },
+  {
+    adapter: "corp.accounts.list", suggestedId: "accountList", description: "The company's accounts as a map; for 'export' only those the person may export.",
+    input: { for: "optional: 'export'" }, returns: "Map by id: the account row of corp.accounts.overview plus option 'Operating ••2001 · USD'.", errors: ["PERMISSION_DENIED", "WRONG_CONTEXT"],
+  },
+  {
+    adapter: "corp.accounts.get", suggestedId: "companyAccount", description: "One account with the numbers others pay it on (by the bank's home market).",
+    input: { accountId: "id", details: "false leaves the numbers out" }, returns: "The account row plus holds and identifiers { first { label, value }, second, name } (Routing number and Account number, Sort code and Account number, or IBAN and BIC) or null.", errors: ["ACCOUNT_NOT_FOUND", "PERMISSION_DENIED"],
+  },
+  {
+    adapter: "corp.transactions.list", suggestedId: "companyTransactions", description: "An account's (or every account's) transactions for a period, with a search; up to 25.",
+    input: { accountId: "optional", period: "7d | 30d (default) | 90d | month", text: "counterparty or reference" }, returns: "{ from, to, period, periodText, count, shown, rows: map by id { id, date, dateIso, description, reference, text, account, where, amount, currency, amountText, status 'Pending' | 'Booked' } }.",
+    errors: ["ACCOUNT_NOT_FOUND", "ACCOUNT_NOT_PERMITTED", "INVALID_RANGE", "PERMISSION_DENIED"],
+  },
+  {
+    adapter: "corp.statements.list", suggestedId: "statementList", description: "The statement schedules that exist, the most there can be and the default address.",
+    input: { accountId: "optional: ticked alone when the person may export it" }, returns: "{ picked: [ids], count, max, defaultRecipient, accountIds, schedules: map by id { id, format, frequency, how, first, recipients, accounts } }.", errors: ["PERMISSION_DENIED"],
+  },
+  {
+    adapter: "corp.statements.check", suggestedId: "statementCheck", description: "Checks the accounts and the period of a statement; sends nothing.",
+    input: { accountIds: "[ids]", type: "eod | intraday", period: "7d | month | last | 3m | custom", from: "custom", to: "custom", intraday: "true when the bank offers Today so far" }, returns: "{ ok, from, to }. Errors: ACCOUNT_REQUIRED, ACCOUNT_NOT_PERMITTED, INVALID_RANGE, PERIOD_TOO_LONG (over 24 months), FORMAT_NOT_ENABLED.", errors: ["PERMISSION_DENIED"],
+  },
+  {
+    adapter: "corp.statements.generate", suggestedId: "statementSend", description: "Builds a statement and emails it once. No code; the company's addresses unless external.",
+    input: { accountIds: "[ids]", type: "eod | intraday", period: "as corp.statements.check", format: "pdf | csv | excel (bankFormats: bai2 | mt940 | camt053; intraday: bai2 | mt942 | camt052)", recipients: "1 to 5 addresses, comma separated, up to 200 characters", bankFormats: "true if offered", intraday: "true if offered", external: "true to allow outside addresses" },
+    returns: "{ reference, format, formatText, accounts, period, recipients, count }. Errors as corp.statements.check plus NO_TRANSACTIONS, INVALID_RECIPIENT, EXTERNAL_RECIPIENT_BLOCKED.", errors: ["PERMISSION_DENIED"],
+  },
+  {
+    adapter: "corp.statements.schedule", suggestedId: "statementSchedule", description: "Creates (or removes) a repeating statement; ten at most.",
+    input: { action: "create (default) | remove", scheduleId: "to remove", "...": "the fields of corp.statements.generate", frequency: "daily | weekly | monthly", day: "weekly: mon | tue | fri; monthly: 1 | 5 | last", schedule: "false when the bank has switched schedules off" },
+    returns: "{ id, format, formatText, how, frequencyText, first 'Fri 6 Nov', recipients, accounts, reference, count, max }. Errors: SCHEDULE_LIMIT, INVALID_SCHEDULE, FORMAT_NOT_ENABLED, as the statement.", errors: ["PERMISSION_DENIED"],
+  },
+  {
+    adapter: "corp.suppliers.validate", suggestedId: "validateSupplier", description: "Checks a supplier being added: step 1 the name, step 2 the bank details of the home market or the country.",
+    input: { step: "1 | 2 (default)", name: "supplier", type: "company | person", where: "same | abroad", allowPerson: "false when off", allowAbroad: "false when off", accountName: "name on the account", routing: "9 digits + account (+ accountType)", sort: "sort code + account", iban: "IBAN", country: "abroad", swift: "abroad", bankCode: "abroad, some countries" },
+    returns: "{ ok, name, accountName, key, region, country, account ('021000021 · ••4321'), countryName, needsAddress }. Errors: INVALID_NAME, SUPPLIER_NAME_EXISTS, TOO_MANY_PENDING (10 waiting), SUPPLIER_EXISTS, INVALID_ROUTING, INVALID_ACCOUNT, INVALID_SORT_CODE, INVALID_IBAN, NOT_SEPA, COUNTRY_MISMATCH, INVALID_BIC, INVALID_BANK_CODE.", errors: ["PERMISSION_DENIED"],
+  },
+  {
+    adapter: "corp.suppliers.check", suggestedId: "supplierNameCheck", description: "The name check of a supplier's bank account against the name on the account.",
+    input: { "...": "the fields of corp.suppliers.validate" }, returns: "{ result: match | close | none | na | wrongType, registeredName, recorded, fix }.", errors: ["PERMISSION_DENIED", "TIMEOUT", "SERVICE_UNAVAILABLE"],
+  },
+  {
+    adapter: "corp.suppliers.request", suggestedId: "requestSupplier", description: "Asks for a supplier to be added; an administrator approves it. Needs the one-time code first.",
+    input: { "...": "the fields of corp.suppliers.validate", acknowledged: "true when the person accepted a name that was not a match", street: "abroad", city: "abroad", postcode: "abroad" },
+    returns: "{ requestId, reference, name, account, country, status 'waiting_approval', approval }. Errors: OTP_REQUIRED, STEP_UP_FAILED, NAME_CHECK_NOT_CONFIRMED, ADDRESS_REQUIRED, and those of corp.suppliers.validate.", requiresOtp: true, errors: ["PERMISSION_DENIED"],
+  },
+  {
+    adapter: "corp.templates.save", suggestedId: "saveTemplate", description: "Saves a payment template (twenty at most); dryRun only checks. No code.",
+    input: { name: "up to 30 characters, not another template's", supplierId: "an approved supplier", amount: "optional, up to the person's limit", reference: "optional", purpose: "optional: Goods | Services | Rent | Utilities | Taxes and duties | Other", dryRun: "true to check only" },
+    returns: "The template (see corp.templates.list). Errors: NAME_REQUIRED, TEMPLATE_NAME_EXISTS, SUPPLIER_NOT_APPROVED, INVALID_AMOUNT, LIMIT_USER_EXCEEDED, INVALID_REFERENCE, PURPOSE_REQUIRED, TEMPLATE_LIMIT.", errors: ["PERMISSION_DENIED"],
+  },
+  {
+    adapter: "corp.templates.delete", suggestedId: "deleteTemplate", description: "Deletes a payment template; payments already sent are not touched.",
+    input: { templateId: "id" }, returns: "{ deleted, id, name }.", errors: ["TEMPLATE_NOT_FOUND", "PERMISSION_DENIED"],
+  },
+  {
+    adapter: "corp.schedules.list", suggestedId: "scheduleList", description: "The company's scheduled supplier payments, not the cancelled ones.",
+    input: {}, returns: "Map by id: { id, supplierName, reference, purpose, amountText, how, next, line '$4,500.00 · Monthly · next Tue 1 Dec', statusKey 'active' | 'awaiting', badge, progress '0 of 1 approved', warning (why the next payment would be skipped), last, info, ends }.", errors: ["PERMISSION_DENIED"],
+  },
+  {
+    adapter: "corp.schedules.get", suggestedId: "getSchedule", description: "One scheduled payment to change or cancel; refused when changes have closed.",
+    input: { scheduleId: "id", strictCutoff: "true when changes close at 09:00 instead of 18:00" }, returns: "The row of corp.schedules.list plus supplierId, currency, amount, frequency, nextRunOn, nextText, endMode, endsOn, endCount. Errors: SCHEDULE_NOT_FOUND, SCHEDULE_NOT_ACTIVE, SCHEDULE_RUNNING, SCHEDULE_CUTOFF_PASSED.", errors: ["PERMISSION_DENIED"],
+  },
+  {
+    adapter: "corp.schedules.check", suggestedId: "checkSchedule", description: "The review of a schedule or a change (with scheduleId): every rule applied, nothing made.",
+    input: { supplierId: "approved", amount: "in the supplier's currency", reference: "required", purpose: "required", frequency: "once | weekly | monthly | quarterly", start: "YYYY-MM-DD, a weekday from tomorrow to 12 months", endMode: "never | date | count", endDate: "a payment date after the first", endCount: "2 to 104 weekly, 60 monthly, 40 quarterly", allowQuarterly: "false when off", scheduleId: "to change one", strictCutoff: "see get" },
+    returns: "{ firstText, firstShort, nextDates, required (1 or 2 approvers), approvalText, codeRequired (from 25,000.00), amountText, how, adverb, ends, before, endDates }. Errors: SUPPLIER_NOT_APPROVED, RAIL_LIMIT, LIMIT_USER_EXCEEDED, DATE_TOO_SOON, DATE_TOO_FAR, NOT_A_WEEKDAY, END_BEFORE_START, INVALID_COUNT, INVALID_END_DATE, INVALID_FREQUENCY, REFERENCE_REQUIRED, PURPOSE_REQUIRED.", errors: ["PERMISSION_DENIED"],
+  },
+  {
+    adapter: "corp.schedules.create", suggestedId: "createSchedule", description: "Schedules a supplier payment; it waits for approval and no money moves. A code from the threshold.",
+    input: { "...": "the fields of corp.schedules.check" }, returns: "The schedule row plus the review fields and a reference. Errors: those of check, SCHEDULE_LIMIT (20 active), OTP_REQUIRED, STEP_UP_FAILED.", requiresOtp: true, errors: ["PERMISSION_DENIED"],
+  },
+  {
+    adapter: "corp.schedules.update", suggestedId: "updateSchedule", description: "Changes a scheduled payment; it goes back for approval. A code from the threshold.",
+    input: { scheduleId: "id", "...": "the fields of corp.schedules.check" }, returns: "As corp.schedules.create. Errors: those of check and get.", requiresOtp: true, errors: ["PERMISSION_DENIED"],
+  },
+  {
+    adapter: "corp.schedules.cancel", suggestedId: "cancelSchedule", description: "Cancels a scheduled payment at once; no code.",
+    input: { scheduleId: "id", strictCutoff: "see get" }, returns: "{ id, supplierName, amountText, how, cancelledOn }. Errors: as get.", errors: ["PERMISSION_DENIED"],
+  },
+  {
+    adapter: "corp.payments.track", suggestedId: "track", description: "Every payment of the company, newest first, with its status; with paymentId one payment and its timeline.",
+    input: { status: "all | pending_approval | released | settled | rejected | withdrawn", paymentId: "optional" }, returns: "{ role, count, canStart, rows: map by id { id, started, to, amount, currency, amountText, statusKey, statusText, startedBy, reference, canWithdraw, withdrawReason } }; with paymentId the row plus timeline: map { id, title, text, state } and canReceipt. Error: PAYMENT_NOT_FOUND.", errors: ["PERMISSION_DENIED"],
+  },
+  {
+    adapter: "corp.sandbox.arrange", suggestedId: "arrange", description: "Scenario only: sets the books up for a test (a supplier off the list, a balance, a payment released).",
+    input: { op: "removeSupplier | waitSupplier | approveSupplier | balance | release | payment | fillTemplates | fillSchedules | fillRequests | fillStatements | emptyTransactions", "...": "id, accountId, balance, paymentId, payment, count" }, returns: "{ ok }. Never called by a journey.",
+  },
   // ---- A retail customer's records (BankWorkx) ----
   {
     adapter: "bank.accounts.overview", suggestedId: "overview", description: "All accounts in groups, with the total",

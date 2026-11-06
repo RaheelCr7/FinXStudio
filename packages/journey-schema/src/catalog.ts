@@ -7,6 +7,15 @@ import { schedulePayment } from "./fixtures/schedule-payment";
 import { cancelStandingOrder } from "./fixtures/cancel-standing-order";
 import { supplierPayment } from "./fixtures/supplier-payment";
 import { approvePayments } from "./fixtures/approve-payments";
+import { paymentTracker } from "./fixtures/payment-tracker";
+import { businessWithdraw } from "./fixtures/business-withdraw";
+import { businessSchedules } from "./fixtures/business-schedules";
+import { scheduleBusinessPayment } from "./fixtures/schedule-business-payment";
+import { templates } from "./fixtures/templates";
+import { paymentTemplate } from "./fixtures/payment-template";
+import { addSupplier } from "./fixtures/add-supplier";
+import { businessStatement } from "./fixtures/business-statement";
+import { businessAccounts } from "./fixtures/business-accounts";
 import { corporatePayment, corporateApproval } from "./fixtures/corporate-payments";
 import { bulkPayment } from "./fixtures/bulk-payment";
 import { payrollRun } from "./fixtures/payroll-run";
@@ -168,6 +177,51 @@ export const catalog: CatalogEntry[] = [
     id: supplierPayment.slug, category: "Payments", madeFor: "bankworkx", journey: supplierPayment,
     summary: "A Maker pays a saved supplier from the company's account: amount, reference and purpose, the speeds the bank offers, a review, and a code from the company's threshold. The payment then waits for approvers; nothing leaves the account until it is released.",
     highlights: ["Only saved suppliers", "Speeds with fee and arrival; one over its limit is marked", "Rate and fee for a supplier paid in another currency", "One or two approvers shown on the review", "Code only from the threshold, naming the amount and the supplier", "Refused by the bank for a role without the permission"],
+  },
+  {
+    id: businessAccounts.slug, category: "Accounts", madeFor: "bankworkx", journey: businessAccounts,
+    summary: "The company's accounts in one place: the total balance, each account's available and ledger balance, the numbers to receive money on, and a searchable list of transactions by period. Some accounts are view only. Nothing here moves money.",
+    highlights: ["Total in the company's currency", "Available balance net of pending and waiting payments", "Numbers to receive money follow the bank's home market", "7, 30, 90 days or this month, and a search", "View only accounts show no transactions", "Export and Pay from this account only with the right"],
+  },
+  {
+    id: businessStatement.slug, category: "Accounts", madeFor: "bankworkx", journey: businessStatement,
+    summary: "Send a statement or a report for one or several accounts by email, once or on a schedule, as PDF, CSV or Excel (and the bank formats when the bank offers them). Only accounts the person may export; addresses at the company unless the bank allows others. Nothing is charged and no money moves.",
+    highlights: ["Only accounts the person may export", "Last month, last 3 months or a custom period up to 24 months", "Bank formats and Today so far only when the bank turns them on", "Up to 5 addresses, at the company by default", "Schedules: daily, weekly or monthly, ten at most", "Timeout and unavailable screens send nothing"],
+  },
+  {
+    id: addSupplier.slug, category: "Payments", madeFor: "bankworkx", journey: addSupplier,
+    summary: "A Maker asks for a supplier to be added to the company's approved list: the name, the bank details for the bank's home market (or another country, with an address), the bank's name check, a review and always a one-time code. An administrator approves it before the supplier can be paid.",
+    highlights: ["Bank details follow the bank's home market", "Another country: IBAN or account, bank code, SWIFT/BIC, address", "Name check: Use, Switch, or Add anyway", "Name, bank details and ten waiting are refused", "Code always asked, naming the supplier", "Waits for an administrator; cannot be paid yet"],
+  },
+  {
+    id: paymentTemplate.slug, category: "Payments", madeFor: "bankworkx", journey: paymentTemplate,
+    summary: "A Maker saves a payment made often (a supplier, an amount or none, a reference and a purpose), starts it again from the list, or deletes a template. A template holds no money and needs no approval; the payment it starts asks for its own.",
+    highlights: ["Create, use and delete in one journey", "Amount optional: Amount each time", "Twenty templates at most; a name only once", "Use fills in Pay a supplier", "A supplier waiting for approval or gone cannot be used", "Starts from a payment already made"],
+  },
+  {
+    id: templates.slug, category: "Payments", madeFor: "bankworkx", journey: templates,
+    summary: "The company's saved payments with their supplier and amount (or Amount each time), Use to start Pay a supplier with one, Delete, and Save a template. A template whose supplier is waiting for approval or gone cannot be used. An Approver sees the list without buttons.",
+    highlights: ["Supplier and amount, or Amount each time", "Use fills in Pay a supplier", "Waiting for approval and Unavailable chips instead of Use", "Buttons only with the right to manage templates or pay", "Empty state and retry state"],
+  },
+  {
+    id: scheduleBusinessPayment.slug, category: "Payments", madeFor: "bankworkx", journey: scheduleBusinessPayment,
+    summary: "A Maker schedules a payment to a saved supplier once, weekly, monthly or every 3 months, with an end; approvers approve it once before the first payment and the bank checks again before each one. The same journey changes a schedule (it goes back for approval) or cancels it at once. A code is asked only from the company's threshold.",
+    highlights: ["Saved, approved suppliers only", "Working days from tomorrow to 12 months ahead", "Ends never, on a date or after a number of payments", "Next three dates and approvers on the review", "Changes close the business day before", "Twenty schedules at most; timeout and unavailable screens"],
+  },
+  {
+    id: businessSchedules.slug, category: "Payments", madeFor: "bankworkx", journey: businessSchedules,
+    summary: "Scheduled and repeating supplier payments: supplier, reference, amount, how often, next date, whether the schedule waits for approval (0 of 1 approved) or is active, and a warning when the bank would skip the next payment and why. Change and Cancel open the schedule journey.",
+    highlights: ["Active and Waiting for approval badges", "Next date moved off weekends and closed days", "Warns when the next payment would be skipped, and why", "Change, Cancel and Schedule a payment only with the right", "Cancelled schedules are not listed"],
+  },
+  {
+    id: businessWithdraw.slug, category: "Payments", madeFor: "bankworkx", journey: businessWithdraw,
+    summary: "A Maker takes back a payment they started while it still waits for approval: pick it (or open it from the tracker), an optional reason (Other adds a note), and the payment becomes Withdrawn. Nothing was sent and no code is asked; the bank refuses another person's payment and one already released.",
+    highlights: ["Only your own pending payments", "Optional reason; Other adds a note of up to 100 characters", "Released or no longer pending payments are refused", "The amount is given back to the daily limit", "Check Payments message on a timeout; unavailable sheet", "Refused by the bank for a role without the permission"],
+  },
+  {
+    id: paymentTracker.slug, category: "Payments", madeFor: "bankworkx", journey: paymentTracker,
+    summary: "Every payment the company started, newest first, with its status (Pending approval, Released to bank, Settled, Rejected, Withdrawn) and a status timeline: who started it, who approved, the cut-off and, for a withdrawn payment, the reason. Withdraw opens for the Maker's own pending payment. Nothing here moves money.",
+    highlights: ["Filter by status one at a time", "Timeline matches the status and names the approvers", "Withdraw only on your own pending payment", "An Approver sees the list and a note about their role", "Empty and Nothing here states; retry state"],
   },
   {
     id: approvePayments.slug, category: "Payments", madeFor: "bankworkx", journey: approvePayments,

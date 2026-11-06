@@ -14,6 +14,8 @@ export interface CorporateProvider extends CorporateBankAdapter {
   delegatePayment?(input: { userId: string; paymentId: string; toUserId: string }): CorpPayment;
   /** Puts a payment that already happened (or waits) into the bank's books without running the rules: the sandbox's seed data, never a client call. */
   seedPayment?(p: CorpPayment): void;
+  /** Sandbox only: arranges the books for a scenario (the reference sandbox only). */
+  arrange?(op: { kind: "balance"; accountId: string; balance: number } | { kind: "removeSupplier"; id: string } | { kind: "addSupplier"; supplier: import("./corporate").CorpBeneficiary } | { kind: "release"; paymentId: string }): void;
 }
 export type ProviderId = "reference" | "bank-b";
 export const PROVIDERS: ProviderId[] = ["reference", "bank-b"];
