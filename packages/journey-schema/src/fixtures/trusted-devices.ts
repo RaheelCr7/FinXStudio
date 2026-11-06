@@ -101,7 +101,8 @@ export const trustedDevices: Journey = {
         text("Every other device is signed out and asks for a code next time.", "body", "td.all"),
         alert("error", "That code isn’t right. {{3 - td.wrong}} {{td.wrong == 2 ? 'try' : 'tries'}} left.", "td.codeError == 'OTP_INVALID'"),
         alert("error", "That code has expired. Cancel and start again.", "td.codeError == 'OTP_EXPIRED'"),
-        { type: "textInput", bind: "td.code", label: "Code sent to the phone ending {{td.otp.last4}}", placeholder: "6 digits", keyboard: "number", pattern: "^[0-9]{6}$", patternMessage: "Enter the 6 digits.", visibleWhen: "td.codeError != 'OTP_EXPIRED'" },
+        // an otp block, as in the other journeys that ask for a code: the lint finds the code screen by it
+        { type: "otp", bind: "td.code", length: 6, hint: "Code sent to the phone ending {{td.otp.last4}}", visibleWhen: "td.codeError != 'OTP_EXPIRED'" },
         button("Remove", [
           { type: "validate" },
           { type: "callApi", integration: "otpVerify", input: { code: "{{td.code}}", strict: true }, onError: { navigate: "codeFail" } },

@@ -49,7 +49,7 @@ export const trustedDevicesScenarios: NonNullable<Journey["scenarios"]> = [
   {
     id: "T-3", name: "A short code is not sent; a wrong code says so with the tries left; the third wrong one locks the view and nothing is removed", covers: ["AC-3"], ...base,
     steps: [
-      press("Work laptop, Chrome"), ...code("12"), { expectError: "Enter the 6 digits." }, screen("remove"), noText("tries left"),
+      press("Work laptop, Chrome"), ...code("12"), { expectError: "Enter all 6 digits" }, screen("remove"), noText("tries left"),
       ...code("000000"), text("That code isn’t right. 2 tries left."), screen("remove"), ...code("000000"), text("That code isn’t right. 1 try left."),
       ...code("000000"), screen("list"), text("Too many wrong codes. Try again later."), trusted(ALL),
       press("Work laptop, Chrome"), screen("list"), noText("Remove Work laptop, Chrome?"), noText("Sign out other devices"),
@@ -138,7 +138,7 @@ export const trustedDevicesScenarios: NonNullable<Journey["scenarios"]> = [
   },
   {
     id: "T-21", name: "The bank is unavailable when the other devices are signed out: a short code is not sent, nothing is changed", covers: ["AC-7", "AC-4"], ...base, conditions: { unavailable: ["bank.devices.remove"] },
-    steps: [press("Sign out other devices"), ...code("12", "Sign out"), { expectError: "Enter the 6 digits." }, screen("remove"), ...code("482100", "Sign out"), screen("removeProblem"), text(SORRY), noText("Other devices signed out"), trusted(ALL)],
+    steps: [press("Sign out other devices"), ...code("12", "Sign out"), { expectError: "Enter all 6 digits" }, screen("remove"), ...code("482100", "Sign out"), screen("removeProblem"), text(SORRY), noText("Other devices signed out"), trusted(ALL)],
   },
   {
     id: "T-20", name: "The view can be closed", covers: ["AC-6"], ...base,

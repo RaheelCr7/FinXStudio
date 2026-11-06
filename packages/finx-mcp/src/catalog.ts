@@ -249,6 +249,7 @@ export const LINT_RULES = [
   { code: "no_terminal", means: "No screen has kind \"terminal\".", fix: "Add a success screen, and a failed screen for money-moving journeys." },
   { code: "consent_before_submit", means: "A money-moving journey has no consent block.", fix: "Add a consent block on the review screen." },
   { code: "otp_before_money", means: "A money-moving journey has no OTP screen, or the money call is before otpVerify.", fix: "Put otpVerify before the money call in the same button." },
+  { code: "step_up_before_security_change", means: "A card, payee, contact, password, device or company-admin change has no OTP screen, or is before otpVerify.", fix: "Put otpVerify before it in the same button." },
   { code: "unbound_input", means: "A block binds a path that dataModel does not declare.", fix: "Add the path to dataModel." },
   { code: "amount_no_currency", means: "An amountInput has no currency.", fix: "Set currency to a code like JOD, or a path like {{account.currency}}." },
   { code: "amount_currency_invalid", means: "An amountInput's currency is neither a 3-4 letter code nor a {{path}}.", fix: "Use a code like JOD, or {{account.currency}}." },
