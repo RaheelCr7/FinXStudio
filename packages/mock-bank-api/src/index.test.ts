@@ -66,9 +66,9 @@ describe("mock bank sandbox", () => {
     expect(ADAPTER_CATALOG.find((a) => a.adapter === "bank.otp.verify")!.suggestedId).toBe("otpVerify");
   });
   it("describes the sandbox customers with their test OTPs, per bank app", () => {
-    expect(describePersonas().map((p) => [p.id, p.otpCode])).toEqual([["ayesha", "482100"], ["bilal", "111111"], ["alex", "482100"], ["alexglobal", "482100"], ["alexpayees", "482100"], ["alexfull", "482100"], ["alexbills", "482100"], ["alextopup", "482100"], ["alexsched", "482100"], ["sam", "123456"], ["zara", "123456"], ["hina", "482100"], ["acme", "482100"], ["nour", "482100"], ["sara", "482100"], ["yasmin", "482100"], ["lina", "482100"], ["omar", "482100"], ["alexbiz", "482100"], ["alexaccounts", "482100"], ["alexsave", "482100"], ["demolocked", "482100"], ["demoexpired", "482100"], ["demoinactive", "482100"], ["demonew", "482100"], ["demolimit", "482100"]]);
+    expect(describePersonas().map((p) => [p.id, p.otpCode])).toEqual([["ayesha", "482100"], ["bilal", "111111"], ["alex", "482100"], ["alexglobal", "482100"], ["alexpayees", "482100"], ["alexfull", "482100"], ["alexbills", "482100"], ["alextopup", "482100"], ["alexsched", "482100"], ["sam", "123456"], ["zara", "123456"], ["hina", "482100"], ["acme", "482100"], ["nour", "482100"], ["sara", "482100"], ["yasmin", "482100"], ["lina", "482100"], ["omar", "482100"], ["alexbiz", "482100"], ["alexaccounts", "482100"], ["alexsave", "482100"], ["demolocked", "482100"], ["demoexpired", "482100"], ["demoinactive", "482100"], ["demonew", "482100"], ["demolimit", "482100"], ["jordan", "482100"], ["demoapplicant", "482100"]]);
     expect(personasFor("meezan").map((p) => p.id)).toEqual(["ayesha", "bilal", "zara", "hina", "acme"]);
-    expect(personasFor("bankworkx").map((p) => p.id)).toEqual(["alex", "alexglobal", "alexpayees", "alexfull", "alexbills", "alextopup", "alexsched", "sam", "alexbiz", "alexaccounts", "alexsave", "demolocked", "demoexpired", "demoinactive", "demonew", "demolimit"]);
+    expect(personasFor("bankworkx").map((p) => p.id)).toEqual(["alex", "alexglobal", "alexpayees", "alexfull", "alexbills", "alextopup", "alexsched", "sam", "alexbiz", "alexaccounts", "alexsave", "demolocked", "demoexpired", "demoinactive", "demonew", "demolimit", "jordan", "demoapplicant"]);
   });
 });
 

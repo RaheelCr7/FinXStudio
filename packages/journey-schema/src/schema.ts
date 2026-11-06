@@ -254,6 +254,8 @@ export const Journey = z.object({
       device: z.enum(["known", "new", "unusual", "browser"]).optional(), idleTimeoutSeconds: z.number().int().positive().optional(),
       /** Personal permissions the person lacks (for example payments.create): the bank refuses what needs them. */
       withoutPermissions: z.array(z.string()).optional(),
+      /** How the photos of opening an account turn out (the first photo of that kind fails, a retake passes), and whether the bank declines every application. */
+      onboarding: z.object({ id: z.enum(["unreadable", "expired"]).optional(), selfie: z.enum(["dark", "notLive"]).optional(), poa: z.enum(["old"]).optional(), match: z.enum(["mismatch"]).optional(), decline: z.boolean().optional() }).optional(),
     }).optional(),
     /** How the bank is set up for this scenario: its options per journey (for example { "sign-in": { forceExpiry: false } }). */
     config: z.object({ options: z.record(z.string(), z.record(z.string(), z.unknown())).optional(), /** The bank's home market (us, uk, eu, ae, sa, jo): the numbers, addresses and postcodes it shows. */ homeMarket: z.enum(["us", "uk", "eu", "ae", "sa", "jo"]).optional(), /** Journey slugs the bank has switched off (a view draws no button to them). */ disabled: z.array(z.string()).optional() }).optional(),

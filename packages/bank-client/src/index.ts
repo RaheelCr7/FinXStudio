@@ -8,6 +8,7 @@ export * from "./view-models/budgets";
 export * from "./view-models/wallet";
 export * from "./view-models/invest";
 export * from "./view-models/catalog";
+export * from "./landing";
 export * from "./view-models/home";
 export * from "./session";
 export * from "./launch-points";

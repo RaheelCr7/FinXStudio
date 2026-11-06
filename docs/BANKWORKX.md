@@ -542,6 +542,53 @@ New module `packages/mock-bank-api/src/retail/more.ts` (`MoreApi`, `Persona.more
 
 The web app, run with `FINX_STUDIO_URL` pointing at a dead port (so the bundled journeys are used), signed in as Alex Morgan from the sandbox picker, on 6 November 2026 by the machine's clock (so the bank's two-second answer arrived at once, unread). Walked by hand in the browser: **the More tab** (the profile with *Change* on the mobile row, the conversations with *New*, the requests with their status, the linked bank, the *Read messages*, *New message*, *My requests*, *New request* and *Connect an account* buttons); **Update profile** for the mobile number ("Enter 10 digits." for 123, then 5550100177, the code screen "Sent to the phone ending 0142.", 000000: "That code isn't right. Try again." and "2 tries left.", then 482100, "Sent to the new number.", 482100: "Mobile number updated", •••• 0177, Updated, Old number Told by message; the More tab then showed +1 555 010 0177 and the bell one more unread); **New message** (Fraud or security showed the warning; a subject of `<b>Odd</b> sign-in` and a text with `<script>` were sent and shown as written), **Messages** (the new conversation first, with the bank's answer unread; opening it cleared the mark; a reply of "a" gave "Write a message first."; "Thanks, I changed my password." was added with the toast "Message sent"), **Service request** (the five kinds; a cheque book for Main gave "You already have this request open."; Savings gave SR-204119 with Received and the rows; an *Other* request opened by a link with the kind chosen gave SR-204120), **My requests** (the list newest first; the detail; *Cancel request* asks "Cancel this request?", *Keep it* changed nothing, *Yes, cancel* gave Cancelled and the toast) and **Connect a bank** (Summit Federal listed as connected; Maple Credit Union; *Continue* without the tick said "Agree to continue."; "Until 6 Nov 2027"; Allow; the three accounts with their balances; every switch off said "Choose at least one account."; two accounts connected, then three in a second run; the Accounts tab listed them under "At other banks", read only). Not walked by hand: Update profile for an email and an address (and the pending state, the market variants, the proof of address), three wrong codes and an expired code, an attachment in a message, a closed conversation, *Disconnect*, a bank that does not answer, *Deny*, and the phone app (type-checked only; no emulator was run). A full reload of the page starts the sandbox again, and so does a hot reload of the code: each walk was done without reloading.
 
+## Public: before sign-in (step 7, slice E)
+
+The journeys a person can use without a session: `loan-calculator`, `deposit-calculator`, `find-branch-atm`, `contact-support`, `open-account`, `track-application` and `register-digital-banking`. Spec: the "Public" part of the Retail catalog, lean and country-neutral. All are for BankWorkx only (`apps: ["bankworkx"]`), for the web and the phone, in the catalog (new categories **Public** and **Onboarding**) and in `bankworkxJourneys`. They start from the **Landing** under the sign-in.
+
+| Journey | Slug | What it is | Scenarios | Criteria | Mutation check |
+|---|---|---|---|---|---|
+| Loan calculator | `loan-calculator` | A product (personal, car, home), an amount and a term; the bank's quote (payment, rate, interest, total); *Start application* goes to the sign-in | 24 | 10 | 27 mutants, 18 killed, 9 accepted |
+| Deposit calculator | `deposit-calculator` | An amount, a term and where the interest is paid; the bank's quote; *Start application* goes to the sign-in | 25 | 10 | 25 mutants, 17 killed, 8 accepted |
+| Find a branch or ATM | `find-branch-atm` | A list (distance, address, open or closed by the bank's clock), a search, filters (all, branches, cash machines, open now), details | 34 | 10 | 18 mutants, 15 killed, 3 accepted |
+| Contact us | `contact-support` | Chat, call or message, with the hours; a message with a topic, an email and a text, and a reference | 30 | 9 | 25 mutants, 21 killed, 4 accepted |
+| Open an account | `open-account` | A code to the mobile number, about you, an ID check (simulated), contact details, consent, a one-time code, the reference; *Save and finish later* and resume (30 days) | 73 | 16 | 101 mutants, 78 killed, 23 accepted |
+| Track an application | `track-application` | The reference and the mobile number, a one-time code, the stage (received, checking, ready, declined) and what comes next | 29 | 9 | 45 mutants, 27 killed, 18 accepted |
+| Register for digital banking | `register-digital-banking` | Customer ID or card, date of birth, a one-time code, a username and a password (the sign-in's rules), consent, device trust, the result | 39 | 12 | 61 mutants, 49 killed, 12 accepted |
+
+Every accepted survivor has its reason in `packages/finx-mcp/src/scenarios.test.ts`: a rule of the bank that a journey only meets through a journey it opens (`linked`), or an error path no screen can reach.
+
+### Money safety, privacy and security, as built
+
+- **Exact money.** The calculators work in minor units with integers and BigInt fractions (no floats): the loan payment is `P * num * A / (den * (A - B))` rounded half up, a deposit's interest is an integer sum. The bank's quote is the one that counts; a screen shows what the bank answered.
+- **A code before an account is made or enrolled.** Open an account, track an application and register all need a one-time code (the sign-in's model: 482100, wrong 000000, expired 999999, 5 minutes, 3 resends, 3 wrong codes lock for 30 minutes). Registration reuses the sign-in's credentials: a hashed password (`secretHash`), the password rules, a trusted device.
+- **Consent before submit**, asked by the bank (`CONSENT_REQUIRED`), not only by the screen.
+- **Nothing sensitive is kept.** A draft keeps the answers except the ID number and the tax ID (a hash and a mask); photos and codes are never kept; after submit the application keeps the reference, product, stage and masks. `sandbox.public.inspect {contains}` proves that a string is nowhere in the bank's record. Tests look at the journeys' data and transcripts, the outbox and the log for the typed values; secure fields never reach a transcript. A secret is never echoed back (the confirmation shows the username and "Trusted", never the password).
+- **What the person writes is data.** A message and a name are stored as written and drawn as text; scenarios send `<script>` and `<b>`.
+- **Before sign-in, only the public adapters answer.** The signed-out allow-list (`PUBLIC_ADAPTERS`) is added deliberately, and a test checks that every other adapter still answers `NOT_SIGNED_IN`.
+- **A failure path for every call** (unavailable, timeout, slow answers); typed values stay on the screen and nothing says it was done when it was not.
+
+### How they differ from the spec, and why
+
+The engine has no sliders, live redraw, maps, camera, per-field messages from the bank or link action, so:
+
+- **Calculators.** The amount is a field with chips (not a slider) and the term a list. *Start application* goes to the sign-in (`apply-loan` and `term-deposit` need a customer) instead of opening the product.
+- **Find a branch or ATM.** A list with details, no map and no directions (no link action); the distance is the sandbox's fixed figure for a made-up place, not a measured one; an hour of 24:00 is shown as the bank sends it.
+- **Open an account.** The photo capture is simulated (no camera, nothing saved); no file upload; the ID number is asked again on resume, by design.
+- **Contact us.** Chat and call show the hours; they do not open a chat or a dialer (no link action).
+- **Landing.** Three actions beside Sign in (open an account, register, track) and four Explore rows, for web and phone. Not built: Products, Exchange rates, the legal pages, the welcome carousel and the splash. Apply for a loan, Term deposit and New message from a public screen go to the sign-in.
+- **Where the spec's text and its criterion disagree**, the criterion is followed (for example 12 months is shown as "1 year").
+
+### Sandbox added for them
+
+`packages/mock-bank-api/src/retail/public.ts` (`PublicApi`) and `public-data.ts` (products and rates, branches, contact hours, applications, enrolment), with their tests (`public.test.ts`, 52), the shared `AccessDirectory` (`pub`) and helpers in `access.ts` (`freshOtp`, `sendCode`, `judgeCode`, `checkRegistration`, `registerUser`). Every rule is switchable for the mutation check (the `pub*` entries of `Flaws`). Condition: `SandboxConditions.onboarding`. Personas: `jordan` (a customer who has not registered) and `demoapplicant`.
+
+The catalog's adapter section grew by 22 entries (the whole catalog from 48,217 to 50,319 characters, cap 56,000, unchanged); the test's ceiling for the adapters part went from 17,700 to 19,600.
+
+### Checked on screen
+
+The web app, run with `FINX_STUDIO_URL` at a dead port (so the bundled journeys are used), signed out, from the Landing under the sign-in, on 6 November 2026 by the machine's clock. Walked by hand: the loan calculator ($10,000 over 3 years at 9.9%: $322.20) and *Start application* going to the sign-in; the deposit calculator ($10,000, 1 year: $390.00); find a branch or ATM (the list with open and closed); contact us by message (a reference, the topic and the email back); open an account (code, about you, *Save and finish later*, *Continue now*, the ID number masked and asked again, on to the ID check); track an application (the code, the stage); register for digital banking (code, username and password, consent, device trust, "You're registered", no password shown). **Not walked:** the phone app's Landing, the open-account steps after the ID check (proved by scenarios), other deposit terms and a branch's details. A browser tab that restores a signed-in session shows no Landing (it is for the signed-out bank); clear the session to see it.
+
 ## How a bank is defined
 
 A bank is a **project**: see [PROJECTS.md](PROJECTS.md). In short, `packages/ui-kit/src/brands.json` holds each bank's name, ids, look ("preset"), accent colour and currency; the design system turns that into a full light and dark theme, and Studio can add new ones. The sandbox customers are in `packages/mock-bank-api`, tagged by look. Banks with a Personal and a Business side can theme each apart (BankWorkx has Aurora and Graphite); see [WORKSPACE-THEMES.md](WORKSPACE-THEMES.md). Build with `--brand <id>`. Icons come from `scripts/generate-brand-assets.py` (the build makes them if missing).
