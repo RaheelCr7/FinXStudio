@@ -166,3 +166,28 @@ describe("launch values for the engine", () => {
     expect(launchNames("mobile-topup").has("carrierId")).toBe(false);
   });
 });
+
+describe("the card buttons follow the card", () => {
+  it("each button names the states of a card it is for, and a row shows only those", async () => {
+    const { forRow } = await import("./launch-points");
+    const alex = await ctx("personal");
+    const at = (state: string) => forRow(launchPointsFor({ context: alex, entries: ALL }, { place: "cards.card" }).filter((l) => l.passes.length), { state }).map((l) => l.label);
+    expect(at("active")).toEqual(["Freeze", "Limits and controls", "Virtual card", "Replace card", "Set PIN"]);
+    expect(at("frozen")).toEqual(["Unfreeze", "Limits and controls", "Replace card", "Set PIN"]);
+    expect(at("inactive")).toEqual(["Activate"]);
+    expect(at("blocked")).toEqual(["Replace card"]);
+    expect(at("expired")).toEqual(["Replace card"]);
+    expect(at("replaced")).toEqual([]);
+    expect(at("virtual-active")).toEqual(["Freeze", "Limits and controls"]);
+    expect(at("virtual-frozen")).toEqual(["Unfreeze", "Limits and controls"]);
+    const spending = (state: string) => forRow(launchPointsFor({ context: alex, entries: ALL }, { place: "cards.transaction" }), { state }).map((l) => l.label);
+    expect([spending("reportable"), spending("none")]).toEqual([["Report a problem"], []]);
+  });
+  it("Unfreeze and Freeze are the same journey with their own action, and the card buttons need the permission of their journey", async () => {
+    const alex = await ctx("personal");
+    const lps = launchPointsFor({ context: alex, entries: ALL }, { place: "cards.card" });
+    const by = (label: string) => lps.find((l) => l.label === label)!;
+    expect([launchValues(by("Unfreeze"), { cardId: "card_9021", action: "freeze" }), launchValues(by("Freeze"), { cardId: "card_9021" })]).toEqual([{ cardId: "card_9021", action: "unfreeze" }, { cardId: "card_9021", action: "freeze" }]);
+    expect([by("Set PIN").needs, by("Virtual card").needs, launchPointsFor({ context: alex, entries: ALL }, { place: "cards" }).map((l) => [l.label, l.needs]), launchPointsFor({ context: alex, entries: ALL }, { place: "cards.overview" }).map((l) => [l.journey, l.needs])]).toEqual(["cards.pin", "cards.manage", [["Add a card", "payments.create"]], [["cards", "cards.view"]]]);
+  });
+});

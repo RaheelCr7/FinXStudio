@@ -28,6 +28,16 @@ import { budgets } from "./budgets";
 import { transferTypes } from "./transfer-types";
 import { accountNickname } from "./account-nickname";
 import { singleTransfer } from "./single-transfer";
+import { addCard } from "./add-card";
+export { addCard };
+import { disputeTransaction } from "./dispute-transaction";
+import { replaceCard } from "./replace-card";
+import { virtualCard } from "./virtual-card";
+import { freezeCard } from "./freeze-card";
+import { cardControls } from "./card-controls";
+import { activateCard } from "./activate-card";
+import { cardsView } from "./cards";
+import { cardPin } from "./card-pin";
 
 // Create a budget is its own file (accounts and budgets belong together); it is still exported from here, where it always was
 export { createBudget };
@@ -85,59 +95,6 @@ export const addMoney: Journey = {
       blocks: [
         { type: "result", tone: "error", title: "Couldn't add money", text: "Nothing was charged to your card. Check the amount and try again." },
         { type: "button", label: "Try again", variant: "primary", actions: [{ type: "navigate", to: "amount" }] },
-      ],
-    },
-  ],
-};
-
-export const addCard: Journey = {
-  ...base, id: "jrn_add_card", slug: "add-card", name: "Add card", entryScreen: "card",
-  dataModel: {
-    card: { type: "object", required: true },
-    "card.number": { type: "string" }, "card.holder": { type: "string" }, "card.expiry": { type: "string" }, "card.cvv": { type: "string" },
-    "card.nickname": { type: "string" },
-    "card.makeDefault": { type: "boolean" },
-    "card.consent": { type: "boolean", required: true },
-  },
-  integrations: [{ id: "addCard", adapter: "bank.cards.add", mode: "sandbox" }],
-  screens: [
-    {
-      id: "card", title: "Add your card",
-      blocks: [
-        { type: "stepper", steps: ["card", "review"] },
-        { type: "cardForm", bind: "card" },
-        { type: "textInput", bind: "card.nickname", label: "Nickname (optional)", placeholder: "For example, Everyday" },
-        { type: "toggle", bind: "card.makeDefault", label: "Make this my default card", helper: "Used first when you add money" },
-        { type: "button", label: "Continue", variant: "primary", actions: [{ type: "validate" }, { type: "navigate", to: "review" }] },
-      ],
-    },
-    {
-      id: "review", title: "Review card",
-      blocks: [
-        { type: "reviewSummary", rows: [{ label: "Name on card", value: "{{card.holder}}" }, { label: "Expires", value: "{{card.expiry}}" }, { label: "Nickname", value: "{{card.nickname}}" }] },
-        {
-          type: "consent", bind: "card.consent", termsVersion: "cards-v1", text: "I authorise BankWorkx to save this card for adding money",
-          validation: { mustBeTrue: true, messages: { mustBeTrue: "Tick the box to continue" } },
-        },
-        {
-          type: "button", label: "Save card", variant: "primary",
-          actions: [
-            { type: "validate" },
-            { type: "callApi", integration: "addCard", input: { number: "{{card.number}}", holder: "{{card.holder}}", expiry: "{{card.expiry}}", cvv: "{{card.cvv}}", nickname: "{{card.nickname}}", makeDefault: "{{card.makeDefault}}" }, saveAs: "result", onError: { navigate: "failed" } },
-            { type: "navigate", to: "success" },
-          ],
-        },
-      ],
-    },
-    {
-      id: "success", title: "Card added", kind: "terminal",
-      blocks: [{ type: "result", tone: "success", title: "Card added", text: "You can now add money from this card." }, done],
-    },
-    {
-      id: "failed", title: "Card not added", kind: "terminal",
-      blocks: [
-        { type: "result", tone: "error", title: "We couldn't add this card", text: "It may already be saved, or the details may not match. Check them and try again." },
-        { type: "button", label: "Try again", variant: "primary", actions: [{ type: "navigate", to: "card" }] },
       ],
     },
   ],
@@ -320,4 +277,4 @@ export const sellInvestment: Journey = {
   ],
 };
 
-export const bankworkxJourneys: Journey[] = [addMoney, addCard, connectAccount, createBudget, invest, sellInvestment, ownTransfer, manageBeneficiary, personalTransfer, internalTransfer, internationalTransfer, payBillBankworkx, mobileTopup, schedulePayment, cancelStandingOrder, supplierPayment, approvePayments, signIn, forgotUsername, resetPassword, forgotPassword, unlockAccount, changePassword, trustedDevices, changeQuickPin, setupQuickLogin, accounts, accountDetails, statement, openAnotherAccount, budgets, accountNickname, transferTypes, singleTransfer];
+export const bankworkxJourneys: Journey[] = [addMoney, addCard, connectAccount, createBudget, invest, sellInvestment, ownTransfer, manageBeneficiary, personalTransfer, internalTransfer, internationalTransfer, payBillBankworkx, mobileTopup, schedulePayment, cancelStandingOrder, supplierPayment, approvePayments, signIn, forgotUsername, resetPassword, forgotPassword, unlockAccount, changePassword, trustedDevices, changeQuickPin, setupQuickLogin, accounts, accountDetails, statement, openAnotherAccount, budgets, accountNickname, transferTypes, singleTransfer, cardsView, activateCard, cardControls, freezeCard, virtualCard, replaceCard, cardPin, disputeTransaction];

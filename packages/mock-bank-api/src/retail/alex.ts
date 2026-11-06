@@ -37,15 +37,8 @@ const transactions = (): AccountTxn[] => [
 ];
 
 
-const card = (c: Partial<IssuedCard> & Pick<IssuedCard, "id" | "kind" | "last4" | "nickname">): IssuedCard => ({
-  network: c.kind === "credit" ? "mastercard" : "visa", holder: "Alex Morgan", expiry: "11/29", status: "active", virtual: false, pinSet: true,
-  limits: { daily: 5000, online: 3000, atm: 1000 }, controls: { online: true, international: false, contactless: true, atm: true }, ...c,
-});
-const cards = (): IssuedCard[] => [
-  card({ id: "card_debit", kind: "debit", last4: "4410", nickname: "Debit", accountId: "acc_main" }),
-  card({ id: "card_credit", kind: "credit", last4: "0873", nickname: "Credit", limits: { daily: 12000, online: 6000, atm: 500 }, creditLimit: 12000, outstanding: 1340.2, controls: { online: true, international: true, contactless: true, atm: false } }),
-  card({ id: "card_new", kind: "debit", last4: "2290", nickname: "Debit (new)", accountId: "acc_main", status: "inactive", pinSet: false, expiry: "11/30" }),
-];
+// Alex's issued cards are kept by the cards sandbox (cards.ts, Persona.cards); the shell reads them through bank.cards.issued.
+const cards = (): IssuedCard[] => [];
 
 /** An even-instalment loan: the schedule that pays `outstanding` off over `n` months at `ratePercent`. */
 export function loanSchedule(outstanding: number, ratePercent: number, n: number, firstDue: string, currency: string): { monthlyPayment: number; schedule: LoanInstalment[] } {

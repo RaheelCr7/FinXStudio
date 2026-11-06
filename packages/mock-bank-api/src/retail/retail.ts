@@ -4,7 +4,7 @@ import type { Account, Beneficiary, Persona, SandboxConditions, SavedBiller, Sav
 import type { Flaws } from "../business/corporate";
 import type { BankConfig } from "../config";
 import { instrumentOf, INSTRUMENTS, dayChange } from "./invest";
-import { BANKS, cardNetwork, luhnValid } from "./finance";
+import { BANKS } from "./finance";
 import { customerRate, midRate, priceQuote, fxSupports, DEFAULT_FX, BANKWORKX_FX, QUOTE_TTL_SECONDS, type FxConfig, type Quote } from "./fx";
 import { CabSandbox } from "./cab";
 import { checkName, checkPayee, COOLING_OFF_HOURS, COOLING_OFF_USD, COUNTRY_RULES, findCustomer, hoursSince, MAX_PAYEES, sendTypeOf, type NameCheck, type PayeeDetails, type PayeeInput, type PayeeKind, type PayeeRegion } from "./payees";
@@ -15,6 +15,7 @@ import { ADDRESS_RULE_USD, businessDays, money, PAYMENT_QUOTE_SECONDS, PURPOSES,
 import { credit, debit, spendable } from "./money";
 import { retailRecords } from "./records";
 import { AccountsApi } from "./accounts";
+import { CardsApi } from "./cards";
 
 const hour = 3600 * 1000;
 
@@ -68,6 +69,8 @@ export class RetailSandbox {
   readonly cab: CabSandbox;
   /** Accounts, statements, budgets and the speeds on offer (accounts.ts). */
   private accounts: AccountsApi;
+  /** The cards the bank issued and the cards a customer saves (cards.ts). */
+  private cards: CardsApi;
   constructor(private p: Persona, private host: RetailHost) {
     this.schedules = p.schedules ?? [];
     this.savedBillers = p.savedBillers ?? [];
@@ -75,6 +78,7 @@ export class RetailSandbox {
     this.fx = p.brand === "bankworkx" ? BANKWORKX_FX : DEFAULT_FX;
     this.flaws = host.flaws;
     this.accounts = new AccountsApi(p, { now: () => host.now(), otp: host.otp, conditions: () => host.conditions(), flaws: host.flaws, config: host.config });
+    this.cards = new CardsApi(p, { now: () => host.now(), otp: host.otp, conditions: () => host.conditions(), flaws: host.flaws, config: host.config });
     this.cab = new CabSandbox(p, { otpVerified: () => host.otp.verified, clearOtp: () => { host.otp.verified = false; }, now: () => host.now() });
   }
   private get otp(): OtpState { return this.host.otp; }
@@ -737,6 +741,8 @@ export class RetailSandbox {
     }
     // the accounts of a customer, their statements, budgets and the speeds on offer
     if (this.accounts.handles(adapter)) return this.accounts.call(adapter, input);
+    // the cards the bank issued, and saving a card from another bank
+    if (this.cards.handles(adapter)) return this.cards.call(adapter, input);
     // a BankWorkx customer pays bills from the bank's own directory (bills.ts); the Meezan customers keep the older billers below
     if (this.p.brand === "bankworkx" && /^bank\.bill(er)?s\./.test(adapter)) return this.bankworkxBills(adapter, input);
     // a BankWorkx customer tops up from the bank's own operators (topup.ts); the Meezan customers keep the carriers and the 50 to 5,000 rule below
@@ -1017,22 +1023,6 @@ export class RetailSandbox {
         credit(to, amount);
         fin.transactions.unshift({ id: `t_dep${++this.seq}`, title: "Added money", category: "income", amount, daysAgo: 0, time: "Now" });
         return { reference: `ADD-${this.day()}-${String(930 + this.seq).padStart(4, "0")}`, newBalance: to.balance };
-      }
-      case "bank.cards.add": {
-        const fin = this.p.finance; if (!fin) throw new BankError("NOT_SUPPORTED", "Not available for this customer");
-        const num = String(input.number ?? "").replace(/\s/g, "");
-        if (!luhnValid(num)) throw new BankError("CARD_INVALID", "That card number is not valid");
-        const m = /^(0[1-9]|1[0-2])\/?([0-9]{2})$/.exec(String(input.expiry ?? "").replace(/\s/g, ""));
-        if (!m) throw new BankError("EXPIRY_INVALID", "Enter the expiry as MM/YY");
-        const exp = new Date(2000 + Number(m[2]), Number(m[1]), 0, 23, 59);
-        if (exp.getTime() < Date.UTC(2026, 10, 2)) throw new BankError("CARD_EXPIRED", "This card has expired");
-        if (!/^[0-9]{3,4}$/.test(String(input.cvv ?? ""))) throw new BankError("CVV_INVALID", "Enter the 3 or 4 digit security code");
-        if (fin.cards.some((c) => c.last4 === num.slice(-4))) throw new BankError("CARD_EXISTS", "This card is already added");
-        const makeDefault = input.makeDefault === true || fin.cards.length === 0;
-        if (makeDefault) fin.cards.forEach((c) => { c.isDefault = false; });
-        const card = { id: `c_${num.slice(-4)}`, network: cardNetwork(num), last4: num.slice(-4), holder: String(input.holder ?? this.p.name), expiry: `${m[1]}/${m[2]}`, nickname: String(input.nickname || "My card"), isDefault: makeDefault };
-        fin.cards.push(card);
-        return { cardId: card.id, last4: card.last4, network: card.network };
       }
       case "bank.accounts.connect": {
         const fin = this.p.finance; if (!fin) throw new BankError("NOT_SUPPORTED", "Not available for this customer");

@@ -256,7 +256,7 @@ export const Journey = z.object({
       withoutPermissions: z.array(z.string()).optional(),
     }).optional(),
     /** How the bank is set up for this scenario: its options per journey (for example { "sign-in": { forceExpiry: false } }). */
-    config: z.object({ options: z.record(z.string(), z.record(z.string(), z.unknown())).optional() }).optional(),
+    config: z.object({ options: z.record(z.string(), z.record(z.string(), z.unknown())).optional(), /** The bank's home market (us, uk, eu, ae, sa, jo): the numbers, addresses and postcodes it shows. */ homeMarket: z.enum(["us", "uk", "eu", "ae", "sa", "jo"]).optional() }).optional(),
     /** Values the journey is opened with, by data path (as when another journey opens it, or an app deep link): they are there before the entry screen runs. */
     launch: z.record(z.string(), z.unknown()).optional(),
     /** Calls made on the bank before the walk starts, for example a payment waiting for approval. */

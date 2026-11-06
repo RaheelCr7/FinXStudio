@@ -73,7 +73,9 @@ describe("catalog stays in sync with the real schema and lint", () => {
   // Trim the section that grew (shorter wording, no repeats) before raising a number, and raise it by what the new entries need, not more.
   // adapters 12,700 -> 12,800: the 14 adapters of the Accounts journeys (overview, transactions, hide, report, closure, open, three statement calls, budgets update and delete,
   // spending, speeds), each cut to one short line before raising (12,796 now). The whole stays at 54,530 of 56,000.
-  const SECTION_CEILINGS: Record<string, number> = { overview: 900, journey: 2_600, blocks: 22_500, actions: 3_000, expressions: 1_900, data: 900, localization: 1_100, adapters: 12_800, personas: 5_800, lint: 4_300, patterns: 1_700 };
+  // adapters 12,800 -> 14,100: the 19 new adapters of the Cards journeys (choosing cards, their spending, activation, freezing, controls, virtual cards, replacing, the PIN, reporting a payment, saving another
+  // bank's card), and 3 rewritten entries (issued, get, add), each cut to one short line before raising (14,055 now). The whole stays at 55,802 of 56,000, which is not raised.
+  const SECTION_CEILINGS: Record<string, number> = { overview: 900, journey: 2_600, blocks: 22_500, actions: 3_000, expressions: 1_900, data: 900, localization: 1_100, adapters: 14_100, personas: 5_800, lint: 4_300, patterns: 1_700 };
   it("each section stays within its ceiling, and the whole stays within the size the tool returns", () => {
     const sizes = catalogSizes();
     const report = JSON.stringify(sizes);

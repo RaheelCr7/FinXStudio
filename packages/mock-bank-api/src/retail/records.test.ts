@@ -72,10 +72,10 @@ describe("transactions and statements", () => {
 });
 
 describe("the rest of Alex's relationship", () => {
-  it("cards: a debit and a credit card are active, a new one waits to be activated", async () => {
+  it("cards: a debit and a credit card are active, a virtual card sits under its parent, a new one waits to be activated", async () => {
     const cards = Object.values(await alex().call("bank.cards.issued")) as any[];
-    expect(cards.map((c) => [c.kind, c.last4, c.status])).toEqual([["debit", "4410", "active"], ["credit", "0873", "active"], ["debit", "2290", "inactive"]]);
-    expect((await alex().call("bank.cards.get", { cardId: "card_credit" })).creditLimit).toBe(12_000);
+    expect(cards.map((c) => [c.kind, c.last4, c.status])).toEqual([["debit", "9021", "active"], ["debit", "6150", "active"], ["debit", "7745", "inactive"], ["credit", "3318", "active"]]);
+    expect((await alex().call("bank.cards.get", { cardId: "card_3318" })).creditLimit).toBe(5000);
     expect(await code(alex().call("bank.cards.get", { cardId: "x" }))).toBe("CARD_NOT_FOUND");
   });
   it("deposits, goals, loans with a schedule that pays off, profile, messages, notifications, requests", async () => {

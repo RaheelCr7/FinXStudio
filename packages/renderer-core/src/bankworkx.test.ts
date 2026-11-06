@@ -69,39 +69,46 @@ describe("Add money", () => {
 });
 
 describe("Add a card", () => {
+  // the journey was rewritten for the Cards spec (the bank checks the card, a code proves it, a tick saves it); its full proof is in finx-mcp (add-card scenarios)
   const fill = (r: JourneyRunner, over: Record<string, string> = {}) => {
-    const v = { number: "4242424242424242", holder: "ALEX MORGAN", expiry: "12/29", cvv: "123", ...over };
-    for (const [k, val] of Object.entries(v)) r.set(`card.${k}`, val);
+    const v = { number: "4242 4242 4242 4242", holder: "Alex Morgan", expiry: "12/29", cvv: "123", postcode: "62704", ...over };
+    for (const [k, val] of Object.entries(v)) r.set(`ac.${k}`, val);
   };
   it("shows one error per field that is wrong", async () => {
     const { r } = mk(addCard); await r.start();
-    fill(r, { number: "4242424242424241", expiry: "01/20", cvv: "1", holder: "" });
+    fill(r, { number: "42a2", expiry: "13/29", cvv: "1", holder: "1", postcode: "" });
     await press(r, "Continue");
     expect(r.current).toBe("card");
-    expect(Object.keys(r.errors).sort()).toEqual(["card.cvv", "card.expiry", "card.holder", "card.number"]);
-    expect(r.view().blocks.find((b) => b.type === "cardForm")!.errors.number).toBe("Enter a valid card number");
+    expect(Object.keys(r.errors).sort()).toEqual(["ac.cvv", "ac.expiry", "ac.holder", "ac.number", "ac.postcode"]);
+    expect(r.errors["ac.number"]).toBe("Use digits only.");
   });
-  it("saves a valid card, as default when asked", async () => {
+  it("saves a valid card after the code and the tick, and does not keep the number or the security code", async () => {
     const { r, bank } = mk(addCard); await r.start();
-    fill(r); r.set("card.nickname", "Travel"); r.set("card.makeDefault", true);
+    fill(r);
     await press(r, "Continue");
-    expect(r.current).toBe("review");
+    expect(r.current).toBe("verify");
+    r.set("ac.code", "482100"); await press(r, "Continue");
+    expect(r.current).toBe("name");
+    r.set("ac.nick", "Travel");
     await press(r, "Save card");
-    expect(r.errors["card.consent"]).toBeTruthy();
-    r.set("card.consent", true);
+    expect(r.errors["ac.consent"]).toBeTruthy();
+    r.set("ac.consent", true);
     await press(r, "Save card");
-    expect(r.current).toBe("success");
-    const cards = bank.persona.finance!.cards;
-    expect(cards.map((c) => [c.last4, c.nickname, c.isDefault])).toEqual([["5832", "Everyday", false], ["4242", "Travel", true]]);
+    expect(r.current).toBe("done");
+    expect(bank.persona.finance!.cards.map((c) => [c.last4, c.nickname, c.isDefault])).toEqual([["5832", "Everyday", true], ["4242", "Travel", false]]);
+    expect([r.get("ac.number"), r.get("ac.cvv"), r.get("ac.code")]).toEqual(["", "", ""]);
   });
-  it("lands on the failure screen when the card is already saved, and can go back", async () => {
+  it("stays on the card step when the card is already saved, with the bank's words", async () => {
     const { r } = mk(addCard); await r.start();
-    fill(r, { number: "5200000000005832" });
-    r.set("card.consent", true);
+    fill(r, { number: "5200 8282 8282 8210", expiry: "11/28" });
     await press(r, "Continue");
-    await press(r, "Save card");
-    expect(r.current).toBe("failed");
-    await press(r, "Try again");
+    expect(r.current).toBe("verify");
+    r.set("ac.code", "482100"); await press(r, "Continue");
+    r.set("ac.consent", true); await press(r, "Save card");
+    expect(r.current).toBe("done");
+    await r.start();
+    fill(r, { number: "5200 8282 8282 8210", expiry: "11/28" });
+    await press(r, "Continue");
     expect(r.current).toBe("card");
   });
 });

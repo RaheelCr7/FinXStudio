@@ -2,7 +2,7 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { Icon, ProgressBar } from "@finx/renderer-web";
-import { isRowLevel, isSectionLevel, screenIsEmpty, type LaunchPoint, type Row, type Screen, type Section, type ShellTab } from "@finx/bank-client";
+import { forRow, isRowLevel, isSectionLevel, screenIsEmpty, type LaunchPoint, type Row, type Screen, type Section, type ShellTab } from "@finx/bank-client";
 import { useWs } from "./use-ws";
 
 function Skeleton() {
@@ -29,7 +29,7 @@ function Buttons({ points, passed, small }: { points: LaunchPoint[]; passed?: Re
 function RowView({ row }: { row: Row }) {
   const { app } = useWs();
   const [open, setOpen] = useState(false);
-  const points = row.place ? app.launchPoints({ place: row.place }).filter(isRowLevel) : [];
+  const points = row.place ? forRow(app.launchPoints({ place: row.place }).filter(isRowLevel), row) : [];
   const { project } = useWs();
   const body = (
     <>
