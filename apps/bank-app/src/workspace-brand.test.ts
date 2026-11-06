@@ -13,7 +13,8 @@ describe("the brand the mobile app draws", () => {
     const m = await load({ EXPO_PUBLIC_FINX_BRAND: "bankworkx" });
     expect(m.WORKSPACE).toBeUndefined();
     expect(m.brandOf()).toBe(m.brands.bankworkx);
-  });
+    // The first test of the file loads the app's modules cold (ui-kit and brand data); on a slow CI runner that can pass the default 5 s.
+  }, 30_000);
   it("passes the resolved workspace brand object when the bank themed that workspace", async () => {
     const m = await load({ EXPO_PUBLIC_FINX_BRAND: "bankworkx", EXPO_PUBLIC_FINX_WORKSPACE: "business" });
     expect(m.WORKSPACE).toBe("business");
