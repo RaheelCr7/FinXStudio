@@ -64,6 +64,15 @@ describe("catalog stays in sync with the real schema and lint", () => {
       expect(g.split("(").length, a.adapter).toBe(g.split(")").length); // never cut inside a bracket
     }
   });
+  it("the whole catalog is the short form and each section by name is complete", () => {
+    const all = getCatalog("all") as any;
+    expect(all.blocks.every((b: any) => b.example === undefined && b.fields)).toBe(true);
+    expect(all.lint.every((r: any) => r.fix === undefined)).toBe(true);
+    expect((getCatalog("blocks") as any).blocks).toEqual(BLOCKS);
+    expect((getCatalog("lint") as any).lint).toEqual(LINT_RULES);
+    expect(all.personas.list.length).toBe((getCatalog("personas") as any).personas.list.length);
+    expect(typeof (getCatalog("personas") as any).personas.list[0]).toBe("object");
+  });
   it("sections return only what was asked for", () => {
     for (const s of SECTIONS.filter((x) => x !== "all")) expect(Object.keys(getCatalog(s))).toEqual([s]);
   });
@@ -75,7 +84,9 @@ describe("catalog stays in sync with the real schema and lint", () => {
   // spending, speeds), each cut to one short line before raising (12,796 now). The whole stays at 54,530 of 56,000.
   // adapters 12,800 -> 14,100: the 19 new adapters of the Cards journeys (choosing cards, their spending, activation, freezing, controls, virtual cards, replacing, the PIN, reporting a payment, saving another
   // bank's card), and 3 rewritten entries (issued, get, add), each cut to one short line before raising (14,055 now). The whole stays at 55,802 of 56,000, which is not raised.
-  const SECTION_CEILINGS: Record<string, number> = { overview: 900, journey: 2_600, blocks: 22_500, actions: 3_000, expressions: 1_900, data: 900, localization: 1_100, adapters: 14_100, personas: 5_800, lint: 4_300, patterns: 1_700 };
+  // The whole catalog is the short form (44,600 of 56,000 after this compaction, 55,802 before): blocks without their examples, personas as one line each, lint codes without their fix.
+  // Each section by name is still complete, so an agent asks for what it needs. Ceilings = today's size plus what the Save & Borrow journeys add (adapters +2,500, personas +300).
+  const SECTION_CEILINGS: Record<string, number> = { overview: 1_100, journey: 2_600, blocks: 15_100, actions: 3_000, expressions: 1_900, data: 900, localization: 1_100, adapters: 16_600, personas: 1_800, lint: 2_600, patterns: 1_700 };
   it("each section stays within its ceiling, and the whole stays within the size the tool returns", () => {
     const sizes = catalogSizes();
     const report = JSON.stringify(sizes);

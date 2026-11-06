@@ -16,6 +16,7 @@ import { credit, debit, spendable } from "./money";
 import { retailRecords } from "./records";
 import { AccountsApi } from "./accounts";
 import { CardsApi } from "./cards";
+import { SaveApi } from "./save";
 
 const hour = 3600 * 1000;
 
@@ -71,6 +72,8 @@ export class RetailSandbox {
   private accounts: AccountsApi;
   /** The cards the bank issued and the cards a customer saves (cards.ts). */
   private cards: CardsApi;
+  /** Term deposits, savings goals, loans, the funds and topping up from a card (save.ts). */
+  private save: SaveApi;
   constructor(private p: Persona, private host: RetailHost) {
     this.schedules = p.schedules ?? [];
     this.savedBillers = p.savedBillers ?? [];
@@ -79,6 +82,7 @@ export class RetailSandbox {
     this.flaws = host.flaws;
     this.accounts = new AccountsApi(p, { now: () => host.now(), otp: host.otp, conditions: () => host.conditions(), flaws: host.flaws, config: host.config });
     this.cards = new CardsApi(p, { now: () => host.now(), otp: host.otp, conditions: () => host.conditions(), flaws: host.flaws, config: host.config });
+    this.save = new SaveApi(p, { now: () => host.now(), otp: host.otp, conditions: () => host.conditions(), flaws: host.flaws, config: host.config });
     this.cab = new CabSandbox(p, { otpVerified: () => host.otp.verified, clearOtp: () => { host.otp.verified = false; }, now: () => host.now() });
   }
   private get otp(): OtpState { return this.host.otp; }
@@ -743,6 +747,8 @@ export class RetailSandbox {
     if (this.accounts.handles(adapter)) return this.accounts.call(adapter, input);
     // the cards the bank issued, and saving a card from another bank
     if (this.cards.handles(adapter)) return this.cards.call(adapter, input);
+    // term deposits, savings goals, loans, the funds and adding money from a card
+    if (this.save.handles(adapter)) return this.save.call(adapter, input);
     // a BankWorkx customer pays bills from the bank's own directory (bills.ts); the Meezan customers keep the older billers below
     if (this.p.brand === "bankworkx" && /^bank\.bill(er)?s\./.test(adapter)) return this.bankworkxBills(adapter, input);
     // a BankWorkx customer tops up from the bank's own operators (topup.ts); the Meezan customers keep the carriers and the 50 to 5,000 rule below
@@ -1013,17 +1019,6 @@ export class RetailSandbox {
         return Object.fromEntries((this.p.finance?.cards ?? []).map((c) => [c.id, { ...c, name: `${c.nickname} ••${c.last4}` }]));
       case "bank.subscriptions.list":
         return Object.fromEntries((this.p.finance?.subscriptions ?? []).map((x) => [x.id, x]));
-      case "bank.deposit.create": {
-        const fin = this.p.finance; if (!fin) throw new BankError("NOT_SUPPORTED", "Not available for this customer");
-        const to = this.p.accounts.find((a) => a.id === input.toAccountId);
-        if (!to) throw new BankError("ACCOUNT_NOT_FOUND", "Account not found");
-        const amount = Number(input.amount);
-        if (!(amount >= 1 && amount <= 50000)) throw new BankError("INVALID_AMOUNT", "Enter an amount from $1 to $50,000");
-        if (!fin.cards.some((c) => c.id === input.fromCardId)) throw new BankError("CARD_NOT_FOUND", "Choose a card to add money from");
-        credit(to, amount);
-        fin.transactions.unshift({ id: `t_dep${++this.seq}`, title: "Added money", category: "income", amount, daysAgo: 0, time: "Now" });
-        return { reference: `ADD-${this.day()}-${String(930 + this.seq).padStart(4, "0")}`, newBalance: to.balance };
-      }
       case "bank.accounts.connect": {
         const fin = this.p.finance; if (!fin) throw new BankError("NOT_SUPPORTED", "Not available for this customer");
         const bank = BANKS.find((b) => b.id === input.bankId);

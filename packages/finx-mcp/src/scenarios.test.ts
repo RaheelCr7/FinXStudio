@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { bankworkxJourneys, chainTargets, chainWarnings, bulkPayment, catalog, corporateApproval, corporatePayment, Journey, withdrawPayment, payrollRun, ownTransfer, manageBeneficiary, personalTransfer, internalTransfer, internationalTransfer, payBillBankworkx, mobileTopup, schedulePayment, cancelStandingOrder, supplierPayment, approvePayments, signIn, forgotUsername, resetPassword, forgotPassword, unlockAccount, changePassword, trustedDevices, setupQuickLogin, changeQuickPin, accounts, accountDetails, statement, accountNickname, openAnotherAccount, budgets, createBudget, transferTypes, singleTransfer, cardPin, cardsView, activateCard, cardControls, freezeCard, virtualCard, replaceCard, disputeTransaction, addCard } from "@finx/journey-schema";
+import { bankworkxJourneys, chainTargets, chainWarnings, bulkPayment, catalog, corporateApproval, corporatePayment, Journey, withdrawPayment, payrollRun, ownTransfer, manageBeneficiary, personalTransfer, internalTransfer, internationalTransfer, payBillBankworkx, mobileTopup, schedulePayment, cancelStandingOrder, supplierPayment, approvePayments, signIn, forgotUsername, resetPassword, forgotPassword, unlockAccount, changePassword, trustedDevices, setupQuickLogin, changeQuickPin, accounts, accountDetails, statement, accountNickname, openAnotherAccount, budgets, createBudget, transferTypes, singleTransfer, cardPin, cardsView, activateCard, cardControls, freezeCard, virtualCard, replaceCard, disputeTransaction, addCard, termDeposit } from "@finx/journey-schema";
 import { lintAll } from "@finx/renderer-core";
 import { MockBank } from "@finx/mock-bank-api";
 import { mutationCheck, runScenarios } from "./scenarios";
@@ -1427,5 +1427,43 @@ describe("add-card: Add a card", () => {
     expect(JSON.stringify(r.data)).not.toContain("4242424242424242");
     expect(JSON.stringify(r.data)).not.toContain("482100");
     expect(JSON.stringify(r.frames)).not.toContain("123");
+  });
+});
+
+describe("term-deposit: Term deposit", () => {
+  const j = Journey.parse(termDeposit);
+  const ACC: Record<string, string> = {
+    "no-error-path-51": RESEND,
+    "no-rule-fail-2": "A deposit that disappears between the list and the last step cannot be arranged in one walk; the bank's own refusal (DEPOSIT_NOT_FOUND) is proved by T-37",
+    "no-rule-fail-8": "A code that was just verified cannot be spent in between, so the bank's own OTP_REQUIRED at the last step is reached only by a forged call (T-37)",
+    ...linked(["bank-totalHidden", "bank-totalFx"], "accounts"),
+  };
+  it("is lint clean, every scenario passes and every acceptance criterion is proved", async () => {
+    expect(lintAll(j)).toEqual([]);
+    const r = await runScenarios(j);
+    expect(r.results.filter((x) => !x.ok).map((x) => `${x.id} ${x.name}: ${x.failures.join(" | ")}`)).toEqual([]);
+    expect(r.coverage.map((c) => [c.id, c.status])).toEqual((j.acceptance ?? []).map((a) => [a.id, "proved"]));
+    expect([r.passed, r.total, r.coverage.length]).toEqual([47, 47, 11]);
+  });
+  it("the tests notice when the journey or the bank's rules are broken (mutation check)", async () => {
+    const m = await mutationCheck(j, ACC);
+    expect(m.survived.map((s) => `${s.id}: ${s.what}`)).toEqual([]);
+    expect([m.total, m.killed, m.accepted.length]).toEqual([56, 51, 5]);
+    for (const id of ["bank-depositRange", "bank-depositCharge", "bank-depositCode", "bank-depositEarly", "bank-saveFunds", "bank-depositTerm"]) expect(m.results.find((x) => x.id === id)?.killed, id).toBe(true);
+  }, 240_000);
+  it("is for BankWorkx only, asks for a tick and a code before it opens or closes and never keeps the code", async () => {
+    expect([termDeposit.apps, termDeposit.channels]).toEqual([["bankworkx"], ["web", "mobile"]]);
+    expect(catalog.filter((c) => c.id === "term-deposit").map((c) => [c.madeFor, c.category])).toEqual([["bankworkx", "Save & Borrow"]]);
+    expect(bankworkxJourneys.map((x) => x.slug)).toContain("term-deposit");
+    expect(chainTargets(termDeposit).sort()).toEqual(["accounts", "save-borrow"]);
+    expect(chainWarnings(termDeposit, bankworkxJourneys.map((x) => x.slug))).toEqual([]);
+    const verify = termDeposit.screens.find((s) => s.id === "code")!.blocks.flatMap((b: any) => (b.type === "button" ? b.actions : [])).filter((a: any) => a.type === "callApi").map((a: any) => a.integration);
+    expect(verify[0]).toBe("otpVerify");
+    const r = await simulate({
+      journey: j, persona: "alex", lang: "en", now: Date.parse("2026-11-03T10:00:00Z"), launch: { "launch.mode": "open" },
+      steps: [{ set: { "td.amount": 5000 } }, { press: "Continue" }, { press: "Continue" }, { set: { "td.consent": true } }, { press: "Confirm" }, { set: { "otp.code": "482100" } }, { press: "Confirm" }],
+    });
+    expect(r.finalScreen).toBe("doneOpen");
+    expect(JSON.stringify(r.data)).not.toContain("482100");
   });
 });

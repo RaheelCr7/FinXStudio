@@ -7,4 +7,4 @@ export const hit = (list: string[] | undefined, adapter: string) =>
   !!list?.some((x) => !x.startsWith("rail:") && (x === adapter || (x.endsWith(".") && adapter.startsWith(x)) || (x.endsWith("*") && adapter.startsWith(x.slice(0, -1)))));
 
 /** Adapters that read a list or a map: the ones `empty` can empty. */
-export const isListAdapter = (adapter: string) => /\.(list|pending|totals|issued|saved|numbers|amounts)$/.test(adapter);
+export const isListAdapter = (adapter: string) => /\.(list|pending|totals|issued|saved|numbers|amounts|holdings)$/.test(adapter);

@@ -80,14 +80,11 @@ describe("the rest of Alex's relationship", () => {
   });
   it("deposits, goals, loans with a schedule that pays off, profile, messages, notifications, requests", async () => {
     const b = alex();
-    expect(Object.values(await b.call("bank.deposits.list")).map((d: any) => d.status)).toEqual(["active", "matured"]);
-    expect(Object.values(await b.call("bank.goals.list")).map((g: any) => g.name)).toEqual(["Holiday", "Emergency fund"]);
-    const loans = await b.call("bank.loans.list");
-    expect(loans.loan_personal.schedule).toBeUndefined();
-    const loan = await b.call("bank.loans.get", { loanId: "loan_personal" });
-    expect(loan.schedule).toHaveLength(20);
-    expect(loan.schedule.at(-1).balance).toBe(0);
-    expect(loan.schedule.reduce((s: number, x: any) => s + x.principal, 0)).toBeCloseTo(7480, 2);
+    // the deposit, the goal and the loan are the Save and borrow sandbox's (save.ts, save.test.ts); the schedule of a loan is `loanSchedule`, tested below
+    expect(Object.values(await b.call("bank.deposits.list")).map((d: any) => [d.title, d.status])).toEqual([["Term deposit", "active"]]);
+    expect(Object.values(await b.call("bank.goals.list")).map((g: any) => g.name)).toEqual(["Holiday fund"]);
+    expect((await b.call("bank.loans.list")).ln1.schedule).toBeUndefined();
+    expect((await b.call("bank.loans.get", { loanId: "ln1" })).outstanding).toBe(9600);
     expect(await code(b.call("bank.loans.get", { loanId: "x" }))).toBe("LOAN_NOT_FOUND");
     expect(await b.call("bank.profile.get")).toMatchObject({ name: "Alex Morgan", email: "alex.morgan@example.com" });
     expect(Object.keys(await b.call("bank.messages.list"))).toHaveLength(3);

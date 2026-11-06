@@ -45,12 +45,17 @@ import { cardControls } from "./fixtures/card-controls";
 import { activateCard } from "./fixtures/activate-card";
 import { cardsView } from "./fixtures/cards";
 import { cardPin } from "./fixtures/card-pin";
+import { termDeposit } from "./fixtures/term-deposit";
+import { saveBorrow } from "./fixtures/save-borrow";
+import { savingsGoal } from "./fixtures/savings-goal";
+import { applyLoan } from "./fixtures/apply-loan";
+import { repayLoan } from "./fixtures/repay-loan";
 
 /**
  * The journey catalog: ready-made journeys a project can add to its own app.
  * Each entry is the journey exactly as shipped, so adding it never depends on what someone later edited in Studio.
  */
-export const CATEGORIES = ["Payments", "Accounts", "Cards", "Budgeting", "Investing", "Access"] as const;
+export const CATEGORIES = ["Payments", "Accounts", "Cards", "Budgeting", "Save & Borrow", "Investing", "Access"] as const;
 export type CatalogCategory = (typeof CATEGORIES)[number];
 
 export type CatalogEntry = {
@@ -109,8 +114,8 @@ export const catalog: CatalogEntry[] = [
   },
   {
     id: addMoney.slug, category: "Accounts", madeFor: "bankworkx", journey: addMoney,
-    summary: "Top up an account from a saved card, with quick amounts and a review step.",
-    highlights: ["Quick amount chips", "Card picker", "Review and receipt"],
+    summary: "Top up an account from a saved card (10.00 to 5,000.00, with a 1.5% card fee when on, security code, one-time code), or show the account's details to send money from another bank.",
+    highlights: ["Card or bank transfer details", "Expired cards cannot be chosen", "Fee and total charged shown before the code", "Details of the home market for a transfer", "Timeout and unavailable screens"],
   },
   {
     id: ownTransfer.slug, category: "Payments", madeFor: "bankworkx", journey: ownTransfer,
@@ -264,13 +269,38 @@ export const catalog: CatalogEntry[] = [
   },
   {
     id: invest.slug, category: "Investing", madeFor: "bankworkx", journey: invest,
-    summary: "Buy a stock or fund with a dollar amount, even part of a share, with a review step before the order.",
-    highlights: ["Instrument picker", "Quick amount chips", "Risk notice", "Failure path with no money moved"],
+    summary: "Invest in one of four funds: filter by risk, see the charge and the smallest amount, confirm the risk of a high-risk fund, review, and pay with a one-time code. A stock opened from the Invest tab is still bought the older way.",
+    highlights: ["Four funds with risk, charge and smallest amount", "Risk filter, high-risk funds can be switched off", "Risk acknowledgement", "Estimated units and charge", "One-time code", "Timeout and unavailable screens"],
   },
   {
     id: sellInvestment.slug, category: "Investing", madeFor: "bankworkx", journey: sellInvestment,
-    summary: "Sell part or all of a holding and have the money paid into an account.",
-    highlights: ["Holding picker", "Amount capped by what you own", "Failure path with nothing sold"],
+    summary: "Sell part or all of a fund holding: see the selling fee, the estimated proceeds and when the money arrives, confirm with a one-time code. Selling everything removes the holding.",
+    highlights: ["Only funds you hold", "An amount or everything", "0.25% selling fee when on", "Settlement two business days later", "One-time code", "Timeout and unavailable screens"],
+  },
+  {
+    id: saveBorrow.slug, category: "Save & Borrow", madeFor: "bankworkx", journey: saveBorrow,
+    summary: "Savings goals, term deposits, loans and the investment portfolio on one screen, each card with its key number and the next action. A section shows only when the bank has it on and its journey is allowed.",
+    highlights: ["Four sections in a fixed order", "Goal progress, deposit maturity, loan balance, portfolio gain", "Empty text and one button when a section has nothing", "Nothing to show when every section is off"],
+  },
+  {
+    id: termDeposit.slug, category: "Save & Borrow", madeFor: "bankworkx", journey: termDeposit,
+    summary: "Open a term deposit for 3, 6, 12 or 24 months, renew it or change what happens at maturity, or close it early with the charge shown first. One-time code every time.",
+    highlights: ["Rate and maturity by term", "Interest at maturity or every month", "Early closure keeps half the interest earned", "The money paid in is never touched", "Timeout and unavailable screens"],
+  },
+  {
+    id: savingsGoal.slug, category: "Save & Borrow", madeFor: "bankworkx", journey: savingsGoal,
+    summary: "Create or change a savings goal with a target and a month, an automatic monthly top-up, add money to it or take it out. The money stays the customer's, so no code is asked.",
+    highlights: ["Monthly amount needed to reach the target", "Automatic top-up on the 1st", "Up to 10 goals", "Add and take out", "Timeout and unavailable screens"],
+  },
+  {
+    id: applyLoan.slug, category: "Save & Borrow", madeFor: "bankworkx", journey: applyLoan,
+    summary: "Choose an amount and a term, see the monthly payment, tell the bank about work and income, get a decision at once and accept the offer with the terms ticked and a one-time code.",
+    highlights: ["Monthly payment as the amount changes", "Approved, in review or declined", "Rate one point higher above 35% of income", "Arrangement fee when on", "At most 3 loans", "Timeout and unavailable screens"],
+  },
+  {
+    id: repayLoan.slug, category: "Save & Borrow", madeFor: "bankworkx", journey: repayLoan,
+    summary: "Pay the next instalment, another amount, or settle a loan in full with the settlement figure shown first; confirm with a one-time code.",
+    highlights: ["Next instalment lowers the balance by its principal", "Another amount from 10.00", "Settlement with interest to date and the early fee", "One-time code", "Timeout and unavailable screens"],
   },
   {
     id: signIn.slug, category: "Access", madeFor: "bankworkx", journey: signIn,

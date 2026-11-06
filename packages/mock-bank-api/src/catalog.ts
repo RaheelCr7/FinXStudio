@@ -256,9 +256,10 @@ export const ADAPTER_CATALOG: AdapterInfo[] = [
     input: {}, returns: "Map by card id: { id, network, last4, holder, expiry, nickname, isDefault, name }. Save as ctx.cards and use with a select block (source).",
   },
   {
-    adapter: "bank.deposit.create", suggestedId: "addMoney", description: "Adds money to an account from a saved card (BankWorkx). $1 to $50,000 per transaction.",
-    input: { toAccountId: "account id", fromCardId: "card id", amount: "number, 1 to 50000" }, returns: "{ reference, newBalance }",
-    errors: ["INVALID_AMOUNT", "ACCOUNT_NOT_FOUND", "CARD_NOT_FOUND"],
+    adapter: "bank.deposit.create", suggestedId: "addMoney", description: "Adds money to an account from a saved card, after the code; 10.00 to 5,000.00 with a 1.5% fee",
+    input: { toAccountId: "account id", fromCardId: "card id", amount: "10 to 5000, at most 2 decimals", securityCode: "3 digits (never kept)", fee: "false: no fee", allowCard: "false: refused", dryRun: "true: apply every rule, charge nothing, no code" },
+    returns: "{ toName, cardName, amountText, fee, feeText, chargedText } and, after the code, reference, newBalance. The account gets the amount, the card is charged the amount and the fee.", requiresOtp: true,
+    errors: ["INVALID_AMOUNT", "LIMIT_EXCEEDED", "ACCOUNT_NOT_FOUND", "ACCOUNT_CANNOT_CREDIT", "CARD_NOT_FOUND", "CARD_EXPIRED", "CARD_DECLINED (a card ending 0000)", "CVV_INVALID", "CARD_OFF", "OTP_REQUIRED"],
   },
   {
     adapter: "bank.cards.check", suggestedId: "checkCard", description: "Checks a card from another bank before saving it",
@@ -486,10 +487,101 @@ export const ADAPTER_CATALOG: AdapterInfo[] = [
     returns: "{ disputeId DSP-..., status 'under_review', statusLabel, replyBy, cardBlocked, merchant, amountText, reason, evidence }", errors: ["CARD_NOT_FOUND", "TRANSACTION_NOT_FOUND", "TRANSACTION_PENDING", "NOT_A_PAYMENT_OUT", "NOT_A_CARD_PAYMENT", "DISPUTE_EXISTS", "DISPUTE_WINDOW_CLOSED", "REASON_INVALID", "DETAILS_INVALID", "DISPUTE_AMOUNT_INVALID"],
   },
   { adapter: "bank.disputes.list", suggestedId: "disputes", description: "The cases opened on card payments", input: { cardId: "optional" }, returns: "Map by case id: { id, cardId, transactionId, reason, amountText, status, cardBlocked }." },
-  { adapter: "bank.deposits.list", suggestedId: "deposits", description: "Term deposits.", input: {}, returns: "Map by id: { id, name, principal, currency, ratePercent, termMonths, openedOn, maturesOn, status, autoRenew, accountId }.", errors: ["NOT_SUPPORTED"] },
-  { adapter: "bank.goals.list", suggestedId: "goals", description: "Savings goals.", input: {}, returns: "Map by id: { id, name, target, saved, currency, targetDate, accountId }.", errors: ["NOT_SUPPORTED"] },
-  { adapter: "bank.loans.list", suggestedId: "loans", description: "Loans, without their schedule.", input: {}, returns: "Map by id: { id, name, principal, outstanding, currency, ratePercent, monthlyPayment, nextDue }.", errors: ["NOT_SUPPORTED"] },
-  { adapter: "bank.loans.get", suggestedId: "loan", description: "One loan with its schedule.", input: { loanId: "id" }, returns: "{ …loan, schedule: [{ n, due, principal, interest, balance }] }", errors: ["LOAN_NOT_FOUND", "NOT_SUPPORTED"] },
+  { adapter: "bank.deposits.list", suggestedId: "deposits", description: "Term deposits", input: { pick: "true: { items, count, firstId } instead of the map" }, returns: "Map by id: { id, name (the amount), title, sub, principal, ratePercent, termMonths, openedOn, maturesOn, status, accountId, amountText, rateText, maturesText, line, renewalText ('Renews for 12 months' once chosen) }.", errors: ["NOT_SUPPORTED"] },
+  { adapter: "bank.deposits.terms", suggestedId: "terms", description: "The four terms with rate and maturity date", input: { allowMonthly: "false: monthly interest not offered" }, returns: "{ terms, renewTerms: maps '3'|'6'|'12'|'24' of { id, name, sub, months, rateText, maturesText } (sub: the maturity, or the rate for a renewal), allowMonthly }" },
+  {
+    adapter: "bank.deposits.quote", suggestedId: "depositQuote", description: "Prices a deposit and checks the account; changes nothing",
+    input: { amount: "1000 to 250000, at most 2 decimals", term: "3 | 6 | 12 | 24 months", payout: "maturity | monthly", allowMonthly: "false: monthly refused", fromAccountId: "the account that pays (optional)" },
+    returns: "{ amountText, termText, rateText, interestText, maturesText, receiveText (the amount alone when payout is monthly), payoutText, from }",
+    errors: ["AMOUNT_REQUIRED", "AMOUNT_DECIMALS", "BELOW_MINIMUM", "ABOVE_MAXIMUM", "TERM_INVALID", "PAYOUT_INVALID", "PAYOUT_OFF", "ACCOUNT_NOT_FOUND", "ACCOUNT_CANNOT_DEBIT", "INSUFFICIENT_FUNDS"],
+  },
+  {
+    adapter: "bank.deposits.open", suggestedId: "openDeposit", description: "Opens a term deposit, after the code",
+    input: { "...": "as bank.deposits.quote, fromAccountId required", dryRun: "true: the quote, no code" }, returns: "The quote plus depositId, reference. The amount leaves the account.", moneyMoving: true, requiresOtp: true,
+    errors: ["the errors of bank.deposits.quote", "OTP_REQUIRED"],
+  },
+  {
+    adapter: "bank.deposits.renew", suggestedId: "renewDeposit", description: "Changes the term and what happens at maturity, after the code; no money moves",
+    input: { depositId: "id", term: "3 | 6 | 12 | 24", instruction: "renew | renew-payout | payout", dryRun: "true: the summary, no code" },
+    returns: "{ depositText, termText, rateText, instructionText, effectText, renewsText } and reference", requiresOtp: true, errors: ["DEPOSIT_NOT_FOUND", "TERM_INVALID", "INSTRUCTION_INVALID", "OTP_REQUIRED"],
+  },
+  { adapter: "bank.deposits.renew.quote", suggestedId: "renewQuote", description: "Checks a renewal and says what it does; changes nothing", input: { depositId: "id", term: "3 | 6 | 12 | 24", instruction: "renew | renew-payout | payout" }, returns: "As bank.deposits.renew without the reference", errors: ["DEPOSIT_NOT_FOUND", "TERM_INVALID", "INSTRUCTION_INVALID"] },
+  { adapter: "bank.deposits.close.quote", suggestedId: "closeQuote", description: "What closing a deposit early pays: interest, the charge, the net", input: { depositId: "id", earlyClose: "false: early closure is off" }, returns: "{ depositText, days, earnedText, chargeText (half the interest, negative), netText }", errors: ["DEPOSIT_NOT_FOUND", "EARLY_CLOSE_OFF"] },
+  {
+    adapter: "bank.deposits.close", suggestedId: "closeDeposit", description: "Closes a deposit early and pays the net into an account, after the code",
+    input: { depositId: "id", toAccountId: "id", earlyClose: "false: refused" }, returns: "The quote plus reference, paidInto. The deposit is gone.", moneyMoving: true, requiresOtp: true,
+    errors: ["DEPOSIT_NOT_FOUND", "EARLY_CLOSE_OFF", "ACCOUNT_NOT_FOUND", "ACCOUNT_CANNOT_CREDIT", "OTP_REQUIRED"],
+  },
+  { adapter: "bank.goals.list", suggestedId: "goals", description: "Savings goals", input: { pick: "true: { items, count, firstId } instead of the map" }, returns: "Map by id: { id, name, sub, target, saved, targetDate, savedText, ofText, pct, pctText, reached, byText ('By 30 Jun 2027' or 'Goal reached'), line, autoOn, autoAmount, autoText }.", errors: ["NOT_SUPPORTED"] },
+  { adapter: "bank.goals.months", suggestedId: "months", description: "The next 36 month ends, from next month", input: {}, returns: "{ months: map of { id (YYYY-MM-DD, the last day), name ('December 2026') } } for a select" },
+  { adapter: "bank.goals.plan", suggestedId: "plan", description: "What it takes to reach a target by a month", input: { target: "amount", date: "a month end", saved: "optional, taken off" }, returns: "{ months (this month counts), monthly, monthlyText, byText, line, suggested (at least 5.00), reachedAlready }", errors: ["AMOUNT_REQUIRED"] },
+  {
+    adapter: "bank.goals.create", suggestedId: "createGoal", description: "Creates a goal; no code",
+    input: { name: "2 to 30 characters", target: "50 to 1000000", date: "a month end from goals.months", auto: "{ on, fromAccountId, amount (5 or more) } or flat autoOn, autoAmount, fromAccountId", allowAuto: "false: a top-up is refused", dryRun: "true: check only" },
+    returns: "{ goalId, name, targetText, byText, autoText } and reference. A top-up shows in bank.schedule.list.",
+    errors: ["GOAL_LIMIT (10)", "NAME_INVALID", "AMOUNT_REQUIRED", "AMOUNT_DECIMALS", "TARGET_BELOW", "TARGET_ABOVE", "DATE_REQUIRED", "DATE_INVALID", "AUTO_OFF", "AUTO_REQUIRED", "AUTO_BELOW", "ACCOUNT_NOT_FOUND"],
+  },
+  { adapter: "bank.goals.update", suggestedId: "updateGoal", description: "Changes a goal's name, target, month and top-up; no code", input: { goalId: "id", "...": "as bank.goals.create" }, returns: "As bank.goals.create. A top-up is replaced, switched off it is removed.", errors: ["GOAL_NOT_FOUND", "the errors of bank.goals.create except GOAL_LIMIT"] },
+  {
+    adapter: "bank.goals.contribute", suggestedId: "addToGoal", description: "Adds money to a goal from an account; no code",
+    input: { goalId: "id", amount: "1 or more", fromAccountId: "id" }, returns: "{ savedText ('$3,300.00 of $5,000.00'), reached, reachedText, amountText, fromName, goalName, reference }. A goal can go above its target.", moneyMoving: true,
+    errors: ["GOAL_NOT_FOUND", "AMOUNT_REQUIRED", "AMOUNT_DECIMALS", "AMOUNT_BELOW", "ACCOUNT_NOT_FOUND", "ACCOUNT_CANNOT_DEBIT", "INSUFFICIENT_FUNDS"],
+  },
+  {
+    adapter: "bank.goals.withdraw", suggestedId: "takeFromGoal", description: "Takes money out of a goal into an account; no code",
+    input: { goalId: "id", amount: "1 up to what is saved", toAccountId: "id", allowWithdraw: "false: refused" }, returns: "{ savedText, amountText, intoName, goalName, reference }", moneyMoving: true,
+    errors: ["GOAL_NOT_FOUND", "WITHDRAW_OFF", "AMOUNT_REQUIRED", "AMOUNT_BELOW", "ABOVE_SAVED", "ACCOUNT_NOT_FOUND", "ACCOUNT_CANNOT_CREDIT"],
+  },
+  { adapter: "bank.schedule.list", suggestedId: "scheduled", description: "The monthly top-ups of goals as scheduled payments", input: {}, returns: "Map by id (goal:g1): { id, name ('Goal: Holiday fund'), kind 'goal', goalId, amountText, fromAccountId, nextText, sub ('Monthly · 1 Dec') }." },
+  { adapter: "bank.loans.list", suggestedId: "loans", description: "Loans, without their schedule", input: { pick: "true: { items, count, firstId } instead of the map" }, returns: "Map by id: { id, name, sub, original, outstanding, ratePercent, monthlyPayment, nextDue, paymentsLeft, leftText, pct, pctText, nextAmountText, nextText ('Next payment $412.50 on 1 Dec 2026') }.", errors: ["NOT_SUPPORTED"] },
+  { adapter: "bank.loans.get", suggestedId: "loan", description: "One loan with the cost of each way to pay it", input: { loanId: "id", settleFee: "false: no early settlement fee" }, returns: "{ …loan, nextSub ('Due 1 Dec 2026'), interestText, principalText, settle: { balanceText, interestText, feeText, totalText, sub } }", errors: ["LOAN_NOT_FOUND", "NOT_SUPPORTED"] },
+  {
+    adapter: "bank.loans.quote", suggestedId: "loanQuote", description: "The rate table, or the checks of a loan request",
+    input: { amount: "1000 to 50000 in steps of 500 (leave out for the table)", term: "12 | 24 | 36 | 48 | 60 months" },
+    returns: "{ rates: map by term of { term, rate, factor }, min, max, step } and, with an amount, ok, rate, rateText, payment, paymentText. A screen shows the payment as amount x factor.",
+    errors: ["LOAN_LIMIT (3)", "AMOUNT_REQUIRED", "AMOUNT_RANGE", "AMOUNT_STEP", "TERM_INVALID"],
+  },
+  {
+    adapter: "bank.loans.eligibility", suggestedId: "decide", description: "Decides a loan request: approved, referred or declined",
+    input: { amount: "as loans.quote", term: "months", purpose: "Home improvement | Car | Education | Medical | Travel | Debt consolidation | Other", employment: "Employed | Self-employed | Retired | Student | Not working", income: "monthly after tax, above 0, up to 1000000", commitments: "monthly payments, 0 or more", allowReferral: "false: a referral is a decline", arrFee: "false: no 1% fee" },
+    returns: "{ decision, reason ('income' | 'affordability' | 'review' | ''), rate, payment, ratio, reference } and, approved, offer: { loanText, termText, rateText, paymentText, interestText, feeText, totalText, firstText, payoutText }. An approval keeps the offer a loan can be made from.",
+    errors: ["LOAN_LIMIT", "AMOUNT_RANGE", "AMOUNT_STEP", "TERM_INVALID", "PURPOSE_INVALID", "EMPLOYMENT_INVALID", "INCOME_INVALID", "COMMITMENTS_INVALID"],
+  },
+  {
+    adapter: "bank.loans.apply", suggestedId: "applyLoan", description: "Makes the approved loan and pays it into an account, after the code",
+    input: { amount: "the offer's", term: "the offer's", rate: "the offer's, for example 9.9", accountId: "account to pay into and repay from" }, returns: "{ loanId, reference, name ('Car loan'), paidIntoText, paymentText, feeText, firstText, paidOutText }. The account gets the loan less the fee.", moneyMoving: true, requiresOtp: true,
+    errors: ["LOAN_LIMIT", "OFFER_NOT_FOUND", "ACCOUNT_NOT_FOUND", "ACCOUNT_CANNOT_CREDIT", "OTP_REQUIRED"],
+  },
+  {
+    adapter: "bank.loans.repay", suggestedId: "repayLoan", description: "Pays the next instalment or another amount, after the code",
+    input: { loanId: "id", option: "next | custom", amount: "custom: 10 up to just below the balance", fromAccountId: "id", dryRun: "true: the summary, no code" },
+    returns: "{ loanName, fromName, paidText, balanceText, next ('1 Jan 2027'), resultText } and reference. An instalment lowers the balance by its principal and moves the date a month.", moneyMoving: true, requiresOtp: true,
+    errors: ["LOAN_NOT_FOUND", "OPTION_INVALID", "AMOUNT_REQUIRED", "REPAY_BELOW", "REPAY_ABOVE", "ACCOUNT_NOT_FOUND", "ACCOUNT_CANNOT_DEBIT", "INSUFFICIENT_FUNDS", "OTP_REQUIRED"],
+  },
+  { adapter: "bank.loans.settlement.quote", suggestedId: "settleQuote", description: "What settling a loan costs today", input: { loanId: "id", settleFee: "false: no fee" }, returns: "{ balanceText, interestText (since the last payment), feeText (1% of the balance with more than 12 payments left), totalText, sub }", errors: ["LOAN_NOT_FOUND"] },
+  {
+    adapter: "bank.loans.settle", suggestedId: "settleLoan", description: "Pays a loan off in full, after the code",
+    input: { loanId: "id", fromAccountId: "id", settleFee: "false: no fee", dryRun: "true: the summary, no code" }, returns: "The settlement plus loanName, fromName, paidText, reference. The loan is gone.", moneyMoving: true, requiresOtp: true,
+    errors: ["LOAN_NOT_FOUND", "ACCOUNT_NOT_FOUND", "ACCOUNT_CANNOT_DEBIT", "INSUFFICIENT_FUNDS", "OTP_REQUIRED"],
+  },
+  { adapter: "bank.funds.list", suggestedId: "funds", description: "The shelf of four funds, all and by risk", input: { allowHigh: "false: no high-risk funds" }, returns: "{ funds: { all, low, medium, high } each a map of { id, name, sub, riskText, chargeText, minText, priceText, price, min, charge }, count }" },
+  { adapter: "bank.funds.get", suggestedId: "fund", description: "One fund", input: { fundId: "gov | bal | geq | tech" }, returns: "{ id, name, riskText, charge, chargeText, min, minText, price, priceText, about }", errors: ["FUND_NOT_FOUND"] },
+  { adapter: "bank.funds.holdings", suggestedId: "fundHoldings", description: "The funds the customer holds", input: {}, returns: "Map by fund id: { id, name, units, unitsText, cost, value, valueText, sub ('150 units · $2,400.00') }." },
+  { adapter: "bank.funds.portfolio", suggestedId: "portfolio", description: "The value of all holdings and the gain against cost", input: {}, returns: "{ count, valueText, cost, gain, up, gainText ('▲ $170.00 (3.7%) since you invested') }" },
+  {
+    adapter: "bank.funds.buy", suggestedId: "buyFund", description: "Buys units of a fund from an account, after the code",
+    input: { fundId: "id", amount: "at least the fund's smallest", fromAccountId: "id", allowHigh: "false: high-risk funds are closed", dryRun: "true: the summary, no code" },
+    returns: "{ name, riskText, fromName, amountText, unitsText (3 decimals), priceText, chargeText, chargeAbout } and reference. A fund held already grows.", moneyMoving: true, requiresOtp: true,
+    errors: ["FUND_NOT_FOUND", "FUND_CLOSED", "AMOUNT_REQUIRED", "BELOW_MINIMUM", "ACCOUNT_NOT_FOUND", "ACCOUNT_CANNOT_DEBIT", "INSUFFICIENT_FUNDS", "OTP_REQUIRED"],
+  },
+  {
+    adapter: "bank.funds.sell", suggestedId: "sellFund", description: "Sells part or all of a holding into an account, after the code",
+    input: { fundId: "id", amount: "10 up to the value (or all: true)", all: "true: everything", toAccountId: "id", sellFee: "false: no 0.25% fee", dryRun: "true: the summary, no code" },
+    returns: "{ name, soldText, feeText (negative), proceedsText, settlesText (2 business days), intoName, everything } and reference. The account is credited at once.", moneyMoving: true, requiresOtp: true,
+    errors: ["FUND_NOT_FOUND", "NOTHING_TO_SELL", "AMOUNT_REQUIRED", "SELL_BELOW", "ABOVE_HOLDING", "ACCOUNT_NOT_FOUND", "ACCOUNT_CANNOT_CREDIT", "OTP_REQUIRED"],
+  },
+  { adapter: "bank.accounts.payFrom", suggestedId: "payFrom", description: "The accounts that can pay, with what is available", input: {}, returns: "{ accounts: map of { id, name ('Main ••4410'), sub ('$8,602.36 available'), available, status }, count, firstId, defaultId }" },
+  { adapter: "bank.cards.forTopup", suggestedId: "topupCards", description: "The saved cards that can top up an account", input: {}, returns: "{ cards: map of { id, name ('Visa ••4242'), sub ('Harbor Bank · expires 09/28') } (not expired), count, firstId, hasExpired, expired, expiredText }" },
   { adapter: "bank.messages.list", suggestedId: "messages", description: "Secure messages.", input: {}, returns: "Map by id: { id, subject, from, at, read, body }.", errors: ["NOT_SUPPORTED"] },
   { adapter: "bank.notifications.list", suggestedId: "notifications", description: "Notifications, each tagged with its place (personal, or a company id). The text of other places is withheld.", input: { context: "optional" }, returns: "Map by id: { id, context, topic, text (\"New activity\" for another place), at, read }.", errors: ["NOT_SUPPORTED"] },
   { adapter: "bank.requests.list", suggestedId: "requests", description: "Service requests.", input: {}, returns: "Map by id: { id, type, summary, status, openedAt }.", errors: ["NOT_SUPPORTED"] },
@@ -635,6 +727,7 @@ export function describePersonas() {
     const twin = accounts.length > 2 ? seen.find((x) => x.accounts.join("|") === accounts.join("|")) : undefined;
     seen.push({ id: p.id, accounts });
     // the account-states customer is Alex with two more accounts: said in a line
+    if (p.id === "alexsave") return { ...describe(p), accounts: ["Same accounts as alex"] };
     if (p.id === "alexaccounts") return { ...describe(p), accounts: ["As alex, plus acc_old: Old savings ••6602, USD 12 (dormant); acc_spare: Spare ••6603, USD -5 (overdrawn)"] };
     return { ...describe(p), accounts: twin ? [`Same accounts as ${twin.id}`] : accounts };
   });
@@ -642,6 +735,7 @@ export function describePersonas() {
 const SIGN_IN_CAST = ["demolocked", "demoexpired", "demoinactive", "demonew", "demolimit"];
 function describe(p: (typeof personas)[string]) {
   if (SIGN_IN_CAST.includes(p.id)) return { id: p.id, brand: p.brand, name: p.name, otpCode: p.behaviour.otpCode, note: "Sign-in cast (see bank.auth.signIn)." };
+  if (p.id === "alexsave") return { id: p.id, brand: p.brand, name: p.name, otpCode: p.behaviour.otpCode, note: "As alex; saved cards for adding money: c_4242 Visa 4242 Harbor Bank 09/28, c_5100 Mastercard 5100 Crest Bank 03/29, c_0019 Visa 0019 Lakeside Bank 01/26 (expired)." };
   if (p.id === "alexaccounts") return { id: p.id, brand: p.brand, name: p.name, otpCode: p.behaviour.otpCode, note: "As alex; 6 accounts for the limit, budgets in all 8 categories at the edges of the chips (79.99%, 80%, 99.99%, 100%, 320%)." };
   // the approvals cast is Alex again with more waiting at Beta: said in a line
   if (p.identity?.cast) return { id: p.id, brand: p.brand, name: p.name, otpCode: p.behaviour.otpCode, note: "As alex; Beta also holds PAY-2043 to PAY-2048 (name checks, an order, two approvals) and PAY-2036 rejected." };
