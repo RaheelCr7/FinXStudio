@@ -10,12 +10,14 @@ export interface CorporateProvider extends CorporateBankAdapter {
   now: (() => number) | undefined;
   /** Every payment of the company, in any state (the reference sandbox only: the history of the approvals inbox). */
   all?(): CorpPayment[];
+  /** Starts a batch whose rows the caller checked: only the rules every payment meets (currency, funds, limits) are applied here (the reference sandbox only). */
+  initiateChecked?(input: { userId: string; fromAccountId: string; total: number; reference: string; lines: NonNullable<CorpPayment["lines"]>; period?: string }): CorpPayment;
   /** Passes a waiting payment to another approver (the reference sandbox only). */
   delegatePayment?(input: { userId: string; paymentId: string; toUserId: string }): CorpPayment;
   /** Puts a payment that already happened (or waits) into the bank's books without running the rules: the sandbox's seed data, never a client call. */
   seedPayment?(p: CorpPayment): void;
   /** Sandbox only: arranges the books for a scenario (the reference sandbox only). */
-  arrange?(op: { kind: "balance"; accountId: string; balance: number } | { kind: "removeSupplier"; id: string } | { kind: "addSupplier"; supplier: import("./corporate").CorpBeneficiary } | { kind: "release"; paymentId: string }): void;
+  arrange?(op: { kind: "balance"; accountId: string; balance: number } | { kind: "dualAbove"; amount: number } | { kind: "companyUsed"; amount: number } | { kind: "userUsed"; userId: string; amount: number } | { kind: "removeSupplier"; id: string } | { kind: "addSupplier"; supplier: import("./corporate").CorpBeneficiary } | { kind: "release"; paymentId: string }): void;
 }
 export type ProviderId = "reference" | "bank-b";
 export const PROVIDERS: ProviderId[] = ["reference", "bank-b"];

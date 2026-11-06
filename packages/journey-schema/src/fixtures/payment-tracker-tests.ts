@@ -25,7 +25,7 @@ const withdrawn = { setup: [{ adapter: "corp.payments.withdraw", input: { paymen
 export const paymentTrackerScenarios: NonNullable<Journey["scenarios"]> = [
   T("T-1", "Alex at Alpha: the payments, newest first, PAY-2040 pending approval with its start time, the batches as Bulk, and New supplier payment", ["AC-1"], alpha, [
     screen("list"), text("Payments"), text("PAY-2040"), text("Today 09:30"), text("Harbour Packaging"), text("$18,900.00"), text("Pending approval"), text("PAY-1187"), text("$12,450.00"), text("Settled"),
-    text("Bulk · 3 payments"), text("Bulk · 2 payments"), text("New supplier payment"), noText("Nothing here"), noText("Your role here is"),
+    text("Bulk · 6 payments"), text("Bulk · 4 payments"), text("New supplier payment"), noText("Nothing here"), noText("Your role here is"),
   ]),
   T("T-2", "The chip Settled shows only settled payments; PAY-2040 is gone", ["AC-2"], alpha, [press("Settled"), text("PAY-1187"), text("PAY-1190"), text("PAY-1180"), noText("PAY-2040"), noText("Pending approval"), press("Pending"), text("PAY-2040"), noText("PAY-1187"), press("All"), text("PAY-1187"), text("PAY-2040")]),
   T("T-3", "The chip Rejected matches none: Nothing here and No payment has this status.", ["AC-6"], alpha, [press("Rejected"), text("Nothing here"), text("No payment has this status."), noText("PAY-2040"), noText("No payments yet")]),

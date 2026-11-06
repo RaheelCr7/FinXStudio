@@ -1,5 +1,5 @@
 import type { Journey } from "../schema";
-import { approvePaymentsAcceptance, approvePaymentsScenarios } from "./approve-payments-tests";
+import { approvePaymentsAcceptance, approvePaymentsScenarios, approvePaymentsScenariosB } from "./approve-payments-tests";
 
 const toRoute = { navigate: "route" };
 const lockOnWrongCode = { showToast: "The code didn’t work.", stay: true, lockAfter: 3, lockTo: "locked" };
@@ -33,8 +33,9 @@ const is = (...codes: string[]) => codes.map((c) => `ctx.error.code == '${c}'`).
  *
  * Built from the spec of the prototype with the blocks FinX has (see docs/BANKWORKX.md): it is stepped screens (inbox, details, confirm) rather than one
  * list beside a detail; the status buttons are the table's own filter on its status column; every approval has the tick the money rules ask for (the
- * spec asks for it only when the name does not match); the "stepUp" option and "Reject several" are not built, and the bank, not an option, decides
- * when a code is asked.
+ * spec asks for it only when the name does not match). Step 8, slice B upgraded it: the option stepUp (the bank asks for a code from its threshold unless it
+ * switched that off), Reject several (one reason, all or none), the rule behind the approvers (any of them, or one after the other) with the time each approved,
+ * the APR reference of every decision, and the payments of a batch or a payroll run under its details.
  */
 export const approvePayments: Journey = {
   id: "jrn_approve_payments",
@@ -47,7 +48,7 @@ export const approvePayments: Journey = {
   locale: { default: "en", supported: ["en"] },
   entryScreen: "start",
   acceptance: approvePaymentsAcceptance,
-  scenarios: approvePaymentsScenarios,
+  scenarios: [...approvePaymentsScenarios, ...approvePaymentsScenariosB],
   // a person whose role in this company does not include approving is sent to the no-access card (the screen only hides what the bank refuses again)
   authorisation: { role: "approver", rolesFrom: "ctx.company.me.roles", deniedScreen: "denied" },
   dataModel: {
@@ -55,7 +56,10 @@ export const approvePayments: Journey = {
     "launch.paymentIds": { type: "array" },
     "opt.batch": { type: "boolean" },
     "opt.delegation": { type: "boolean" },
+    "opt.stepUp": { type: "boolean" },
+    "launch.mode": { type: "string" },
     "ap.id": { type: "string" },
+    "ap.reject": { type: "boolean" },
     "ap.picked": { type: "array" },
     "ap.ack": { type: "boolean", required: true },
     "ap.reason": { type: "string" },
@@ -77,6 +81,7 @@ export const approvePayments: Journey = {
     { id: "approve", adapter: "corp.payments.approve", mode: "sandbox" },
     { id: "approveMany", adapter: "corp.payments.approveMany", mode: "sandbox" },
     { id: "reject", adapter: "corp.payments.reject", mode: "sandbox" },
+    { id: "rejectMany", adapter: "corp.payments.rejectMany", mode: "sandbox" },
     { id: "delegate", adapter: "corp.payments.delegate", mode: "sandbox" },
   ],
   screens: [
@@ -89,9 +94,11 @@ export const approvePayments: Journey = {
         { type: "setData", path: "ctx.error", value: null },
         { type: "setData", path: "ap.id", value: "{{isEmpty(launch.paymentId) ? '' : launch.paymentId}}" },
         { type: "setData", path: "ap.picked", value: "{{launch.paymentIds}}" },
+        { type: "setData", path: "ap.reject", value: "{{launch.mode == 'reject'}}" },
         // used once: Back to approvals does not open the same payment again
         { type: "setData", path: "launch.paymentId", value: "" },
         { type: "setData", path: "launch.paymentIds", value: "" },
+        { type: "setData", path: "launch.mode", value: "" },
         { type: "setData", path: "ap.ack", value: false },
         { type: "setData", path: "ap.reason", value: "" },
         { type: "setData", path: "ap.note", value: "" },
@@ -104,6 +111,7 @@ export const approvePayments: Journey = {
         rules: [
           { when: "!isEmpty(session.permissions) && !has(session.permissions, 'biz.approvals.approve')", to: "denied" },
           { when: "!isEmpty(ap.id)", to: "open" },
+          { when: "len(ap.picked) > 0 && ap.reject", to: "rejectMany" },
           { when: "len(ap.picked) > 0", to: "many" },
         ],
       },
@@ -126,6 +134,7 @@ export const approvePayments: Journey = {
           onRowPress: ROW, empty: "Nothing found. Try another search or status.",
         },
         { type: "button", label: "Approve several", variant: "secondary", visibleWhen: "opt.batch != false && len(ctx.ready) > 1", actions: [{ type: "navigate", to: "many" }] },
+        { type: "button", label: "Reject several", variant: "secondary", visibleWhen: "opt.batch != false && len(ctx.inbox) > 1", actions: [{ type: "setData", path: "ap.picked", value: "" }, { type: "setData", path: "ap.reason", value: "" }, { type: "setData", path: "ap.note", value: "" }, { type: "setData", path: "ap.noReason", value: false }, { type: "setData", path: "ctx.error", value: null }, { type: "navigate", to: "rejectMany" }] },
         { type: "button", label: "History", variant: "ghost", actions: [{ type: "navigate", to: "history" }] },
         { type: "button", label: "Close", variant: "ghost", actions: [{ type: "exit" }] },
       ],
@@ -173,20 +182,27 @@ export const approvePayments: Journey = {
         },
         { type: "reviewSummary", visibleWhen: "!isEmpty(ctx.p.purpose)", rows: [{ label: "Purpose", value: "{{ctx.p.purpose}}" }, { label: "Speed", value: "{{ctx.p.rail.name}}" }] },
         { type: "reviewSummary", visibleWhen: "ctx.p.status == 'rejected'", rows: [{ label: "Reason", value: "{{ctx.p.rejectReason}}" }] },
+        // a batch or a payroll run: who is paid how much (never an account number)
+        { type: "sectionHeader", title: "{{ctx.p.batch.countText}}", subtitle: "{{ctx.p.batch.name}}", visibleWhen: "!isEmpty(ctx.p.batch)" },
+        {
+          type: "dataTable", source: "ctx.p.batch.rows", label: "Payments in this batch", visibleWhen: "!isEmpty(ctx.p.batch)", pageSize: 25,
+          columns: [{ key: "payee", label: "Payee" }, { key: "amountText", label: "Amount" }, { key: "reference", label: "Reference" }],
+        },
         // the bank's record of the payee, when it does not match the name on the payment
         { type: "statusChip", status: "{{ctx.p.nameResult}}", visibleWhen: "ctx.p.nameResult != 'match'", statuses: { close: { label: "Close match", tone: "warning" }, none: { label: "No match", tone: "negative" } } },
         { type: "text", variant: "body", text: "{{ctx.p.nameSentence}}", visibleWhen: "ctx.p.nameResult != 'match'" },
         { type: "sectionHeader", title: "Approvals", subtitle: "{{ctx.p.progress}}", visibleWhen: "ctx.p.status == 'pending_approval'" },
+        { type: "text", variant: "caption", text: "{{ctx.p.groupText}}", visibleWhen: "ctx.p.status == 'pending_approval' && !isEmpty(ctx.p.groupText)" },
         {
           // who must approve, in order, and where each one stands
           type: "timeline", source: "ctx.p.signatories", visibleWhen: "ctx.p.status == 'pending_approval'",
-          item: { title: "{{item.label}}", text: "{{item.text}}", state: "{{item.state == 'approved' ? 'done' : (item.state == 'next' ? 'current' : (item.state == 'can' ? 'current' : 'upcoming'))}}" },
+          item: { title: "{{item.label}}", text: "{{item.text}}", time: "{{item.time}}", state: "{{item.state == 'approved' ? 'done' : (item.state == 'next' ? 'current' : (item.state == 'can' ? 'current' : 'upcoming'))}}" },
         },
         {
           type: "statusChip", status: "{{ctx.p.cutoffTone}}", label: "{{ctx.p.cutoffText}}", visibleWhen: "!isEmpty(ctx.p.cutoffText)",
           statuses: { neutral: { tone: "neutral" }, warning: { tone: "warning" }, negative: { tone: "negative" } },
         },
-        { type: "text", variant: "caption", text: "You’ll be asked for a code.", visibleWhen: "ctx.p.you.can && ctx.p.codeRequired" },
+        { type: "text", variant: "caption", text: "You’ll be asked for a code.", visibleWhen: "ctx.p.you.can && ctx.p.codeRequired && opt.stepUp != false" },
         { type: "button", label: `Approve ${AMT}`, variant: "primary", visibleWhen: "ctx.p.you.can", actions: [{ type: "setData", path: "ap.ack", value: false }, { type: "setData", path: "ctx.error", value: null }, { type: "navigate", to: "confirm" }] },
         { type: "button", label: "Reject", variant: "secondary", visibleWhen: "ctx.p.you.can", actions: [{ type: "setData", path: "ap.reason", value: "" }, { type: "setData", path: "ap.note", value: "" }, { type: "setData", path: "ap.noReason", value: false }, { type: "setData", path: "ctx.error", value: null }, { type: "navigate", to: "reject" }] },
         { type: "button", label: "Pass to someone", variant: "secondary", visibleWhen: "ctx.p.you.can && opt.delegation == true", actions: [{ type: "setData", path: "ap.to", value: "" }, { type: "setData", path: "ctx.error", value: null }, { type: "navigate", to: "pass" }] },
@@ -205,16 +221,16 @@ export const approvePayments: Journey = {
         { type: "consent", bind: "ap.ack", termsVersion: "approve-payments-v1", text: "I checked the payee details", validation: { mustBeTrue: true, messages: { mustBeTrue: "Confirm that you checked the payee details." } } },
         {
           // under the company's threshold no code is asked
-          type: "button", label: `Approve ${AMT}`, variant: "primary", visibleWhen: "!ctx.p.codeRequired",
+          type: "button", label: `Approve ${AMT}`, variant: "primary", visibleWhen: "!(ctx.p.codeRequired && opt.stepUp != false)",
           actions: [
             { type: "validate" },
             { type: "setData", path: "ctx.error", value: null },
-            { type: "callApi", integration: "approve", input: { paymentId: "{{ap.id}}", acknowledged: "{{ap.ack}}" }, saveAs: "ctx.done", onError: toRoute },
+            { type: "callApi", integration: "approve", input: { paymentId: "{{ap.id}}", acknowledged: "{{ap.ack}}", stepUp: "{{opt.stepUp != false}}" }, saveAs: "ctx.done", onError: toRoute },
             { type: "navigate", to: "approved" },
           ],
         },
         {
-          type: "button", label: `Approve ${AMT}`, variant: "primary", visibleWhen: "ctx.p.codeRequired",
+          type: "button", label: `Approve ${AMT}`, variant: "primary", visibleWhen: "ctx.p.codeRequired && opt.stepUp != false",
           actions: [
             { type: "validate" },
             { type: "setData", path: "ctx.error", value: null },
@@ -241,7 +257,7 @@ export const approvePayments: Journey = {
           actions: [
             { type: "validate" },
             { type: "callApi", integration: "otpVerify", input: { code: "{{otp.code}}" }, onError: lockOnWrongCode },
-            { type: "callApi", integration: "approve", input: { paymentId: "{{ap.id}}", acknowledged: "{{ap.ack}}" }, saveAs: "ctx.done", onError: toRoute },
+            { type: "callApi", integration: "approve", input: { paymentId: "{{ap.id}}", acknowledged: "{{ap.ack}}", stepUp: "{{opt.stepUp != false}}" }, saveAs: "ctx.done", onError: toRoute },
             { type: "navigate", to: "approved" },
           ],
         },
@@ -260,6 +276,7 @@ export const approvePayments: Journey = {
             { label: "Payment", value: "{{ctx.done.id}}" },
             { label: "Total", value: "{{ctx.done.amount | money2:ctx.done.currency}}" },
             { label: "Approvals", value: "{{len(ctx.done.approvals)}} of {{ctx.done.required}}" },
+            { label: "Reference", value: "{{ctx.done.aprRef}}" },
           ],
         },
         { type: "button", label: "Back to approvals", variant: "primary", actions: [{ type: "navigate", to: "inbox" }] },
@@ -291,7 +308,7 @@ export const approvePayments: Journey = {
       blocks: [
         { type: "result", tone: "success", title: "Payment rejected", text: `${DONE_TO}. Nothing was sent.`, meta: "Payment {{ctx.done.id}}" },
         { type: "statusChip", status: "rejected" },
-        { type: "reviewSummary", rows: [{ label: "Payment", value: "{{ctx.done.id}}" }, { label: "Reason", value: "{{ctx.done.rejectReason}}" }, { label: "Told", value: "{{ctx.done.startedBy}}" }] },
+        { type: "reviewSummary", rows: [{ label: "Payment", value: "{{ctx.done.id}}" }, { label: "Reason", value: "{{ctx.done.rejectReason}}" }, { label: "Told", value: "{{ctx.done.startedBy}}" }, { label: "Reference", value: "{{ctx.done.aprRef}}" }] },
         { type: "button", label: "Back to approvals", variant: "primary", actions: [{ type: "navigate", to: "inbox" }] },
       ],
     },
@@ -318,7 +335,7 @@ export const approvePayments: Journey = {
       blocks: [
         { type: "result", tone: "success", title: "Passed to {{ctx.done.passedToName}}", text: "{{ctx.done.passedToName}} can now approve this payment.", meta: "Payment {{ctx.done.id}}" },
         { type: "statusChip", status: "info", label: "Passed on", statuses: { info: { tone: "info" } } },
-        { type: "reviewSummary", rows: [{ label: "Payment", value: "{{ctx.done.id}}" }, { label: "Passed to", value: "{{ctx.done.passedToName}}" }] },
+        { type: "reviewSummary", rows: [{ label: "Payment", value: "{{ctx.done.id}}" }, { label: "Passed to", value: "{{ctx.done.passedToName}}" }, { label: "Reference", value: "{{ctx.done.aprRef}}" }] },
         { type: "button", label: "Back to approvals", variant: "primary", actions: [{ type: "navigate", to: "inbox" }] },
       ],
     },
@@ -340,7 +357,7 @@ export const approvePayments: Journey = {
             { type: "validate" },
             { type: "setData", path: "ctx.error", value: null },
             // the bank asks for the code when one of them is at or above its threshold: then one code covers them all
-            { type: "callApi", integration: "approveMany", input: { paymentIds: "{{ap.picked}}" }, saveAs: "ctx.many", onError: toRoute },
+            { type: "callApi", integration: "approveMany", input: { paymentIds: "{{ap.picked}}", stepUp: "{{opt.stepUp != false}}" }, saveAs: "ctx.many", onError: toRoute },
             { type: "navigate", to: "manyDone" },
           ],
         },
@@ -368,7 +385,7 @@ export const approvePayments: Journey = {
           actions: [
             { type: "validate" },
             { type: "callApi", integration: "otpVerify", input: { code: "{{otp.code}}" }, onError: lockOnWrongCode },
-            { type: "callApi", integration: "approveMany", input: { paymentIds: "{{ap.picked}}" }, saveAs: "ctx.many", onError: toRoute },
+            { type: "callApi", integration: "approveMany", input: { paymentIds: "{{ap.picked}}", stepUp: "{{opt.stepUp != false}}" }, saveAs: "ctx.many", onError: toRoute },
             { type: "navigate", to: "manyDone" },
           ],
         },
@@ -380,9 +397,47 @@ export const approvePayments: Journey = {
         { type: "result", tone: "success", title: "{{ctx.many.count}} payment{{ctx.many.count > 1 ? 's' : ''}} approved", text: "{{ctx.many.total | money2:ctx.many.currency}} in total." },
         { type: "statusChip", status: "released", label: "Sent to the bank", visibleWhen: "ctx.many.released == ctx.many.count" },
         { type: "statusChip", status: "pending_approval", label: "Some wait for another approver", visibleWhen: "ctx.many.released != ctx.many.count" },
-        { type: "reviewSummary", rows: [{ label: "Payments", value: "{{ctx.many.count}}" }, { label: "Total", value: "{{ctx.many.total | money2:ctx.many.currency}}" }, { label: "Sent to the bank", value: "{{ctx.many.released}} of {{ctx.many.count}}" }] },
+        { type: "reviewSummary", rows: [{ label: "Payments", value: "{{ctx.many.count}}" }, { label: "Total", value: "{{ctx.many.total | money2:ctx.many.currency}}" }, { label: "Sent to the bank", value: "{{ctx.many.released}} of {{ctx.many.count}}" }, { label: "Reference", value: "{{ctx.many.aprRef}}" }] },
         { type: "button", label: "Back to approvals", variant: "primary", actions: [{ type: "navigate", to: "inbox" }] },
         { type: "button", label: "Share receipt", variant: "ghost", actions: [{ type: "share", template: "receipt" }] },
+      ],
+    },
+    {
+      // several payments rejected for one reason, all or none (the Approvals inbox's Reject {n})
+      id: "rejectMany", title: "Reject several",
+      onEnter: [{ type: "callApi", integration: "inbox", input: { status: "pending" }, saveAs: "ctx.inbox", onError: toRoute }],
+      blocks: [
+        { type: "text", variant: "title", text: "Reject several" },
+        { type: "text", variant: "caption", text: "Tick the payments to reject. They all get the same reason, and none is rejected unless all can be." },
+        { type: "alert", tone: "error", text: "{{ctx.error.message}}", visibleWhen: is("PAYMENT_NOT_PENDING", "NOT_AUTHORISED", "EMPTY_BATCH", "REASON_REQUIRED") },
+        {
+          type: "dataTable", source: "ctx.inbox", label: "Payments waiting for approval", bind: "ap.picked", total: { key: "amount", currency: "{{ctx.company.currency}}" },
+          columns: PAYMENT_COLUMNS, empty: "No payments are waiting for approval.",
+        },
+        { type: "alert", tone: "error", text: "Choose a reason.", visibleWhen: "ap.noReason && isEmpty(ap.reason)" },
+        { type: "select", bind: "ap.reason", label: "Reason", variant: "chips", options: ["Wrong amount", "Wrong payee", "Unknown supplier", "Duplicate", "Other"] },
+        { type: "textInput", bind: "ap.note", label: "Note", lines: 3, visibleWhen: "ap.reason == 'Other'", pattern: "^[\\s\\S]{10,300}$", patternMessage: "Write at least 10 characters (up to 300)." },
+        {
+          type: "button", label: "Reject {{len(ap.picked)}}", variant: "primary", visibleWhen: "len(ap.picked) > 0 && !isEmpty(ap.reason)",
+          actions: [
+            { type: "validate" },
+            { type: "setData", path: "ctx.error", value: null },
+            { type: "callApi", integration: "rejectMany", input: { paymentIds: "{{ap.picked}}", reason: "{{ap.reason == 'Other' ? ap.note : ap.reason}}" }, saveAs: "ctx.many", onError: toRoute },
+            { type: "navigate", to: "manyRejected" },
+          ],
+        },
+        { type: "button", label: "Reject {{len(ap.picked)}}", variant: "primary", visibleWhen: "len(ap.picked) > 0 && isEmpty(ap.reason)", actions: [{ type: "setData", path: "ap.noReason", value: true }] },
+        { type: "text", variant: "caption", text: "Tick the payments to reject.", visibleWhen: "len(ap.picked) == 0" },
+        { type: "button", label: "Back", variant: "ghost", actions: [{ type: "navigate", to: "inbox" }] },
+      ],
+    },
+    {
+      id: "manyRejected", title: "Rejected", kind: "terminal",
+      blocks: [
+        { type: "result", tone: "success", title: "{{ctx.many.count}} payment{{ctx.many.count > 1 ? 's' : ''}} rejected", text: "{{ctx.many.total | money2:ctx.many.currency}} in total. Nothing was sent." },
+        { type: "statusChip", status: "rejected" },
+        { type: "reviewSummary", rows: [{ label: "Payments", value: "{{ctx.many.count}}" }, { label: "Total", value: "{{ctx.many.total | money2:ctx.many.currency}}" }, { label: "Reason", value: "{{ctx.many.reason}}" }, { label: "Reference", value: "{{ctx.many.aprRef}}" }] },
+        { type: "button", label: "Back to approvals", variant: "primary", actions: [{ type: "navigate", to: "inbox" }] },
       ],
     },
     {
@@ -392,13 +447,14 @@ export const approvePayments: Journey = {
       blocks: [],
       navigation: {
         rules: [
-          { when: `ctx.error.code == 'TIMEOUT' && (${["approve", "approveMany", "reject", "delegate"].map((i) => `ctx.error.integration == '${i}'`).join(" || ")})`, to: "timeout" },
+          { when: `ctx.error.code == 'TIMEOUT' && (${["approve", "approveMany", "reject", "rejectMany", "delegate"].map((i) => `ctx.error.integration == '${i}'`).join(" || ")})`, to: "timeout" },
           { when: "ctx.error.code == 'TIMEOUT'", to: "slow" },
           { when: "ctx.error.code == 'SERVICE_UNAVAILABLE'", to: "unavailable" },
           { when: is("PERMISSION_DENIED", "WRONG_CONTEXT"), to: "denied" },
           { when: "ctx.error.code == 'PAYMENT_NOT_FOUND'", to: "gone" },
           { when: "ctx.error.code == 'OTP_REQUIRED' && ctx.error.integration == 'approveMany'", to: "askCode" },
           { when: is("DELEGATE_CONFLICT", "DELEGATE_ALREADY_APPROVED"), to: "pass" },
+          { when: `(${is("PAYMENT_NOT_PENDING", "NOT_AUTHORISED", "EMPTY_BATCH", "REASON_REQUIRED")}) && ctx.error.integration == 'rejectMany'`, to: "rejectMany" },
           { when: is(...REFUSALS), to: "problem" },
         ],
       },
@@ -413,6 +469,7 @@ export const approvePayments: Journey = {
           { when: "ctx.error.integration == 'approve' || ctx.error.integration == 'otpSend'", to: "confirm" },
           { when: "ctx.error.integration == 'approveMany' || ctx.error.integration == 'otpSendMany' || ctx.error.integration == 'ready'", to: "many" },
           { when: "ctx.error.integration == 'reject'", to: "reject" },
+          { when: "ctx.error.integration == 'rejectMany'", to: "rejectMany" },
           { when: "ctx.error.integration == 'delegate'", to: "pass" },
         ],
       },

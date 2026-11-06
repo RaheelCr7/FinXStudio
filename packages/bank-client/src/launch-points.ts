@@ -134,6 +134,7 @@ const BUSINESS: Def[] = [
   ["payments.views", "Payment tracker", "payment-tracker", "biz.accounts.view"],
   ["payments.views", "Templates", "templates", "biz.accounts.view"],
   ["payments.views", "Scheduled payments", "business-schedules", "biz.accounts.view"],
+  ["payments.views", "Bulk payments", "bulk-status", "biz.payments.bulk"],
   ["accounts.detail", "Statement", "business-statement", "biz.accounts.export", ["accountId"]],
   ["accounts.detail", "Transactions", "business-accounts", "biz.accounts.view", ["accountId"]],
   ["accounts.detail", "Pay from this account", "supplier-payment", "biz.payments.initiate", ["accountId"]],
@@ -146,9 +147,11 @@ const BUSINESS: Def[] = [
   ["payments.hub", "Schedule", "schedule-business-payment", "biz.payments.schedule", ["supplierId", "amount"]],
   ["payments.payment", "Track", "payment-tracker", "biz.accounts.view", ["paymentId"]],
   ["payments.payment", "Withdraw", "withdraw-payment", "biz.payments.withdraw", ["paymentId"]],
-  ["payments.payment", "Repair rejected lines", "repair-bulk-lines", "biz.payments.bulk", ["paymentId"]],
   ["payments.payment", "Save as template", "payment-template", "biz.templates.manage", ["paymentId"]],
   ["payments.payment", "Repeat", "supplier-payment", "biz.payments.initiate", ["paymentId"]],
+  // the batches of Bulk and payroll (a batch with payments the bank returned is the only one that offers a repair)
+  ["payments.bulk", "Batch status", "bulk-status", "biz.payments.bulk", ["id"]],
+  ["payments.bulk", "Repair rejected lines", "repair-bulk-lines", "biz.payments.bulk", ["paymentId"], { states: ["partly"] }],
   ["payments.templates", "New template", "payment-template", "biz.templates.manage"],
   ["payments.templates", "Use", "supplier-payment", "biz.payments.initiate", ["templateId"]],
   ["payments.templates", "Delete", "payment-template", "biz.templates.manage", ["templateId", "mode"], { fixed: { mode: "delete" } }],
@@ -160,7 +163,7 @@ const BUSINESS: Def[] = [
   ["payments.history", "New run", "payroll-run", "biz.payroll.run", ["period"]],
   ["approvals.inbox", "Approve", "approve-payments", "biz.approvals.approve", ["paymentId"]],
   ["approvals.inbox", "Approve several", "approve-payments", "biz.approvals.approve", ["paymentIds"], { many: true }],
-  ["approvals.inbox", "Reject several", "approve-payments", "biz.approvals.approve", ["paymentIds"], { many: true }],
+  ["approvals.inbox", "Reject several", "approve-payments", "biz.approvals.approve", ["paymentIds", "mode"], { many: true, fixed: { mode: "reject" } }],
   ["admin.users", "Invite", "manage-user", "biz.admin.users"],
   ["admin.users", "Edit", "manage-user", "biz.admin.users", ["userId"]],
   ["admin.users", "Change limit", "change-limits", "biz.admin.limits", ["userId"]],
@@ -200,7 +203,8 @@ export type LaunchContext = {
 
 /** Whether the bank has this journey on: not in the disabled list, and not switched off in its options. */
 export function journeyOn(journey: string, settings: LaunchContext["settings"]) {
-  const names = [journey, ...(JOURNEY_ALIASES[journey] ?? [])];
+  // Repair rejected lines is Bulk payment in resend mode: a bank turns it off only together with Bulk payment
+  const names = [journey, ...(JOURNEY_ALIASES[journey] ?? []), ...(journey === "repair-bulk-lines" ? ["bulk-payment"] : [])];
   if (names.some((n) => settings?.disabled.some((d) => slugIs(d, n)))) return false;
   return !names.some((n) => settings?.options[n]?.enabled === false);
 }

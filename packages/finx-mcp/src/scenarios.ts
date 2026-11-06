@@ -102,6 +102,9 @@ export function bankMutants(journey: Journey): Mutant[] {
   const bulk = journey.integrations.some((i) => /^corp\.(bulk|payroll)\./.test(i.adapter));
   const payroll = journey.integrations.some((i) => /^corp\.payroll\./.test(i.adapter));
   const uses = (re: RegExp) => journey.integrations.some((i) => re.test(i.adapter));
+  // bulk payments and payroll runs of the BankWorkx sandbox (a journey with a session): the older Meezan journeys read a pasted file and meet none of these rules
+  const bulkB = uses(/^corp\.bulk\.(quote|list|get)$/);
+  const payB = uses(/^corp\.payroll\.register$/);
   // only the rules this journey can reach: starting a payment, or approving and rejecting one
   const all: [keyof Flaws, string, boolean][] = [
     ["roles", "The bank ignores who may start and who may approve", calls("initiate") || calls("approve")],
@@ -403,6 +406,37 @@ export function bankMutants(journey: Journey): Mutant[] {
     ["wdState", "The bank withdraws a payment that was released or is no longer waiting", demo && uses(/^corp\.payments\.withdraw$/)],
     ["wdReason", "The bank takes any reason, and a note of any length", demo && uses(/^corp\.payments\.withdraw$/)],
     ["trkSettled", "The bank calls a payment released today settled", uses(/^corp\.payments\.track$/)],
+    // Business: bulk payments (the file, each line, the speeds and the date, the review, the code, resending, the status of a batch)
+    ["bulkFile", "The bank reads a file of any size, with no payment or more than 50, or of the wrong kind", bulkB],
+    ["bulkSent", "The bank takes a file that was sent before", bulkB],
+    ["bulkName", "The bank takes a line with no payee name or a name of more than 70 characters", bulkB],
+    ["bulkAmount", "The bank takes a line whose amount is not a number above zero with the currency's decimals", bulkB],
+    ["bulkAccount", "The bank takes an account number, a routing number, a sort code or an IBAN that fails its check", bulkB],
+    ["bulkApproved", "The bank takes a payee that is not on the company's approved list", bulkB],
+    ["bulkMatch", "The bank takes an account that is not the one saved for the payee", bulkB],
+    ["bulkLineLimit", "The bank takes a line above what is left of the person's limit", bulkB],
+    ["bulkDuplicate", "The bank takes the same payment twice in one batch", bulkB],
+    ["bulkFixed", "The bank sends a batch that still has lines that need fixing", bulkB],
+    ["bulkSpeed", "The bank offers a speed that a payment is too large for", bulkB],
+    ["bulkDate", "The bank takes a send date that is not a working day, or no date", bulkB],
+    ["bulkFunds", "The bank lets a batch go on to the code when the account cannot pay it", bulkB],
+    ["bulkCode", "The bank sends a batch without the one-time code", bulkB],
+    ["bulkRepair", "The bank lets a batch be sent again when nothing failed, or a batch that was not paid", bulkB],
+    ["bulkResent", "The bank does not mark the lines sent again, so they can be sent twice", bulkB],
+    ["bulkStatus", "The bank calls a batch with returned payments Paid", bulkB],
+    ["bulkFormats", "The bank reads a bank file when the bank did not turn it on, and takes a file of the wrong format", bulkB],
+    // payroll runs
+    ["payCap", "The bank pays more than 1.5 times an employee's monthly salary", payB],
+    ["payAmount", "The bank takes a pay that is zero, below zero or not an amount", payB],
+    ["payDate", "The bank takes a pay date that is not a working day", payB],
+    ["payVariance", "The bank takes a total that moved by more than 20 per cent without a reason", payB],
+    ["payFunds", "The bank lets a run go on when the account cannot pay it", payB],
+    ["payCode", "The bank sends a run without the one-time code", payB],
+    // approving
+    ["apprStepUp", "The bank asks for no code, or always one, whatever its option says", demo && calls("approve")],
+    ["apprReason", "The bank rejects a payment with no reason, or a note that is too short", demo && uses(/^corp\.payments\.reject(Many)?$/)],
+    ["apprRejectMany", "The bank rejects several payments even when one of them cannot be rejected", demo && uses(/^corp\.payments\.rejectMany$/)],
+    ["apprReference", "The bank gives no reference for a decision", demo && (calls("approve") || uses(/^corp\.payments\.(reject|rejectMany|delegate)$/))],
   ];
   const rules = all.filter(([, , reachable]) => reachable).map(([k, what]) => [k, what] as [keyof Flaws, string]);
   return rules.map(([k, what]) => ({ id: `bank-${k}`, what, kind: "bank" as const, flaws: { [k]: false } as Flaws }));
