@@ -7,6 +7,8 @@ import { dayName } from "../retail/schedules";
 import { BUSINESS_PURPOSES, DOMESTIC, supplierLine } from "./rules";
 import { SME_NEEDS, SmeSandbox } from "./sme";
 import { BulkSandbox } from "./bulk";
+import { ADMIN_NEEDS, AdminSandbox } from "./admin";
+import { REQUEST_ARRANGE, REQUEST_NEEDS, RequestSandbox } from "./requests";
 import { approvalRefusal, isDue, type ApprovalRefusal, type CorpAuditEntry, type CorpBeneficiary, type CorpCompany, type CorpPayment, type Flaws } from "./corporate";
 import type { CorporateProvider } from "./corporate-provider";
 export { BUSINESS_PURPOSES } from "./rules";
@@ -32,7 +34,7 @@ const NEEDS: Record<string, string> = {
   "corp.payments.list": "biz.approvals.view", "corp.payments.rejectMany": "biz.approvals.approve",
   "corp.bulk.quote": "biz.payments.bulk", "corp.bulk.list": "biz.payments.bulk", "corp.bulk.get": "biz.payments.bulk", "corp.payroll.register": "biz.payroll.run",
   "corp.signatories.list": "biz.audit.view", "corp.audit.list": "biz.audit.view",
-  ...SME_NEEDS,
+  ...SME_NEEDS, ...ADMIN_NEEDS, ...REQUEST_NEEDS,
 };
 
 export type PaymentMeta = { speed: SpeedClass; rail: { id: string; name: string }; railReference: string; receive: { amount: number; currency: string }; rate: number | null; fee: number; purpose: string; arrives: string };
@@ -45,9 +47,14 @@ export class BusinessSandbox {
   private seq = 0;
   private sme: SmeSandbox;
   private bulk: BulkSandbox;
+  private admin: AdminSandbox;
+  private requests: RequestSandbox;
   private decisions = 0;
   constructor(private host: BusinessHost) {
     this.sme = new SmeSandbox({ now: host.now, otp: host.otp, config: host.config, conditions: host.conditions, flaws: host.flaws, actor: host.actor, log: (corp, userId, action, outcome) => this.log(corp, userId, action, outcome) });
+    const log = (corp: CorporateProvider, userId: string, action: string, outcome?: CorpAuditEntry["outcome"]) => this.log(corp, userId, action, outcome);
+    this.admin = new AdminSandbox({ now: host.now, otp: host.otp, conditions: host.conditions, flaws: host.flaws, actor: host.actor, log });
+    this.requests = new RequestSandbox({ now: host.now, flaws: host.flaws, actor: host.actor, log });
     this.bulk = new BulkSandbox({
       now: host.now, otp: host.otp, config: host.config, conditions: host.conditions, flaws: host.flaws, actor: host.actor, log: (corp, userId, action, outcome) => this.log(corp, userId, action, outcome),
       canPay: (co, accountId, userId) => this.sme.rights(co, accountId, userId).pay, requireCode: (co, always, amount) => this.requireCode(co, amount, always), spendCode: () => { host.otp.verified = false; },
@@ -112,7 +119,7 @@ export class BusinessSandbox {
 
     // who must approve, and where each one stands: in the order the payment fixed, or the group that covers its amount, or every approver
     const group = [...(co.signatoryGroups ?? [])].sort((a, b) => b.above - a.above).find((g) => p.amount > g.above);
-    const ids = (p.sequence ? [...new Set([...p.approvals.map((a) => a.userId), ...p.sequence])] : group?.members ?? co.users.filter((u) => u.roles.includes("approver")).map((u) => u.id)).filter((id) => id !== p.initiatedBy);
+    const ids = (p.sequence ? [...new Set([...p.approvals.map((a) => a.userId), ...p.sequence])] : p.approvers ?? group?.members ?? co.users.filter((u) => u.roles.includes("approver")).map((u) => u.id)).filter((id) => id !== p.initiatedBy);
     const next = p.sequence?.find((id) => !p.approvals.some((a) => a.userId === id));
     const when = (iso: string) => `${dayName(iso.slice(0, 10)).slice(4)} ${iso.slice(11, 16)}`;
     const signatories = ids.filter((id) => co.users.some((u) => u.id === id)).map((id, i) => {
@@ -160,6 +167,9 @@ export class BusinessSandbox {
     if (!corp) throw new BankError("NOT_SUPPORTED", "Not available for this customer");
     const userId = this.acting(adapter, corp, input);
     if (this.bulk.handles(adapter, input, !!this.host.actor())) return this.bulk.call(adapter, input, corp, userId);
+    if (this.admin.handles(adapter, input, !!this.host.actor())) return this.admin.call(adapter, input, corp, userId);
+    if (this.requests.handles(adapter, !!this.host.actor())) return this.requests.call(adapter, input, corp, userId);
+    if (adapter === "corp.sandbox.arrange" && this.host.actor() && REQUEST_ARRANGE.includes(String(input.op))) return this.requests.arrange(corp, corp.getCompany(), input);
     if (this.sme.handles(adapter, !!this.host.actor())) return this.sme.call(adapter, input, corp, userId);
     const c = () => corp.getCompany();
     const done = (p: CorpPayment, what: string) => { this.log(corp, userId, `${what} ${p.id}`); return this.shown(p, c(), userId); };
@@ -390,7 +400,10 @@ const REJECT_REASONS = ["Wrong amount", "Wrong payee", "Unknown supplier", "Dupl
 
 /** What the person sees for who a payment goes to: the beneficiary's name, or how many payees a bulk payment has. */
 export function shown(p: CorpPayment, company: CorpCompany): CorpPayment & { payee: string } {
-  return { ...p, payee: p.period ? `Payroll ${p.period} · ${p.lines?.length ?? 0} employee${p.lines?.length === 1 ? "" : "s"}` : p.lines ? `${p.lines.length} payment${p.lines.length === 1 ? "" : "s"}` : company.whitelist.find((b) => b.id === p.beneficiaryId)?.name ?? p.beneficiaryId };
+  // who may approve is the bank's own record of the payment (what a person sees of it is `signatories`)
+  const { approvers: _kept, ...visible } = p;
+  void _kept;
+  return { ...visible, payee: p.period ? `Payroll ${p.period} · ${p.lines?.length ?? 0} employee${p.lines?.length === 1 ? "" : "s"}` : p.lines ? `${p.lines.length} payment${p.lines.length === 1 ? "" : "s"}` : company.whitelist.find((b) => b.id === p.beneficiaryId)?.name ?? p.beneficiaryId };
 }
 
 const BULK_LINE_MESSAGE: Record<string, string> = {

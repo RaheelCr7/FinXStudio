@@ -100,7 +100,8 @@ describe("the More buttons", () => {
     const a = await signedIn();
     await a.switchContext("alpha"); await a.beginStepUp({ secret: "Bwx!Demo2026" }); await a.confirmStepUp("000000");
     const ctx = { context: a.context, entries: ALL };
-    expect(launchPointsFor(ctx, { place: "more.requests" }).map((l) => l.journey)).toEqual(["business-service-request"]);
+    // the company's own requests: the list (step 8 slice C) and a new one; neither is the Personal service-request
+    expect(launchPointsFor(ctx, { place: "more.requests" }).map((l) => l.journey)).toEqual(["business-requests", "business-service-request"]);
     expect(launchPointsFor(ctx, { place: "more.profile" }).map((l) => l.journey)).toEqual(expect.not.arrayContaining(["update-profile"]));
   });
 });

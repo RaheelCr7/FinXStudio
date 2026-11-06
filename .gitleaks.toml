@@ -12,4 +12,6 @@ paths = [
   '''packages/bank-client/src/security\.test\.ts''',
   '''packages/mock-bank-api/src/retail/public\.test\.ts''',
   '''packages/journey-schema/src/fixtures/register-digital-banking-tests\.ts''',
+  '''packages/mock-bank-api/src/business/admin\.test\.ts''',
+  '''packages/bank-client/src/admin-more\.test\.ts''',
 ]

@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { bankworkxJourneys, chainTargets, chainWarnings, bulkPayment, catalog, corporateApproval, corporatePayment, Journey, withdrawPayment, payrollRun, ownTransfer, manageBeneficiary, personalTransfer, internalTransfer, internationalTransfer, payBillBankworkx, mobileTopup, schedulePayment, cancelStandingOrder, supplierPayment, approvePayments, signIn, forgotUsername, resetPassword, forgotPassword, unlockAccount, changePassword, trustedDevices, setupQuickLogin, changeQuickPin, accounts, accountDetails, statement, accountNickname, openAnotherAccount, budgets, createBudget, transferTypes, singleTransfer, cardPin, cardsView, activateCard, cardControls, freezeCard, virtualCard, replaceCard, disputeTransaction, addCard, termDeposit, savingsGoal, saveBorrow, applyLoan, repayLoan, invest, sellInvestment, addMoney, updateProfile, newMessage, messagesView, serviceRequest, myRequests, connectAccount, loanCalculator, depositCalculator, findBranchAtm, contactSupport, openAccount, trackApplication, registerDigitalBanking, businessAccounts, businessStatement, addSupplier, paymentTemplate, templates, scheduleBusinessPayment, businessSchedules, businessWithdraw, paymentTracker } from "@finx/journey-schema";
 import { businessBulk, bulkStatus, repairBulkLines, businessPayroll } from "@finx/journey-schema";
+import { manageUser, changeLimits, editSignatoryGroup, admin as adminView, businessServiceRequest, businessRequests, kybOnboarding } from "@finx/journey-schema";
 import { lintAll } from "@finx/renderer-core";
 import { MockBank } from "@finx/mock-bank-api";
 import { mutationCheck, runScenarios } from "./scenarios";
@@ -2776,5 +2777,295 @@ describe("the Meezan bulk and payroll journeys are not changed by the BankWorkx 
     expect(bankworkxJourneys.find((x) => x.slug === "payroll-run")).toBe(businessPayroll);
     expect(bulkPayment.apps).toEqual(["meezan"]);
     expect(payrollRun.apps).toEqual(["meezan"]);
+  });
+});
+
+/** The numbers each journey's proof has: scenarios, mutants, killed, accepted (a change here says the tests or the journey changed). */
+const MU_COUNTS = { scenarios: 43, mutants: 58, killed: 48, accepted: 10 };
+const CL_COUNTS = { scenarios: 28, mutants: 29, killed: 24, accepted: 5 };
+const EG_COUNTS = { scenarios: 26, mutants: 29, killed: 22, accepted: 7 };
+const AD_COUNTS = { scenarios: 32, mutants: 54, killed: 28, accepted: 26 };
+const SR_COUNTS = { scenarios: 24, mutants: 24, killed: 20, accepted: 4 };
+const BR_COUNTS = { scenarios: 13, mutants: 11, killed: 7, accepted: 4 };
+const KB_COUNTS = { scenarios: 30, mutants: 43, killed: 29, accepted: 14 };
+
+/* ------------------------------------------------------------------------------------------------------------------------------------ Business: Admin and More (step 8, slice C) */
+
+const ADMIN_USER_RULES = ["bank-admSelf", "bank-admLastAdmin", "bank-admLastApprover", "bank-admPending", "bank-admPayments", "bank-admExists", "bank-admFields", "bank-admLimit", "bank-admCode", "bank-admSecond"];
+const ADMIN_LIMIT_RULES = ["bank-limRules", "bank-limCeiling", "bank-limIncrease", "bank-limPending"];
+const ADMIN_GROUP_RULES = ["bank-grpRules", "bank-grpSeparation", "bank-grpPending", "bank-grpSnapshot"];
+const REQUEST_RULES = ["bank-crqRules", "bank-crqDuplicate", "bank-crqDaily", "bank-crqAccount", "bank-crqConsent"];
+const REAL_AFTER_CHECK = (what: string) => `${what}: the call that changes something uses the same adapter as the check before it, which fails first under a sandbox condition (a condition covers the whole walk), so only the check's error path can be proved`;
+const SLOW_CHANGE = "A slow answer to the call that changes something is the same adapter as the check before it, so the check is the first to fail; the timeout screen that tells the person to check Admin cannot be reached in one walk";
+const ADMIN_TAB_BLOCKED = (rule: string) => `${rule} is stopped by the field of the screen before the bank is asked, so only a forged call reaches the bank's own refusal (proved with expectBankError)`;
+
+describe("manage-user: Invite, edit or disable a user", () => {
+  const j = Journey.parse(manageUser);
+  const MU: Record<string, string> = {
+    "no-error-path-55": RESEND_CODE("T-22"),
+    "no-error-path-58": REAL_AFTER_CHECK("The invitation after the code"), "no-error-path-63": REAL_AFTER_CHECK("The change of a person after the code"),
+    "no-error-path-68": REAL_AFTER_CHECK("Disabling after the code"), "no-error-path-73": REAL_AFTER_CHECK("Enabling after the code"),
+    "no-rule-route-0": SLOW_CHANGE,
+    "no-rule-retry-3": REAL_AFTER_CHECK("The retry after the invitation"), "no-rule-retry-4": REAL_AFTER_CHECK("The retry after the change of a person"),
+    "no-rule-retry-5": REAL_AFTER_CHECK("The retry after disabling"), "no-rule-retry-6": REAL_AFTER_CHECK("The retry after enabling"),
+  };
+  it("is lint clean, every scenario passes and every acceptance criterion is proved", async () => {
+    expect(lintAll(j)).toEqual([]);
+    const r = await runScenarios(j);
+    expect(r.results.filter((x) => !x.ok).map((x) => `${x.id} ${x.name}: ${x.failures.join(" | ")}`)).toEqual([]);
+    expect(r.coverage.map((c) => [c.id, c.status])).toEqual((j.acceptance ?? []).map((a) => [a.id, "proved"]));
+    expect([r.passed, r.total, r.coverage.length]).toEqual([MU_COUNTS.scenarios, MU_COUNTS.scenarios, 8]);
+    expect(r.ok).toBe(true);
+  });
+  it("the tests notice when the journey or the bank's rules are broken (mutation check)", async () => {
+    const m = await mutationCheck(j, MU);
+    expect(m.survived.map((s) => `${s.id}: ${s.what}`)).toEqual([]);
+    expect([m.total, m.killed, m.accepted.length]).toEqual([MU_COUNTS.mutants, MU_COUNTS.killed, MU_COUNTS.accepted]);
+    expect(m.ok).toBe(true);
+  }, 300_000);
+  it("every rule that decides who can move money is checked by a mutant and caught by a screen: the people, the limits, the code, the second administrator", async () => {
+    const m = await mutationCheck(j, MU);
+    const killed = m.results.filter((x) => x.kind === "bank" && x.killed).map((x) => x.id).sort();
+    expect(killed).toEqual([...ADMIN_USER_RULES, "bank-permissions"].sort());
+  }, 300_000);
+  it("is for BankWorkx only, in the Admin category; every change asks for the code before the bank is called, after a check that changes nothing; Back to people opens Admin", () => {
+    expect(catalog.filter((c) => c.id === "manage-user").map((c) => [c.madeFor, c.category])).toEqual([["bankworkx", "Admin"]]);
+    expect([manageUser.apps, manageUser.channels]).toEqual([["bankworkx"], ["web", "mobile"]]);
+    expect(bankworkxJourneys.map((x) => x.slug)).toContain("manage-user");
+    expect(chainTargets(manageUser)).toEqual(["admin"]);
+    const otp = manageUser.screens.find((s) => s.id === "otp")!;
+    const calls = otp.blocks.flatMap((b: any) => (b.type === "button" ? [b.actions.filter((a: any) => a.type === "callApi").map((a: any) => a.integration)] : []));
+    expect(calls).toEqual([["otpVerify", "invite"], ["otpVerify", "edit"], ["otpVerify", "disable"], ["otpVerify", "enable"]]);
+    // the dry run (the review) never carries a code and the real call is a different integration
+    const checks = manageUser.integrations.filter((i) => /Check$/.test(i.id)).map((i) => i.adapter).sort();
+    expect(checks).toEqual(["corp.users.disable", "corp.users.invite", "corp.users.enable", "corp.users.update"].sort());
+  });
+});
+
+describe("change-limits: Change limits", () => {
+  const j = Journey.parse(changeLimits);
+  const CL: Record<string, string> = {
+    "no-error-path-29": RESEND_CODE("T-15"), "no-error-path-32": REAL_AFTER_CHECK("The change after the code"), "no-rule-route-0": SLOW_CHANGE,
+    "no-rule-route-6": ADMIN_TAB_BLOCKED("An unknown setting"), "no-rule-retry-1": REAL_AFTER_CHECK("The retry after the change"),
+  };
+  it("is lint clean, every scenario passes and every acceptance criterion is proved", async () => {
+    expect(lintAll(j)).toEqual([]);
+    const r = await runScenarios(j);
+    expect(r.results.filter((x) => !x.ok).map((x) => `${x.id} ${x.name}: ${x.failures.join(" | ")}`)).toEqual([]);
+    expect(r.coverage.map((c) => [c.id, c.status])).toEqual((j.acceptance ?? []).map((a) => [a.id, "proved"]));
+    expect([r.passed, r.total, r.coverage.length]).toEqual([CL_COUNTS.scenarios, CL_COUNTS.scenarios, 7]);
+    expect(r.ok).toBe(true);
+  });
+  it("the tests notice when the journey or the bank's rules are broken (mutation check)", async () => {
+    const m = await mutationCheck(j, CL);
+    expect(m.survived.map((s) => `${s.id}: ${s.what}`)).toEqual([]);
+    expect([m.total, m.killed, m.accepted.length]).toEqual([CL_COUNTS.mutants, CL_COUNTS.killed, CL_COUNTS.accepted]);
+    expect(m.ok).toBe(true);
+  }, 300_000);
+  it("each rule of a limit is checked by a mutant and caught by a screen: the amount, the ceiling, an increase waiting for a second administrator, a change already waiting, the code", async () => {
+    const m = await mutationCheck(j, CL);
+    const killed = m.results.filter((x) => x.kind === "bank" && x.killed).map((x) => x.id).sort();
+    expect(killed).toEqual([...ADMIN_LIMIT_RULES, "bank-admCode", "bank-admSecond", "bank-admSelf", "bank-permissions"].sort());
+  }, 300_000);
+  it("is for BankWorkx only, in the Admin category; a code is asked before the bank changes a limit; Back to limits opens Admin", () => {
+    expect(catalog.filter((c) => c.id === "change-limits").map((c) => [c.madeFor, c.category])).toEqual([["bankworkx", "Admin"]]);
+    expect(bankworkxJourneys.map((x) => x.slug)).toContain("change-limits");
+    expect(chainTargets(changeLimits)).toEqual(["admin"]);
+    const otp = changeLimits.screens.find((s) => s.id === "otp")!;
+    expect(otp.blocks.flatMap((b: any) => (b.type === "button" ? b.actions : [])).filter((a: any) => a.type === "callApi").map((a: any) => a.integration)).toEqual(["otpVerify", "change"]);
+  });
+});
+
+describe("edit-signatory-group: Edit an approval group", () => {
+  const j = Journey.parse(editSignatoryGroup);
+  const EG: Record<string, string> = {
+    "no-error-path-32": SAME_FIRST_BIZ("The read of the chosen group"), "no-error-path-48": RESEND_CODE("T-21"), "no-error-path-51": REAL_AFTER_CHECK("The change after the code"), "no-rule-route-0": SLOW_CHANGE,
+    "no-rule-route-6": ADMIN_TAB_BLOCKED("A group that does not exist"), "no-rule-retry-1": REAL_AFTER_CHECK("The retry after the change"),
+    "bank-admSelf": LINKED("admin (which Back to groups opens): nobody decides their own change"),
+  };
+  it("is lint clean, every scenario passes and every acceptance criterion is proved", async () => {
+    expect(lintAll(j)).toEqual([]);
+    const r = await runScenarios(j);
+    expect(r.results.filter((x) => !x.ok).map((x) => `${x.id} ${x.name}: ${x.failures.join(" | ")}`)).toEqual([]);
+    expect(r.coverage.map((c) => [c.id, c.status])).toEqual((j.acceptance ?? []).map((a) => [a.id, "proved"]));
+    expect([r.passed, r.total, r.coverage.length]).toEqual([EG_COUNTS.scenarios, EG_COUNTS.scenarios, 8]);
+    expect(r.ok).toBe(true);
+  });
+  it("the tests notice when the journey or the bank's rules are broken (mutation check)", async () => {
+    const m = await mutationCheck(j, EG);
+    expect(m.survived.map((s) => `${s.id}: ${s.what}`)).toEqual([]);
+    expect([m.total, m.killed, m.accepted.length]).toEqual([EG_COUNTS.mutants, EG_COUNTS.killed, EG_COUNTS.accepted]);
+    expect(m.ok).toBe(true);
+  }, 300_000);
+  it("each rule of a group is checked by a mutant and caught by a screen: two approvers over the limit, the person who starts payments, a change already waiting, waiting payments keeping their approvers, the code, the second administrator", async () => {
+    const m = await mutationCheck(j, EG);
+    const killed = m.results.filter((x) => x.kind === "bank" && x.killed).map((x) => x.id).sort();
+    expect(killed).toEqual([...ADMIN_GROUP_RULES, "bank-admCode", "bank-admSecond", "bank-permissions"].sort());
+  }, 300_000);
+  it("is for BankWorkx only, in the Admin category; a code is asked before the bank changes a group; Back to groups opens Admin", () => {
+    expect(catalog.filter((c) => c.id === "edit-signatory-group").map((c) => [c.madeFor, c.category])).toEqual([["bankworkx", "Admin"]]);
+    expect(bankworkxJourneys.map((x) => x.slug)).toContain("edit-signatory-group");
+    expect(chainTargets(editSignatoryGroup)).toEqual(["admin"]);
+    const otp = editSignatoryGroup.screens.find((s) => s.id === "otp")!;
+    expect(otp.blocks.flatMap((b: any) => (b.type === "button" ? b.actions : [])).filter((a: any) => a.type === "callApi").map((a: any) => a.integration)).toEqual(["otpVerify", "change"]);
+  });
+});
+
+describe("admin: Admin", () => {
+  const j = Journey.parse(adminView);
+  const AD: Record<string, string> = {
+    "no-error-path-10": SAME_FIRST_BIZ("Turning the preview on"), "no-error-path-15": SAME_FIRST_BIZ("Turning the preview off"), "no-error-path-37": RESEND_CODE("T-30"), "no-error-path-41": REAL_AFTER_CHECK("Approving after the code"),
+    "no-validate-43": "The code field is the only field of that screen and an empty code is stopped by the bank's own check; the field's own rule is proved on the three journeys that ask for a code (their scenarios press the button with no code)",
+    "no-chain-22": "The journey Edit group opens is proved by its own scenarios (T-21 here proves the value it is opened with)", "no-launch-value-22-launch.group": "The scenario of the other group checks the value in the same place (T-21 opens the first group, whose value is `over`; the second card passes `upto` the same way)",
+    "no-rule-route-5": "A change decided by someone else or already decided is refused with its own words; the first screen is a list of what waits, so the refusal can only come from a forged call (proved with expectBankError)", "no-rule-retry-0": SAME_FIRST_BIZ("The retry after the code was not sent"), "no-rule-retry-1": REAL_AFTER_CHECK("The retry after a decision"),
+    ...linked(ADMIN_USER_RULES.filter((x) => x !== "bank-admSelf" && x !== "bank-admCode" && x !== "bank-admSecond"), "manage-user (which Invite user, Edit and Disable open)"), "bank-admSecond": LINKED("manage-user, change-limits and edit-signatory-group (which this view opens)"),
+    ...linked([...ADMIN_LIMIT_RULES, ...ADMIN_GROUP_RULES], "change-limits and edit-signatory-group (which Change limits and Edit group open)"),
+  };
+  it("is lint clean, every scenario passes and every acceptance criterion is proved", async () => {
+    expect(lintAll(j)).toEqual([]);
+    const r = await runScenarios(j);
+    expect(r.results.filter((x) => !x.ok).map((x) => `${x.id} ${x.name}: ${x.failures.join(" | ")}`)).toEqual([]);
+    expect(r.coverage.map((c) => [c.id, c.status])).toEqual((j.acceptance ?? []).map((a) => [a.id, "proved"]));
+    expect([r.passed, r.total, r.coverage.length]).toEqual([AD_COUNTS.scenarios, AD_COUNTS.scenarios, 6]);
+    expect(r.ok).toBe(true);
+  });
+  it("the tests notice when the journey or the bank's rules are broken (mutation check)", async () => {
+    const m = await mutationCheck(j, AD);
+    expect(m.survived.map((s) => `${s.id}: ${s.what}`)).toEqual([]);
+    expect([m.total, m.killed, m.accepted.length]).toEqual([AD_COUNTS.mutants, AD_COUNTS.killed, AD_COUNTS.accepted]);
+    expect(m.ok).toBe(true);
+  }, 300_000);
+  it("is for BankWorkx only, in the Admin category; it opens the three journeys; the first call is refused without the permission and approving a change asks for the code at the bank", async () => {
+    expect(catalog.filter((c) => c.id === "admin").map((c) => [c.madeFor, c.category])).toEqual([["bankworkx", "Admin"]]);
+    expect(bankworkxJourneys.map((x) => x.slug)).toContain("admin");
+    expect(chainTargets(adminView).sort()).toEqual(["change-limits", "edit-signatory-group", "manage-user"]);
+    const otp = adminView.screens.find((s) => s.id === "otp")!;
+    expect(otp.blocks.flatMap((b: any) => (b.type === "button" ? b.actions : [])).filter((a: any) => a.type === "callApi").map((a: any) => a.integration)).toEqual(["otpVerify", "decide"]);
+    const decline = adminView.screens.find((s) => s.id === "change")!.blocks.filter((b: any) => b.type === "button" && b.label === "Decline").flatMap((b: any) => b.actions).filter((a: any) => a.type === "callApi").map((a: any) => a.integration);
+    expect(decline).toEqual(["decide"]);
+  });
+  it("the preview is a prototype device of the bank: it needs the step-up, ends on switching company, and the activity log keeps no email", async () => {
+    const b = new MockBank("alex");
+    let t = Date.parse("2026-11-03T10:42:00Z"); b.now = () => t;
+    await b.call("bank.otp.send"); await b.call("bank.otp.verify", { code: "482100" }); await b.call("bank.session.stepUp", { method: "password", secret: "Bwx!Demo2026" }); await b.call("bank.session.switch", { contextId: "alpha" });
+    await b.call("bank.session.preview", { on: true });
+    expect(JSON.stringify(await b.call("corp.admin.get"))).not.toMatch(/@[a-z0-9.-]+\.[a-z]+/i);
+    t += 301_000;
+    await b.call("bank.session.switch", { contextId: "personal" });
+    await expect(b.call("bank.session.switch", { contextId: "beta" })).rejects.toMatchObject({ code: "STEP_UP_REQUIRED" });
+    await expect(b.call("corp.admin.get")).rejects.toMatchObject({ code: "WRONG_CONTEXT" });
+  });
+});
+
+describe("business-service-request: Business service request", () => {
+  const j = Journey.parse(businessServiceRequest);
+  const SR: Record<string, string> = {
+    "no-error-path-34": REAL_AFTER_CHECK("The request after the tick"), "no-rule-route-0": SLOW_CHANGE,
+    "no-rule-route-5": ADMIN_TAB_BLOCKED("The tick"), "no-rule-retry-1": REAL_AFTER_CHECK("The retry after the request"),
+  };
+  it("is lint clean, every scenario passes and every acceptance criterion is proved", async () => {
+    expect(lintAll(j)).toEqual([]);
+    const r = await runScenarios(j);
+    expect(r.results.filter((x) => !x.ok).map((x) => `${x.id} ${x.name}: ${x.failures.join(" | ")}`)).toEqual([]);
+    expect(r.coverage.map((c) => [c.id, c.status])).toEqual((j.acceptance ?? []).map((a) => [a.id, "proved"]));
+    expect([r.passed, r.total, r.coverage.length]).toEqual([SR_COUNTS.scenarios, SR_COUNTS.scenarios, 7]);
+    expect(r.ok).toBe(true);
+  });
+  it("the tests notice when the journey or the bank's rules are broken (mutation check)", async () => {
+    const m = await mutationCheck(j, SR);
+    expect(m.survived.map((s) => `${s.id}: ${s.what}`)).toEqual([]);
+    expect([m.total, m.killed, m.accepted.length]).toEqual([SR_COUNTS.mutants, SR_COUNTS.killed, SR_COUNTS.accepted]);
+    expect(m.ok).toBe(true);
+  }, 300_000);
+  it("each rule of a request is checked by a mutant and caught by a screen: the fields, a second open request, five a day, the account, the tick", async () => {
+    const m = await mutationCheck(j, SR);
+    const killed = m.results.filter((x) => x.kind === "bank" && x.killed).map((x) => x.id).sort();
+    expect(killed).toEqual([...REQUEST_RULES, "bank-permissions"].sort());
+  }, 300_000);
+  it("is for BankWorkx only, in the More category; it moves no money and asks for no code; Go to requests opens the list", () => {
+    expect(catalog.filter((c) => c.id === "business-service-request").map((c) => [c.madeFor, c.category])).toEqual([["bankworkx", "More"]]);
+    expect(bankworkxJourneys.map((x) => x.slug)).toContain("business-service-request");
+    expect(chainTargets(businessServiceRequest)).toEqual(["business-requests"]);
+    expect(businessServiceRequest.screens.some((s) => s.blocks.some((b: any) => b.type === "otp"))).toBe(false);
+    expect(businessServiceRequest.integrations.map((i) => i.adapter).sort()).toEqual(["corp.requests.create", "corp.requests.create", "corp.requests.list"]);
+  });
+});
+
+describe("business-requests: Service requests", () => {
+  const j = Journey.parse(businessRequests);
+  const BR: Record<string, string> = { ...linked(REQUEST_RULES, "business-service-request (which New request opens)") };
+  it("is lint clean, every scenario passes and every acceptance criterion is proved", async () => {
+    expect(lintAll(j)).toEqual([]);
+    const r = await runScenarios(j);
+    expect(r.results.filter((x) => !x.ok).map((x) => `${x.id} ${x.name}: ${x.failures.join(" | ")}`)).toEqual([]);
+    expect(r.coverage.map((c) => [c.id, c.status])).toEqual((j.acceptance ?? []).map((a) => [a.id, "proved"]));
+    expect([r.passed, r.total, r.coverage.length]).toEqual([BR_COUNTS.scenarios, BR_COUNTS.scenarios, 5]);
+    expect(r.ok).toBe(true);
+  });
+  it("the tests notice when the journey or the bank's rules are broken (mutation check)", async () => {
+    const m = await mutationCheck(j, BR);
+    expect(m.survived.map((s) => `${s.id}: ${s.what}`)).toEqual([]);
+    expect([m.total, m.killed, m.accepted.length]).toEqual([BR_COUNTS.mutants, BR_COUNTS.killed, BR_COUNTS.accepted]);
+    expect(m.ok).toBe(true);
+  }, 300_000);
+  it("is for BankWorkx only, in the More category; it is a view: no code, no money, one read, and New request opens Business service request; the bank lists newest first and keeps each company's own", async () => {
+    expect(catalog.filter((c) => c.id === "business-requests").map((c) => [c.madeFor, c.category])).toEqual([["bankworkx", "More"]]);
+    expect(bankworkxJourneys.map((x) => x.slug)).toContain("business-requests");
+    expect(chainTargets(businessRequests)).toEqual(["business-service-request"]);
+    expect(businessRequests.integrations.map((i) => i.adapter)).toEqual(["corp.requests.list"]);
+    expect(businessRequests.screens.some((s) => s.blocks.some((b: any) => b.type === "otp"))).toBe(false);
+    const b = new MockBank("alex");
+    b.now = () => Date.parse("2026-11-03T10:42:00Z");
+    await b.call("bank.otp.send"); await b.call("bank.otp.verify", { code: "482100" }); await b.call("bank.session.stepUp", { method: "password", secret: "Bwx!Demo2026" }); await b.call("bank.session.switch", { contextId: "alpha" });
+    await b.call("corp.requests.create", { type: "add", currency: "EUR", purpose: "Savings", phone: "+1 415 555 0100", acknowledged: true });
+    expect(Object.keys(await b.call("corp.requests.list"))).toEqual(["REQ-30419", "REQ-30418"]);
+  });
+});
+
+describe("kyb-onboarding: Open a business account", () => {
+  const j = Journey.parse(kybOnboarding);
+  const STEP_RETRY = "A scenario makes a whole adapter fail, so only the first step's check can be failed on its own: the other steps use the same adapter, and the rule that sends the person back to the step they were on cannot be reached in one walk";
+  const KB: Record<string, string> = {
+    "no-error-path-69": SAME_FIRST_BIZ("The check of the business step"), "no-rule-route-5": ADMIN_TAB_BLOCKED("The description of the business"),
+    ...Object.fromEntries(["timeout", "unavailable"].flatMap((screen) => [2, 3, 4, 5, 6, 7].map((n) => [`no-rule-${screen}-${n}`, STEP_RETRY]))),
+  };
+  it("is lint clean, every scenario passes and every acceptance criterion is proved", async () => {
+    expect(lintAll(j)).toEqual([]);
+    const r = await runScenarios(j);
+    expect(r.results.filter((x) => !x.ok).map((x) => `${x.id} ${x.name}: ${x.failures.join(" | ")}`)).toEqual([]);
+    expect(r.coverage.map((c) => [c.id, c.status])).toEqual((j.acceptance ?? []).map((a) => [a.id, "proved"]));
+    expect([r.passed, r.total, r.coverage.length]).toEqual([KB_COUNTS.scenarios, KB_COUNTS.scenarios, 8]);
+    expect(r.ok).toBe(true);
+  });
+  it("the tests notice when the journey or the bank's rules are broken (mutation check)", async () => {
+    const m = await mutationCheck(j, KB);
+    expect(m.survived.map((s) => `${s.id}: ${s.what}`)).toEqual([]);
+    expect([m.total, m.killed, m.accepted.length]).toEqual([KB_COUNTS.mutants, KB_COUNTS.killed, KB_COUNTS.accepted]);
+    expect(m.ok).toBe(true);
+  }, 300_000);
+  it("each rule of the application is checked by a mutant and caught by a screen: the details, the owners, the tax ID, the documents, the ticks, a second application", async () => {
+    const m = await mutationCheck(j, KB);
+    const killed = m.results.filter((x) => x.kind === "bank" && x.killed).map((x) => x.id).sort();
+    expect(killed).toEqual(["bank-kybConsent", "bank-kybDocs", "bank-kybDuplicate", "bank-kybFields", "bank-kybOwnership", "bank-kybTax"]);
+  }, 300_000);
+  it("is public, for BankWorkx only, in the Onboarding category; it needs no permission and no code, calls only the adapters a visitor may use, and the Landing offers it", () => {
+    expect(catalog.filter((c) => c.id === "kyb-onboarding").map((c) => [c.madeFor, c.category])).toEqual([["bankworkx", "Onboarding"]]);
+    expect(bankworkxJourneys.map((x) => x.slug)).toContain("kyb-onboarding");
+    expect(kybOnboarding.integrations.map((i) => i.adapter).sort()).toEqual(["bank.kyb.check", "bank.kyb.config", "bank.kyb.submit"]);
+    expect(kybOnboarding.screens.some((s) => s.blocks.some((b: any) => b.type === "otp"))).toBe(false);
+    expect(chainTargets(kybOnboarding)).toEqual([]);
+  });
+  it("before sign-in the bank answers the three public adapters and refuses every other adapter with NOT_SIGNED_IN", async () => {
+    const b = new MockBank("signed-out");
+    const publicOnes = ["bank.kyb.config", "bank.kyb.check", "bank.kyb.submit", "sandbox.kyb.inspect"];
+    for (const a of publicOnes) expect(await b.call(a, {}).then(() => "ok", (e) => e.code as string), a).not.toBe("NOT_SIGNED_IN");
+    for (const a of ["corp.users.invite", "corp.limits.set", "corp.signatories.update", "corp.changes.decide", "corp.requests.create", "corp.admin.get", "bank.session.preview", "bank.kybx.config"]) expect(await b.call(a, {}).then(() => "ok", (e) => e.code as string), a).toBe("NOT_SIGNED_IN");
+  });
+});
+
+describe("bulk-payment: the stepper of a resend (a correction of step 8, slice B)", () => {
+  it("says 3 steps in resend mode, as the line under it and the spec do, and 4 for a new batch", () => {
+    const steppers = businessBulk.screens.flatMap((s) => s.blocks.filter((b: any) => b.type === "stepper").map((b: any) => [b.visibleWhen, b.steps.length]));
+    expect(new Set(steppers.map((x) => JSON.stringify(x)))).toEqual(new Set([JSON.stringify(["!bp.resend", 4]), JSON.stringify(["bp.resend", 3])]));
   });
 });

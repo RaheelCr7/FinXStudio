@@ -140,7 +140,6 @@ const BUSINESS: Def[] = [
   ["accounts.detail", "Pay from this account", "supplier-payment", "biz.payments.initiate", ["accountId"]],
   ["accounts.transactions", "Export", "business-statement", "biz.accounts.export", ["accountId", "from", "to"]],
   ["accounts.statements", "New statement", "business-statement", "biz.accounts.export", ["accountId"]],
-  ["accounts.detail", "Request a chequebook", "business-service-request", "biz.requests.create", ["type"], { fixed: { type: "chequebook" } }],
   ["payments.hub", "Pay a supplier", "supplier-payment", "biz.payments.initiate", ["supplierId"]],
   ["payments.hub", "Upload a file", "bulk-payment", "biz.payments.bulk"],
   ["payments.hub", "Run payroll", "payroll-run", "biz.payroll.run", ["period"]],
@@ -164,17 +163,19 @@ const BUSINESS: Def[] = [
   ["approvals.inbox", "Approve", "approve-payments", "biz.approvals.approve", ["paymentId"]],
   ["approvals.inbox", "Approve several", "approve-payments", "biz.approvals.approve", ["paymentIds"], { many: true }],
   ["approvals.inbox", "Reject several", "approve-payments", "biz.approvals.approve", ["paymentIds", "mode"], { many: true, fixed: { mode: "reject" } }],
-  ["admin.users", "Invite", "manage-user", "biz.admin.users"],
-  ["admin.users", "Edit", "manage-user", "biz.admin.users", ["userId"]],
-  ["admin.users", "Change limit", "change-limits", "biz.admin.limits", ["userId"]],
-  ["admin.permissions", "Edit roles", "manage-user", "biz.admin.users", ["userId"]],
-  ["admin.limits", "Change", "change-limits", "biz.admin.limits", ["userId"]],
-  ["admin.limits", "Ask for a higher ceiling", "business-service-request", "biz.requests.create", ["type"], { fixed: { type: "limit_review" } }],
-  ["admin.groups", "Edit", "edit-signatory-group", "biz.admin.signatories", ["groupId"]],
-  ["admin.groups", "New group", "edit-signatory-group", "biz.admin.signatories"],
-  ["more.requests", "New request", "business-service-request", "biz.requests.create", ["type"]],
-  ["more.profile", "Request a change", "business-service-request", "biz.requests.create", ["type"]],
-  ["more.profile", "Business onboarding", "kyb-onboarding", "biz.admin.users"],
+  // Admin (docs/BANKWORKX.md, step 8 slice C): the view, and the three journeys it starts. The view is open to every context (a person without the admin permission meets its lock screen, where the
+  // administrator preview is offered); the content and every journey need the permission, which the bank checks again.
+  ["admin.overview", "Open Admin", "admin"],
+  ["admin.users", "Invite user", "manage-user", "biz.admin.users", ["mode"], { fixed: { mode: "invite" } }],
+  ["admin.users", "Edit", "manage-user", "biz.admin.users", ["userId", "mode"], { fixed: { mode: "edit" }, states: ["editable"] }],
+  ["admin.users", "Disable", "manage-user", "biz.admin.users", ["userId", "mode"], { fixed: { mode: "disable" }, states: ["editable"] }],
+  ["admin.users", "Enable", "manage-user", "biz.admin.users", ["userId", "mode"], { fixed: { mode: "enable" }, states: ["disabled"] }],
+  ["admin.limits", "Change limits", "change-limits", "biz.admin.limits"],
+  ["admin.groups", "Edit group", "edit-signatory-group", "biz.admin.signatories", ["group"]],
+  // More: the requests this company sent to the bank, and a new one (any person who may see accounts)
+  ["more.requests", "Service requests", "business-requests", "biz.accounts.view"],
+  ["more.requests", "New request", "business-service-request", "biz.accounts.view", ["type"]],
+  ["more.profile", "Request a change", "business-service-request", "biz.accounts.view", ["type"], { fixed: { type: "update" } }],
 ];
 
 export const LAUNCH_POINTS: LaunchPoint[] = [...make("personal", PERSONAL), ...make("business", BUSINESS)];

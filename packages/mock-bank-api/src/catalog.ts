@@ -483,7 +483,84 @@ export const ADAPTER_CATALOG: AdapterInfo[] = [
   },
   {
     adapter: "corp.sandbox.arrange", suggestedId: "arrange", description: "Scenario only: sets the books up for a test (a supplier off the list, a balance, a payment released).",
-    input: { op: "removeSupplier | waitSupplier | approveSupplier | balance | release | payment | fillTemplates | fillSchedules | fillRequests | fillStatements | emptyTransactions", "...": "id, accountId, balance, paymentId, payment, count" }, returns: "{ ok }. Never called by a journey.",
+    input: { op: "removeSupplier | waitSupplier | approveSupplier | balance | release | payment | fillTemplates | fillSchedules | fillRequests | fillStatements | emptyTransactions | admRoles | admSingleAdmin | admChange | admInspect | reqToday | reqStatus | soleAccount", "...": "id, accountId, balance, paymentId, payment, count" }, returns: "{ ok }. Never called by a journey.",
+  },
+  // ---- Admin of a company (BankWorkx Business) ----
+  {
+    adapter: "corp.admin.get", suggestedId: "admin", description: "The Admin view: waiting changes, people, limits, approval groups and the activity log.",
+    input: { log: "false leaves the activity log out" }, returns: "{ company, me, waiting: map by id { id, text, byName, mine, sent, canDecide }, people: map by id { id, name, label, roleText, limitText, statusKey, statusText, self, canEdit, canDisable, canEnable }, limitRows [{label,value}], groups { over, upto: { title, line } }, log: map { when, who, what, result } }. PERMISSION_DENIED without the admin permission.", errors: ["PERMISSION_DENIED"],
+  },
+  {
+    adapter: "corp.users.get", suggestedId: "person", description: "One person of the company, to edit: masked email, mobile, role, limit and which accounts.",
+    input: { personId: "id" }, returns: "{ name, emailMasked, phone, role, limit, status, self, on1..on4 (accounts, by position), label1..label4, count, ceiling, companyLimit }.", errors: ["USER_NOT_FOUND", "PERMISSION_DENIED"],
+  },
+  {
+    adapter: "corp.users.invite", suggestedId: "invite", description: "Invites a person (needs the one-time code; an administrator waits for a second one).",
+    input: { dryRun: "true checks and returns the review only", name: "2 to 60 characters", email: "work email", phone: "+ and 8 to 16 digits", role: "maker | approver | both | viewer | admin", on1: "accounts by position, boolean", limit: "daily limit, Makers only", secondApproval: "false applies an administrator at once" },
+    returns: "dryRun: the review { name, roleText, emailMasked, phoneMasked, accountsText, limitText, approvalNeeded }. Otherwise also { status: invited | waiting, personId, changeId }. Errors: INVALID_NAME, INVALID_EMAIL, INVALID_PHONE, USER_EXISTS, NO_ACCOUNT, LIMIT_ABOVE_COMPANY, LIMIT_ABOVE_PERSON, OTP_REQUIRED.", errors: ["USER_EXISTS", "OTP_REQUIRED", "PERMISSION_DENIED"], requiresOtp: true,
+  },
+  {
+    adapter: "corp.users.update", suggestedId: "editUser", description: "Changes a person's name, mobile, role, accounts or daily limit; the email stays.",
+    input: { personId: "id", dryRun: "true returns the review only", name: "", phone: "", role: "", on1: "accounts by position", limit: "", secondApproval: "" },
+    returns: "The review with one 'before to after' text for each change (nameChange, mobileChange, roleChange, accountsChange, limitChange); otherwise also { status: saved | waiting }. Errors: NO_CHANGE, SELF_CHANGE, CHANGE_PENDING, USER_HAS_PENDING_PAYMENTS, LAST_ADMIN, LAST_APPROVER, USER_NOT_FOUND, OTP_REQUIRED.", errors: ["NO_CHANGE", "SELF_CHANGE", "OTP_REQUIRED"], requiresOtp: true,
+  },
+  {
+    adapter: "corp.users.disable", suggestedId: "disableUser", description: "Disables a person (a reason when askReason is on); an administrator waits for a second one.",
+    input: { personId: "id", dryRun: "", reason: "Left the company | Changed role | Security concern | Other", note: "for Other, 5 or more characters", askReason: "false asks for none", secondApproval: "" },
+    returns: "The review { name, roleText, statusFrom, statusTo, reasonText, paymentsWaiting }; otherwise also { status: disabled | waiting }. Errors: CANNOT_DISABLE_SELF, LAST_ADMIN, LAST_APPROVER, REASON_REQUIRED, ALREADY_DISABLED, OTP_REQUIRED.", errors: ["CANNOT_DISABLE_SELF", "LAST_ADMIN", "OTP_REQUIRED"], requiresOtp: true,
+  },
+  {
+    adapter: "corp.users.enable", suggestedId: "enableUser", description: "Enables a disabled person again.",
+    input: { personId: "id", dryRun: "", secondApproval: "" }, returns: "The review; otherwise also { status: active | waiting }. Errors: NOT_DISABLED, SELF_CHANGE, OTP_REQUIRED.", errors: ["NOT_DISABLED", "OTP_REQUIRED"], requiresOtp: true,
+  },
+  {
+    adapter: "corp.limits.get", suggestedId: "adminLimits", description: "The four limits of the company, with which have a change waiting.",
+    input: {}, returns: "{ items: map by person | company | two | code { title, sub, name, value, text, waiting }, personText, companyText, twoText, codeText, ceilingText }.", errors: ["PERMISSION_DENIED"],
+  },
+  {
+    adapter: "corp.limits.set", suggestedId: "setLimit", description: "Changes one limit; a decrease applies at once, an increase waits for a second administrator.",
+    input: { which: "person | company | two | code", value: "the new amount", dryRun: "true checks and returns the review only", secondApproval: "false applies an increase at once" },
+    returns: "{ setting, nowText, newText, kind: increase | decrease, changeText, effectText, approvalNeeded }; otherwise also { status: applied | waiting, changeId }. Errors: CHANGE_PENDING, LIMIT_SAME, LIMIT_ABOVE_COMPANY, LIMIT_ABOVE_CEILING, LIMIT_BELOW_OTHERS, INVALID_AMOUNT, OTP_REQUIRED.", errors: ["CHANGE_PENDING", "LIMIT_SAME", "OTP_REQUIRED"], requiresOtp: true,
+  },
+  {
+    adapter: "corp.signatories.get", suggestedId: "groups", description: "The two approval groups and who can be chosen; with group the one to edit.",
+    input: { group: "over | upto (optional)" }, returns: "{ groups { over, upto: { title, line, mode, need, waiting } }, candidates, count, label1..6, id1..6, current { on1..on6 }, line, title, modeText, paymentsWaiting }.", errors: ["PERMISSION_DENIED"],
+  },
+  {
+    adapter: "corp.signatories.update", suggestedId: "setGroup", description: "Changes who approves in a group and how; waits for a second administrator.",
+    input: { group: "over | upto", mode: "any | seq | par", on1: "approvers by position (up to 6), boolean", need: "for par, 2 or more", first: "for seq, who goes first", allowSeq: "false hides In order", dryRun: "", secondApproval: "" },
+    returns: "{ groupTitle, nowLine, newLine, modeText, effectText, approvalNeeded, paymentsWaiting }; otherwise also { status: applied | waiting }. Errors: CHANGE_PENDING, NO_APPROVERS, NOT_ENOUGH_APPROVERS, INVALID_NEED, SEPARATION, NO_CHANGE, OTP_REQUIRED.", errors: ["CHANGE_PENDING", "NOT_ENOUGH_APPROVERS", "OTP_REQUIRED"], requiresOtp: true,
+  },
+  {
+    adapter: "corp.changes.decide", suggestedId: "adminDecide", description: "A second administrator approves or declines a waiting change.",
+    input: { changeId: "CHG-n", decision: "approve | decline" }, returns: "{ id, status, text, message }. Approving needs the one-time code. Errors: SELF_APPROVAL, CHANGE_NOT_FOUND, OTP_REQUIRED.", errors: ["SELF_APPROVAL", "CHANGE_NOT_FOUND", "OTP_REQUIRED"], requiresOtp: true,
+  },
+  {
+    adapter: "corp.requests.list", suggestedId: "companyRequests", description: "The service requests of the company, newest first.",
+    input: { status: "optional: received | in_progress | done | declined" }, returns: "Map by id { id, type, typeText, subject, status, statusText, dateText ('Today' or '28 Oct'), createdBy }.", errors: ["PERMISSION_DENIED"],
+  },
+  {
+    adapter: "corp.requests.create", suggestedId: "companyRequest", description: "Sends a service request to the bank; no code, nothing moves.",
+    input: { type: "add | close | update | cheque | other", currency: "add", purpose: "add", accountId: "close, cheque", moveTo: "close, when the account has a balance", reason: "close", what: "update", details: "update, other", leaves: "cheque: 25 | 50 | 100", delivery: "cheque", subject: "other", phone: "+ and 8 to 16 digits", acknowledged: "true", cheque: "false switches cheque books off" },
+    returns: "{ id (REQ-n), typeText, subject, statusText, company }. Errors: REQUEST_DUPLICATE, REQUEST_LIMIT_REACHED (5 a day), ONLY_ACCOUNT, ACCOUNT_NOT_FOUND, CONSENT_REQUIRED.", errors: ["REQUEST_DUPLICATE", "REQUEST_LIMIT_REACHED", "CONSENT_REQUIRED"],
+  },
+  {
+    adapter: "bank.session.preview", suggestedId: "adminPreview", description: "Turns the administrator preview on or off in the active company (a prototype device).",
+    input: { on: "false turns it off" }, returns: "{ on, as, name }. Needs a step-up; switching place ends it. Errors: STEP_UP_REQUIRED, WRONG_CONTEXT.", errors: ["STEP_UP_REQUIRED"],
+  },
+  // ---- A company applying for business banking, before sign-in (BankWorkx) ----
+  {
+    adapter: "bank.kyb.config", suggestedId: "kybConfig", description: "The rules of the form for the bank's market: tax ID, money sign, lists.",
+    input: {}, returns: "{ market, symbol, taxHint, taxMessage, taxSample, postalRequired, askChart, maxPeople, countries, types, roles, industries, sources, turnover, money, payments } (lists are maps by id { id, name }).",
+  },
+  {
+    adapter: "bank.kyb.check", suggestedId: "kybCheck", description: "Checks one step of a company's application (1 company, 2 people, 3 business, 4 documents, 5 tax).",
+    input: { step: "1 to 5", legalName: "", registrationNo: "", companyType: "", incorporated: "DD/MM/YYYY", country: "", address: "", city: "", postcode: "", count: "people", p1Name: "p1..p5 Name, Email, Role, Own", other: "other owners %", industry: "", about: "", tradeCountry: "", turnover: "", money: "", payments: "", source: "", certName: "", certSize: "bytes", proofName: "", proofSize: "bytes", chartName: "optional", taxCountry: "", taxId: "" },
+    returns: "{ ok, ... } (step 2: people, listed; step 5: taxMasked). Errors are the message to show: INVALID_REGISTRATION, INVALID_DATE, OWNERSHIP_TOTAL, DIRECTOR_REQUIRED, INVALID_TAX_ID, CERTIFICATE_REQUIRED, PROOF_REQUIRED.", errors: ["OWNERSHIP_TOTAL", "INVALID_TAX_ID"],
+  },
+  {
+    adapter: "bank.kyb.submit", suggestedId: "kybSubmit", description: "Submits the company's application; checks every step again; no code.",
+    input: { "...": "every field of bank.kyb.check", agreeTerms: "true", confirmTrue: "true" }, returns: "{ reference (KYB-n), company, registrationMasked, taxMasked, people, stage, stageText, steps }. Errors: TERMS_REQUIRED, TRUTH_REQUIRED, DUPLICATE_APPLICATION.", errors: ["DUPLICATE_APPLICATION", "TERMS_REQUIRED"],
   },
   // ---- A retail customer's records (BankWorkx) ----
   {

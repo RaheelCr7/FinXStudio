@@ -12,6 +12,9 @@ export interface CorporateProvider extends CorporateBankAdapter {
   all?(): CorpPayment[];
   /** Starts a batch whose rows the caller checked: only the rules every payment meets (currency, funds, limits) are applied here (the reference sandbox only). */
   initiateChecked?(input: { userId: string; fromAccountId: string; total: number; reference: string; lines: NonNullable<CorpPayment["lines"]>; period?: string }): CorpPayment;
+  /** The bank's own change to its books and the fixing of the approvers of waiting payments (Admin; the reference sandbox only). */
+  configure?(fn: (company: CorpCompany) => void): void;
+  fixWaitingApprovers?(): void;
   /** Passes a waiting payment to another approver (the reference sandbox only). */
   delegatePayment?(input: { userId: string; paymentId: string; toUserId: string }): CorpPayment;
   /** Puts a payment that already happened (or waits) into the bank's books without running the rules: the sandbox's seed data, never a client call. */

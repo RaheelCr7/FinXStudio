@@ -17,7 +17,7 @@ jobs:
   test:
     name: Typecheck and test
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 35
     steps:
       - uses: actions/checkout@v4
       - uses: pnpm/action-setup@v4 # pnpm version comes from "packageManager" in package.json

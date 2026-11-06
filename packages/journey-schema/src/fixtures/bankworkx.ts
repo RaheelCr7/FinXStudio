@@ -30,6 +30,13 @@ import { accountDetails } from "./account-details";
 import { statement } from "./statement";
 import { paymentTracker } from "./payment-tracker";
 import { businessWithdraw } from "./business-withdraw";
+import { manageUser } from "./manage-user";
+import { changeLimits } from "./change-limits";
+import { editSignatoryGroup } from "./edit-signatory-group";
+import { admin } from "./admin";
+import { businessServiceRequest } from "./business-service-request";
+import { businessRequests } from "./business-requests";
+import { kybOnboarding } from "./kyb-onboarding";
 import { businessBulk } from "./business-bulk";
 import { bulkStatus } from "./bulk-status";
 import { repairBulkLines } from "./repair-bulk-lines";
@@ -87,4 +94,4 @@ export { connectAccount };
 
 
 
-export const bankworkxJourneys: Journey[] = [addMoney, addCard, connectAccount, createBudget, invest, sellInvestment, ownTransfer, manageBeneficiary, personalTransfer, internalTransfer, internationalTransfer, payBillBankworkx, mobileTopup, schedulePayment, cancelStandingOrder, supplierPayment, businessAccounts, businessStatement, addSupplier, paymentTemplate, templates, scheduleBusinessPayment, businessSchedules, businessWithdraw, businessBulk, bulkStatus, repairBulkLines, businessPayroll, paymentTracker, approvePayments, signIn, forgotUsername, resetPassword, forgotPassword, unlockAccount, changePassword, trustedDevices, changeQuickPin, setupQuickLogin, accounts, accountDetails, statement, openAnotherAccount, budgets, accountNickname, transferTypes, singleTransfer, cardsView, activateCard, cardControls, freezeCard, virtualCard, replaceCard, cardPin, disputeTransaction, saveBorrow, termDeposit, savingsGoal, applyLoan, repayLoan, updateProfile, newMessage, messagesView, serviceRequest, myRequests, loanCalculator, depositCalculator, findBranchAtm, contactSupport, trackApplication, registerDigitalBanking, openAccount];
+export const bankworkxJourneys: Journey[] = [addMoney, addCard, connectAccount, createBudget, invest, sellInvestment, ownTransfer, manageBeneficiary, personalTransfer, internalTransfer, internationalTransfer, payBillBankworkx, mobileTopup, schedulePayment, cancelStandingOrder, supplierPayment, businessAccounts, businessStatement, addSupplier, paymentTemplate, templates, scheduleBusinessPayment, businessSchedules, businessWithdraw, businessBulk, bulkStatus, repairBulkLines, businessPayroll, paymentTracker, approvePayments, signIn, forgotUsername, resetPassword, forgotPassword, unlockAccount, changePassword, trustedDevices, changeQuickPin, setupQuickLogin, accounts, accountDetails, statement, openAnotherAccount, budgets, accountNickname, transferTypes, singleTransfer, cardsView, activateCard, cardControls, freezeCard, virtualCard, replaceCard, cardPin, disputeTransaction, saveBorrow, termDeposit, savingsGoal, applyLoan, repayLoan, updateProfile, newMessage, messagesView, serviceRequest, myRequests, loanCalculator, depositCalculator, findBranchAtm, contactSupport, trackApplication, registerDigitalBanking, openAccount, manageUser, changeLimits, editSignatoryGroup, admin, businessServiceRequest, businessRequests, kybOnboarding];
