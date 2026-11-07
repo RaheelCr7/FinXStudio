@@ -44,7 +44,7 @@ Known gaps against the Figma: the bank's own typeface is not available, so the w
 
 ## Checked
 
-- 29 end-to-end tests run every journey through the engine against the sandbox: happy paths, wrong password to locked, locked, expired and inactive profiles, PIN mismatch, wrong picture code, not found, already enrolled, activation block, wrong one-time code to lock, password rules, and Arabic right to left. 43 sandbox tests cover the rules.
+- 40 end-to-end tests (`packages/renderer-core/src/cab.test.ts`) run every journey through the engine against the sandbox: happy paths, wrong password to locked, locked, expired and inactive profiles, PIN mismatch, wrong picture code, not found, already enrolled, activation block, wrong one-time code to lock, password rules, and Arabic right to left. 24 sandbox tests (`packages/mock-bank-api/src/retail/cab.test.ts`) cover the rules.
 - Every journey is lint clean, complete in Arabic, and passes the automatic accessibility test of the web renderer.
 
 ## Audit against the design frames (3 November 2026)

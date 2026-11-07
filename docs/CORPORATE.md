@@ -52,13 +52,12 @@ A journey can carry its own proof: **`acceptance`** (criteria `AC-1 …`, each a
 
 - `finx_run_scenarios` (and `runScenarios` in `packages/finx-mcp/src/scenarios.ts`) runs them and reports, per criterion, **proved** (a passing scenario covers it), **failing** or **uncovered**; `provider: "bank-b"` runs the corporate adapters against the second API.
 - `finx_mutation_check` breaks the journey one thing at a time (each validation step, each one-time-code check, each error path, each navigation rule, the confirmation, the amount limits, the role check) and, for company journeys, switches off one bank rule at a time (roles, approved list, user and company limits, second approver, four eyes, cut-off), then re-runs the scenarios. A mutant is **killed** when a scenario fails. A survivor is a mistake the tests would let through.
-- **Both corporate journeys carry them**: 11 and 8 criteria, 12 and 10 scenarios, all proved on both bank APIs. The mutation check kills every mutant except the ones listed, with the reason for each, in `packages/finx-mcp/src/scenarios.test.ts` (another layer already stops the case, or the sandbox cannot produce it, for example the company limit of 8,000,000 is above the sum of every initiator's limit). The test fails on any new survivor, so changing a journey makes the tests prove themselves again.
+- **Both corporate journeys carry them**: `corporate-payment` has 11 criteria and 12 scenarios, `corporate-approval` 9 criteria and 11 scenarios (counted from the journey files on 7 November 2026), all proved on both bank APIs. The mutation check kills every mutant except the ones listed, with the reason for each, in `packages/finx-mcp/src/scenarios.test.ts` (another layer already stops the case, or the sandbox cannot produce it, for example the company limit of 8,000,000 is above the sum of every initiator's limit). The test fails on any new survivor, so changing a journey makes the tests prove themselves again.
 - The `/finx-generate` skill is the workflow around this: plan and wait for a yes, draft, write scenarios, run, mutation check, report.
 
 ## Not built yet
-- Bulk payments and payroll (more journeys for the generator to try).
 - A checkpoint of a generator run that can be undone in one click (Studio's journey history covers published versions only), and a Studio view of scenarios and coverage.
-- Choosing the bank API per project in Studio, and a real vendor behind a mapping file.
+- A real vendor behind a mapping file (choosing the bank API per project is built: the *Bank API* page, see [PROJECTS.md](PROJECTS.md)).
 
 
 ## Bulk payments

@@ -66,4 +66,4 @@ Each bank has a web app manifest (`/<project>/manifest.webmanifest`), an icon dr
 
 ## Not there yet
 
-Real sign-in and passkeys (none exist in the apps yet), a "change Studio server" setting (the server decides), PNG icons for older phones, deploy tooling, and the browser's Back button stepping through journey screens (it leaves the journey).
+A real passkey or biometric prompt (BankWorkx has a real sign-in with a password and a one-time code, but biometrics are only state in the sandbox: see [BANKWORKX.md](BANKWORKX.md)), a way to sign in to the classic bank (Meezan) other than the customer picker, a "change Studio server" setting (the server decides), PNG icons for older phones, deploy tooling, and the browser's Back button stepping through journey screens (it leaves the journey).
