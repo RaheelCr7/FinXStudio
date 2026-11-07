@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { commandFor } from "./ai-command";
+import { channelChoices, commandFor } from "./ai-command";
 
 describe("Claude Code commands", () => {
   it("builds a journey command, with a placeholder until the person writes one", () => {
@@ -24,6 +24,26 @@ describe("Claude Code commands", () => {
     expect(commandFor("review", "pay-a-bill", undefined, p)).toBe("claude '/finx-review pay-a-bill'");
     expect(commandFor("code", "fix the login", undefined, p)).toBe("claude '/finx-code fix the login'");
     expect(commandFor("journey", "x", undefined, { id: "cab", name: "Cairo Amman Bank (JOD) 'web'" })).toBe(`claude '/finx-journey For Cairo Amman Bank (JOD) '\\''web'\\'' (cab): x'`);
+  });
+  it("says where a new journey will run, so the draft is built for the web app, the mobile app or both", () => {
+    const p = { id: "test-bank", name: "test bank" };
+    expect(commandFor("journey", "a sign-in journey", undefined, p, "web")).toBe("claude '/finx-journey For test bank (test-bank), for web only: a sign-in journey'");
+    expect(commandFor("journey", "a sign-in journey", undefined, p, "mobile")).toBe("claude '/finx-journey For test bank (test-bank), for mobile only: a sign-in journey'");
+    expect(commandFor("journey", "a sign-in journey", undefined, p, "both")).toBe("claude '/finx-journey For test bank (test-bank), for web and mobile: a sign-in journey'");
+    expect(commandFor("journey", "", undefined, p, "web")).toBe("claude '/finx-journey For test bank (test-bank), for web only: <describe what you want>'");
+    // a journey in view keeps its own channels; reviews and code changes are not about a channel
+    expect(commandFor("journey", "add a warning", { slug: "pay-a-bill", name: "Pay a bill" }, p, "web")).toBe(`claude '/finx-journey Change the "Pay a bill" journey (pay-a-bill): add a warning'`);
+    expect(commandFor("review", "pay-a-bill", undefined, p, "web")).toBe("claude '/finx-review pay-a-bill'");
+    expect(commandFor("code", "fix the login", undefined, p, "web")).toBe("claude '/finx-code fix the login'");
+  });
+  it("offers a choice only when the project covers both channels", () => {
+    expect(channelChoices(["web", "mobile"])).toEqual(["both", "web", "mobile"]);
+    expect(channelChoices(["web"])).toEqual(["web"]);
+    expect(channelChoices(["mobile"])).toEqual(["mobile"]);
+    // tablet and watch are stored but not built; they never narrow the choice on their own
+    expect(channelChoices(["web", "tablet"])).toEqual(["web"]);
+    expect(channelChoices(["tablet"])).toEqual(["both", "web", "mobile"]);
+    expect(channelChoices([])).toEqual(["both", "web", "mobile"]);
   });
   it("keeps quotes in the request from breaking the command", () => {
     expect(commandFor("journey", "it's a \"test\"")).toBe(`claude '/finx-journey it'\\''s a "test"'`);

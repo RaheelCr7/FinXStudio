@@ -3,7 +3,7 @@ import { useState } from "react";
 import Link from "next/link";
 import { Check, CreditCard, KeyRound, Send, Sparkles } from "lucide-react";
 import { projectShape } from "@finx/ui-kit";
-import { commandFor, type Agent } from "@/lib/ai-command";
+import { channelChoices, commandFor, CHANNEL_PHRASE, type Agent, type ChannelChoice } from "@/lib/ai-command";
 import { composeJourneyBrief, languageNames, TEMPLATES } from "@/lib/ai-brief";
 import { useProjects } from "./Projects";
 
@@ -11,6 +11,7 @@ type JourneyRef = { slug: string; name: string; focus?: string };
 type Pick = { slug: string; name: string };
 const ICONS: Record<string, React.ComponentType<{ size?: number; "aria-hidden"?: boolean }>> = { "sign-in": KeyRound, "pay-a-bill": CreditCard, "send-money": Send };
 const BLURB: Record<string, string> = { "sign-in": "Username, password, attempts left, locked and expired screens", "pay-a-bill": "Look the bill up, review, consent, one-time code", "send-money": "A saved payee, a daily limit, a one-time code" };
+const CHANNEL_LABEL: Record<ChannelChoice, string> = { both: "Web and mobile", web: "Web", mobile: "Mobile" };
 
 /**
  * One prompt and one button. The button copies the `claude` command and says where to paste it: AI runs in Claude Code on
@@ -23,9 +24,13 @@ export function NewAiTask({ journey, journeys = [], compact }: { journey?: Journ
   const [text, setText] = useState("");
   const [pick, setPick] = useState(journeys[0]?.slug ?? "");
   const [sent, setSent] = useState<"" | "copied" | "manual">("");
+  const [chosen, setChosen] = useState<ChannelChoice | null>(null);
 
+  // A new journey runs where the project does: a project with both channels lets you choose, one with a single channel is fixed.
+  const choices = channelChoices(projectShape(current).channels);
+  const channel: ChannelChoice = chosen && choices.includes(chosen) ? chosen : choices[0] ?? "both";
   const picked = journey ?? (mode === "review" ? journeys.find((j) => j.slug === pick) : undefined);
-  const command = commandFor(mode, text, mode === "code" ? undefined : picked, { id: current.id, name: current.name });
+  const command = commandFor(mode, text, mode === "code" ? undefined : picked, { id: current.id, name: current.name }, channel);
   const ready = mode === "review" ? !!picked : text.trim().length > 0;
   const useTemplate = (id: string) => { const t = TEMPLATES.find((x) => x.id === id); if (t) { setText(composeJourneyBrief({ ...t.brief, languages: languageNames(projectShape(current).languages) })); setSent(""); } };
   async function go() {
@@ -41,7 +46,7 @@ export function NewAiTask({ journey, journeys = [], compact }: { journey?: Journ
   const where = mode === "code" ? "The change arrives as a pull request on GitHub."
     : mode === "review" ? "The report appears here when it is done."
     : journey ? "The change lands in this journey's draft. Nothing goes live until you publish it."
-    : <>The draft appears under Journeys for <b>{current.name}</b>. Nothing goes live until you publish it.</>;
+    : <>The draft appears under Journeys for <b>{current.name}</b>, built {CHANNEL_PHRASE[channel]}. Nothing goes live until you publish it.</>;
 
   return (
     <div className={compact ? "stack" : "ai-prompt"}>
@@ -57,6 +62,14 @@ export function NewAiTask({ journey, journeys = [], compact }: { journey?: Journ
           </select>
         ) : null}
         <textarea value={text} onChange={(e) => { setText(e.target.value); setSent(""); }} placeholder={placeholder} rows={compact ? 3 : 4} aria-label={mode === "review" ? "What to look at" : "What you want"} />
+        {!journey && mode === "journey" && choices.length > 1 ? (
+          <div className="row wrap">
+            <span className="muted">Runs on</span>
+            <div className="seg" role="group" aria-label="Where will it run?">
+              {choices.map((c) => <button key={c} aria-pressed={channel === c} onClick={() => { setChosen(c); setSent(""); }}>{CHANNEL_LABEL[c]}</button>)}
+            </div>
+          </div>
+        ) : null}
         <div className="row wrap">
           <div className="seg" role="group" aria-label="What should Claude do?">
             <button aria-pressed={mode === "journey"} onClick={() => { setMode("journey"); setSent(""); }}>{journey ? "Change" : "Build"}</button>
