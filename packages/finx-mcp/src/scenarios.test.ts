@@ -7,6 +7,19 @@ import { MockBank } from "@finx/mock-bank-api";
 import { mutationCheck, runScenarios } from "./scenarios";
 import { simulate } from "./simulate";
 
+/**
+ * CI runs this file in parallel shards (FINX_TEST_SHARD of FINX_TEST_SHARDS, counted from 0). The top-level groups are dealt out one by one,
+ * so every group runs in exactly one shard; with neither variable set, everything runs, as before.
+ */
+const SHARDS = Number(process.env.FINX_TEST_SHARDS || 1);
+const SHARD = Number(process.env.FINX_TEST_SHARD || 0);
+let dealt = 0;
+const mine = () => dealt++ % SHARDS === SHARD;
+const shardDescribe: typeof describe = Object.assign(
+  ((name: any, fn: any) => (mine() ? describe : describe.skip)(name, fn)) as any,
+  { each: ((cases: any) => (name: any, fn: any) => (mine() ? describe.each(cases) : describe.skip.each(cases))(name, fn)) as any },
+) as typeof describe;
+
 const journeys = [corporatePayment, corporateApproval, withdrawPayment, bulkPayment, payrollRun].map((j) => Journey.parse(j));
 
 /**
@@ -52,7 +65,7 @@ const ACCEPTED: Record<string, Record<string, string>> = {
   },
 };
 
-describe("the tests that travel with a journey", () => {
+shardDescribe("the tests that travel with a journey", () => {
   for (const j of journeys) {
     it(`${j.slug}: every scenario passes and every acceptance criterion is proved`, async () => {
       const r = await runScenarios(j);
@@ -112,7 +125,7 @@ describe("the tests that travel with a journey", () => {
  * Between my accounts is a retail journey: it has no second bank API, so the "second API" run of the company journeys does not apply.
  * Survivors of the mutation check are listed with the reason each cannot be reached from a screen.
  */
-describe("own-transfer: Between my accounts", () => {
+shardDescribe("own-transfer: Between my accounts", () => {
   const j = Journey.parse(ownTransfer);
   const OWN_ACCEPTED: Record<string, string> = {
     "no-error-path-28": "'Get a new rate' fails only if the rate service fails on the second request after answering the first; the same error path is proved on the first request (T-10)",
@@ -151,7 +164,7 @@ describe("own-transfer: Between my accounts", () => {
  * Add, edit or delete a payee is a retail journey: it has no second bank API, so the "second API" run of the company journeys does not apply.
  * Survivors of the mutation check are listed with the reason each cannot be reached from a screen.
  */
-describe("manage-beneficiary: Add, edit or delete a payee", () => {
+shardDescribe("manage-beneficiary: Add, edit or delete a payee", () => {
   const j = Journey.parse(manageBeneficiary);
   const BEN_ACCEPTED: Record<string, string> = {
     "no-error-path-69": "Resending the code is a button of the code field that a scenario cannot press; the first send has the same error path and is proved (T-30)",
@@ -191,7 +204,7 @@ describe("manage-beneficiary: Add, edit or delete a payee", () => {
  * Send money is a retail journey: it has no second bank API, so the "second API" run of the company journeys does not apply.
  * Survivors of the mutation check are listed with the reason each cannot be reached from a screen.
  */
-describe("personal-transfer: Send money", () => {
+shardDescribe("personal-transfer: Send money", () => {
   const j = Journey.parse(personalTransfer);
   const PT_ACCEPTED: Record<string, string> = {
     "no-error-path-107": "The address step asks for the price a second time, with the same answer the first time had; the same error path is proved on the first price (T-42, T-43)",
@@ -242,7 +255,7 @@ describe("personal-transfer: Send money", () => {
  * To a BankWorkx customer is a thin entry: it opens Send money (personal-transfer) with the launch value launch.type, so it carries none of
  * its screens or bank calls. Its scenarios follow the chain into Send money, so the rules are proved there, by the journey they belong to.
  */
-describe("internal-transfer: To a BankWorkx customer (opens Send money)", () => {
+shardDescribe("internal-transfer: To a BankWorkx customer (opens Send money)", () => {
   const j = Journey.parse(internalTransfer);
   it("is lint clean, every scenario passes and every acceptance criterion is proved", async () => {
     expect(lintAll(j)).toEqual([]);
@@ -270,7 +283,7 @@ describe("internal-transfer: To a BankWorkx customer (opens Send money)", () => 
  * the chain into Send money, so the bank rules a payment abroad meets are still caught (mutants of the bank), and the entry's own few
  * parts are mutated here.
  */
-describe("international-transfer: Abroad (opens Send money)", () => {
+shardDescribe("international-transfer: Abroad (opens Send money)", () => {
   const j = Journey.parse(internationalTransfer);
   // the bank rules a payment abroad cannot reach (the entry's own parts are all caught)
   const IT_ACCEPTED: Record<string, string> = {
@@ -321,7 +334,7 @@ describe("international-transfer: Abroad (opens Send money)", () => {
  * Pay a bill is a retail journey: it has no second bank API, so the "second API" run of the company journeys does not apply.
  * Survivors of the mutation check are listed with the reason each cannot be reached from a screen.
  */
-describe("pay-bill: Pay a bill", () => {
+shardDescribe("pay-bill: Pay a bill", () => {
   const j = Journey.parse(payBillBankworkx);
   const PB_ACCEPTED: Record<string, string> = {
     "no-error-path-67": "Resending the code is a button of the code field that a scenario cannot press; the first send has the same error path and is proved (T-40)",
@@ -365,7 +378,7 @@ describe("pay-bill: Pay a bill", () => {
  * Mobile top-up is a retail journey: it has no second bank API, so the "second API" run of the company journeys does not apply.
  * Survivors of the mutation check are listed with the reason each cannot be reached from a screen.
  */
-describe("mobile-topup: Mobile top-up", () => {
+shardDescribe("mobile-topup: Mobile top-up", () => {
   const j = Journey.parse(mobileTopup);
   const MT_ACCEPTED: Record<string, string> = {
     "no-error-path-54": "Resending the code is a button of the code field that a scenario cannot press; the first send has the same error path and is proved (T-33)",
@@ -405,7 +418,7 @@ describe("mobile-topup: Mobile top-up", () => {
  * Schedule a payment is a retail journey: it has no second bank API, so the "second API" run of the company journeys does not apply.
  * Survivors of the mutation check are listed with the reason each cannot be reached from a screen.
  */
-describe("schedule-payment: Schedule a payment", () => {
+shardDescribe("schedule-payment: Schedule a payment", () => {
   const j = Journey.parse(schedulePayment);
   const SP_ACCEPTED: Record<string, string> = {
     "no-error-path-88": "Resending the code is a button of the code field that a scenario cannot press; the first send has the same error path and is proved (T-46)",
@@ -447,7 +460,7 @@ describe("schedule-payment: Schedule a payment", () => {
  * Cancel a standing order is the cancel mode of Schedule a payment, as a journey of its own. It asks for no code, so the "code before money" rule
  * of lint does not apply to it; the bank calls it makes only reduce what leaves the account.
  */
-describe("cancel-standing-order: Cancel a standing order", () => {
+shardDescribe("cancel-standing-order: Cancel a standing order", () => {
   const j = Journey.parse(cancelStandingOrder);
 
   it("is lint clean, every scenario passes and every acceptance criterion is proved", async () => {
@@ -485,7 +498,7 @@ describe("cancel-standing-order: Cancel a standing order", () => {
  */
 const SUPPLIER_RULES_SP = ["bank-bankCode", "bank-ibanChecksum", "bank-sepa", "bank-countryMatch", "bank-routingChecksum", "bank-sortCode", "bank-bic", "bank-nameCheck", "bank-supName", "bank-supDuplicate", "bank-supPending", "bank-supCheck", "bank-supCode"];
 
-describe("supplier-payment: Pay a supplier", () => {
+shardDescribe("supplier-payment: Pay a supplier", () => {
   const j = Journey.parse(supplierPayment);
   const SUP_ACCEPTED: Record<string, string> = {
     "no-error-path-65": "Resending the code is a button of the code field that a scenario cannot press; the first send has the same error path and is proved (T-25)",
@@ -529,7 +542,7 @@ describe("supplier-payment: Pay a supplier", () => {
   });
 });
 
-describe("approve-payments: Approve payments", () => {
+shardDescribe("approve-payments: Approve payments", () => {
   const j = Journey.parse(approvePayments);
   const SAME_ADAPTER = (what: string) => `${what} reads the same list as the inbox, which is read first, so a scenario (which makes a whole adapter fail) cannot make only this call fail; the inbox's own error path is proved (T-37)`;
   const AP_ACCEPTED: Record<string, string> = {
@@ -581,7 +594,7 @@ describe("approve-payments: Approve payments", () => {
   });
 });
 
-describe("scenario setup can keep what the bank answered", () => {
+shardDescribe("scenario setup can keep what the bank answered", () => {
   it.each(["reference", "bank-b"] as const)("a later step reads the id of a payment made in setup, on the %s API", async (provider) => {
     const j = structuredClone(journeys[1]!) as any;
     j.acceptance = [{ id: "AC-1", text: "x" }];
@@ -599,7 +612,7 @@ describe("scenario setup can keep what the bank answered", () => {
   });
 });
 
-describe("scenario conditions: empty lists", () => {
+shardDescribe("scenario conditions: empty lists", () => {
   it("a list that comes back empty is an empty list for the journey", async () => {
     const j = structuredClone(journeys[0]!) as any;
     j.acceptance = [{ id: "AC-1", text: "x" }];
@@ -620,7 +633,7 @@ const SIGN_IN_RULES = ["bank-credentials", "bank-signInLock", "bank-usernameHidi
 const RESET_RULES = ["bank-resetClearsLock", "bank-passwordLength", "bank-passwordUsername", "bank-passwordCommon", "bank-passwordBreach", "bank-passwordReuse", "bank-codeExpiry", "bank-resendLimit", "bank-recoveryLock", "bank-tokenExpiry", "bank-resetNeedsCode"];
 const linked = (ids: string[], where: string) => Object.fromEntries(ids.map((id) => [id, LINKED(where)]));
 
-describe("sign-in: Sign in", () => {
+shardDescribe("sign-in: Sign in", () => {
   const j = Journey.parse(signIn);
   // the recovery rules it meets through the "Forgot username?" link
   const SI_ACCEPTED = linked(["bank-recoveryLock", "bank-tokenExpiry", "bank-resetNeedsCode"], "forgot-username");
@@ -659,7 +672,7 @@ describe("sign-in: Sign in", () => {
   });
 });
 
-describe("forgot-username: Forgot username", () => {
+shardDescribe("forgot-username: Forgot username", () => {
   const j = Journey.parse(forgotUsername);
   const ACC: Record<string, string> = { ...linked(SIGN_IN_RULES, "sign-in"), ...linked(RESET_RULES.filter((id) => !["bank-codeExpiry", "bank-resendLimit", "bank-recoveryLock", "bank-tokenExpiry", "bank-resetNeedsCode"].includes(id)), "reset-password") };
   it("is lint clean, every scenario passes and every acceptance criterion is proved", async () => {
@@ -682,7 +695,7 @@ describe("forgot-username: Forgot username", () => {
   });
 });
 
-describe("reset-password: Reset password", () => {
+shardDescribe("reset-password: Reset password", () => {
   const j = Journey.parse(resetPassword);
   const ACC: Record<string, string> = linked(SIGN_IN_RULES.filter((id) => id !== "bank-credentials"), "sign-in");
   it("is lint clean, every scenario passes and every acceptance criterion is proved", async () => {
@@ -708,7 +721,7 @@ describe("reset-password: Reset password", () => {
  * Forgot password and Unlock account are thin entries: no bank calls and two screens of their own, and they open Reset password with the mode.
  * Their scenarios follow the chain into Reset password, so the entry's own parts are all caught; the bank rules of the reset are proved there.
  */
-describe.each([
+shardDescribe.each([
   ["forgot-password", forgotPassword, [4, 4, 3], [15, 4, 11]],
   ["unlock-account", unlockAccount, [5, 5, 4], [17, 6, 11]],
 ] as const)("%s (opens Reset password)", (slug, journey, proof, mutants) => {
@@ -744,7 +757,7 @@ describe.each([
  */
 const NO_RESEND = "This journey never asks for a second code in one attempt (a new attempt starts again from the first code); the resend limit is caught by Change password, which has a Resend code button";
 
-describe("change-password: Change password", () => {
+shardDescribe("change-password: Change password", () => {
   const j = Journey.parse(changePassword);
   const ACC: Record<string, string> = {};
   it("is lint clean, every scenario passes and every acceptance criterion is proved", async () => {
@@ -769,7 +782,7 @@ describe("change-password: Change password", () => {
   });
 });
 
-describe("trusted-devices: Trusted devices", () => {
+shardDescribe("trusted-devices: Trusted devices", () => {
   const j = Journey.parse(trustedDevices);
   const ACC: Record<string, string> = { "bank-resendLimit": NO_RESEND };
   it("is lint clean, every scenario passes and every acceptance criterion is proved", async () => {
@@ -792,7 +805,7 @@ describe("trusted-devices: Trusted devices", () => {
   });
 });
 
-describe("setup-quick-login: Set up quick sign-in", () => {
+shardDescribe("setup-quick-login: Set up quick sign-in", () => {
   const j = Journey.parse(setupQuickLogin);
   const ACC: Record<string, string> = {
     ...linked(["bank-pinLockOff", "bank-currentPin", "bank-pinSame"], "change-quick-pin"),
@@ -820,7 +833,7 @@ describe("setup-quick-login: Set up quick sign-in", () => {
   });
 });
 
-describe("change-quick-pin: Change quick PIN", () => {
+shardDescribe("change-quick-pin: Change quick PIN", () => {
   const j = Journey.parse(changeQuickPin);
   const ACC: Record<string, string> = linked(["bank-codeExpiry", "bank-codeLock", "bank-resendLimit", "bank-quickNeedsCode"], "setup-quick-login");
   it("is lint clean, every scenario passes and every acceptance criterion is proved", async () => {
@@ -858,7 +871,7 @@ const STATEMENT_RULES = ["bank-statementDates", "bank-statementEmpty", "bank-fee
 /** The bank rules of sending money to someone else and between a person's own accounts: Send money, Between my accounts and Add a payee prove them. */
 const SEND_RULES = ["bank-sameAccount", "bank-canDebit", "bank-funds", "bank-quoteExpiry", "bank-quoteReplay", "bank-railLimit", "bank-dailyLimit", "bank-coolingOff", "bank-sanctions", "bank-purposeRule", "bank-addressRule", "bank-bankCode", "bank-payeeLimit", "bank-payeeDuplicate", "bank-ibanChecksum", "bank-sepa", "bank-countryMatch", "bank-routingChecksum", "bank-sortCode", "bank-bic"];
 
-describe("accounts: Accounts", () => {
+shardDescribe("accounts: Accounts", () => {
   const j = Journey.parse(accounts);
   const ACC: Record<string, string> = {
     ...linked(except(ACCOUNT_RULES, "bank-totalHidden", "bank-totalFx"), "account-details or open-another-account"),
@@ -885,7 +898,7 @@ describe("accounts: Accounts", () => {
   });
 });
 
-describe("account-details: Account details", () => {
+shardDescribe("account-details: Account details", () => {
   const j = Journey.parse(accountDetails);
   const ACC: Record<string, string> = {
     ...linked(["bank-totalFx"], "accounts"),
@@ -916,7 +929,7 @@ describe("account-details: Account details", () => {
   });
 });
 
-describe("statement: Statement", () => {
+shardDescribe("statement: Statement", () => {
   const j = Journey.parse(statement);
   const ACC: Record<string, string> = {
     ...linked(ACCOUNT_RULES, "accounts or account-details"),
@@ -945,7 +958,7 @@ describe("statement: Statement", () => {
   });
 });
 
-describe("account-nickname: Rename an account (opens Account details)", () => {
+shardDescribe("account-nickname: Rename an account (opens Account details)", () => {
   const j = Journey.parse(accountNickname);
   const ACC = linked(except(ACCOUNT_RULES, "bank-nameTaken"), "account-details");
   it("is lint clean, every scenario passes and every acceptance criterion is proved", async () => {
@@ -969,7 +982,7 @@ describe("account-nickname: Rename an account (opens Account details)", () => {
   }, 240_000);
 });
 
-describe("open-another-account: Open another account", () => {
+shardDescribe("open-another-account: Open another account", () => {
   const j = Journey.parse(openAnotherAccount);
   const ACC: Record<string, string> = {
     ...linked(["bank-totalHidden", "bank-totalFx"], "accounts"),
@@ -996,7 +1009,7 @@ describe("open-another-account: Open another account", () => {
   });
 });
 
-describe("create-budget: Create a budget", () => {
+shardDescribe("create-budget: Create a budget", () => {
   const j = Journey.parse(createBudget);
   const ACC: Record<string, string> = {
     "bank-budgetChips": LINKED("budgets"),
@@ -1025,7 +1038,7 @@ describe("create-budget: Create a budget", () => {
   });
 });
 
-describe("budgets: Budgets", () => {
+shardDescribe("budgets: Budgets", () => {
   const j = Journey.parse(budgets);
   const ACC = linked(["bank-budgetAmount", "bank-budgetDuplicate"], "create-budget");
   it("is lint clean, every scenario passes and every acceptance criterion is proved", async () => {
@@ -1049,7 +1062,7 @@ describe("budgets: Budgets", () => {
   });
 });
 
-describe("transfer-types: Ways to send money", () => {
+shardDescribe("transfer-types: Ways to send money", () => {
   const j = Journey.parse(transferTypes);
   const ACC = linked(SEND_RULES, "personal-transfer or own-transfer");
   it("is lint clean, every scenario passes and every acceptance criterion is proved", async () => {
@@ -1074,7 +1087,7 @@ describe("transfer-types: Ways to send money", () => {
   });
 });
 
-describe("single-transfer: Quick transfer (opens Send money)", () => {
+shardDescribe("single-transfer: Quick transfer (opens Send money)", () => {
   const j = Journey.parse(singleTransfer);
   const ACC = linked(["bank-canDebit", "bank-quoteExpiry", "bank-quoteReplay", "bank-railLimit", "bank-dailyLimit", "bank-sanctions", "bank-addressRule", "bank-bankCode", "bank-payeeLimit", "bank-payeeDuplicate", "bank-ibanChecksum", "bank-sepa", "bank-countryMatch", "bank-routingChecksum", "bank-sortCode", "bank-bic"], "personal-transfer");
   it("is lint clean, every scenario passes and every acceptance criterion is proved", async () => {
@@ -1104,7 +1117,7 @@ describe("single-transfer: Quick transfer (opens Send money)", () => {
  * yet activated, a virtual card ••6150) on Tuesday 3 November 2026. A rule of the bank that a journey only meets through another one it opens is proved where it
  * lives: each such survivor says where. The numbers of the other home markets are set by a scenario with `config: { homeMarket }`.
  */
-describe("card-pin: Set or change a card PIN", () => {
+shardDescribe("card-pin: Set or change a card PIN", () => {
   const j = Journey.parse(cardPin);
   const ACC: Record<string, string> = {
     "no-error-path-20": RESEND,
@@ -1142,7 +1155,7 @@ describe("card-pin: Set or change a card PIN", () => {
   });
 });
 
-describe("cards: Cards", () => {
+shardDescribe("cards: Cards", () => {
   const j = Journey.parse(cardsView);
   const ACC: Record<string, string> = {
     "no-error-path-14": "The reload after a freeze can only fail if the call that has just worked fails: a sandbox condition applies to the whole walk, so the first load fails first (the error path of the first load is proved)",
@@ -1175,7 +1188,7 @@ describe("cards: Cards", () => {
   });
 });
 
-describe("activate-card: Activate a card", () => {
+shardDescribe("activate-card: Activate a card", () => {
   const j = Journey.parse(activateCard);
   const ACC: Record<string, string> = {
     ...linked(["bank-cardState", "bank-pinCode"], "card-pin"),
@@ -1216,7 +1229,7 @@ describe("activate-card: Activate a card", () => {
   });
 });
 
-describe("replace-card: Replace a card", () => {
+shardDescribe("replace-card: Replace a card", () => {
   const j = Journey.parse(replaceCard);
   const ACC: Record<string, string> = {
     "no-validate-25": "The button is drawn only while Lost or Stolen is chosen, so the reason is never empty there; the validation of the Continue button, which is drawn for the other reasons and for none, is proved by T-33",
@@ -1251,7 +1264,7 @@ describe("replace-card: Replace a card", () => {
 });
 
 const CONTROL_RULES = ["bank-cardState", "bank-loosenCode", "bank-limitRules", "bank-limitCeiling", "bank-tripRules", "bank-alertRules"];
-describe("card-controls: Card limits and controls", () => {
+shardDescribe("card-controls: Card limits and controls", () => {
   const j = Journey.parse(cardControls);
   const ACC: Record<string, string> = {
     "no-error-path-61": RESEND,
@@ -1294,7 +1307,7 @@ describe("card-controls: Card limits and controls", () => {
   });
 });
 
-describe("freeze-card: Freeze a card (opens card-controls)", () => {
+shardDescribe("freeze-card: Freeze a card (opens card-controls)", () => {
   const j = Journey.parse(freezeCard);
   const ACC = linked(CONTROL_RULES, "card-controls");
   it("is lint clean, every scenario passes and every acceptance criterion is proved", async () => {
@@ -1319,7 +1332,7 @@ describe("freeze-card: Freeze a card (opens card-controls)", () => {
   }, 240_000);
 });
 
-describe("virtual-card: Virtual card", () => {
+shardDescribe("virtual-card: Virtual card", () => {
   const j = Journey.parse(virtualCard);
   const SCREEN_FIRST = "The screen checks the limit and offers only the purposes first, so the bank's own refusal of it is reached only by a forged call (T-21)";
   const ACC: Record<string, string> = {
@@ -1369,7 +1382,7 @@ describe("virtual-card: Virtual card", () => {
   });
 });
 
-describe("dispute-transaction: Report a problem with a payment", () => {
+shardDescribe("dispute-transaction: Report a problem with a payment", () => {
   const j = Journey.parse(disputeTransaction);
   const ACC: Record<string, string> = {};
   it("is lint clean, every scenario passes and every acceptance criterion is proved", async () => {
@@ -1396,7 +1409,7 @@ describe("dispute-transaction: Report a problem with a payment", () => {
   });
 });
 
-describe("add-card: Add a card", () => {
+shardDescribe("add-card: Add a card", () => {
   const j = Journey.parse(addCard);
   const ACC: Record<string, string> = {
     "no-rule-fail-4": "The screen stops a nickname of one character first, so the bank's NICKNAME_INVALID is reached only by a forged call (T-33)",
@@ -1436,7 +1449,7 @@ describe("add-card: Add a card", () => {
   });
 });
 
-describe("term-deposit: Term deposit", () => {
+shardDescribe("term-deposit: Term deposit", () => {
   const j = Journey.parse(termDeposit);
   const ACC: Record<string, string> = {
     "no-error-path-51": RESEND,
@@ -1474,7 +1487,7 @@ describe("term-deposit: Term deposit", () => {
   });
 });
 
-describe("savings-goal: Savings goal", () => {
+shardDescribe("savings-goal: Savings goal", () => {
   const j = Journey.parse(savingsGoal);
   const ACC: Record<string, string> = {
     "no-min-fund": "The bank refuses a monthly amount below 5.00 with the same words when Save goal is pressed (AUTO_BELOW, T-13), so removing the screen's own minimum changes nothing a person sees",
@@ -1507,7 +1520,7 @@ describe("savings-goal: Savings goal", () => {
   });
 });
 
-describe("save-borrow: Save", () => {
+shardDescribe("save-borrow: Save", () => {
   const j = Journey.parse(saveBorrow);
   // a view opens six journeys, so the bank's rules of every one of them are mutated too; each is proved by the mutation check of the journey that owns it
   const ACC: Record<string, string> = {
@@ -1543,7 +1556,7 @@ describe("save-borrow: Save", () => {
   });
 });
 
-describe("apply-loan: Apply for a loan", () => {
+shardDescribe("apply-loan: Apply for a loan", () => {
   const j = Journey.parse(applyLoan);
   const ACC: Record<string, string> = {
     "no-error-path-33": RESEND,
@@ -1587,7 +1600,7 @@ describe("apply-loan: Apply for a loan", () => {
   });
 });
 
-describe("repay-loan: Repay a loan", () => {
+shardDescribe("repay-loan: Repay a loan", () => {
   const j = Journey.parse(repayLoan);
   const ACC: Record<string, string> = {
     "no-error-path-36": RESEND,
@@ -1626,7 +1639,7 @@ describe("repay-loan: Repay a loan", () => {
   });
 });
 
-describe("invest: Invest", () => {
+shardDescribe("invest: Invest", () => {
   const j = Journey.parse(invest);
   const ACC: Record<string, string> = {
     "no-error-path-44": RESEND,
@@ -1668,7 +1681,7 @@ describe("invest: Invest", () => {
   });
 });
 
-describe("sell-investment: Sell investment", () => {
+shardDescribe("sell-investment: Sell investment", () => {
   const j = Journey.parse(sellInvestment);
   const ACC: Record<string, string> = {
     "no-error-path-42": RESEND,
@@ -1709,7 +1722,7 @@ describe("sell-investment: Sell investment", () => {
   });
 });
 
-describe("add-money: Add money", () => {
+shardDescribe("add-money: Add money", () => {
   const j = Journey.parse(addMoney);
   const ACC: Record<string, string> = {
     "no-error-path-26": RESEND,
@@ -1762,7 +1775,7 @@ const NOW_MORE = Date.parse("2026-11-03T10:00:00Z");
 /** The reads and refreshes that run after the call that has just worked: a sandbox condition covers the whole walk, so the first call fails first and these can only fail if the call that worked fails. */
 const AFTER_WORKED = (what: string) => `${what} can only fail if the call that has just worked fails: a sandbox condition applies to the whole walk, so the first load fails first (the error path of the first load is proved)`;
 
-describe("update-profile: Update profile", () => {
+shardDescribe("update-profile: Update profile", () => {
   const j = Journey.parse(updateProfile);
   const ACC: Record<string, string> = {
     "no-error-path-102": "The check before the code is the same call of the same adapter (a dry run) and fails first, so the call after the codes can only fail if the call that has just worked fails; the error path of the check is proved on each of the three screens",
@@ -1818,7 +1831,7 @@ describe("update-profile: Update profile", () => {
   });
 });
 
-describe("new-message: New message", () => {
+shardDescribe("new-message: New message", () => {
   const j = Journey.parse(newMessage);
   const ACC: Record<string, string> = { ...linked(["bank-replyRules"], "messages") };
   it("is lint clean, every scenario passes and every acceptance criterion is proved", async () => {
@@ -1850,7 +1863,7 @@ describe("new-message: New message", () => {
   });
 });
 
-describe("messages: Messages", () => {
+shardDescribe("messages: Messages", () => {
   const j = Journey.parse(messagesView);
   const ACC: Record<string, string> = {
     "no-error-path-15": AFTER_WORKED("The read of a conversation again after a reply"),
@@ -1880,7 +1893,7 @@ describe("messages: Messages", () => {
   });
 });
 
-describe("service-request: Service request", () => {
+shardDescribe("service-request: Service request", () => {
   const j = Journey.parse(serviceRequest);
   const ACC: Record<string, string> = {
     "no-error-path-43": "The options of an account are asked for again when the account is chosen: that call is the same adapter as the first, which fails first under a sandbox condition (the error path of the first call is proved)",
@@ -1914,7 +1927,7 @@ describe("service-request: Service request", () => {
   });
 });
 
-describe("my-requests: My requests", () => {
+shardDescribe("my-requests: My requests", () => {
   const j = Journey.parse(myRequests);
   const ACC: Record<string, string> = {
     "no-error-path-15": AFTER_WORKED("The read of a request again after it was cancelled"),
@@ -1944,7 +1957,7 @@ describe("my-requests: My requests", () => {
   });
 });
 
-describe("connect-account: Connect a bank", () => {
+shardDescribe("connect-account: Connect a bank", () => {
   const j = Journey.parse(connectAccount);
   const ACC: Record<string, string> = {
     "no-error-path-17": AFTER_WORKED("The read of the list of banks again after a disconnect"),
@@ -1998,7 +2011,7 @@ const PASSWORD_PUB = ["bank-passwordLength", "bank-passwordUsername", "bank-pass
 const SUPPORT_RULES = ["bank-pubSupportHours", "bank-pubSupportWays", "bank-pubSupportRules", "bank-pubSupportRate"];
 const REG_RULES = ["bank-pubRegMatch", "bank-pubRegAlready", "bank-pubRegLock", "bank-pubRegCode", "bank-pubRegUsername", "bank-pubRegCard", "bank-pubRegTrust"];
 
-describe("loan-calculator: Loan calculator", () => {
+shardDescribe("loan-calculator: Loan calculator", () => {
   const j = Journey.parse(loanCalculator);
   const ACC: Record<string, string> = {
     ...linked(["bank-saveCredit", "bank-loanLimit", "bank-loanRange", "bank-loanIncome", "bank-loanAffordability", "bank-loanReferral", "bank-loanRateRise", "bank-loanCode", "bank-loanOffer"], "apply-loan"),
@@ -2035,7 +2048,7 @@ describe("loan-calculator: Loan calculator", () => {
   });
 });
 
-describe("deposit-calculator: Deposit calculator", () => {
+shardDescribe("deposit-calculator: Deposit calculator", () => {
   const j = Journey.parse(depositCalculator);
   const ACC: Record<string, string> = {
     ...linked(["bank-saveFunds", "bank-saveDebit", "bank-saveCredit", "bank-depositRange", "bank-depositTerm", "bank-depositCode", "bank-depositCharge", "bank-depositEarly"], "term-deposit"),
@@ -2064,7 +2077,7 @@ describe("deposit-calculator: Deposit calculator", () => {
   });
 });
 
-describe("find-branch-atm: Find a branch or ATM", () => {
+shardDescribe("find-branch-atm: Find a branch or ATM", () => {
   const j = Journey.parse(findBranchAtm);
   const ACC: Record<string, string> = {
     "no-error-path-12": SAME_FIRST("The search of the Search button"),
@@ -2094,7 +2107,7 @@ describe("find-branch-atm: Find a branch or ATM", () => {
   });
 });
 
-describe("contact-support: Contact us", () => {
+shardDescribe("contact-support: Contact us", () => {
   const j = Journey.parse(contactSupport);
   const ACC: Record<string, string> = {
     "no-rule-timeout-2": RETRY_FIRST, "no-rule-unavailable-2": RETRY_FIRST,
@@ -2134,7 +2147,7 @@ describe("contact-support: Contact us", () => {
   });
 });
 
-describe("open-account: Open an account", () => {
+shardDescribe("open-account: Open an account", () => {
   const j = Journey.parse(openAccount);
   const ACC: Record<string, string> = {
     "no-validate-158": "The account is always chosen (the first one is preselected), so the field can never be empty when Continue is pressed",
@@ -2193,7 +2206,7 @@ describe("open-account: Open an account", () => {
   });
 });
 
-describe("track-application: Track my application", () => {
+shardDescribe("track-application: Track my application", () => {
   const j = Journey.parse(trackApplication);
   const ACC: Record<string, string> = {
     "bank-resendLimit": "The tracker has no Resend button (the spec's open point), so the limit of codes asked for again belongs to register-digital-banking, whose scenarios prove it",
@@ -2232,7 +2245,7 @@ describe("track-application: Track my application", () => {
   });
 });
 
-describe("register-digital-banking: Register for digital banking", () => {
+shardDescribe("register-digital-banking: Register for digital banking", () => {
   const j = Journey.parse(registerDigitalBanking);
   const ACC: Record<string, string> = {
     ...linked(SIGN_IN_PUB.filter((x) => x !== "bank-credentials"), "sign-in"),
@@ -2301,7 +2314,7 @@ const SCREEN_RULE = (what: string) => `The screen's own permission rule sends a 
 const EVERY_ROLE = (permission: string) => `Every role of a company holds ${permission}, so no role can be refused here; the permission table is proved by the journeys whose permission only some roles hold (add-supplier, payment-template, schedule-business-payment)`;
 const SAME_FIRST_BIZ = (what: string) => `${what}: the same adapter as the call before it, which fails first under a sandbox condition (a condition covers the whole walk), so only that first error path can be proved`;
 
-describe("business-accounts: Business accounts", () => {
+shardDescribe("business-accounts: Business accounts", () => {
   const j = Journey.parse(businessAccounts);
   const ACC: Record<string, string> = {
     "no-rule-start-0": SCREEN_RULE("biz.accounts.view"),
@@ -2336,7 +2349,7 @@ describe("business-accounts: Business accounts", () => {
   });
 });
 
-describe("business-statement: Statements and reports", () => {
+shardDescribe("business-statement: Statements and reports", () => {
   const j = Journey.parse(businessStatement);
   const ST: Record<string, string> = {
     "no-rule-start-0": SCREEN_RULE("biz.accounts.view"),
@@ -2370,7 +2383,7 @@ describe("business-statement: Statements and reports", () => {
   });
 });
 
-describe("add-supplier: Add a supplier", () => {
+shardDescribe("add-supplier: Add a supplier", () => {
   const j = Journey.parse(addSupplier);
   const AS: Record<string, string> = {
     "no-error-path-61": "Resending the code is a button of the code field that a scenario cannot press; the first send has the same error path and is proved (T-19)",
@@ -2407,7 +2420,7 @@ describe("add-supplier: Add a supplier", () => {
   });
 });
 
-describe("payment-template: Payment templates", () => {
+shardDescribe("payment-template: Payment templates", () => {
   const j = Journey.parse(paymentTemplate);
   const PT: Record<string, string> = {
     "no-rule-route-5": "A supplier taken off the list between choosing it and saving cannot be arranged within one walk; the bank's refusal is proved by a forced call (T-13)",
@@ -2444,7 +2457,7 @@ describe("payment-template: Payment templates", () => {
   });
 });
 
-describe("templates: Templates", () => {
+shardDescribe("templates: Templates", () => {
   const j = Journey.parse(templates);
   const TP: Record<string, string> = {
     "no-rule-start-0": SCREEN_RULE("biz.accounts.view"),
@@ -2474,7 +2487,7 @@ describe("templates: Templates", () => {
   });
 });
 
-describe("schedule-business-payment: Schedule a supplier payment", () => {
+shardDescribe("schedule-business-payment: Schedule a supplier payment", () => {
   const j = Journey.parse(scheduleBusinessPayment);
   const SC: Record<string, string> = {
     "no-error-path-41": SAME_FIRST_BIZ("The check when the last payment is chosen"),
@@ -2512,7 +2525,7 @@ describe("schedule-business-payment: Schedule a supplier payment", () => {
   });
 });
 
-describe("business-schedules: Scheduled supplier payments", () => {
+shardDescribe("business-schedules: Scheduled supplier payments", () => {
   const j = Journey.parse(businessSchedules);
   const BS: Record<string, string> = {
     "no-rule-start-0": SCREEN_RULE("biz.accounts.view"),
@@ -2542,7 +2555,7 @@ describe("business-schedules: Scheduled supplier payments", () => {
   });
 });
 
-describe("withdraw-payment: Withdraw a payment", () => {
+shardDescribe("withdraw-payment: Withdraw a payment", () => {
   const j = Journey.parse(businessWithdraw);
   const WD: Record<string, string> = linked(PAY_RULES, "supplier-payment (which New supplier payment opens)");
   it("is lint clean, every scenario passes and every acceptance criterion is proved", async () => {
@@ -2572,7 +2585,7 @@ describe("withdraw-payment: Withdraw a payment", () => {
   });
 });
 
-describe("payment-tracker: Payment tracker", () => {
+shardDescribe("payment-tracker: Payment tracker", () => {
   const j = Journey.parse(paymentTracker);
   const PTR: Record<string, string> = {
     "no-rule-route-0": SCREEN_RULE("biz.accounts.view"),
@@ -2612,7 +2625,7 @@ const CUTOFF_ONLY = "The cut-off only decides the value date of the payment, whi
 const RESERVE_TOO = "Reserve is refused for its currency as well as for the right on it, so the right alone is never what stops it; the rights are proved by Business accounts";
 const NOT_HERE = (what: string) => `${what} is not on this journey's screens (the Payment tracker proves it)`;
 
-describe("bulk-payment: Bulk payment", () => {
+shardDescribe("bulk-payment: Bulk payment", () => {
   const j = Journey.parse(businessBulk);
   const BP: Record<string, string> = {
     "no-error-path-89": SAME_FIRST_BIZ("The change of a line (an edit, the saved details, a removal)"),
@@ -2662,7 +2675,7 @@ describe("bulk-payment: Bulk payment", () => {
   });
 });
 
-describe("bulk-status: Batch status", () => {
+shardDescribe("bulk-status: Batch status", () => {
   const j = Journey.parse(bulkStatus);
   const BS: Record<string, string> = {
     "no-error-path-17": SAME_FIRST_BIZ("The report"),
@@ -2699,7 +2712,7 @@ describe("bulk-status: Batch status", () => {
   });
 });
 
-describe("repair-bulk-lines: Repair rejected lines", () => {
+shardDescribe("repair-bulk-lines: Repair rejected lines", () => {
   const j = Journey.parse(repairBulkLines);
   const RB: Record<string, string> = { ...linked([...BULK_LINE_RULES, ...BULK_OTHER_RULES, "bank-permissions", "bank-bulkStatus"], "bulk-payment (which this entry opens)") };
   it("is lint clean, every scenario passes and every acceptance criterion is proved", async () => {
@@ -2724,7 +2737,7 @@ describe("repair-bulk-lines: Repair rejected lines", () => {
   });
 });
 
-describe("payroll-run: Payroll run", () => {
+shardDescribe("payroll-run: Payroll run", () => {
   const j = Journey.parse(businessPayroll);
   const PR: Record<string, string> = {
     "no-error-path-37": SAME_FIRST_BIZ("The read of one person's row"),
@@ -2770,7 +2783,7 @@ describe("payroll-run: Payroll run", () => {
   });
 });
 
-describe("the Meezan bulk and payroll journeys are not changed by the BankWorkx ones", () => {
+shardDescribe("the Meezan bulk and payroll journeys are not changed by the BankWorkx ones", () => {
   it("both bulk-payment and payroll-run exist for each bank, and the BankWorkx app opens its own", () => {
     for (const slug of ["bulk-payment", "payroll-run"]) expect(catalog.filter((c) => c.id === slug).map((c) => c.madeFor), slug).toEqual(["meezan"]);
     expect(bankworkxJourneys.find((x) => x.slug === "bulk-payment")).toBe(businessBulk);
@@ -2799,7 +2812,7 @@ const REAL_AFTER_CHECK = (what: string) => `${what}: the call that changes somet
 const SLOW_CHANGE = "A slow answer to the call that changes something is the same adapter as the check before it, so the check is the first to fail; the timeout screen that tells the person to check Admin cannot be reached in one walk";
 const ADMIN_TAB_BLOCKED = (rule: string) => `${rule} is stopped by the field of the screen before the bank is asked, so only a forged call reaches the bank's own refusal (proved with expectBankError)`;
 
-describe("manage-user: Invite, edit or disable a user", () => {
+shardDescribe("manage-user: Invite, edit or disable a user", () => {
   const j = Journey.parse(manageUser);
   const MU: Record<string, string> = {
     "no-error-path-55": RESEND_CODE("T-22"),
@@ -2842,7 +2855,7 @@ describe("manage-user: Invite, edit or disable a user", () => {
   });
 });
 
-describe("change-limits: Change limits", () => {
+shardDescribe("change-limits: Change limits", () => {
   const j = Journey.parse(changeLimits);
   const CL: Record<string, string> = {
     "no-error-path-29": RESEND_CODE("T-15"), "no-error-path-32": REAL_AFTER_CHECK("The change after the code"), "no-rule-route-0": SLOW_CHANGE,
@@ -2876,7 +2889,7 @@ describe("change-limits: Change limits", () => {
   });
 });
 
-describe("edit-signatory-group: Edit an approval group", () => {
+shardDescribe("edit-signatory-group: Edit an approval group", () => {
   const j = Journey.parse(editSignatoryGroup);
   const EG: Record<string, string> = {
     "no-error-path-32": SAME_FIRST_BIZ("The read of the chosen group"), "no-error-path-48": RESEND_CODE("T-21"), "no-error-path-51": REAL_AFTER_CHECK("The change after the code"), "no-rule-route-0": SLOW_CHANGE,
@@ -2911,7 +2924,7 @@ describe("edit-signatory-group: Edit an approval group", () => {
   });
 });
 
-describe("admin: Admin", () => {
+shardDescribe("admin: Admin", () => {
   const j = Journey.parse(adminView);
   const AD: Record<string, string> = {
     "no-error-path-10": SAME_FIRST_BIZ("Turning the preview on"), "no-error-path-15": SAME_FIRST_BIZ("Turning the preview off"), "no-error-path-37": RESEND_CODE("T-30"), "no-error-path-41": REAL_AFTER_CHECK("Approving after the code"),
@@ -2957,7 +2970,7 @@ describe("admin: Admin", () => {
   });
 });
 
-describe("business-service-request: Business service request", () => {
+shardDescribe("business-service-request: Business service request", () => {
   const j = Journey.parse(businessServiceRequest);
   const SR: Record<string, string> = {
     "no-error-path-34": REAL_AFTER_CHECK("The request after the tick"), "no-rule-route-0": SLOW_CHANGE,
@@ -2991,7 +3004,7 @@ describe("business-service-request: Business service request", () => {
   });
 });
 
-describe("business-requests: Service requests", () => {
+shardDescribe("business-requests: Service requests", () => {
   const j = Journey.parse(businessRequests);
   const BR: Record<string, string> = { ...linked(REQUEST_RULES, "business-service-request (which New request opens)") };
   it("is lint clean, every scenario passes and every acceptance criterion is proved", async () => {
@@ -3022,7 +3035,7 @@ describe("business-requests: Service requests", () => {
   });
 });
 
-describe("kyb-onboarding: Open a business account", () => {
+shardDescribe("kyb-onboarding: Open a business account", () => {
   const j = Journey.parse(kybOnboarding);
   const STEP_RETRY = "A scenario makes a whole adapter fail, so only the first step's check can be failed on its own: the other steps use the same adapter, and the rule that sends the person back to the step they were on cannot be reached in one walk";
   const KB: Record<string, string> = {
@@ -3063,7 +3076,7 @@ describe("kyb-onboarding: Open a business account", () => {
   });
 });
 
-describe("bulk-payment: the stepper of a resend (a correction of step 8, slice B)", () => {
+shardDescribe("bulk-payment: the stepper of a resend (a correction of step 8, slice B)", () => {
   it("says 3 steps in resend mode, as the line under it and the spec do, and 4 for a new batch", () => {
     const steppers = businessBulk.screens.flatMap((s) => s.blocks.filter((b: any) => b.type === "stepper").map((b: any) => [b.visibleWhen, b.steps.length]));
     expect(new Set(steppers.map((x) => JSON.stringify(x)))).toEqual(new Set([JSON.stringify(["!bp.resend", 4]), JSON.stringify(["bp.resend", 3])]));
