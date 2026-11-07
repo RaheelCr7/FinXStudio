@@ -27,7 +27,7 @@ Open this folder in Claude Code. The first time, approve the project's `finx` MC
 
 Watch it at `http://localhost:3100/agents`. When the run is *Needs your review*, open the draft in the builder, check it, and press **Publish to UAT**. Publishing from Studio completes the run.
 
-You can also start from Studio: the Agents page and the Builder's **Ask Claude** button turn your request into the exact `claude` command to run, for a journey change, a review, or a code change. Studio never calls an AI service itself.
+You can also start from Studio: the Agents page and the Builder's **Ask Claude** button turn your request into the exact `claude` command to run, for a journey change, a review, or a code change. For a new journey the AI assistant page also asks where it runs (web and mobile, web only or mobile only; a project with one channel is fixed to it), and the command says so, for example `For BankWorkx (bankworkx), for web only: …`. The journey skill sets the draft's `channels` from that phrase. Studio never calls an AI service itself.
 
 ```
 /finx-review pay-a-bill focus on the failure screens
