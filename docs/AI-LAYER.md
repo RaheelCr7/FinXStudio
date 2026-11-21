@@ -27,6 +27,8 @@ Open this folder in Claude Code. The first time, approve the project's `finx` MC
 
 Watch it at `http://localhost:3100/agents`. When the run is *Needs your review*, open the draft in the builder, check it, and press **Publish to UAT**. Publishing from Studio completes the run.
 
+How to write the brief for each skill, with examples: [PROMPTING.md](PROMPTING.md).
+
 You can also start from Studio: the Agents page and the Builder's **Ask Claude** button turn your request into the exact `claude` command to run, for a journey change, a review, or a code change. Studio never calls an AI service itself.
 
 ```

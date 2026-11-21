@@ -8,8 +8,8 @@ Brand rule: the product is written **BankWorkx®**. All people, companies, numbe
 
 | File | Module | Release | Workspace | Depth |
 |---|---|---|---|---|
-| [01-retail.md](01-retail.md) | 1. Retail (pre-login, sign-in, security, Personal "Aurora"): 47 journeys | 1 | Public + Personal | Full |
-| [02-sme.md](02-sme.md) | 2. SME (Business "Graphite") and the combined Alex Morgan demo: 15 journeys | 1 | Business | Full |
+| [01-retail.md](01-retail.md) | 1. Retail (pre-login, sign-in, security, Personal "Aurora"): 52 journeys | 1 | Public + Personal | Full |
+| [02-sme.md](02-sme.md) | 2. SME (Business "Graphite") and the combined Alex Morgan demo: 17 journeys | 1 | Business | Full |
 | [03-wealth.md](03-wealth.md) | 3. Wealth: 10 journeys | 2 | Personal (Wealth section) | Structure + planned parts |
 | [04-corporate.md](04-corporate.md) | 4. Corporate: 11 journeys | 2 | Business | Structure + planned parts |
 | [05-trade-finance.md](05-trade-finance.md) | 5. Trade Finance: 12 journeys | 3 | Business | Structure + planned parts |
@@ -17,6 +17,8 @@ Brand rule: the product is written **BankWorkx®**. All people, companies, numbe
 | [07-supply-chain-finance.md](07-supply-chain-finance.md) | 7. Supply Chain Finance: 11 journeys | 4 | Business | Structure + planned parts |
 | [08-factoring.md](08-factoring.md) | 8. Factoring: 12 journeys | 4 | Business | Structure + planned parts |
 | [09-payment-rails.md](09-payment-rails.md) | Shared reference for payments: US, Europe (SEPA), UK, Middle East and SWIFT rails, payee fields and checks, FX, limits, receipts, error codes | 1 | Personal + Business | Full |
+| [10-journey-catalog.md](10-journey-catalog.md) | Journey catalog: every journey as a catalog entry a bank can switch on or off, with options, and what is built in the prototype | 1 | All | Full |
+| [research/](research/) | One research note per built journey (sources, patterns by region, standards, decisions, fields, edge cases) | 1 | All | 22 notes |
 
 Release 1 (modules 1 and 2) is at full depth: every screen, field, message, adapter and test. Releases 2–4 use the same structure, and name the sandbox domains, adapters (marked *planned*) and new components each needs.
 
@@ -183,7 +185,7 @@ Light and airy; bento widgets; floating pill tab bar; ⌘K command bar on web.
 | Tab | Shell screens | Journeys |
 |---|---|---|
 | Home | Dashboard: balance hero, accounts, insights, upcoming payments, offers | none |
-| Accounts | List; account detail; transaction history; transaction detail; spending analysis; budgets | `account-statement`, `account-nickname`, `open-another-account`, `create-budget` |
+| Accounts | List; account detail; transaction history; transaction detail; spending analysis; budgets | `statement`, `account-nickname`, `open-another-account`, `create-budget` |
 | Payments | Hub; beneficiaries; scheduled and recurring; payment tracker with receipts | `own-transfer`, `internal-transfer`, `personal-transfer`, `international-transfer`, `pay-bill`, `mobile-topup`, `manage-beneficiary`, `schedule-payment`, `cancel-standing-order` |
 | Cards | Carousel; card detail; card transactions; controls overview | `activate-card`, `freeze-card`, `card-controls`, `virtual-card`, `replace-card`, `card-pin`, `dispute-transaction`, `add-card` |
 | Save & Borrow | Deposits; savings goals; loans with schedules; investments | `term-deposit`, `savings-goal`, `apply-loan`, `repay-loan`, `invest`, `sell-investment`, `add-money` |
@@ -203,7 +205,7 @@ Dense and professional; split list-plus-detail on web; tables become card lists 
 
 **Tabs added in Releases 2–4** (see the module files): Wealth is a segment inside Save & Borrow plus a Home widget in Personal (a sixth tab does not fit the phone tab bar). In Business: *Group* (entity hierarchy, Module 4), *Trade* (Module 5), *Cash* (Module 6) and *Finance* (Modules 7 and 8, sections Supply chain and Factoring). The Approvals inbox gets a Type filter (Payments, Trade, Treasury, Supply chain, Factoring) and new item kinds: `scf_financing`, `scf_repayment`, `factoring_advance`, `reserve_release`, `repurchase`, `pass_on`. Whether the phone tab bar can hold these is an open question.
 
-Release 1 journey count: **Retail 47, SME 15 (14 + 1 stretch)**, checked against the module files (section 6).
+Release 1 journey count: **Retail 52, SME 17 (14 + 1 stretch + 2 screens added in the prototype)**, checked against the module files (section 6).
 
 ---
 
@@ -311,7 +313,7 @@ Leads to: sign-in ends in the Personal Home (or the last used workspace); open-a
 | Home | Upcoming payment › Edit | `schedule-payment` | `{scheduleId}` | `payments.schedule` |
 | Home | Offer › Apply | `apply-loan` or `open-another-account` | `{offerId}` | `loans.apply` / `accounts.manage` |
 | Accounts › list | Open another account | `open-another-account` | – | `accounts.manage` |
-| Accounts › detail | Statement | `account-statement` | `{accountId}` | `accounts.statement` |
+| Accounts › detail | Statement | `statement` | `{accountId}` | `accounts.statement` |
 | Accounts › detail | Rename | `account-nickname` | `{accountId}` | `accounts.manage` |
 | Accounts › detail | Transfer from this account | `own-transfer` / `personal-transfer` | `{accountId}` | `payments.create` |
 | Accounts › transaction detail | Dispute | `dispute-transaction` | `{transactionId}` | `cards.dispute` |
@@ -405,7 +407,7 @@ The module files carry the full entry-point tables; these are the additions to t
 | Public › Application tracker | Continue application / Upload documents | `open-account` | `{applicationId}` | none |
 | Public › Application tracker | Activate digital banking | `register-digital-banking` | `{applicationId}` | none |
 | Personal › Accounts › detail | Ask about this account | `new-message` | `{accountId}` | `messages.send` |
-| Personal › Accounts › transaction history | Export | `account-statement` | `{accountId}` | `accounts.statement` |
+| Personal › Accounts › transaction history | Export | `statement` | `{accountId}` | `accounts.statement` |
 | Personal › Accounts › detail | Transfer between my accounts | `own-transfer` | `{accountId}` | `payments.create` |
 | Personal › Payments › beneficiaries › row | Schedule instead | `schedule-payment` | `{beneficiaryId}` | `payments.schedule` |
 | Personal › Home › Insights › Budgets tile | New budget | `create-budget` | `{category}` | `accounts.manage` |
@@ -437,7 +439,7 @@ In 5.3 the passed value of *Admin › limits › Change* is `{userId}` only (acc
 Modules 3–8 launch points are in each module file (section "Entry points" of each journey and its link-map table).
 
 ## 6. Release 1 count check
-Retail 47 + SME 15 = 62 journeys, checked by counting the `### ★` headings in the files. Releases 2–4: Wealth 10, Corporate 11, Trade Finance 12, Cash & Liquidity 11, Supply Chain Finance 11, Factoring 12 (67).
+Retail 52 + SME 17 = 69 journeys, checked by counting the `### ★` headings in the files. Releases 2–4: Wealth 10, Corporate 11, Trade Finance 12, Cash & Liquidity 11, Supply Chain Finance 11, Factoring 12 (67).
 
 ## 7. How the proof works (existing)
 `acceptance` (AC-n) and `scenarios` (T-n, with `covers`, optional `setup`, `now`, `provider`, steps and `expectBank`) travel with the journey. `finx_run_scenarios` reports each criterion proved, failing or uncovered. `finx_mutation_check` breaks the journey and the bank rules one at a time; a mutant is killed when a scenario fails; survivors are listed in `packages/finx-mcp/src/scenarios.test.ts` with the reason. See `docs/CORPORATE.md`.

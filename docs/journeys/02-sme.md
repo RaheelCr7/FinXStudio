@@ -10,14 +10,14 @@
 
 | Group | Journeys |
 |---|---|
-| Accounts | `business-statement` |
-| Payments | `supplier-payment`, `add-supplier`, `payment-template`, `schedule-business-payment`, `withdraw-payment` |
-| Bulk and payroll | `bulk-payment`, `repair-bulk-lines`, `payroll-run` |
+| Accounts | `business-accounts`, `business-statement` |
+| Payments | `supplier-payment`, `add-supplier`, `payment-template`, `templates` (view), `schedule-business-payment`, `business-schedules` (view), `withdraw-payment`, `payment-tracker` (view) |
+| Bulk and payroll | `bulk-payment`, `repair-bulk-lines` (alias of `bulk-payment`), `bulk-status`, `payroll-run` |
 | Approvals | `approve-payments` |
-| Admin | `manage-user`, `change-limits`, `edit-signatory-group` |
-| More | `business-service-request`, `kyb-onboarding` (stretch) |
+| Admin | `admin` (view), `manage-user`, `change-limits`, `edit-signatory-group` |
+| More | `business-service-request`, `business-requests` (view), `kyb-onboarding` (public, Open a business account) |
 
-**15 journeys** (14 plus the stretch). Existing fixtures behind them: `corporate-payment` (becomes `supplier-payment`), `corporate-approval` (becomes `approve-payments`), `bulk-payment`, `payroll-run`, `withdraw-a-payment` (becomes `withdraw-payment`).
+**17 journeys** (14 plus the stretch, plus `bulk-status` and `business-accounts` added when the prototype was built). Existing fixtures behind them: `corporate-payment` (becomes `supplier-payment`), `corporate-approval` (becomes `approve-payments`), `bulk-payment`, `payroll-run`, `withdraw-a-payment` (becomes `withdraw-payment`).
 
 ## Business: Overview
 
@@ -110,7 +110,7 @@ The same person sees two different Overviews. The permission list comes from `ba
 | Balances, cash flow, cash in and out, recent payments | Shown | Shown |
 | Approvals queue | Hidden (no `biz.approvals.approve`) | Shown, with the payment started by `priya` waiting for Alex |
 | My payments waiting | Shown (payments Alex started) | Hidden |
-| Admin tab | Hidden | Hidden |
+| Admin tab | Shown, but only "You don’t have access" and a preview button (no people, limits or groups) | Same |
 | Direct link to `approve-payments` | Opens a refusal: "Your role doesn't allow this. Ask an administrator at Alpha Trading LLC." | Opens the journey |
 
 #### States
@@ -148,7 +148,7 @@ The same person sees two different Overviews. The permission list comes from `ba
 
 ## Business: Accounts
 
-Shell screens for the **Accounts** tab of Business "Graphite", and the one journey on it, `business-statement`. All are Release 1. Data comes from view-models in `packages/bank-client` over the active context (the company the person switched to). Nothing here shows data from another company or from Personal.
+Shell screens for the **Accounts** tab of Business "Graphite", and two journeys on it, `business-accounts` (which folds the former Accounts table, Account detail and Transaction table shells) and `business-statement`. All are Release 1. Data comes from view-models in `packages/bank-client` over the active context (the company the person switched to). Nothing here shows data from another company or from Personal.
 
 Common to every screen on this tab: the permission `biz.accounts.view` is needed to see it; the Export buttons need `biz.accounts.export`. Without `biz.accounts.view` the tab is not in the menu, and a forced adapter call answers `PERMISSION_DENIED` (planned). Amounts are in each account's own currency and decimals (`currencyInfo`, `roundMoney`). Totals are never added across currencies (the same rule as `bank.accounts.totals` for Personal). Account rows only appear if the person's role includes that account (see *Admin › Account permissions*).
 
@@ -159,100 +159,6 @@ New sandbox adapters used by this tab (all *planned*, read-only, `moneyMoving: f
 | `corp.accounts.list` (planned) | none (company and user from the active context) | record keyed by account id: `{ id, name, maskedNumber, iban, currency, ledgerBalance, availableBalance, status ("active" or "dormant" or "blocked"), type ("current" or "savings" or "payroll" or "collection"), lastActivityAt }` | `PERMISSION_DENIED`, `TIMEOUT`, `SERVICE_UNAVAILABLE` |
 | `corp.accounts.get` (planned) | `{ accountId }` | one account as above, plus `holdsToday` (money reserved by payments waiting for approval), `signatories` (names), `openedAt` | `ACCOUNT_NOT_FOUND`, `PERMISSION_DENIED`, `TIMEOUT`, `SERVICE_UNAVAILABLE` |
 | `corp.transactions.list` (planned) | `{ accountId?, from?, to?, direction?, minAmount?, maxAmount?, text?, status?, reference?, sort?, page?, pageSize? }` | `{ rows: record keyed by transaction id, total, page, pageSize, sumIn, sumOut, currency }`; row `{ id, accountId, bookedAt, valueDate, description, counterparty, reference, amount (signed), currency, runningBalance, status ("booked" or "pending"), paymentId? }` | `ACCOUNT_NOT_FOUND`, `INVALID_RANGE`, `PERMISSION_DENIED`, `TIMEOUT`, `SERVICE_UNAVAILABLE` |
-
-### Shell: Accounts table (multi-account, multi-currency)
-
-| | |
-|---|---|
-| Purpose | One place to see every account the person may see at this company, in every currency. |
-| Route | Web: `/{project}/business/{companyId}/accounts`. Mobile: `Business/Accounts`. |
-| Data source | View-model `businessAccounts(ctx)` (planned) over `corp.accounts.list` and `corp.company.get`. |
-| Permission | `biz.accounts.view` |
-
-**Widgets, top to bottom**
-1. **Totals strip**: one tile per currency the company holds, e.g. "USD 480,000.00 available · 3 accounts". No tile adds two currencies. A tile is a filter: tap it to show only that currency.
-2. **Accounts table** (`dataTable`, planned; card list on phones).
-3. **Holds line** under the table: "Payments waiting for approval hold USD 12,500.00 of your balance." Shown only when `holdsToday` is above zero. The money has not left; the sandbox releases or frees the hold on approve, reject or withdraw.
-
-**Table columns** (web; on phones each row is a card showing 1, 2, 4 and 5)
-
-| # | Column | Content | Sortable |
-|---|---|---|---|
-| 1 | Account | Name, then masked number below ("Operating ••2001") | Yes (A to Z) |
-| 2 | Type | Current, Savings, Payroll or Collection (`statusChip`-style label) | Yes |
-| 3 | Currency | ISO code | Yes |
-| 4 | Available | Amount in the account currency, right-aligned | Yes |
-| 5 | Ledger | Amount; greyed when equal to available | Yes |
-| 6 | Status | `statusChip`: Active (green, tick icon), Dormant (amber, clock icon), Blocked (red, lock icon). Colour is never the only signal. | Yes |
-| 7 | Last activity | `12 Nov 2026` | Yes |
-
-**Filters**: currency (chips: All plus one per currency held), status (chips), type (chips), search box (matches name and masked number). **Default sort**: Available, high to low, within currency groups ordered by the company's base currency first. **Page size**: 25.
-
-**States**
-- Loading: five skeleton rows and three skeleton tiles.
-- Empty (company has no accounts the person may see): "You don't have access to any accounts at {company} yet. Ask an administrator at {company}." No button.
-- Filtered to nothing: "No accounts match. Clear filters." Button: *Clear filters*.
-- Error (`SERVICE_UNAVAILABLE`): "This service is not available right now. Nothing was changed. Please try again in a few minutes." Button: *Try again*.
-- Timeout (10 s): "This is taking longer than expected. Nothing was changed." Button: *Try again*.
-
-**Drill-downs**: tap a row → *Account detail*. Tap a currency tile → filter. **Launch points on it**: *Accounts › list › Statement or report* (row menu) opens `business-statement` with `{accountId}`; permission `biz.accounts.export`.
-
-### Shell: Account detail
-
-| | |
-|---|---|
-| Purpose | One account: balances, recent activity, who signs for it, and quick actions. |
-| Route | Web: `/{project}/business/{companyId}/accounts/{accountId}` (split view: list on the left, detail on the right at 1024 px and wider). Mobile: `Business/Accounts/Detail`. |
-| Data source | `businessAccountDetail(ctx, accountId)` (planned) over `corp.accounts.get` and `corp.transactions.list { accountId, pageSize: 10 }`. |
-| Permission | `biz.accounts.view` |
-
-**Widgets**
-1. **Header**: account name, masked number, IBAN with a *Copy* button, `statusChip`.
-2. **Balance card**: Available (large, rolls up when it changes), Ledger, "Held for payments waiting approval". Labels: "Available balance", "Ledger balance", "On hold".
-3. **30-day balance chart** (`chart`, planned; line): ledger balance per day. Alt text: "Balance over the last 30 days. Lowest {x}, highest {y}."
-4. **Recent transactions**: the last 10 rows (date, description, signed amount), then *View all transactions*.
-5. **Signatories**: the people who can approve payments from this account, from `signatories` (names and role badges).
-6. **Actions row**: *Statement or report* (→ `business-statement`, `{accountId}`, needs `biz.accounts.export`), *Pay a supplier from this account* (→ `supplier-payment`, needs `biz.payments.initiate`, shown only to a Maker).
-
-**States**: loading (skeleton balance card, chart and five rows); account not found or not permitted → "We can't find that account. Choose another." with *Back to accounts* (`ACCOUNT_NOT_FOUND`; `PERMISSION_DENIED` shows the S-`PERMISSION_DENIED` message); error and timeout as above. An account with no activity: "No transactions yet." (no button).
-
-**Drill-downs**: a transaction row → *Transaction detail* (a side sheet on web, a full screen on mobile) with date, value date, description, counterparty, reference, amount, running balance, status, and, when `paymentId` is set, *View payment* (→ Payments tracker detail, needs `biz.accounts.view`).
-
-### Shell: Transaction table with advanced filters and export
-
-| | |
-|---|---|
-| Purpose | Find any transaction on any permitted account, narrow it down, and export what you see. |
-| Route | Web: `/{project}/business/{companyId}/accounts/transactions`. Mobile: `Business/Accounts/Transactions`. |
-| Data source | `businessTransactions(ctx, filters)` (planned) over `corp.transactions.list`. Filters are kept in the address on web (so a filtered view can be shared inside the company) and cleared on a context switch (README 5.4). |
-| Permission | `biz.accounts.view`; Export needs `biz.accounts.export`. |
-
-**Filters** (a filter bar on web; a *Filters* bottom sheet on phones)
-
-| Filter | Block | Rule |
-|---|---|---|
-| Account | `select` (all permitted accounts, or "All accounts") | Default: all |
-| Date range | `datePicker` range (planned) | Default: last 30 days. Presets: Today, Last 7 days, Last 30 days, This month, Last month, Custom. From not after To; range at most 12 months. Error: "Choose a start date that is before the end date." / "The range can be at most 12 months." |
-| Direction | chips: All, Money in, Money out | Default: All |
-| Amount | two `amountInput` (From, To) | From not above To. Error: "The smallest amount can't be above the largest." |
-| Status | chips: All, Booked, Pending | Default: All |
-| Text | `textInput` | Matches description, counterparty and reference, case-insensitive |
-| Reference | `textInput` | Exact start of reference |
-
-**Columns**: Date (booked), Value date, Account (name and ••number), Description, Counterparty, Reference, Money in (green, +), Money out (charcoal, −), Balance (running; only when one account is selected), Status (`statusChip`). Money in and out are separate columns so sign never relies on colour.
-
-**Sort**: Date, newest first (default); every column sortable except Description. **Page size**: 50, with a footer "Showing 1 to 50 of {total}". A totals bar above the table shows "Money in {sumIn} · Money out {sumOut} · {n} transactions" for the filtered set, per currency when more than one is shown.
-
-**Export** (button *Export*, top right): opens `business-statement` with `{accountId, from, to}` taken from the current filters (account "All accounts" is passed as no `accountId`). The journey pre-fills and skips to the review when all three are present. Without `biz.accounts.export` the button is hidden.
-
-**States**
-- Loading: ten skeleton rows.
-- Empty (no filters set, no transactions): "No transactions yet."
-- Empty (filters set): "No transactions match these filters." Button: *Clear filters*.
-- Error and timeout: as for the Accounts table.
-- Invalid filter: inline message under the field; the table keeps showing the last good result.
-
-**Drill-downs**: row → transaction detail (as above); the Account cell → account detail.
 
 ### Shell: Statements
 
@@ -293,217 +199,283 @@ Each *Create* opens `business-statement` with `{reportType}` (planned value pass
 
 ---
 
-### ★ Business statement and report download — `business-statement`
+### ★ Business accounts — `business-accounts`
+
+**Catalog**: slug `business-accounts`, workspace business, category Accounts, core no, a bank can switch it off (yes), kept in the Lean preset (basic). Permission `accounts.view`, does not move money. Option: **Show account numbers for receiving money** (`details`, default on). Prototype file `design/bankworkx-r1/src/journeys/45-business-accounts.js`. It is a screen in the Accounts tab (`view`, tab `acc`), not a stepped journey.
+
+> Lean. The 13-week forecast chart, the totals for other companies and the long filter panel of the earlier version are gone. The screen is: total balance, the accounts table, one transactions list with a period row and a search box.
+
+#### 1. Summary
+
+| | |
+|---|---|
+| Slug | `business-accounts` |
+| Purpose | Total balance, accounts with available and ledger balances, the numbers others use to pay the account, and a searchable list of transactions. |
+| Release | 1 |
+| Workspace | Business |
+| Status | Existing, upgraded (`corp.company.get` returns accounts; the transaction list is (planned)). |
+| Channels | web (accounts and detail together), mobile (list, then detail with **‹ Back**) |
+| Who may use it | `accounts.view` at the company. What each person may do per account is separate (section 6). |
+| Seed | Alpha: Operating ••2001 USD 480,000.00 and Reserve ••2044 EUR 95,200.00. Beta: Operating ••3001 USD 310,000.00 and Payroll ••3002 USD 64,300.00. About 64 synthetic transactions over the last 95 days, a few pending. |
+
+**Home market configuration** (the identifiers shown under "Show account numbers for receiving money"; the account name is always the company name).
+
+| Market | First line | Second line |
+|---|---|---|
+| Market A (routing number and account) | Routing number | Account number |
+| Market B (sort code and account) | Sort code | Account number |
+| Market C (IBAN) | IBAN | BIC |
+| Market D (IBAN, mobile alias) | IBAN | BIC |
+
+#### 2. Entry points
+
+| Place › label | Passes | Permission |
+|---|---|---|
+| Accounts tab | none | `accounts.view` |
+| Overview › Consolidated balance | none | `accounts.view` |
+| Command bar › Accounts | none | `accounts.view` |
+| Other screens that open one account | `{accountId}` | `accounts.view` |
+
+#### 3. Screen
+
+- **Total balance** (hero): the sum of ledger balances converted to the company currency, and the company name.
+- **Accounts table**: columns Account (name, and the chip "View only" when transactions are not allowed), Number (••last 4), Currency, Available, Ledger. Tapping a row selects it (tapping again clears it). Available is the ledger balance less pending outgoing items and payments waiting for approval (and an amount held for pending items).
+- **Account detail** (shown for the selected account): name and ••last 4, chip "View only" if applicable, rows Currency, Available, Ledger; when `details` is on, the two identifier rows of the Home market table above and **Account name**, plus the button **Copy details** (toast "Account details copied"); the button **Pay from this account** when the person may pay from it (starts `supplier-payment`).
+- **Transactions** (heading "Transactions", with " · {account}" when one is selected):
+  - Period buttons **7 days**, **30 days** (default), **90 days**, **This month**; a **Search** box (counterparty or reference); a button **Export** when the person may export (opens `business-statement` with the account and the period).
+  - Table with columns Date ("3 Nov"), Description (counterparty with the reference under it), Account (with the chip "Pending" where relevant; when one account is selected this column is Status: "Pending" or "Booked"), Amount (negative for payments, positive for receipts and interest). Up to 25 rows.
+  - Empty: "No transactions" / "Try another period or search."
+- **Account not allowed**: when the selected account hides its transactions, a card with "You can see the balance of this account, but not its transactions."
+- **No accounts**: "No accounts yet" / "Ask an administrator for access."
+- **Bank unavailable**: "We couldn’t load your accounts" / "We couldn’t load your accounts. Try again." with the button **Try again**.
+
+| Field | Type | Required | Rule | Message |
+|---|---|---|---|---|
+| Period | buttons | no | one of four | none |
+| Search | text | no | none | none |
+
+Loading: the table shows its skeleton while the tab reads accounts. Messages here are plain; no codes appear.
+
+#### 4. Errors
+
+| Code | Message | Where |
+|---|---|---|
+| `SERVICE_UNAVAILABLE` | "We couldn’t load your accounts. Try again." | whole screen |
+| `ACCOUNT_NOT_PERMITTED` | "You can see the balance of this account, but not its transactions." | transactions area |
+| `TIMEOUT` | "This is taking longer than expected. Nothing was changed." with **Try again** (planned) | whole screen |
+
+#### 5. Adapters
+
+| Integration | Adapter | Status |
+|---|---|---|
+| Accounts and balances | `corp.company.get` (accounts); `corp.accounts.list` for per-account rights | Existing / (planned) |
+| Transactions | `corp.transactions.list` | (planned) |
+| Account numbers for receiving money | `corp.accounts.details` | (planned) |
+
+#### 6. Permissions, step-up and limits
+
+`accounts.view`. Per account the person has four rights: see the balance, see transactions, export, pay from. Alpha (Alex, Maker): Operating all four; Reserve balance, transactions and export but not pay. Beta (Alex, Approver): Operating balance, transactions and export; Payroll balance only (chip "View only"). No code, no limit.
+
+#### 7. Result and links out
+
+Links: **Export** (`business-statement`), **Pay from this account** (`supplier-payment`), **Copy details** (toast only). No notification.
+
+#### 8. Acceptance criteria
+
+- AC-1: The total balance and each account's available and ledger balances are shown.
+- AC-2: An account without the transactions right shows "View only" and the not-allowed card, with no list.
+- AC-3: The period buttons and the search box narrow the list; an empty result shows the empty state.
+- AC-4: Account numbers for receiving money show only when `details` is on, in the identifiers of the home market.
+- AC-5: Export and Pay from this account show only to people with those rights.
+- AC-6: A bank that cannot be reached shows the retry state and no balances.
+- AC-7: A company with no accounts shows the empty state.
+
+#### 9. Scenarios
+
+| # | Persona and setup | Steps | Expected | Covers |
+|---|---|---|---|---|
+| T-1 | Alex at Alpha | Open Accounts | Total in USD; two rows | AC-1 |
+| T-2 | Same | Select Operating | Detail with Pay from this account; list titled "Transactions · Operating" | AC-1, AC-5 |
+| T-3 | Same | Select Reserve | No Pay from this account; Export shown | AC-5 |
+| T-4 | Alex at Beta | Select Payroll | "View only"; not-allowed card; no Export | AC-2, AC-5 |
+| T-5 | Same | Period 7 days, search "Payroll" | Shorter list; nonsense text shows the empty state | AC-3 |
+| T-6 | `details` off, then on; home market A, B, C | Select an account | Rows follow the market table | AC-4 |
+| T-7 | Bank unavailable | Open | Retry state | AC-6 |
+| T-8 | Company without accounts (test seed) | Open | "No accounts yet" | AC-7 |
+| T-9 | Timeout (planned) | Open | Retry state | none yet |
+
+#### 10. Expected mutation-check survivors
+
+- The 25-row cap: survives (the seed has more rows but the count is not asserted).
+- The held amount in Available: survives, only the sign is asserted.
+- Search by reference versus counterparty only: survives.
+- The BIC values: survive, they are placeholders.
+
+---
+
+### ★ Business statement — `business-statement`
+
+**Catalog**: slug `business-statement`, workspace business, category Accounts, core no, a bank can switch it off (yes), kept in the Lean preset (basic). Permission `accounts.view`, does not move money. Prototype name on screen: "Statements and reports". Options: **Offer bank statement files** (`bankFormats`, default off; the three bank formats BAI2, MT940 and camt.053), **Allow intraday statements** (`intraday`, default off), **Allow scheduled statements** (`schedule`, default on), **Allow email to addresses outside the company** (`external`, default off). Prototype file `design/bankworkx-r1/src/journeys/46-business-statement.js`.
+
+> Lean. Statements are sent by email only: once or on a schedule, as PDF, CSV or Excel. Delivery by secure file transfer, the separate format switches and the long filter panel are gone. The bank formats are the only format names on screen and appear only when `bankFormats` is on.
 
 #### 1. Summary
 
 | | |
 |---|---|
 | Slug | `business-statement` |
-| Purpose | Make a statement or report for one or all accounts over a period, in PDF, CSV or Excel, and download it. |
+| Purpose | Send a statement for one or several accounts by email, once or on a schedule. |
 | Release | 1 |
-| Workspace | Business (`workspace: "business"`, planned field) |
-| Status | New (planned). No fixture today. |
-| Channels | Web, mobile |
-| Starting pattern | `corporate-payments.ts` for the `callApi` and `ctx.error` pattern; `cab.ts` for the result screen. Money does not move. |
-| Who may use it | A person with `biz.accounts.export` (Maker, Approver, Admin). |
-| Type of journey | File journey (it produces a file), so it carries timeout and unavailable scenarios. |
+| Workspace | Business |
+| Status | New (`corp.statements.generate` is planned). |
+| Channels | web, mobile |
+| Who may use it | `accounts.view`; only accounts the person may export are listed. Alpha (Alex): Operating and Reserve. Beta (Alex): Operating only. |
+| Seed | One schedule exists: "Weekly PDF", weekly on Monday, to finance@alpha-trading.example (finance@beta-services.example at Beta). The default recipient is alex.morgan@ at the company's domain. |
+
+**Home market configuration**: none. The same formats and screens on every market (the bank decides whether the bank formats are offered).
 
 #### 2. Entry points
 
-| Place | Label | Values passed in | Permission |
-|---|---|---|---|
-| Accounts › detail | Statement or report | `{accountId}` | `biz.accounts.export` |
-| Accounts › list › row menu | Statement or report | `{accountId}` | `biz.accounts.export` |
-| Accounts › transactions | Export | `{accountId, from, to}` (`accountId` absent for "All accounts") | `biz.accounts.export` |
-| Accounts › statements | New statement or report | none | `biz.accounts.export` |
-| Accounts › reports | Create | `{reportType}` (planned value) | `biz.accounts.export` |
-| ⌘K command bar | "Statement" | none | `biz.accounts.export` |
+| Place › label | Passes | Permission |
+|---|---|---|
+| Accounts › Export (`business-accounts`) | `{accountId}` optional, `{from}`, `{to}` (opens with Custom period) | `accounts.view` |
+| Accounts › detail › Statement | `{accountId}` | `accounts.view` |
+| Command bar › Statement | none | `accounts.view` |
+| Receipt button "Schedule this" | `{reportType: "sched"}` | `accounts.view` |
 
-When `accountId`, `from` and `to` are all given, the journey opens on **Review** (the person can still press *Back*).
+With `{accountId}` only that account is ticked; otherwise all listed accounts are ticked.
 
 #### 3. Screens
 
-Stepper: **What**, **Review**, then the result. Blocks: `stepper`, `select`, `datePicker` (planned), `alert`, `reviewSummary`, `button`, `result`.
+Progress text "Step n of 2 · Statements and reports".
 
-**Screen `choose` — "Statement or report"**
+**Step 1: Accounts and period** (button **Continue**)
 
-| Field | Block | Required | Validation | Error message |
+| Field | Type | Required | Rule | Message |
 |---|---|---|---|---|
-| Type | `select` (`rows`): Account statement, Daily balance report, Payments report, Cash in and out | Yes | One of the four. Default: Account statement (or `{reportType}`). | "Choose what you want to create." |
-| Account | `accountPicker` (source `ctx.accounts`, `showBalance: false`) plus an "All accounts" choice | Yes | A permitted account, or all | "Choose an account." |
-| Period | `datePicker` range (planned) with presets Last 7 days, Last 30 days, This month, Last month, Custom | Yes | From and To given; From not after To; To not in the future; at most 12 months | "Choose a start and end date." / "Choose a start date that is before the end date." / "The end date can't be in the future." / "The range can be at most 12 months." |
-| Format | `select` (`chips`): PDF, CSV, Excel | Yes | One of the three. Payments report: CSV or Excel only. | "Choose a format." |
-| Include pending | `toggle`, default off | No | none | none |
+| Type | chips "End of day", "Today so far" (only when `intraday` is on) | no | default End of day | none |
+| Accounts | one tick per account, "{name} ••{last 4} · {currency}" | at least one | accounts the person may export | "Choose at least one account." |
+| Period | chips: Last 7 days, This month, Last month (default), Last 3 months, Custom (hidden for Today so far) | yes | one of five | none |
+| From | date, placeholder "Start date" (Custom) | yes | on or before To | field required |
+| To | date, placeholder "End date" (Custom) | yes | not before From; at most 24 months | "The end date is before the start date." / "Choose up to 24 months at a time." |
 
-Copy: title "Statement or report"; helper under Period: "Statements show booked transactions. Turn on 'Include pending' to add payments that are not booked yet."; helper under Format: "PDF is for reading and printing. CSV and Excel are for your accounting software." Alert (info), shown when the account list is empty: "You don't have access to any accounts at {company}. Ask an administrator at {company}."
+**Step 2: Format and delivery** (button **Send**; busy "Preparing…", about 0.8 s)
 
-Buttons: *Review* → `review` (runs `validate`); *Cancel* → `exit` (back to where the person started).
-States: loading skeleton while `ctx.accounts` loads; error and timeout: see section 4 (shown on this screen, button *Try again* reloads the accounts).
+| Field | Type | Required | Rule | Message |
+|---|---|---|---|---|
+| Format | chips PDF, CSV, Excel; with `bankFormats` also BAI2, MT940, camt.053 (for Today so far: MT942 and camt.052 in place of the last two) | yes | an offered format | "That format isn’t available." |
+| Delivery | chips "Send once"; "Schedule" when `schedule` is on | yes | default Send once | none |
+| How often | chips Daily, Weekly, Monthly (Schedule) | yes | one | none |
+| Day | select Monday, Tuesday, Friday (Weekly) | yes | one | none |
+| Day | select 1st, 5th, Last business day (Monthly) | yes | one | none |
+| Send to | text area, placeholder "name@company.example", hint "Up to 5 addresses, separated by commas.", max 200 | yes | 1 to 5 valid addresses; at the company's domain unless `external` is on | "Check the email addresses. Use up to 5, separated by commas." / "You can only send to addresses at your company." |
 
-**Screen `review` — "Check and create"**: `reviewSummary` rows: Type, Account (or "All accounts ({n})"), Period (`1 Oct 2026 to 31 Oct 2026`), Format, Pending included (Yes or No), Company ("{company name}"). Alert (info): "We'll make the file and keep it for 7 days. It lists {n} transactions." (`{n}` comes from `corp.transactions.list` totals; if above 5,000: alert (warning) "That is a lot of rows. Choose a shorter period." and the button is disabled.)
+A schedule is refused when ten already exist: "You already have 10 schedules. Remove one first." For a one-off statement the period, accounts and recipients are checked on Send: a period over 24 months, no permitted account, or no booked transactions in the period ("There are no transactions in that period. Choose another period."). End-of-day statements count booked items only; Today so far also includes pending ones.
 
-Buttons: *Create file* → calls `corp.statements.generate`, then `done`; *Edit* → `choose`.
-States: submitting shows a spinner on the button and disables it. After 10 s: timeout state (section 4).
+**Result (one-off)** "Statement sent", line "It is on its way to {recipients}.", chip with the format name. Receipt rows: Accounts, Period ("Today so far" or "{from} to {to}"), Format, Sent to; then the reference. Buttons **Schedule this**, **Send another**, **Done**.
 
-**Screen `done` — result**: `result` (success): title "Your file is ready"; body "{Type}, {Period}, {Format}. It stays available for 7 days under Accounts › Statements."; reference "Reference {statementId}". Buttons: *Download* (downloads the file; mobile opens the share sheet), *Create another* → `choose` (cleared), *Go to statements* → shell Accounts › Statements, *Done* → exit to where the person started.
+**Result (schedule)** "Schedule created", line "{format} statements will be sent {daily, weekly or monthly}.", chip "{n} of 10 schedules". Rows: Accounts, Format, How often (for example "Weekly, Monday"), First one (for example "Mon 9 Nov"), Sent to. Buttons **New statement**, **Done**.
 
-#### 4. Sandbox errors
+#### 4. States and errors
 
-| Code | Message the person sees | Screen | Button |
-|---|---|---|---|
-| `ACCOUNT_NOT_FOUND` | "We can't find that account. Choose another." | `choose` | *Choose account* → `choose` |
-| `ACCOUNT_NOT_PERMITTED` (planned) | "You don't have access to that account. Ask an administrator at {company}." | `choose` | *Choose account* |
-| `INVALID_RANGE` (planned) | "Choose dates that are no more than 12 months apart and not in the future." | `choose` | *Edit* → `choose` |
-| `NO_TRANSACTIONS` (planned) | "There are no transactions in that period. Choose a longer period." | `review` | *Edit* → `choose` |
-| `EXPORT_TOO_LARGE` (planned) | "That file would have more than 5,000 rows. Choose a shorter period." | `review` | *Edit* → `choose` |
-| `PERMISSION_DENIED` | S-`PERMISSION_DENIED` (README 1.6): "Your role doesn't allow this. Ask an administrator at {company}." | `denied` (see section 6) | *Back* → exit |
-| `TIMEOUT` | "This is taking longer than expected. Nothing was changed." | `review` | *Try again* → `review` |
-| `SERVICE_UNAVAILABLE` | S-`SERVICE_UNAVAILABLE` | `review` | *Try again* → `review`; *Back* → `choose` |
-| `WRONG_CONTEXT` | S-`WRONG_CONTEXT`, with {workspace} = "Business" | `denied` | *Switch* |
-| `SESSION_EXPIRED` | S-`SESSION_EXPIRED` | `denied` | *Sign in* |
+| Code | Message | Where |
+|---|---|---|
+| `INVALID_RANGE` | "The end date is before the start date." | To field |
+| `PERIOD_TOO_LONG` | "Choose up to 24 months at a time." | To field, Send |
+| `NO_TRANSACTIONS` | "There are no transactions in that period. Choose another period." | banner on Send |
+| `ACCOUNT_NOT_PERMITTED` | "You can’t export this account." | banner on Send |
+| `FORMAT_NOT_ENABLED` | "That format isn’t available." | banner on Send |
+| `INVALID_RECIPIENT` | "Check the email addresses. Use up to 5, separated by commas." | Send to field |
+| `EXTERNAL_RECIPIENT_BLOCKED` | "You can only send to addresses at your company." | Send to field |
+| `SCHEDULE_LIMIT` | "You already have 10 schedules. Remove one first." | Delivery |
+| `TIMEOUT` | "We didn’t get an answer in time. Nothing was changed." | banner on Send |
+| `SERVICE_UNAVAILABLE` | Sheet "We couldn’t reach the bank": "Nothing was sent and you haven’t been charged. Try again in a moment." | sheet |
 
-No money moves in this journey, so no message mentions money. `OTP_*`, `INSUFFICIENT_FUNDS` and `LIMIT_*` do not apply.
+Loading: spinner on Send. Empty: no exportable account means the list of accounts is empty and Continue stays blocked.
 
 #### 5. Adapters
 
-| Integration id | Adapter | Request | Response | Error codes | Status |
-|---|---|---|---|---|---|
-| `accounts` | `corp.accounts.list` | none | accounts record | `PERMISSION_DENIED`, `TIMEOUT`, `SERVICE_UNAVAILABLE` | Planned |
-| `count` | `corp.transactions.list` | `{ accountId?, from, to, includePending, pageSize: 1 }` | `{ total, currency }` | `ACCOUNT_NOT_FOUND`, `ACCOUNT_NOT_PERMITTED`, `INVALID_RANGE`, `PERMISSION_DENIED`, `TIMEOUT`, `SERVICE_UNAVAILABLE` | Planned |
-| `generate` | `corp.statements.generate` | `{ kind: "statement" or "daily_balance" or "payments" or "cash_flow", accountId?, from, to, format: "pdf" or "csv" or "xlsx", includePending }` | `{ id, kind, accountId?, from, to, format, rows, sizeKb, createdAt, expiresAt, downloadRef }` | `ACCOUNT_NOT_FOUND`, `ACCOUNT_NOT_PERMITTED`, `INVALID_RANGE`, `NO_TRANSACTIONS`, `EXPORT_TOO_LARGE`, `PERMISSION_DENIED`, `TIMEOUT`, `SERVICE_UNAVAILABLE` | Planned; `moneyMoving: false`, `requiresOtp: false` |
-
-The generated file is a deterministic synthetic file (`downloadRef` resolves in the sandbox to a small generated PDF, CSV or XLSX), so a test can check its row count.
+| Integration | Adapter | Status |
+|---|---|---|
+| Accounts the person may export | `corp.accounts.list` | (planned) |
+| Transactions of the period | `corp.transactions.list` | (planned) |
+| Build and email the statement | `corp.statements.generate` | (planned) |
+| Create, list and remove schedules | `corp.statements.schedule` | (planned) |
 
 #### 6. Permissions, step-up and limits
 
-- Permission: `biz.accounts.export`. Check 1: the launch points show only with it. Check 2: `authorisation` on the journey (role read from `session.permissions`, planned); a person without it sees screen `denied` ("You can't do this", S-`PERMISSION_DENIED`, button *Back*). Check 3: `corp.statements.generate` answers `PERMISSION_DENIED`.
-- Account permission: the person can only pick accounts they may see (`ACCOUNT_NOT_PERMITTED` if forced).
-- Step-up: `none` (read-only). Limits: none. Rate limit in the sandbox: 20 files per user per day; the 21st answers `EXPORT_LIMIT_REACHED` (planned) with "You have made the most files allowed today (20). Try again tomorrow." Screen `review`, button *Back*.
+`accounts.view` plus the export right on each account. No code (nothing is sent to a new payee and no money moves). Up to 5 recipients, up to 10 schedules, up to 24 months. Each send or schedule is written to the audit trail ("Sent a {format} statement for {accounts}", "Created a {frequency} {format} statement").
 
 #### 7. Result and links out
 
-Result: "Your file is ready" with the statement id. Receipt: none (a statement is itself the document). Notification raised: none in Release 1 (open question 6). Links out: *Download*, *Go to statements* (Accounts › Statements), *Create another*, *Done*.
+Links: **Schedule this**, **Send another**, **New statement**. Notification: none (the email is the delivery; "statement ready" in the app is (planned)).
 
 #### 8. Acceptance criteria
 
-- **AC-1** A Maker, Approver or Admin can create a statement for one account and a period and download it in PDF, CSV or Excel.
-- **AC-2** A person can create a report for all accounts at the company, and only for accounts they may see.
-- **AC-3** A period longer than 12 months, in the future, or with the start after the end is refused with a message, and nothing is created.
-- **AC-4** A period with no transactions is refused with "There are no transactions in that period. Choose a longer period."
-- **AC-5** A file with more than 5,000 rows is refused before it is made.
-- **AC-6** A person without `biz.accounts.export` cannot create a file, even if the call is forced.
-- **AC-7** The file's row count equals the count shown on the review screen.
-- **AC-8** When the service times out or is unavailable, the person sees a retry, nothing is created, and no file appears in Statements.
-- **AC-9** Opened from the transaction table's Export, the journey starts on the review with the filter's account and dates.
-- **AC-10** A statement made at one company is never listed or downloadable at another company.
+- AC-1: Only accounts the person may export are listed; at least one must be ticked.
+- AC-2: A custom period needs both dates, in order, within 24 months.
+- AC-3: PDF, CSV and Excel are always offered; the bank formats appear only when `bankFormats` is on, and no format name other than these appears otherwise.
+- AC-4: Recipients are 1 to 5 valid addresses at the company unless `external` is on.
+- AC-5: A one-off statement with no booked transactions in the period is refused with the message.
+- AC-6: A schedule can be created when `schedule` is on and fewer than ten exist, and its result shows the first run.
+- AC-7: Today so far appears only with `intraday` and includes pending items.
+- AC-8: Timeout and unavailable send nothing.
 
 #### 9. Scenarios
 
-| # | Persona and setup | Conditions | Covers | Expected |
+| # | Persona and setup | Steps | Expected | Covers |
 |---|---|---|---|---|
-| T-1 | Alex at Alpha (Maker). Account Operating, Last month, PDF | none | AC-1, AC-7 | `generate` returns a file; `rows` equals the review count; the result shows "Your file is ready". |
-| T-2 | Alex at Alpha. "All accounts", CSV | none | AC-2 | The file has rows from every account Alex may see, and none from an account Alex is not permitted. |
-| T-3 | Alex at Alpha. From 1 Nov 2026 to 1 Oct 2026; then 14 months; then a future end date | none | AC-3 | Each is stopped on `choose` with its message; `corp.statements.list` is unchanged. |
-| T-4 | Alex at Alpha. Account with no activity, 1 week | none | AC-4 | `NO_TRANSACTIONS` message on `review`; *Edit* returns to `choose`. |
-| T-5 | Alex at Alpha. A seeded account with 5,200 rows, 12 months | none | AC-5 | `EXPORT_TOO_LARGE` message; the button is disabled. |
-| T-6 | A user who has `biz.accounts.view` only (Alpha test user `view_only`, planned) forces the call | none | AC-6 | `PERMISSION_DENIED`; screen `denied`; nothing created. |
-| T-7 | Alex at Alpha opens from the transaction table with account, from, to | none | AC-9 | The journey's first screen is `review`, showing the three values. |
-| T-8 | Alex at Alpha. Account Operating | `timeout: ["corp.statements.generate"]` | AC-8 | Timeout message with *Try again*; `expectBank` reads `corp.statements.list` and finds no new file. |
-| T-9 | Alex at Alpha. Account Operating | `unavailable: ["corp.statements.generate"]` | AC-8 | `SERVICE_UNAVAILABLE` message; *Try again* works after the condition is cleared. |
-| T-10 | Alex creates a file at Alpha, then switches to Beta | none | AC-10 | Beta's statements list does not contain it; forcing `downloadRef` at Beta answers `PERMISSION_DENIED`. |
+| T-1 | Alex at Alpha | Defaults (all accounts, Last month, PDF), Send | "Statement sent"; recipient alex.morgan@alpha-trading.example | AC-1, AC-3 |
+| T-2 | Alex at Beta | Open | Only Operating listed (Payroll absent) | AC-1 |
+| T-3 | Same | Custom period To before From | "The end date is before the start date." | AC-2 |
+| T-4 | Same | Custom period of 3 years | "Choose up to 24 months at a time." | AC-2 |
+| T-5 | `bankFormats` on, then off | Step 2 | BAI2, MT940, camt.053 appear and disappear | AC-3 |
+| T-6 | Same | Send to bob@outside.example | "You can only send to addresses at your company."; allowed with `external` on | AC-4 |
+| T-7 | Same | Six addresses | "Check the email addresses. Use up to 5, separated by commas." | AC-4 |
+| T-8 | Custom period with no transactions | Send | "There are no transactions in that period…" | AC-5 |
+| T-9 | Schedule: Weekly, Friday | Send | "Schedule created"; first one "Fri 6 Nov"; "2 of 10 schedules" | AC-6 |
+| T-10 | Ten schedules exist | Schedule, Send | "You already have 10 schedules. Remove one first." | AC-6 |
+| T-11 | `intraday` on | Today so far, MT942 | Offered; pending items included | AC-7 |
+| T-12 | Timeout; unavailable | Send | Banner; sheet; nothing sent | AC-8 |
 
 #### 10. Expected mutation-check survivors
 
-- Removing the 12-month check in the journey survives only if the sandbox `INVALID_RANGE` rule also stops it (layer 3): T-3 uses a 14-month range, so the sandbox rule is exercised; expected survivor: **the journey-side `validate` for range length** (the sandbox answers the same message). Reason: another layer already stops it.
-- Removing the `toggle` "Include pending": none expected, T-1 does not use it; add a variation in T-2 (include pending on) so the count differs. If not added, the survivor is listed.
-- All others: none expected.
+- The 731-day limit by one day: survives (no scenario at the edge).
+- The default format PDF and default period: survive, scenarios choose explicitly.
+- Day choices (Tuesday): survive, only Friday is asserted.
+- The domain suffix check being case-sensitive: survives.
 
 ---
 
 ## Business: Payments
 
-This group is the **Payments** tab of Business "Graphite" (README 3.3). It has seven shell screens and five journeys. The tab is for people who can see payments. Launch points on it show only to the roles in README section 4.2.
+This group is the **Payments** tab of Business "Graphite" (README 3.3). In the prototype the tab is the button **New supplier payment** and five segments: **Tracker** (view `payment-tracker`), **Templates** (view `templates`), **Scheduled** (view `business-schedules`), **Suppliers** and **Bulk & payroll** (shell screens below). It has five journeys and three views. The views are described in their own blocks after the journeys they belong to. The tab is for people who can see payments. Launch points on it show only to the roles in README section 4.2.
 
 Used throughout (sandbox facts, all grounded in `packages/mock-bank-api/src/corporate.ts` and `docs/CORPORATE.md`):
 
 - A company payment is **started** by a Maker and **approved** by someone else. Starting moves no money. The last approval releases it. Nobody approves what they started (`SELF_APPROVAL`).
-- Payment states in the sandbox: `pending_approval`, `released`, `rejected`. A withdrawn payment is stored as `rejected` with the reason "Withdrawn by the person who started it". The screens show four words: **Pending approval**, **Released**, **Rejected**, **Withdrawn**. (planned: **Scheduled** for a payment that has not started yet.)
+- Payment states in the sandbox: `pending_approval`, `released`, `rejected`. A withdrawn payment is stored as `rejected` with the reason "Withdrawn by the person who started it". The screens show five words: **Pending approval**, **Released to bank**, **Settled**, **Rejected**, **Withdrawn** (the sandbox has no settled state yet, planned). Scheduled payments have their own badges in the Scheduled segment: Active, Waiting for approval, Paused.
 - Cut-off is 16:00 UTC. Before it, on a working day, the value date is today. After it, on a weekend or on a closed day (9 Nov 2026), the value date is the next working day and `afterCutoff` is true. At exactly 16:00 it is still today.
-- Alpha Trading LLC seed for these specs (README 1.7, planned): company currency USD; Alex Morgan is Maker with a daily limit of 250,000.00 USD; the company daily limit is 1,000,000.00 USD; a payment **above 50,000.00 USD** needs two different approvers (`dana`, `lee`); accounts Operating ••2001 (USD 250,000.00) and Reserve ••6101 (EUR 40,000.00). Whitelisted suppliers, one per region (`supplier-payment`, `add-supplier`, `schedule-business-payment`, region rules in `09-payment-rails.md`): Harbour Packaging (US, `sup_harbour`), Nordic Supplies AB (Europe, `sup_nordic`), Whitby Logistics (UK, `sup_whitby`), Gulf Trade FZE (UAE, `sup_gulf`); Beta has Nimbus Logistics (US) and Rhine Freight GmbH (Europe). The older domestic suppliers Nile Packaging Co. ••3301 and Delta Logistics ••7782 (US, USD) stay for the template and bulk journeys, and Rhine Components GmbH (Germany, EUR) and Orchid Textiles Ltd (United Kingdom, GBP) are the same as Nordic Supplies AB and Whitby Logistics in kind. Cedar Tools is added but **waiting for whitelisting**, so it cannot be paid yet.
-- The acting person today is a `userId` the journey asks for on a sandbox "who am I" screen (`corp.users.list`). After step 2 (identity) the acting person comes from the **active context** and the "who" screen is removed from the Business versions. Each journey below says what that changes.
+- Alpha Trading LLC seed in the prototype (`src/js/30-data.js`): company currency USD; Alex Morgan is Maker with a daily limit of 250,000.00 USD; a payment **above 50,000.00 USD** needs two approvers (Dana Cruz, Lee Park), and a code is asked from 25,000.00; accounts Operating ••2001 (USD 480,000.00) and Reserve ••2044 (EUR 95,200.00). Suppliers: Harbour Packaging, Nordic Supplies AB, Whitby Logistics and Gulf Trade FZE, each paid in its own currency (the screens show the currency and the last 4 digits only). Beta has Nimbus Logistics and Rhine Freight GmbH, and Alex is an Approver there. A supplier asked for with `add-supplier` waits for an administrator before it can be paid.
+- The acting person comes from the **active context**. The prototype has no "who am I" screen; the sandbox adapters still take a `userId`.
 
 New adapters in this group follow the corporate style: `corp.<domain>.<verb>`. All of them are **(planned)** and read the acting user and company from the active context.
 
-### Shell: Payments hub
+### Shell: Payments tab
 
 | | |
 |---|---|
-| **Purpose** | One place to start a payment, see what needs attention and jump to the lists. |
+| **Purpose** | One place to start a payment and reach the lists. |
 | **Route** | Web `/business/{company}/payments`. Mobile screen `BusinessPaymentsHub` (Payments tab, first screen). |
-| **Data source** | View-model `bizPaymentsHub` (planned, `packages/bank-client`). Built from `corp.company.get` (existing: accounts, `me.remainingToday`, `dualApprovalAbove`, `cutoff`) and `corp.payments.list` (planned, below). |
-| **Permission** | `biz.accounts.view` to see the screen. Each action card shows only with its own permission (below). |
+| **Permission** | `accounts.view` to see the tab. The button needs `pay.create`. |
 
-**Widgets, top to bottom**
+**Top to bottom (prototype, `payB` in `src/js/80-business.js`).** With `pay.create`: the button **New supplier payment** (`supplier-payment`). Without it a note: "Your role here is {role}. It can’t create payments, so this button isn’t offered. The bank refuses it too." Then the segments **Tracker** (default), **Templates**, **Scheduled**, **Suppliers**, **Bulk & payroll**. The cut-off line ("Today’s payment cut-off is 16:00 UTC") and the recent payments are on the Overview tab, not here.
 
-1. **Cut-off banner.** Text: "Cut-off today is 16:00 UTC. {n} h {m} min left." After the cut-off or on a closed day: "The bank is closed for today's payments. New payments go out on {next working day, e.g. 4 Nov 2026}." Button "Pay now" (before the cut-off only) opens `supplier-payment`.
-2. **Action cards** (2 by 3 on web, a vertical list on phones):
-
-| Card | Opens | Shows when the context holds |
-|---|---|---|
-| Pay a supplier | `supplier-payment` | `biz.payments.initiate` |
-| Upload a file | `bulk-payment` | `biz.payments.bulk` |
-| Run payroll | `payroll-run` | `biz.payroll.run` |
-| Schedule a payment | `schedule-business-payment` | `biz.payments.schedule` |
-| Use a template | Templates (shell) | `biz.templates.manage` |
-| Add a supplier | `add-supplier` | `biz.suppliers.manage` |
-
-   A person without the permission does not see the card (check 1). If a deep link opens the journey anyway, check 2 and check 3 apply (`PERMISSION_DENIED`).
-3. **Your limit today** (Makers only): "You can send {remainingToday} more today. Daily limit {dailyLimit}." A progress bar of `usedToday / dailyLimit`.
-4. **Needs your attention** (a short list, up to 5): your payments waiting for approval (with "Withdraw"), payments rejected in the last 7 days, and schedule runs that failed.
-5. **Recent payments**: the last 5 rows of the tracker, with a "See all payments" link.
-
-**States.** Loading: skeleton for the banner and cards. Empty "Needs your attention": "Nothing needs your attention." Error: "We couldn't load your payments. Nothing was changed." with a "Try again" button. `unavailable` condition shows the same error text with SERVICE_UNAVAILABLE wording (README 1.6). **Drill-downs**: a row opens Payment detail; "See all payments" opens the Payment tracker. **Launch points on it**: README 5.3 rows "Payments › hub" (Pay a supplier, Upload a file, Run payroll, Schedule).
-
-### Shell: Payment tracker (list)
-
-| | |
-|---|---|
-| **Purpose** | Find any payment the company started and see where it is. |
-| **Route** | Web `/business/{company}/payments/tracker` (list on the left, detail on the right on wide screens). Mobile `PaymentTracker`. |
-| **Data source** | `corp.payments.list` (planned). Request `{ status?, from?, to?, kind?, startedBy?, q?, sort?, page? }`. Response `{ items: Payment[], total, page, pageSize: 25 }`. `Payment` is the existing payment plus `payee`, `kind` (planned: `single`, `international`, `bulk`, `payroll`, `scheduled`), `displayStatus` and `valueDate`. Error codes: `PERMISSION_DENIED`, `WRONG_CONTEXT`, `TIMEOUT`, `SERVICE_UNAVAILABLE`. `moneyMoving: false`, `requiresOtp: false`. Permission `biz.accounts.view`. |
-| **Block** | `dataTable` (planned) with `statusChip` (planned). On phones the table becomes a list of cards. |
-
-**Table columns** (in this order)
-
-| Column | Content | Sortable |
-|---|---|---|
-| Reference | `id` such as `pay_1`; after release the release reference such as `CORP-20261103-0001` | yes |
-| Payee | `payee` (supplier name, "3 payments" for a bulk file, "Payroll 2026-10 · 3 employees") | yes |
-| Amount | amount and currency, right aligned | yes |
-| Started by | user name | yes |
-| Status | `statusChip` | yes |
-| Approvals | "1 of 2" | no |
-| Value date | `12 Nov 2026` | yes |
-| Started | date and time (24 hour, UTC) | yes (default, newest first) |
-
-**Status chips**
-
-| Word | Colour and icon | Rule |
-|---|---|---|
-| Pending approval | amber, clock | `pending_approval`; the text "1 of 2 approved" is added when at least one approval exists |
-| Released | green, check | `released` |
-| Rejected | red, cross | `rejected` with a reason other than the withdraw reason |
-| Withdrawn | grey, undo | `rejected` and `rejectReason` is "Withdrawn by the person who started it" |
-| Scheduled (planned) | blue, calendar | a schedule run that has not started |
-
-**Filters.** Status (chips: All, Pending approval, Released, Rejected, Withdrawn), Date range (`datePicker`, planned; started date), Type (Single, International, Bulk, Payroll), Started by (a person), Search (reference, payee or reference text). The filter bar shows the active filters as removable chips and "Clear all".
-**Sort order.** Started, newest first; a click on a column header sorts by it. A Maker sees every payment of the company, but "Mine" is a one-tap toggle that filters on `startedBy = me`.
-**States.** Loading: 8 skeleton rows. Empty with no filters: "No payments yet. When you start one, you can follow it here." Button "Pay a supplier" (only with `biz.payments.initiate`). Empty after a filter: "No payments match. Clear the filters to see all." Error: "We couldn't load your payments. Nothing was changed." Button "Try again".
-**Drill-downs.** A row opens Payment detail. A row's overflow menu holds: Withdraw (when pending and mine), Save as template, Repeat, Repair rejected lines (bulk with rejected lines).
-**Launch points on it.** README 5.3: "Payments › tracker › payment" Withdraw, Save as template, Repeat; "Payments › tracker › bulk payment" Repair rejected lines.
+**Not in the prototype (planned):** the cut-off banner with "Pay now", the action cards (upload a file, run payroll, schedule, use a template, add a supplier), the "Your limit today" bar and the "Needs your attention" list. The buttons for those actions sit inside the segments instead. **Launch points on it**: README 5.3 rows "Payments › hub".
 
 ### Shell: Payment detail (with status timeline)
+
+> Prototype: the detail is the right-hand pane of the Tracker (see `payment-tracker`: id, status chip, amount, supplier, reference, a four-step timeline, Withdraw, View receipt). The Approvals tab shows the same card with its own Withdraw button and a demo approve button. The fuller screen below is planned.
 
 | | |
 |---|---|
@@ -541,20 +513,9 @@ New adapters in this group follow the corporate style: `corp.<domain>.<verb>`. A
 
 **States.** Loading: skeleton header and three timeline rows. Not found: "We can't find that payment." with a "Back to payments" button. Error and timeout: "We couldn't load this payment. Nothing was changed." Button "Try again".
 
-### Shell: Templates
-
-| | |
-|---|---|
-| **Purpose** | Saved payment details a Maker can reuse. |
-| **Route** | Web `/business/{company}/payments/templates`. Mobile `PaymentTemplates`. |
-| **Data source** | `corp.templates.list` (planned). Request `{}`. Response `{ items: Template[] }`; a `Template` is `{ id, name, kind, fromAccountId, beneficiaryId, amount?, currency, reference, purpose?, createdBy, createdAt, supplierStatus }`. Error codes `PERMISSION_DENIED`, `WRONG_CONTEXT`, `TIMEOUT`, `SERVICE_UNAVAILABLE`. `moneyMoving: false`, `requiresOtp: false`. Permission `biz.templates.manage`. |
-
-**Columns**: Name, Supplier, Type, Amount ("Variable" when no amount is saved), Reference, Last used, Created by. **Filters**: Type, Search by name. **Sort**: Name, A to Z (default); Last used. **Row buttons**: Use (opens `supplier-payment` with `{templateId}`), Schedule (opens `schedule-business-payment` with `{templateId}`), Edit and Delete (open `payment-template` with `{templateId}`). A template whose supplier is no longer approved shows a red chip "Supplier not approved" and its Use button is disabled with the helper "Ask an approver to confirm this supplier first."
-**Top button**: "New template" opens `payment-template`.
-**States.** Empty: "No templates yet. Save one from a payment you make often." Button "New template". Loading: 6 skeleton rows. Error: "We couldn't load your templates. Nothing was changed." with "Try again".
-**Launch points on it.** README 5.3 row "Payments › templates" (New, Use).
-
 ### Shell: Suppliers
+
+> Prototype: the **Suppliers** segment is a plain list inside the Payments tab: one row per supplier (name, region and masked account) with a chip "Whitelisted", and the button **Add supplier** (`add-supplier`, with `pay.create`). Columns, filters, sort, Pay and Edit below are planned, and the chip should show "Waiting for approval" for a supplier asked for with `add-supplier` (today it shows "Whitelisted").
 
 | | |
 |---|---|
@@ -566,19 +527,9 @@ New adapters in this group follow the corporate style: `corp.<domain>.<verb>`. A
 **States.** Empty: "No suppliers yet. Add one before you can pay them." Button "Add a supplier". Loading: skeleton rows. Error: "We couldn't load your suppliers. Nothing was changed." Button "Try again".
 **Launch points on it.** README 5.3 row "Payments › suppliers" (Add, Edit).
 
-### Shell: Scheduled
-
-| | |
-|---|---|
-| **Purpose** | Payments set to start on future dates, and the runs they have made. |
-| **Route** | Web `/business/{company}/payments/scheduled`. Mobile `ScheduledPayments`. |
-| **Data source** | `corp.schedules.list` (planned). Request `{ status? }`. Response `{ items: Schedule[] }`, `Schedule` is `{ id, templateId?, beneficiaryId, fromAccountId, amount, currency, frequency, nextRunDate, endsOn?, runsLeft?, status, lastRun? }`, `status` one of `active`, `stopped`, `ended`, `failed_last_run`. Error codes as above. `moneyMoving: false`, `requiresOtp: false`. Permission `biz.payments.schedule`. |
-
-**Columns**: Supplier, Amount, Frequency ("Once", "Every week", "Every month"), Next run (`12 Nov 2026`), Ends ("Never", "After 6 runs", "On 31 Dec 2026"), Status chip, Last run (a link to the payment it started). **Sort**: Next run, soonest first. **Filters**: Status chips. **Row buttons**: Stop (a `dialog` block: "Stop this schedule? Payments already started are not affected." Buttons "Stop schedule" and "Keep it"; calls `corp.schedules.cancel` (planned): request `{ scheduleId }`, response the schedule with `status: stopped`, errors `SCHEDULE_NOT_FOUND`, `SCHEDULE_NOT_ACTIVE`, `PERMISSION_DENIED`; `moneyMoving: false`, `requiresOtp: false`). **Top button**: "Schedule a payment" opens `schedule-business-payment`.
-**States.** Empty: "Nothing is scheduled. Set up a payment that repeats and it appears here." Button "Schedule a payment". A `failed_last_run` row shows the red text "Last run failed: {message}. Nothing was paid." **Loading/error** as the other lists.
-**Launch points on it.** README 5.3 row "Payments › hub › Schedule".
-
 ### Shell: Bulk and payroll history
+
+> Prototype: the **Bulk & payroll** segment shows a card "Upload a payment file" ("CSV or XML. Each line is checked before anything is sent.") with the buttons Upload or enter payments, Run payroll, View batches (`bulk-status`) and Reports, then a short History card (October payroll, Supplier batch 18). The table below is planned.
 
 | | |
 |---|---|
@@ -593,917 +544,967 @@ New adapters in this group follow the corporate style: `corp.<domain>.<verb>`. A
 
 ### ★ Pay a supplier — `supplier-payment`
 
-> Starting pattern: the existing `corporate-payment` journey (`packages/journey-schema/src/fixtures/corporate-payments.ts`, adapter `corp.payments.initiate`). This spec describes it **as built** first, then the upgrade for BankWorkx®. The upgrade is region-aware: it uses the rails, fields, charges, purpose rules, limits and error codes in `09-payment-rails.md` (called "09" below) instead of repeating them. The Business version also carries the M1 combined-demo path (below). The prototype is `design/bankworkx-r1/prototype.html` (the business branch of `payFlow`).
+**Catalog**: slug `supplier-payment`, workspace business, category Payments, core no, a bank can switch it off (yes), kept in the Lean preset (basic). Options: none. Permission `pay.create`, moves money. Prototype file `design/bankworkx-r1/src/journeys/36-supplier-payment.js`: a normal engine journey (`JR.define`, three steps, then a code prompt only from 25,000.00). It replaces the earlier region wizard; there is no separate rate screen, charges choice, cooling-off note, repeat choice or consent tick.
+
+> The screens never name a country, a payment scheme or a file standard. The speeds shown are Standard, Same day and Instant. Which rail sits behind each speed, its fee, its limit and its arrival text come from the bank's rail configuration (`09-payment-rails.md`, now the bank-configuration reference).
 
 #### 1. Summary
 
 | | |
 |---|---|
 | Slug | `supplier-payment` |
-| Purpose | A Maker pays a whitelisted supplier in the United States, Europe, the United Kingdom or the Middle East (or in a SWIFT country, if the company has a supplier there). The payment waits for approval; no money leaves the account. |
+| Purpose | A Maker pays a saved (whitelisted) supplier from the company's Operating account. The payment goes to approvers before it is sent. Nothing leaves the account until it is approved. |
 | Release | 1 |
 | Workspace | Business (planned field `workspace: "business"`) |
-| Status | **Existing, upgraded.** Built today as `corporate-payment` ("Start a payment", `entryScreen: "who"`, 11 criteria, 12 scenarios, English only, app `meezan`, USD only, one rail). The new journey adds the region-aware flow of 09 section 1 (steps Payee, Amount and speed, Review, Authorise, Result), the permission model and the context. |
+| Status | Existing, upgraded. Built today as `corporate-payment` (`packages/journey-schema/src/fixtures/corporate-payments.ts`, adapter `corp.payments.initiate`); the prototype journey is the reference for BankWorkx®. |
 | Channels | web, mobile |
-| Starting pattern | `corporate-payment` plus the quote of `bank.fx.quote` (`packages/mock-bank-api/src/fx.ts`) for the foreign-currency branches. |
-| Who may use it | The context holds `biz.payments.initiate`. At Alpha Trading LLC: Alex Morgan (Maker). Not Approvers, not Admins without the permission. |
+| Who may use it | The context holds `pay.create`. At Alpha Trading LLC: Alex Morgan (Maker). Not offered to Approvers (Alex at Beta): the launch buttons are hidden. |
+| Seed | Alpha suppliers: Harbour Packaging (USD), Nordic Supplies AB (EUR), Whitby Logistics (GBP), Gulf Trade FZE (AED). Account: Operating ••2001 USD 480,000.00. Person limit 250,000.00 a day, two approvers above 50,000.00, extra code from 25,000.00 (all in USD). |
 
-**The screens as built today** (`corporate-payment`)
-
-| Screen id | Title | What it does |
-|---|---|---|
-| `who` | Sign in | "Sandbox: choose who you are. A real bank app already knows who signed in." A `select` (rows) bound to `session.userId`, label "I am", fed by `corp.users.list`. Button "Continue" runs `corp.company.get` and goes to `start`. If the user has no `initiator` role the `authorisation` rule sends them to `denied`. |
-| `start` | Payment details | `accountPicker` (`pay.fromAccountId`, balances shown), `beneficiaryPicker` (`pay.beneficiaryId`), `amountInput` (label "Amount", helper "Your limit left today: {remainingToday}", max = remaining, message "That is above your daily limit"), `textInput` "Reference" (placeholder "Invoice number"). Button "Continue". |
-| `review` | Review payment | `reviewSummary` (From, To, Amount, Reference, Approvers needed), `alert` info "Payments made after {cutoff} UTC, or on a day the bank is closed, go out on the next working day.", `consent` ("I confirm the payment details are correct", `mustBeTrue`, message "Tick the confirmation first"), button "Confirm and send OTP". |
-| `otp` | Verify | `otp` block (6 digits, 3 attempts, resend after 60 s, hint "Enter the code sent to {maskedPhone}"), button "Verify and send for approval". Wrong code: toast "Incorrect code", stay; the third wrong code goes to `failed`. |
-| `success` | Sent for approval | `result` success "Sent for approval", text "{amount} to {supplier} now waits for {n} approver(s). Nothing has left the account yet.", meta "Payment {id} · value date {valueDate}", info alert when `afterCutoff`, button "Done". |
-| `failed` | Payment not sent | `result` error with `ctx.error.message`, caption "No money has left the account.", buttons "Try again" (to `start`) and "Close". |
-| `unavailable` | Not available | `result` error "We can't open this right now", button "Try again" (to `who`), "Close". |
-| `denied` | Not allowed | "You can't do this. Only an initiator can use this. You are signed in as {name}." Button "Close". |
-
-**What the upgrade changes**
-
-1. **No `who` screen.** The acting user is the active context's user. The journey no longer holds `session.userId`; the adapters read the user from the context. If a call sends a different `userId`, the sandbox answers `PERMISSION_DENIED` (README 2.3). The old version with `who` keeps working for the Meezan look.
-2. **Region-aware.** The supplier decides the region, country, currency and rails (09 sections 2 and 3). The Maker types **what the supplier receives** in the supplier's currency (09 section 5). There is no "same country / abroad" switch and no separate rate screen: the conversion summary sits under the amount.
-3. **Rail and speed.** The Maker picks a rail that fits (09 section 2), including instant rails and their "not available right now" state.
-4. **Purpose and invoice or PO reference** are always required for a company (09 section 7).
-5. **Limits are tested on the USD amount after conversion** (09 section 9). The number of approvers (1 or 2) and the extra check also use that USD-equivalent amount.
-6. **Authorisation with dynamic linking** (09 section 9) replaces the old "one-time code for every payment" and the password `stepup` screen: a payment under USD 25,000.00 needs no code (the whitelist is the control); from 25,000.00 the Maker sees a prompt that names the amount and the supplier and enters a code that only works for that payment.
-7. **Permission** `biz.payments.initiate` at all three checks; `denied` is reached by `PERMISSION_DENIED` too. New codes: `TIMEOUT`, `SERVICE_UNAVAILABLE`, `SESSION_EXPIRED`, `WRONG_CONTEXT` and the 09 section 12 codes.
-8. **Links out**: Track payment, Save as template, "Add supplier" (an information sheet; the supplier is added and whitelisted by an administrator), "Repeat" from the tracker with `{paymentId}`.
+**Home market configuration**: none. The supplier's own saved region decides the currency and which speeds exist; the screens look the same on Market A, B, C and D. A supplier's account is shown only as the currency and the last 4 digits ("USD · ••8841").
 
 #### 2. Entry points
 
 | Place › label | Passes | Permission |
 |---|---|---|
-| Overview › + quick action: Pay a supplier | none | `biz.payments.initiate` |
-| Overview › Cut-off timer › Pay now | none | `biz.payments.initiate` |
-| Payments › hub › Pay a supplier | `{supplierId}` optional | `biz.payments.initiate` |
-| Payments › suppliers › row › Pay | `{supplierId}` | `biz.payments.initiate` |
-| Payments › templates › Use | `{templateId}` | `biz.templates.manage` and `biz.payments.initiate` |
-| Payments › tracker › payment › Repeat | `{paymentId}` | `biz.payments.initiate` |
-| ⌘K command bar "Pay a supplier", or deep link `bankworkx://business/alpha/j/supplier-payment?supplierId=sup_harbour` | `{supplierId}` optional | `biz.payments.initiate` |
+| Payments › New supplier payment | none | `pay.create` |
+| Payments › Suppliers › row › Pay | `{supplierId}` | `pay.create` |
+| Accounts › detail › Pay from this account (`business-accounts`) | none | `pay.create` and pay-from right on the account |
+| Command bar › Pay a supplier | none | `pay.create` |
 
-When `{supplierId}` is passed the journey opens on `amount` with the supplier chosen. When `{templateId}` or `{paymentId}` is passed the journey fills supplier, account, rail, purpose, reference and (if saved) amount, and the person still goes through every screen. The `amountInput` is pre-filled and editable. If the saved rail no longer fits the amount or is not available, the default rail for the region is chosen and the screen says so.
+Parameters: `{supplierId}` (supplier chosen, step 1 skipped), `{amount}` (pre-fills the amount). The Payments tab lists the saved suppliers; adding one is the `add-supplier` journey.
 
 #### 3. Screens
 
-Screen ids: `payee`, `amount`, `review`, `authorise` (when needed), `success`, `failed`, `unavailable`, `denied`, `wrongContext`. Loading rule for every screen that calls an adapter: the button is disabled with a spinner; after 10 seconds the screen shows `unavailable` with the TIMEOUT text. A `stepper` block shows "Payee", "Amount and speed", "Review", "Authorise" (the last only when the extra check applies).
+Progress text "Step n of 3 · Pay a supplier" (n of 2 when `{supplierId}` was passed). Each screen has **Back** (the first has **Cancel**). A step that calls the bank shows a spinner and the busy text.
 
-**Screen `payee` — "Who are you paying?"**
+**Step 1: Choose supplier** (skipped when a supplier was passed)
 
-Blocks: `stepper`, `beneficiaryPicker` (rows, `allowAddNew: false`), `alert`, `button`. `onEnter`: `corp.company.get` (loads accounts, whitelisted suppliers, `me.remainingToday`, `dualApprovalAbove`, `cutoff`).
-
-| Field | Block | Required | Rule | Error message |
+| Field | Type | Required | Rule | Message |
 |---|---|---|---|---|
-| Supplier (`pay.beneficiaryId`) | `beneficiaryPicker` listing **saved, whitelisted suppliers only** | yes | must be on the whitelist | "Choose a whitelisted supplier." |
+| Supplier | cards: name, then "{currency} · ••{last 4}" | yes | one of the saved suppliers | "Choose a supplier." |
 
-Each row shows: the supplier name, the region and country (for example "Europe · Germany"), the masked account (09 section 3: `ABA 021000021 · ••8841`, `DE89 •••• 3000`, `20-00-00 · ••9911`, `AE07 •••• 3456`, `BOTKJPJT · ••7890`), and the chip **Whitelisted** (green). A supplier whitelisted less than 24 hours ago also shows an amber chip "New: up to USD 500.00 in 24 hours" (the cooling-off rule, 09 section 10). A supplier waiting for whitelisting is listed greyed with "Waiting for whitelisting" and cannot be chosen. There is **no form to enter a new payee**: a company cannot add a payee here (09 section 4).
+Below the cards: the button **Request a new supplier** (opens `add-supplier`). Button **Continue**. Empty list: only the request button.
 
-Copy: title "Who are you paying?". Info alert: "Payments need approval. Nothing leaves your account until it is approved." Link under the list: "Add supplier". It opens an information sheet: "New suppliers are added and whitelisted by a company administrator. Ask {administrator name}." Where the context also holds `biz.suppliers.manage` the sheet has a button "Add a supplier" (`navigate.toJourney: "add-supplier"`, `returnTo: "payee"`, planned engine feature). Button "Continue" (disabled until a supplier is chosen); "Cancel" (exit).
-States. Loading: skeleton rows. Empty: "No whitelisted suppliers yet. Ask an administrator to add one." Error on load: `unavailable`.
+**Step 2: Amount and speed**. Busy text "Checking…" (about 0.5 s). Button **Review**. A live summary box under the fields.
 
-**Screen `amount` — "Amount and speed"**
-
-Blocks: `stepper`, `reviewSummary` (supplier chip), `accountPicker`, `amountInput`, `select` (rail cards), `select` (rows, purpose), `textInput`, `select` (chips, when), `datePicker` (planned), `select` (charges, SWIFT only), `alert`, `button`. `onEnter`: `corp.payments.quote` (planned), repeated while the person types (debounced 400 ms, so the summary updates on every keystroke without moving the cursor). The quote is held for 60 seconds from the moment the amount screen opens (09 section 5).
-
-| Field | Block | Required | Rule | Error message |
+| Field | Type | Required | Rule | Message |
 |---|---|---|---|---|
-| From (`pay.fromAccountId`) | `accountPicker`, balances shown | yes | a USD account of the company (Operating ••2001). Paying from the Reserve (EUR) account is planned. | "Choose an account." |
-| They receive (`pay.amount`) | `amountInput`; the currency is the supplier's (USD, EUR, GBP, AED, SAR, JOD, or a SWIFT currency); the prefix shows the symbol | yes | greater than 0; at most the currency's decimals (JPY none, JOD 3, others 2); the USD amount after conversion at most `me.remainingToday` | required: "Enter an amount."; decimals: "Enter an amount in {cur} with at most {n} decimal places."; zero: "Enter an amount above zero."; limit: "That is above your daily limit of USD 250,000.00. You have {remainingToday} left today." (`LIMIT_USER_EXCEEDED`) |
-| Speed (`pay.rail`) | `select` cards, one per rail of the supplier's region (09 section 2), showing name, arrival, fee in USD | yes | the default is the first rail that fits the amount (09 section 2 "Default rail"). A rail the amount does not fit is dimmed and shows its limit. A rail that is down shows "Not available right now". | `RAIL_LIMIT`: "That's over the {rail} limit of {limit}. Choose another way to send it."; `RAIL_NOT_AVAILABLE`: "{rail} isn't available right now. Choose another way to send it." |
-| Purpose (`pay.purpose`) | `select` rows: Goods or services, Rent, Salary, Education, Savings or investment, Family support, Other (09 section 7) | yes (always, for a company) | one of the list | "Choose a purpose for this payment." (`PURPOSE_REQUIRED`) |
-| Invoice or PO number (`pay.reference`) | `textInput`, placeholder "Required" | yes | 1 up to the region's limit (US 80, Europe 140, UK 18, Middle East and SWIFT 140); the field refuses extra characters; allowed: letters, digits, space and `. , ' - / ( ) + : ?`; others are removed with the note "Some characters aren't allowed and were removed." | required: "Enter the invoice or PO number."; over the limit: the field stops accepting characters and shows "{n} of {max} characters" |
-| Charges (`pay.charges`), SWIFT only | `select` chips: "Shared", "I pay all", "They pay" (09 section 6) | yes (SWIFT) | `SHA` default, `OUR`, `BEN` | "Choose who pays the charges." |
-| When (`pay.when`) | `select` chips "Now", "Later", default "Now" | yes | — | — |
-| Date (`pay.date`), when "Later" | `datePicker` (planned) | yes if "Later" | a business day for the supplier's region within the next 30 days (09 section 8); weekends and the region's closed days are disabled | "Choose a business day." |
-| Repeat (`pay.repeat`), when "Later" | `select` rows: "Doesn't repeat", "Every week", "Every month" | yes if "Later" | one of three | "Choose how often." |
+| To / From | rows | no | To: supplier name and "{currency} · ••{last 4}". From: "Operating ••2001". | none |
+| Amount | amount with the supplier's currency symbol, placeholder "0.00"; label becomes "Amount (EUR)" when the supplier is paid in another currency | yes | greater than 0; fits the chosen speed's limit; the payment (with fee) is within the available balance; USD equivalent plus today's payments by this person is within 250,000.00 | "That is over the limit for this payment. Try a smaller amount." / "Not enough in Operating. Available: {amount}." / "That is over your limit of $250,000.00 a day." |
+| Speed | cards, one per speed the supplier's region offers (Standard, Same day, Instant). Left: name and arrival ("In seconds", "Today", or the bank's arrival text for Standard). Right: fee, or "Free". | yes | the first speed that fits is chosen; a speed the amount does not fit is dimmed with "Over the limit" and cannot be chosen | as above |
+| Reference | text, hint "Invoice or PO number", max 35 | yes | letters, digits, space and `. , ' - / ( ) + : #` | "Use letters, numbers and spaces only." |
+| Purpose | select, placeholder "Choose a purpose": Goods, Services, Rent, Utilities, Taxes and duties, Other | yes | one of the list | field required |
+| Pay date | chips "Today", "Later" | no | default Today | none |
+| Date | select of working days in the next 30 days | yes when Later | working day | field required |
 
-**Conversion summary** (shown under the amount only when the supplier's currency is not USD; for a USD supplier it shows only Fee, You pay and Arrives): They receive, Rate ("1 USD = 0.926 EUR"), Converted ("USD 12,203.02"), Fee (the rail's fee in USD, plus 15.00 for `OUR`), **You pay** (converted amount plus fee), Arrives (the rail's speed, or the date chosen), and a line "Rate held for {mm:ss}". Rounding is to the cent, half up, once, at the end (09 section 5). Under it: "Limit left today: USD {remaining}" in USD, and the approvers line "Needs {1 or 2} approver(s)" (USD-equivalent over 50,000.00 means 2).
+Summary box: when the supplier is paid in another currency, "Rate: 1 USD = {rate} {currency}"; always **You pay** (the USD amount plus the fee). Text before an amount is entered: "Enter an amount." If the supplier has no speed (region switched off by the bank) the card area says "No speeds are available right now."
 
-Funds check: **You pay** must not exceed the balance of the chosen account (`INSUFFICIENT_FUNDS`, message names both numbers, see section 4).
+**Step 3: Review**. Button **Send for approval**.
 
-Copy: title "Amount and speed". Instant rails say "Goes out straight away, any time." Same-day rails say "Cut-off for same-day delivery: {time} UTC." (the effective cut-off, see "Cut-off and value date" in section 6). Warning when the USD amount is 25,000.00 or more: "You'll be asked for an extra security check." Buttons: "Continue" (validates; enabled only when the amount, rail, purpose and reference are valid; goes to `review`); "Back" (to `payee`).
-States. Loading: skeleton summary. Quote error: the field shows the message under the amount and Continue stays disabled. `TIMEOUT` on the quote: `unavailable`.
-When "Later" is chosen the journey continues into `schedule-business-payment` at its `review` screen with the supplier, amount, rail, purpose, reference, date and repeat filled in (`navigate.toJourney: "schedule-business-payment"`, planned). That journey owns the rules for scheduled and repeating payments (09 section 8).
+| Row | Value |
+|---|---|
+| Supplier | name |
+| Amount | in the supplier's currency |
+| You pay | USD total with fee |
+| Speed | Standard, Same day or Instant |
+| Arrives (or Pay date when Later) | arrival text or date like "Thu 5 Nov" |
+| Reference | as typed |
+| Approval | "Needs 1 approval" or "Needs 2 approvals" |
 
-**Screen `review` — "Review payment"**
+The limits are checked again when the person continues (see section 4).
 
-Blocks: `reviewSummary`, `alert`, `consent`, `button`. The screen reads the held quote. If more than 60 seconds have passed since the quote, the screen shows the amber alert "The exchange rate changed. Check the new amount." (`QUOTE_EXPIRED`) with the new figures and the button "Accept new rate"; the payment cannot be sent until it is accepted. A supplier in USD has no quote and cannot show this alert.
-Rows: From ("Operating ••2001"), To (supplier name and masked account), Country, Sent by (rail name), They receive ("EUR 11,300.00"), Rate (if any), Fee, **You pay** ("USD 12,203.02"), Arrives, Goes out on (value date), Purpose, Invoice or PO number, Charges (SWIFT), and **Approvers needed** (below).
-Approvers card: "1 approver: Dana Cruz or Lee Park." or "2 approvers: Dana Cruz and Lee Park." (names from the approver list of the context). If the USD amount is 25,000.00 or more it adds "You'll be asked for an extra security check."
-Alerts: info "Payments made after the cut-off, or on a day the bank is closed, go out on the next working day." When the chosen rail has passed its cut-off or it is a closed day, the same screen shows the warning "Goes out on {valueDate}: after the {time} UTC cut-off." Instant rails show no cut-off warning.
-Consent (`pay.consent`, `termsVersion: "corporate-v1"`): "I confirm the payment details are correct". Rule `mustBeTrue`. Message: "Tick the confirmation first."
-Buttons: "Submit for approval" (validates; if the USD amount is below 25,000.00 creates the payment and goes to `success`; otherwise sends the code and goes to `authorise`); "Back" (to `amount`).
+**Code prompt** (only when the USD equivalent is 25,000.00 or more; below it no code is asked, the saved-supplier list is the control). A keypad sheet. Title "Authorise {amount} to {supplier}". Line "Code sent to ••• 4410." The sandbox code is 482100.
 
-**Screen `authorise` — "Authorise this payment"**
+**Result** "Sent for approval", line "{amount} to {supplier}", amber chip "Waiting for 1 approval" or "Waiting for 2 approvals". Receipt rows: Supplier, Amount, You pay, Speed, Arrives or Pay date, Approval; then the BankWorkx® reference. Buttons **Track payment** (opens the payment in Payments), **Pay another supplier**, **Done**.
 
-Shown only when the USD amount is 25,000.00 or more (the extra security check, policy `stepUpAbove`, planned). Blocks: `text`, `otp`, `button`. The prompt names the payment (dynamic linking, 09 section 9): "Authorise EUR 55,600.00 to Nordic Supplies AB" and below it "This amount needs an extra security check. The code only works for this payment." The `otp` block has 6 digits, 3 attempts, resend after 30 s, hint "Enter the code sent to {maskedPhone}". Field `otp.code`: required, pattern `^[0-9]{6}$`, message "Enter the 6-digit code." Wrong code: toast "That code isn't right. {n} tries left." (`OTP_INVALID`). The third wrong code fails the payment (`STEP_UP_FAILED`): `failed` with "Too many wrong codes. Start again." If the amount, supplier or rail changes after the code was sent, the code is void (`STEP_UP_FAILED`): "The payment changed, so that code no longer works. Start again." Button "Verify and submit for approval"; "Send a new code" after 30 s; "Back".
+#### 4. States and errors (codes are for tests; the person sees the message)
 
-**Screen `success` — "Pending approval"**
+| Code | Message | Where | Button |
+|---|---|---|---|
+| `SUPPLIER_NOT_APPROVED` | "Choose a supplier from your list." | step 1 banner | fix and continue |
+| `RAIL_LIMIT` | "That is over the limit for this payment. Try a smaller amount." | step 2 field, review banner | change amount |
+| `INSUFFICIENT_FUNDS` | "There isn’t enough money in the account." (field: "Not enough in Operating. Available: {amount}.") | step 2, review | change amount |
+| `LIMIT_USER_EXCEEDED` | "That is over your daily limit." (field: "That is over your limit of $250,000.00 a day.") | step 2, review | change amount |
+| `STEP_UP_FAILED` | "We couldn’t confirm this payment. Nothing was sent. Start again." | code sheet | start again |
+| `TIMEOUT` | "We didn’t get an answer in time. Check Payments before you try again, so you don’t pay twice." | banner on step 2 or after the code | check Payments |
+| `SERVICE_UNAVAILABLE` | Sheet "We couldn’t reach the bank": "Nothing was sent and you haven’t been charged. Try again in a moment." | sheet | Try again / Cancel |
 
-`result` success with the status chip **Pending approval**. Title "Pending approval". Text: "{They receive amount} to {supplier} is waiting for {n} approver(s): {names}. Nothing has left your account yet." Receipt-style rows: Sent by (rail), They receive, You pay, Arrives, Payment `{id}` and the BankWorkx® reference `BWX-nnnnnn` (the rail's own reference, 09 section 11, comes after release). Meta: "Payment {id} · value date {valueDate}". Info alert when `afterCutoff`: "It was started after the cut-off, so it goes out on {valueDate}."
-Buttons: "Track payment" (opens Payment detail, `{paymentId}`); "Save as template" (`payment-template`, `{paymentId}`); "Pay another supplier" (restarts); "Done" (returns to where the person started). Notification raised: see section 7.
-
-**Screens `failed`, `unavailable`, `denied`, `wrongContext`**: see section 4. All end with the sentence "No money has left your account." (except the TIMEOUT wording, section 4).
-
-#### 4. Sandbox errors
-
-Messages in the third column are the **upgraded** wording. "Today" is what the adapter message shows through `ctx.error.message` in the existing journey. Codes from 09 section 12 keep the wording given there.
-
-| Code | Adapter message today | What the person sees | Screen | Button |
-|---|---|---|---|---|
-| `OTP_INVALID` | "Incorrect code" (carries `attempt`) | "That code isn't right. {n} tries left." | `authorise` | Try again |
-| `STEP_UP_FAILED` | none today | After the third wrong code, or when the amount or supplier changed after the code was sent: "Too many wrong codes. Start again." / "The payment changed, so that code no longer works. Start again." No payment is created. | `failed` | Start again |
-| `OTP_REQUIRED` | "OTP not verified" | "Confirm with your one-time code first." | `authorise` | Back to code |
-| `ACCOUNT_NOT_FOUND` | "Account not found" | "We can't find that account. Choose another." | `failed` | Choose account (to `amount`) |
-| `USER_NOT_FOUND` | "No user {id} at {company}" | "We can't find your user at {company}. Sign in again." | `failed` | Sign in |
-| `NOT_AUTHORISED` | "{name} is not allowed to initiate payments" | "Only a Maker can start a payment. You are {role}. No money has left your account." | `denied` | Close |
-| `PERMISSION_DENIED` (planned) | none today | "Your role doesn't allow this. Ask an administrator at Alpha Trading LLC." | `denied` | Back |
-| `WRONG_CONTEXT` (planned) | none today | "This belongs to your Business banking. Switch to Business to continue." | `wrongContext` | Switch |
-| `STEP_UP_REQUIRED` (planned) | none today | "For your security, confirm it's you first." Used by `bank.session.switch` when entering Business; for a payment the `authorise` screen already shows. | `authorise` | Confirm |
-| `BENEFICIARY_NOT_WHITELISTED` | "This beneficiary is not on the company's approved list" | "This supplier isn't on Alpha Trading LLC's whitelist. Ask an administrator to whitelist them. No money has left your account." | `failed` | Choose supplier (to `payee`) |
-| `BENEFICIARY_COOLING_OFF` (existing code in the personal sandbox; planned for `corp.*`) | none today | "This supplier was whitelisted less than 24 hours ago. You can send up to USD 500.00 to them in 24 hours. You have {remaining} left. No money has left your account." | `failed` | Change amount |
-| `INVALID_AMOUNT` | "Enter an amount in {cur} with at most {n} decimal places" | "Enter an amount in {cur} with at most {n} decimal places." | `amount` | Change amount |
-| `CURRENCY_NOT_SUPPORTED` | "Payments are limited in {cur}: choose a {cur} account" | "Payments are limited in USD. Choose a USD account. No money has left your account." Also used when the supplier's country does not use the currency sent. | `failed` | Choose account |
-| `RAIL_NOT_AVAILABLE` (planned, 09) | none | "{rail} isn't available right now. Choose another way to send it." | `amount` | Choose another speed |
-| `RAIL_LIMIT` (planned, 09) | none | "That's over the {rail} limit of {limit}. Choose another way to send it." | `amount` | Choose another speed |
-| `PURPOSE_REQUIRED` (planned, 09) | none | "Choose a purpose for this payment." | `amount` | Choose purpose |
-| `QUOTE_EXPIRED` (planned, 09) | none | "The exchange rate changed. Check the new amount." | `review` | Accept new rate |
-| `QUOTE_NOT_FOUND` / `QUOTE_USED` (planned) | none | "This rate can't be used. Check the new amount." | `review` | Accept new rate |
-| `INSUFFICIENT_FUNDS` | "Insufficient funds" | "There isn't enough money in Operating ••2001: you'd pay {youPay} and {balance} is available. No money has left your account." | `failed` | Change amount |
-| `LIMIT_USER_EXCEEDED` | "This is above {name}'s daily limit" | "This is above your daily limit of {dailyLimit}. You have {remainingToday} left today. No money has left your account." Tested on the USD amount after conversion. | `failed` | Change amount |
-| `LIMIT_COMPANY_EXCEEDED` | "This is above the company's daily limit" | "This is above Alpha Trading LLC's daily limit. Try a smaller amount or wait until tomorrow. No money has left your account." | `failed` | Change amount |
-| `PAYMENT_HELD` (planned, 09) | none | The payment is created with the status "Held for review": "We're checking this payment and will tell you within one working day. You don't need to do anything." (sandbox trigger: supplier name "Test Sanctions") | `success` (status chip "Held for review") | Track payment |
-| `CORE_UNAVAILABLE` | "Core banking unavailable" | "We couldn't complete this right now. No money has left your account." | `failed` | Try again |
-| `TIMEOUT` (planned) | none | "We didn't get an answer in time. Check Payments before you try again, so you don't pay twice. In the sandbox nothing was started." | `unavailable` | Check payments (opens the tracker) |
-| `SERVICE_UNAVAILABLE` (planned) | none | "This service is not available right now. Nothing was changed. Please try again in a few minutes." | `unavailable` | Try again |
-| `SESSION_EXPIRED` (planned) | none | "You were signed out for your security. Sign in again to continue. Nothing you were doing was saved." | `unavailable` | Sign in |
+Loading: the spinner on step 2 (about 0.5 s). Empty: no suppliers means only "Request a new supplier". The same-day cut-off, rate hold time and cooling-off note of the earlier version are not on screen (bank configuration, planned).
 
 #### 5. Adapters
 
-| Integration id | Adapter | Request | Response | Error codes | Status |
-|---|---|---|---|---|---|
-| `company` | `corp.company.get` | `{ userId }` (today); `{}` after step 2 | company: `accounts`, `beneficiaries` (whitelisted suppliers; planned fields `region`, `country`, `currency`, `maskedNumber`, `rails`, `whitelistedAt`), `me` (`roles`, `dailyLimit`, `usedToday`, `remainingToday`), `dualApprovalAbove`, `cutoff`, `companyDailyLimit`, `companyUsedToday` | `NOT_SUPPORTED` ("Not available for this customer"), `PERMISSION_DENIED`, `WRONG_CONTEXT`, `TIMEOUT`, `SERVICE_UNAVAILABLE` | Existing |
-| `quote` | `corp.payments.quote` (replaces the planned `corp.fx.quote`) | `{ fromAccountId, beneficiaryId, amount (in the supplier's currency), rail?, charges? }` | `{ quoteId, currency, receive, rate, usdAmount, fee, youPay, rails: [{ id, fits, available, fee, arrives, max }], defaultRail, approversNeeded, extraCheck, valueDate, afterCutoff, expiresAt, ttlSeconds: 60 }` | `ACCOUNT_NOT_FOUND`, `BENEFICIARY_NOT_WHITELISTED`, `BENEFICIARY_COOLING_OFF`, `CURRENCY_NOT_SUPPORTED`, `INVALID_AMOUNT`, `RAIL_LIMIT`, `RAIL_NOT_AVAILABLE`, `INSUFFICIENT_FUNDS`, `LIMIT_USER_EXCEEDED`, `LIMIT_COMPANY_EXCEEDED`, `PERMISSION_DENIED`, `TIMEOUT`, `SERVICE_UNAVAILABLE`. `moneyMoving: false`, `requiresOtp: false` | **(planned)** |
-| `otpSend` | `bank.otp.send` | `{ channel: "sms" }` | `{ sent, maskedPhone, channel }` | `TIMEOUT`, `SERVICE_UNAVAILABLE` | Existing |
-| `otpVerify` | `bank.otp.verify` | `{ code }` | `{ verified: true }` | `OTP_INVALID` (with `attempt`) | Existing. The engine counts failures only for the id `otpVerify`. |
-| `create` | `corp.payments.create` (the upgrade of `corp.payments.initiate`) | today `{ userId, fromAccountId, beneficiaryId, amount, reference }`. Upgrade: no `userId`; adds `{ quoteId, rail, purpose, reference, charges?, code? }`. A code is needed from USD 25,000.00. | the payment: `id`, `status: "pending_approval"` (or `held` after screening), `required` (1 or 2), `valueDate`, `afterCutoff`, `payee`, `amount` and `currency` (the supplier's), `usdAmount`, `youPay`, `rail`, `railReference` after release | `OTP_REQUIRED`, `STEP_UP_FAILED`, `NOT_AUTHORISED`, `USER_NOT_FOUND`, `ACCOUNT_NOT_FOUND`, `BENEFICIARY_NOT_WHITELISTED`, `BENEFICIARY_COOLING_OFF`, `INVALID_AMOUNT`, `CURRENCY_NOT_SUPPORTED`, `QUOTE_EXPIRED`, `QUOTE_NOT_FOUND`, `QUOTE_USED`, `RAIL_NOT_AVAILABLE`, `RAIL_LIMIT`, `PURPOSE_REQUIRED`, `INSUFFICIENT_FUNDS`, `LIMIT_USER_EXCEEDED`, `LIMIT_COMPANY_EXCEEDED`, `PAYMENT_HELD`, `PERMISSION_DENIED`, `WRONG_CONTEXT`, `CORE_UNAVAILABLE`, `TIMEOUT`, `SERVICE_UNAVAILABLE`. `moneyMoving`: **no** at this step (the debit happens at release); `requiresOtp`: from 25,000.00 USD. | Existing as `corp.payments.initiate` (`CorporateSandbox.initiatePayment`), extended; the name `corp.payments.create` is **planned** |
-| `templates` | `corp.templates.list` | `{}` | `{ items }` | see Templates shell | **(planned)** |
-
-Sandbox rule order inside the create call: role, account, whitelist, cooling-off, amount, currency, quote, rail availability, rail limit, purpose, funds, user limit, company limit, code. The journey must show the first refusal; scenarios depend on this order. The company limit is **checked** at start but **used** only at release, as the code does. The existing order (role, account, whitelist, amount, currency, funds, user limit, company limit) is a subset of it.
+| Integration | Adapter | Status |
+|---|---|---|
+| Company, accounts, suppliers, remaining limit | `corp.company.get` | Existing |
+| Start the payment (waits for approval) | `corp.payments.initiate` (needs the code first; errors `NOT_AUTHORISED`, `BENEFICIARY_NOT_WHITELISTED`, `INVALID_AMOUNT`, `CURRENCY_NOT_SUPPORTED`, `INSUFFICIENT_FUNDS`, `LIMIT_USER_EXCEEDED`, `LIMIT_COMPANY_EXCEEDED`) | Existing, `packages/mock-bank-api/src/corporate.ts` |
+| Quote for a foreign currency (rate, fee, speed limits) | `corp.payments.quote` | (planned) |
+| Speeds and fees per supplier region | bank rail configuration (`09-payment-rails.md`) | (planned) |
 
 #### 6. Permissions, step-up and limits
 
-- **Permission:** `biz.payments.initiate` (checks 1, 2 and 3). Launch points are hidden without it. `authorisation.role` is `initiator` today (read from `ctx.company.me.roles`); after step 2 it reads `session.permissions`.
-- **Step-up level:** none for a payment under USD 25,000.00 (the supplier is already whitelisted). From USD 25,000.00, exactly 25,000.00 included, the extra check: a code with dynamic linking (`authorise`). Entering Business needs `stepup` (README 4.3), unchanged. Payments to a supplier whitelisted less than 24 hours ago are limited by the cooling-off rule.
-- **Limits** (09 section 9), all tested on the **USD amount after conversion** (the fee is not part of the limit): per person per day (Alex 250,000.00 USD at Alpha, `LIMIT_USER_EXCEEDED`, counted at start); per company per day (1,000,000.00 USD, `LIMIT_COMPANY_EXCEEDED`, counted at release). The rail maximum in 09 section 2 applies on top and is in the rail's own currency. The source account is USD; **You pay** (converted amount plus fee) must be available on it.
-- **Approvers:** the USD amount decides. Above 50,000.00 USD two different approvers (`dana`, `lee`); at 50,000.00 exactly, one. A payment of GBP 40,000.00 (USD 51,216.39) needs two approvers although 40,000 is below 50,000.
-- **Cut-off and value date:** instant rails ignore cut-offs. Every other rail has an effective cut-off, the earlier of the company cut-off (16:00 UTC) and the rail's own cut-off (09 section 2) converted to UTC. For November 2026 (clocks as in the sandbox) that gives: US, UK and CHAPS: 16:00 UTC (the rail cut-offs 19:45 and 23:00 for the US, and 17:00 for CHAPS, are later); SEPA Credit Transfer 14:00 UTC; UAEFTS 11:00 UTC; SARIE 12:00 UTC; JoPACC 11:00 UTC; SWIFT 15:00 UTC. A payment started at or before the effective cut-off on a working day has the value date today (exactly at the cut-off it is still today); after it, on a weekend or on a closed day (9 Nov 2026) the value date is the next working day and `afterCutoff` is true.
-- **Whitelist:** only whitelisted suppliers; one added by a Maker or an administrator waits for whitelisting (see `add-supplier`).
-- **Other context:** a personal context is refused by `WRONG_CONTEXT`. A user from Beta (Alex as Approver) is refused by `PERMISSION_DENIED`.
+`pay.create`. Code only from 25,000.00 USD equivalent. Person limit 250,000.00 per day (counts this person's payments today that are not rejected or withdrawn); company limit counted at release. Two approvers above 50,000.00. The USD equivalent is used for foreign-currency payments.
 
 #### 7. Result and links out
 
-- **Result:** `success` with payment id, status **Pending approval**, value date. Receipt: not issued until release (planned engine feature `receipts`); the person sees "Receipt available once it is released" on Payment detail. At release the receipt shows the rail's own reference (09 section 11) and the BankWorkx® reference `BWX-nnnnnn`.
-- **Tracker:** Payment detail and the tracker list show the **rail** ("Sent by Wire (Fedwire®)") and the amount **in the supplier's currency** ("EUR 11,300.00", with "USD 12,203.02" beneath). The tracker shell's current columns do not have a Rail column yet; adding one is a small change to the shell (not part of this journey).
-- **Notifications raised:** to every user holding `biz.approvals.approve` at the company (`dana`, `lee`): "Payment awaiting your approval, Alpha Trading LLC. {amount in supplier currency} to {supplier}, started by {name}." (deep link: switch context, then `approve-payments`, `{companyId, paymentId}`). To Alex: none on start.
-- **Buttons:** Track payment (Payments › tracker › Payment detail), Save as template (`payment-template`), Pay another supplier, Done. "Go to approvals" is shown only when the person also holds `biz.approvals.approve`; Alex does not at Alpha.
-- **M1 combined demo:** this journey is the first half. Alex at Alpha starts a payment to Harbour Packaging (US, ACH), sees it Pending approval, cannot approve it (no permission, and `SELF_APPROVAL` as well), switches to Beta (with step-up) and approves **Priya's** payment there with `approve-payments`. At Beta the Pay a supplier card is not shown, because Alex has no `biz.payments.initiate` there.
+The payment is recorded as waiting (id `PAY-n`, "Today 10:42"), so it shows in Payments and in the Approvers' inbox. Notification (planned): "Payment awaiting your approval" to the approvers. Links: Track payment (Payments tab, that payment), Pay another supplier (this journey), `add-supplier`.
 
 #### 8. Acceptance criteria
 
-- **AC-1** The acting person comes from the active context. The journey has no "who" screen, and a call that names a different user is refused (`PERMISSION_DENIED`).
-- **AC-2** Only a context with `biz.payments.initiate` can start a payment; an Approver (Alex at Beta) is refused with "Your role doesn't allow this" and the launch point is hidden.
-- **AC-3** Only a whitelisted supplier can be paid. The Payee screen lists only saved, whitelisted suppliers (name, region, country, masked account, chip "Whitelisted"), has no form for a new payee, and its "Add supplier" link says an administrator whitelists new suppliers. A supplier waiting for whitelisting, or not on the list, is refused (`BENEFICIARY_NOT_WHITELISTED`) and no money moves.
-- **AC-4** United States: a supplier in the US is paid by ACH by default, with same-day ACH, instant (RTP®/FedNow®) and wire as other speeds; the memo allows up to 80 characters; the receipt names the rail reference (09 section 11).
-- **AC-5** Europe: a supplier with a SEPA IBAN is paid in EUR by SEPA Credit Transfer by default, or SEPA Instant; the person types the euro amount the supplier receives and sees the conversion, rate and total in USD; the reference allows up to 140 characters.
-- **AC-6** United Kingdom: a UK supplier is paid in GBP by Faster Payments by default, or CHAPS or Bacs; the reference allows up to 18 characters.
-- **AC-7** Middle East: a supplier in the UAE (or Saudi Arabia, or Jordan) is paid in its local currency by the instant rail by default, or the same-day rail; purpose is required.
-- **AC-8** SWIFT: where the company has a supplier in a SWIFT country, the payment goes by SWIFT, the person chooses who pays the charges, and `OUR` adds USD 15.00 to **You pay**.
-- **AC-9** The person types what the supplier receives, in the supplier's currency. The summary shows rate, converted USD amount, fee, **You pay** and arrival. A payment to a USD supplier shows no rate.
-- **AC-10** The daily limit and the company limit are tested on the USD amount after conversion (`LIMIT_USER_EXCEEDED`, `LIMIT_COMPANY_EXCEEDED`), and the remaining limit is shown in USD.
-- **AC-11** An amount above a rail's maximum cannot be sent on that rail (`RAIL_LIMIT`), and the default rail moves to the first rail that fits.
-- **AC-12** When a rail is down the screen says "Not available right now" and offers another rail; forcing it gives `RAIL_NOT_AVAILABLE`.
-- **AC-13** A payment started after the rail's effective cut-off, on a weekend or on 9 Nov 2026 goes out on the next working day, and the person is told so. Instant rails ignore cut-offs.
-- **AC-14** The rate is held for 60 seconds; a review left open longer asks the person to accept the new amount (`QUOTE_EXPIRED`).
-- **AC-15** Purpose and the invoice or PO number are always required (`PURPOSE_REQUIRED`); Review stays disabled until both are given.
-- **AC-16** Not enough money for **You pay** is refused with both numbers, and an account in a currency other than USD is refused, each with "No money has left your account".
-- **AC-17** The USD amount decides the approvers: above 50,000.00 two different approvers, 50,000.00 exactly one, whatever the supplier's currency.
-- **AC-18** From USD 25,000.00 the person authorises with a code that names the amount and supplier; below 25,000.00 no code is asked. A code is void if the amount or supplier changes, and three wrong codes stop the payment (`STEP_UP_FAILED`).
-- **AC-19** Starting a payment moves no money: the balance is unchanged, and the result shows **Pending approval** with the approvers named and a Track payment button.
-- **AC-20** A payment cannot be sent without the confirmation.
-- **AC-21** A supplier whitelisted less than 24 hours ago can receive at most USD 500.00 in 24 hours (`BENEFICIARY_COOLING_OFF`).
-- **AC-22** Choosing "Later" hands over to `schedule-business-payment` with the details filled in; nothing is started today.
-- **AC-23** A personal context cannot start a company payment (`WRONG_CONTEXT`).
-- **AC-24** When the bank times out or is unavailable, nothing is started and the person is told what to do next.
-- **AC-25** After success the person can follow the payment in the tracker, where it shows Pending approval with a timeline, the rail, and the amount in the supplier's currency.
+- AC-1: Only saved suppliers can be chosen; a new supplier is requested through `add-supplier`.
+- AC-2: The speed cards come from the supplier's region; a speed whose limit is below the amount is dimmed and cannot be chosen.
+- AC-3: Reference and Purpose are required before Review.
+- AC-4: An amount above the balance or above the person's daily limit is refused with the message of section 4.
+- AC-5: Below 25,000.00 USD equivalent no code is asked; from it the code sheet names the amount and the supplier.
+- AC-6: Two approvals are needed above 50,000.00 USD equivalent, one otherwise, and the review and the receipt say so.
+- AC-7: The result is "Sent for approval" with a waiting chip and no money moves.
+- AC-8: A timeout shows the check-Payments message and creates no payment; an unavailable bank shows the sheet and creates no payment.
 
 #### 9. Scenarios
 
-Persona `alpha` is Alex Morgan as Maker at Alpha Trading LLC (planned). `now` is `2026-11-03T10:00:00Z` (Tuesday, before every cut-off) unless stated. Rates are the fixed table of 09 section 5 (EUR 0.926, GBP 0.781, AED 3.672, JPY 151.0). Suppliers (Alpha): `sup_harbour` Harbour Packaging (US), `sup_nordic` Nordic Supplies AB (Europe), `sup_whitby` Whitby Logistics (UK), `sup_gulf` Gulf Trade FZE (UAE); a planned variant persona `alpha-swift` adds `sup_tanaka` Tanaka Metals KK (Japan, BIC BOTKJPJT, JPY). Every scenario that moves nothing also checks the Operating balance with `expectBank` (`corp.company.get`, `accounts.alpha_ops.balance`, 250,000).
-
-| Id | Name | Covers | Persona, setup, conditions | Outcome |
+| # | Persona and setup | Steps | Expected | Covers |
 |---|---|---|---|---|
-| T-1 | US happy path, default rail | AC-1, AC-4, AC-19, AC-25 | `alpha`; Harbour Packaging, USD 12,500.00, ACH, purpose Goods or services, ref INV-1001 | No `who` screen; no code asked; `success` "Pending approval", "waiting for 1 approver: Dana Cruz or Lee Park"; Operating still 250,000.00; the tracker lists it as Pending approval with rail "ACH (standard)" and USD 12,500.00 |
-| T-2 | Europe happy path | AC-5, AC-9 | `alpha`; Nordic Supplies AB, EUR 11,300.00, default rail | Default rail SEPA Credit Transfer; summary: rate 0.926, converted USD 12,203.02, fee 0.00, **You pay** USD 12,203.02; `success`; tracker shows "SEPA Credit Transfer" and EUR 11,300.00; balance unchanged |
-| T-3 | UK happy path | AC-6, AC-9 | `alpha`; Whitby Logistics, GBP 5,000.00, reference of 19 characters typed | Default rail Faster Payments; the reference field stops at 18 characters; **You pay** USD 6,402.05; `success` |
-| T-4 | Middle East happy path | AC-7, AC-9 | `alpha`; Gulf Trade FZE, AED 18,360.00 | Default rail Aani; fee 0.50; converted USD 5,000.00; **You pay** USD 5,000.50; purpose chosen; `success` |
-| T-5 | SWIFT with charges | AC-8 | `alpha-swift`; Tanaka Metals KK, JPY 1,510,000, charges "I pay all" | Rail SWIFT; converted USD 10,000.00; fee 25.00 plus 15.00; **You pay** USD 10,040.00; the review shows "Charges: I pay all"; `success` |
-| T-6 | A different user in the request is refused | AC-1 | `alpha`; call `corp.payments.create` with `userId: "dana"` | `PERMISSION_DENIED`; nothing started |
-| T-7 | An Approver cannot start a payment | AC-2 | persona `beta-alex` (Approver at Beta) opens the journey by deep link | `denied` with "Your role doesn't allow this. Ask an administrator at Beta Services Ltd."; the hub shows no Pay a supplier card |
-| T-8 | Only whitelisted suppliers are listed | AC-3 | `alpha`; open `payee` | Lists Harbour Packaging, Nordic Supplies AB, Whitby Logistics, Gulf Trade FZE, each with region, country, masked account and chip "Whitelisted"; Cedar Tools greyed "Waiting for whitelisting"; no new-payee form; link "Add supplier" shows "New suppliers are added and whitelisted by a company administrator." |
-| T-9 | A supplier that is not whitelisted is refused | AC-3 | `alpha`; supplier `sup_cedar` forced by deep link | `failed` with "This supplier isn't on Alpha Trading LLC's whitelist" and "No money has left your account" |
-| T-10 | Over the personal limit, tested in USD | AC-10 | `alpha`; Nordic Supplies AB, EUR 231,500.01 (USD 250,000.01) | Amount field shows "That is above your daily limit of USD 250,000.00."; EUR 231,500.00 (exactly USD 250,000.00) passes; calling the adapter with the first gives `LIMIT_USER_EXCEEDED` |
-| T-11 | Remaining limit shrinks | AC-10 | `alpha`; setup: USD 215,000.00 already started today by Alex; then Whitby GBP 27,000.00 (USD 34,571.31), then GBP 30,000.00 (USD 38,412.29) | helper shows "Limit left today: USD 35,000.00"; the first amount passes; the second is refused with "That is above your daily limit of USD 250,000.00. You have USD 35,000.00 left today." |
-| T-12 | Over the company limit | AC-10 | persona `alpha-near-limit` (planned variant: `companyUsedToday` 995,000.00); Harbour, USD 6,000.00 | `failed`: "This is above Alpha Trading LLC's daily limit"; balance unchanged |
-| T-13 | Rail limit moves the default | AC-11 | `alpha`; Harbour, USD 60,000.00 | ACH dimmed with "limit $25,000.00"; default rail Same-day ACH; **You pay** USD 60,001.00; forcing ACH gives `RAIL_LIMIT` "That's over the ACH (standard) limit of $25,000.00. Choose another way to send it." |
-| T-14 | Instant rail unavailable | AC-12 | `alpha`; conditions `unavailable: ["rail:sinst"]`; Nordic, EUR 5,000.00 | SEPA Instant shows "Not available right now"; SEPA Credit Transfer is offered and chosen; forcing SEPA Instant gives `RAIL_NOT_AVAILABLE` |
-| T-15 | Before the cut-off, today | AC-13 | `alpha`; `now` 2026-11-03T15:59:00Z; Harbour, ACH | value date 2026-11-03; no after-cut-off alert |
-| T-16 | After the cut-off, next working day | AC-13 | `now` 2026-11-03T17:00:00Z; Harbour, ACH | value date 2026-11-04; alert "It was started after the cut-off, so it goes out on 2026-11-04." |
-| T-17 | Friday after the cut-off skips the weekend and the closed Monday | AC-13 | `now` 2026-11-06T17:00:00Z; Harbour, ACH | value date 2026-11-10 |
-| T-18 | A rail with an earlier cut-off | AC-13 | `now` 2026-11-03T14:30:00Z; Nordic, SEPA Credit Transfer (effective cut-off 14:00 UTC) | review: "Goes out on 4 Nov 2026: after the 14:00 UTC cut-off."; the same payment on Faster Payments to Whitby shows value date today |
-| T-19 | An instant rail ignores the cut-off | AC-13 | `now` 2026-11-03T17:00:00Z; Gulf Trade, Aani, AED 18,360.00 | value date 2026-11-03; no after-cut-off alert |
-| T-20 | Quote expires | AC-14 | `alpha`; Whitby, GBP 5,000.00; `now` advanced 61 seconds after the amount screen opened | `review` shows "The exchange rate changed. Check the new amount."; "Submit for approval" disabled until "Accept new rate"; calling create with the old quote gives `QUOTE_EXPIRED`; nothing started |
-| T-21 | Purpose and reference required | AC-15 | `alpha`; Harbour, amount typed, purpose empty, then reference empty | "Choose a purpose for this payment." (`PURPOSE_REQUIRED` from the adapter); "Enter the invoice or PO number."; Continue stays disabled |
-| T-22 | Wrong currency account | AC-16 | `alpha`; account Reserve ••6101 (EUR) forced | `failed`: "Payments are limited in USD. Choose a USD account. No money has left your account." |
-| T-23 | Not enough money for You pay | AC-16 | persona `alpha-low-balance` (planned variant: Operating 5,000.00); Harbour, USD 5,000.00 on wire (fee 25.00) | `failed`: "There isn't enough money in Operating ••2001: you'd pay USD 5,025.00 and USD 5,000.00 is available." |
-| T-24 | Two approvers by USD equivalent | AC-17, AC-18 | `alpha`; Whitby, GBP 40,000.00 (USD 51,216.39) | Review: "2 approvers: Dana Cruz and Lee Park"; `authorise` appears; `success` says "waiting for 2 approvers" |
-| T-25 | At the threshold, one approver | AC-17 | `alpha`; Nordic, EUR 46,300.00 (exactly USD 50,000.00) | "1 approver"; extra check still asked (above 25,000.00) |
-| T-26 | Extra check starts at 25,000 | AC-18 | `alpha`; Harbour, ACH, USD 24,999.99, then USD 25,000.00 | the first goes straight to `success` with no code; the second shows `authorise` "Authorise USD 25,000.00 to Harbour Packaging" |
-| T-27 | Code is tied to the payment | AC-18 | `alpha`; code requested for USD 30,000.00; person goes Back and changes the amount, then enters the old code | `STEP_UP_FAILED`; no payment; "The payment changed, so that code no longer works. Start again." |
-| T-28 | Short code and three wrong codes | AC-18 | `alpha`; USD 30,000.00; code `123`, then `999999` three times | "Enter the 6-digit code."; then `failed` with "Too many wrong codes. Start again." (`STEP_UP_FAILED`); balance unchanged; no payment listed |
-| T-29 | Without the confirmation | AC-20 | `alpha`; press "Submit for approval" without ticking | stays on `review`; error "Tick the confirmation first." |
-| T-30 | New supplier cooling-off | AC-21 | `alpha`; setup: Nordic whitelisted 2 hours ago; EUR 463.00 (USD 500.00), then EUR 464.00 (USD 501.08) | the first passes; the second fails with `BENEFICIARY_COOLING_OFF` and "up to USD 500.00 in 24 hours" |
-| T-31 | Later hands over to the schedule journey | AC-22 | `alpha`; Harbour, USD 12,500.00, "Later", date 2026-11-12, Doesn't repeat | The journey opens `schedule-business-payment` at `review` with the details filled in; no payment exists; the date picker had 9 Nov 2026 disabled |
-| T-32 | Personal context | AC-23 | persona `alex` with the **personal** context active; call `corp.payments.create` | `WRONG_CONTEXT`; message "This belongs to your Business banking. Switch to Business to continue." |
-| T-33 | **Timeout** on starting | AC-24 | `alpha`; conditions `timeout: ["corp.payments.create"]`, `latencyMs: 10000` | `unavailable` with the TIMEOUT text; no payment in the tracker; balance unchanged |
-| T-34 | **Unavailable** | AC-24 | `alpha`; conditions `unavailable: ["corp.company.get"]` | `unavailable` with "This service is not available right now. Nothing was changed."; button "Try again" |
-| T-35 | Held for review | AC-19 | `alpha`; supplier name "Test Sanctions" (planned variant seed); USD 1,000.00 | Status "Held for review" with "We're checking this payment and will tell you within one working day."; no approver notified; balance unchanged |
-| T-36 | M1 combined demo (first half) | AC-2, AC-19, AC-25 | persona `alex`; start at Alpha (Harbour Packaging, USD 12,500.00 by ACH), then switch to Beta | At Alpha the payment is Pending approval; at Beta the Approvals inbox lists Priya's payment and **not** Alpha's; the Beta hub has no Pay a supplier card |
+| T-1 | Alex at Alpha | Harbour Packaging, 12,500.00, Standard, INV-1042, Goods; send | No code; "Sent for approval"; chip "Waiting for 1 approval"; balance unchanged | AC-1, AC-3, AC-5, AC-7 |
+| T-2 | Alex at Alpha | Nordic Supplies AB, 30,000.00 EUR | Rate row shown; code sheet "Authorise €30,000.00 to Nordic Supplies AB"; code 482100; waiting | AC-5 |
+| T-3 | Alex at Alpha | Harbour Packaging, 60,000.00 | Standard is dimmed "Over the limit" and Same day is chosen; "Needs 2 approvals" on review and receipt | AC-2, AC-6 |
+| T-4 | Alex at Alpha | Amount above every speed limit the bank sets | The message "That is over the limit for this payment. Try a smaller amount." | AC-2 |
+| T-5 | Alex at Alpha | Amount 600,000.00 | "Not enough in Operating. Available: …" | AC-4 |
+| T-6 | Alex at Alpha, 240,000.00 sent earlier today | Another 20,000.00 | "That is over your limit of $250,000.00 a day." | AC-4 |
+| T-7 | Alex at Alpha | Leave Reference or Purpose empty | Review stays disabled | AC-3 |
+| T-8 | Alex at Alpha, wrong code three times | Code sheet | "We couldn’t confirm this payment. Nothing was sent. Start again."; no payment | AC-5 |
+| T-9 | Timeout on submit | Review | Banner "Check Payments before you try again, so you don’t pay twice."; no payment | AC-8 |
+| T-10 | Bank unavailable | Review | Sheet "We couldn’t reach the bank"; no payment | AC-8 |
+| T-11 | Alex at Beta | Open Payments | No Pay a supplier button | AC-1 |
 
 #### 10. Expected mutation-check survivors
 
-| Survivor | Reason |
-|---|---|
-| `flaws.companyLimit` off | Only killed because of the near-limit variant in T-12. Without that variant the company limit (1,000,000) is above the sum of every Maker's limit (250,000), so the sandbox cannot produce it, the same reason as in `scenarios.test.ts` for Acme. |
-| `flaws.roles` off | Killed by T-7 (check 3), unless a second layer (the permission check) stops the Approver first. Then the role rule is a survivor with that reason: the `PERMISSION_DENIED` layer already stops the case. |
-| `flaws.dualApproval` off | Killed by T-24 and T-25. |
-| `flaws.cutoff` off | Killed by T-16, T-17 and T-18. |
-| The text of each message | Tests check the code, not the words (09 section 15). |
-| The rates and the specific rail fees | Tests use the fixed table of 09 sections 2 and 5; changing a rate in the table changes the expected numbers in the same commit. |
-| The order of rails inside a region | Only the default rail is asserted. |
-| The `stepper` block label change | Cosmetic; no scenario depends on step labels. |
-| Region holiday lists other than 9 Nov 2026 and weekends | No scenario relies on them here; they are proved in `schedule-business-payment`. |
+- Changing the 25,000 or 50,000 constants by one cent: survives, because the sandbox amounts in T-1 to T-3 are far from the edge (an edge scenario at exactly 25,000.00 is planned).
+- Changing the pay-date list length (30 days): survives, the list is not asserted.
+- Removing the "#" from the reference pattern: survives, no scenario types it.
+- Swapping the order of the speed cards: survives, only the chosen speed is asserted.
 
 ---
 
 ### ★ Add a supplier — `add-supplier`
+
+**Catalog**: slug `add-supplier`, workspace business, category Payments, core no, a bank can switch it off (yes). Options (all on by default): `allowAbroad` "Allow suppliers with a bank in another country"; `nameCheck` "Run the name check where the market has one"; `newCap` "Cap payments to a supplier in its first 24 hours"; `allowPerson` "Allow a supplier who is a person". Permission `pay.create`; moves no money, but asks for the code. Prototype file `design/bankworkx-r1/src/journeys/70-add-supplier.js`: a normal engine journey (`JR.define`, four steps, the address step only for a bank in another country). It reuses the payee form, the checks and the name check of Send money (`personal-transfer`, `32-personal-transfer.js`).
+
+> The screens never name a country or a payment scheme. What changes with the bank's home market is only the bank-detail fields and the checks (section 1, Home market configuration). A supplier is asked for here, not added: an administrator approves it first.
 
 #### 1. Summary
 
 | | |
 |---|---|
 | Slug | `add-supplier` |
-| Purpose | Add a supplier in the United States, Europe, the United Kingdom, the Middle East or a SWIFT country to the company's list. The supplier's account is checked, the name is checked against the bank's registry, and the supplier cannot be paid until a company administrator whitelists them. A newly whitelisted supplier has a 24-hour cooling-off limit. |
+| Purpose | A Maker asks to add a supplier to the company's list. An administrator approves the request before the supplier can be paid. |
 | Release | 1 |
-| Workspace | Business |
-| Status | **New (planned).** No fixture exists. The sandbox has a fixed whitelist today (`CorporateSandbox.whitelist` in `packages/mock-bank-api/src/corporate.ts`); this journey needs `corp.suppliers.*`, `bank.payees.validate` and `bank.payees.check` (all planned, 09 section 13). |
+| Workspace | Business (planned field `workspace: "business"`) |
+| Status | Built in the prototype. No company-supplier adapter exists in the sandbox yet (section 5). |
 | Channels | web, mobile |
-| Starting pattern | The `beneficiaryPicker` block with `allowAddNew` and `addNewJourney`; the add-payee flow of Personal (`manage-beneficiary`) for the field list; the region fields, validation and name check of `09-payment-rails.md` (called "09" below). |
-| Who may use it | `biz.suppliers.manage` (Maker; Admin by policy) to add or edit. Whitelisting is done by a company administrator (permission `biz.suppliers.whitelist`, planned; Admin only). A person never whitelists a supplier they added themselves. |
+| Who may use it | The context holds `pay.create`. At Alpha Trading LLC: Alex Morgan (Maker). Not offered to Approvers (Alex at Beta): the buttons are hidden. |
+| Seed | Alpha suppliers: Harbour Packaging, Nordic Supplies AB, Whitby Logistics, Gulf Trade FZE. Sample values in the Autofill: supplier name "Brightline Packaging", address "12 Harbour Road", "Springfield", "10001". |
+
+**Home market configuration** (the fields come from the bank's home market; abroad, from the country the Maker picks):
+
+| Market | Bank details asked | Checks | Name check | Saved account shown as |
+|---|---|---|---|---|
+| Market A (routing number and account) | Routing number (9 digits), Account number (4 to 17 digits), Account type: Checking or Savings | routing number check digit | none | "{routing number} · ••{last 4}" |
+| Market B (sort code and account) | Sort code (like 20-00-00), Account number (8 digits), Account type: Personal or Business | six digits, eight digits | yes, also catches a wrong account type | "{sort code} · ••{last 4}" |
+| Market C (IBAN) | IBAN | IBAN check, and the IBAN must be inside the payment area | yes | "DE89 •••• 3000" (first 4, last 4) |
+| Market D (IBAN, mobile alias) | IBAN | IBAN check, and the IBAN must be a home-market one | yes | first 4, last 4 |
+
+A bank in another country asks for: Country, then IBAN (countries that use one) or Account number, a Bank code (only for countries that have one; its label, hint and rule come from the country) and SWIFT / BIC code. It is shown as "{BIC} · ••{last 4}". The countries listed leave out the home country.
 
 #### 2. Entry points
 
 | Place › label | Passes | Permission |
 |---|---|---|
-| Payments › suppliers › Add / Edit | `{supplierId}` optional | `biz.suppliers.manage` |
-| Payments › hub › Add a supplier card | none | `biz.suppliers.manage` |
-| `supplier-payment` › "Add supplier" (information sheet) › Add a supplier | none; opens with `returnTo` | `biz.suppliers.manage` |
-| `payment-template` › "Add a new supplier" | none; opens with `returnTo` | `biz.suppliers.manage` |
+| Payments › Suppliers › Add supplier | none | `pay.create` |
+| Pay a supplier › Choose supplier › Request a new supplier (`supplier-payment`) | none | `pay.create` |
+| Payment template › Choose supplier, empty list › Add a supplier (`payment-template`) | none | `pay.create` |
 
-With `{supplierId}` the journey opens in **edit** mode: the region cannot change, the account number is shown masked and cannot be viewed (09 section 3 masks), and changing the account number or the name sends the supplier back to "Waiting for whitelisting", runs the name check again (09 section 4) and restarts the cooling-off clock when they are whitelisted again.
+No parameters. Editing a supplier is not in the prototype (planned).
 
 #### 3. Screens
 
-Screen ids: `region`, `details`, `check`, `review`, `otp`, `success`, `failed`, `unavailable`, `denied`, `wrongContext`.
+Progress text "Step n of 4 · Add a supplier" (n of 3 for a bank in the same country). Each screen has **Back** (the first has **Cancel**). A step that calls the bank shows a spinner and the busy text.
 
-**Screen `region` — "Add a supplier"**
-Blocks: `text`, `select` (tiles), `button`. Field `sup.region`: tiles "United States" (hint "ACH, same-day ACH, instant, wire"), "Europe (SEPA)" (hint "Euro payments, IBAN"), "United Kingdom" (hint "Faster Payments, CHAPS, Bacs"), "Middle East" (hint "UAE, Saudi Arabia, Jordan"), "Other countries (SWIFT)" (hint "Canada, India, Japan, Australia"). Required. Message: "Choose where the supplier is." Button "Continue" goes to `details`. "Cancel" exits.
+**Step 1: New supplier**. Button **Continue**.
 
-**Screen `details` — "Supplier details"**
-
-Fields that every region has:
-
-| Field | Block | Required | Rule | Error message |
+| Field | Type | Required | Rule | Message |
 |---|---|---|---|---|
-| Name on the account (`sup.name`) | `textInput` | yes | 2 to 70 characters (09 section 3) | "Enter the name on the account." (`PAYEE_NAME_REQUIRED`) |
-| What do you usually pay them for? (`sup.purpose`) | `select` rows: Goods or services, Rent, Salary, Education, Savings or investment, Family support, Other (09 section 7) | yes | one of the list; becomes the default purpose on `supplier-payment` and can be changed per payment | "Choose the usual purpose of payments to this supplier." |
-| Contact email (`sup.email`) | `textInput` | no | a valid email if given | "Enter a valid email address." |
-| Note for the administrator (`sup.note`) | `textInput` (`lines: 3`) | no | up to 140 characters | "Keep it to 140 characters." |
+| Supplier name | text, max 70 | yes | 2 or more characters; letters, digits, space and `. , ' ’ & ( ) / -` | "Enter the supplier’s name." / "Use letters, numbers and spaces in the name." |
+| Type | chips Company, Person (shown when `allowPerson` is on) | no | default Company | none |
+| Their bank is | chips "In the same country", "In another country" (shown when `allowAbroad` is on) | no | default same country; changing it clears the bank fields | none |
 
-Fields that depend on the region (rules and messages are those of 09 section 3; the codes are the ones in 09 section 12):
+On Continue the journey refuses a name that is already on the list (any case) and a tenth waiting request (section 4).
 
-| Region | Fields | Rules | Errors |
-|---|---|---|---|
-| United States | Routing number (ABA) (`sup.rout`), Account number (`sup.account`), Account type (`sup.acctType`: Checking or Savings, default Checking) | 9 digits and the ABA checksum; 4 to 17 digits | `INVALID_ROUTING`: "That routing number isn't valid. Check the 9 digits."; `INVALID_ACCOUNT`: "An account number has 4 to 17 digits." |
-| Europe | IBAN (`sup.iban`) | letters and digits, mod-97 check equals 1, length matches the country, country in the SEPA list | `INVALID_IBAN`: "That IBAN doesn't look right. Check each character."; `NOT_SEPA`: "That IBAN isn't in the SEPA area. Use 'Other countries (SWIFT)'." |
-| United Kingdom | Sort code (`sup.sort`), Account number (`sup.account`) | 6 digits, dashes optional; 8 digits | `INVALID_SORT_CODE`: "A sort code has 6 digits, like 20-00-00."; `INVALID_ACCOUNT`: "A UK account number has 8 digits." |
-| Middle East | Country (`sup.country`: United Arab Emirates, Saudi Arabia, Jordan), IBAN (`sup.iban`) | the IBAN check, and the first two letters match the country (`AE` 23 characters, `SA` 24, `JO` 30) | `INVALID_IBAN`; `COUNTRY_MISMATCH`: "That IBAN starts with AE, but you chose Saudi Arabia." |
-| Other countries (SWIFT) | Country (`sup.country`: Canada, India, Japan, Australia), SWIFT/BIC (`sup.bic`), Account number or IBAN (`sup.account`) | BIC: 8 or 11 characters; account: 6 to 34 letters, digits, spaces or dashes | `INVALID_BIC`: "A SWIFT/BIC has 8 or 11 letters and numbers."; `INVALID_ACCOUNT`: "That account number looks too short or too long." |
+**Step 2: Bank details**. Busy text "Checking the details…" (about 0.6 s). Button **Continue**.
 
-Each field is checked while typing: an error shows once the field has a value, and an empty required field shows its message after the person presses Continue. When a field is valid and the bank is known, a green note shows below it, for example "✓ Valid IBAN · Commerzbank" or "✓ Valid sort code · Barclays". **Currency** (`sup.currency`) is not asked: it is fixed by the region and country (USD, EUR, GBP, AED, SAR, JOD, or CAD, INR, JPY, AUD for SWIFT) and shown read-only as "Payments to this supplier are in {currency}". **Bank name** (`sup.bank`) is filled in when known and shown read-only; when the bank is not known (SWIFT, or an unknown routing number) the field is a required `textInput` of 2 to 60 characters, message "Enter the bank's name."
+| Field | Type | Required | Rule | Message |
+|---|---|---|---|---|
+| Country | select, placeholder "Choose a country" (other country only) | yes | one of the list | field required |
+| Name on the account | text, max 70; starts as the supplier name | yes | as the supplier name | "Enter the name on the account." |
+| Routing number (Market A) | text, max 9, hint "9 digits" | yes | 9 digits, check digit | "That routing number isn’t valid. Check the 9 digits." |
+| Account number (Market A) | text, max 17 | yes | 4 to 17 digits | "An account number has 4 to 17 digits." |
+| Account type (Market A) | chips Checking, Savings | no | default Checking | none |
+| Sort code (Market B) | text, max 8, hint "20-00-00" | yes | 6 digits, dashes optional | "A sort code has 6 digits, like 20-00-00." |
+| Account number (Market B) | text, max 8, hint "8 digits" | yes | 8 digits | "An account number has 8 digits." |
+| Account type (Market B) | chips Personal, Business | no | default Business, or Personal when Type is Person | none |
+| IBAN (Markets C and D; and a country that uses one) | text, max 42 | yes | valid IBAN of the right length; Market C inside the payment area, Market D a home-market IBAN; abroad it must start with the chosen country | "That IBAN doesn’t look right. Check each character." / "That IBAN can’t be used for this payment." |
+| Account number (other country, no IBAN) | text, max 34 | yes | 6 to 34 letters, digits, space or dash (one country needs 18 digits) | "That account number looks too short or too long." / "An account number has 18 digits." |
+| Bank code (some countries) | text, max 14; label, hint and rule per country | yes | the country's pattern | the country's message |
+| SWIFT / BIC code (other country) | text, max 11, hint "8 or 11 characters" | yes | 4 letters, 2 letter country, 2 characters, optional 3 | "A SWIFT/BIC has 8 or 11 letters and numbers." / "That bank code doesn’t match the country." |
 
-Copy: title "Supplier details". Info alert: "A company administrator has to whitelist a new supplier before you can pay them." Buttons "Continue" (validate with `bank.payees.validate`, then `check`; disabled while any field has an error) and "Back".
+Name check box (same-country bank, in markets that have a name check, when `nameCheck` is on, once the identifier is valid and the name has 2 or more characters). It updates as the Maker types.
 
-**Screen `check` — "Check the name"**
-Blocks: `text`, `alert`, `button` (the "Use" button), `consent`, `button`. `onEnter`: `bank.payees.check`. The heading is the label of the region (09 section 4): "Verification of Payee" (Europe), "Confirmation of Payee" (United Kingdom), "Account name check" (United States), "Name check" (Middle East and SWIFT).
-
-| Result | What the person sees | Can the person continue? |
+| Result | Box | Extra |
 |---|---|---|
-| `match` | Green: "The name matches" | Yes |
-| `close` | Amber: "The registered name is {registeredName}. Check with the supplier." and a button "Use '{registeredName}'" that replaces the name and shows the green result | Yes, after ticking "I understand and want to continue" |
-| `none` | Red: "The name doesn't match. The money may go to the wrong person and might not be recoverable." | Yes, only after ticking the box |
-| `na` | Grey: "We couldn't check this name" | Yes, only after ticking the box |
+| Match | "The name matches" | none |
+| Close | "The name is close", "The account holder is {registered name}." | button **Use “{registered name}”** fills the name; tick **Add anyway** to continue |
+| Wrong type (Market B) | "Wrong type of account", "This is a {personal or business} account." | button **Switch to {type}**; or **Add anyway** |
+| No match | "The name doesn’t match", "The account is held by someone else." | tick **Add anyway** |
+| Not known | no box | none |
 
-Rules: the tick is saved on the supplier (`nameCheck: "none"`, `acknowledged: true`), is shown to the administrator who whitelists the supplier, and goes into the audit trail. There is no "Save this payee for next time" box: a supplier is always saved. If the name is edited later the check runs again. If the check cannot run (the check adapter is unavailable or times out) the result is `na`; the rest of the journey is unaffected. Without the tick the bank refuses to add the supplier (`PAYEE_NOT_CHECKED`: "Check the payee before you continue."). Buttons "Continue" (disabled until the result allows it) and "Back".
+Continue stays blocked with "Confirm to continue." until **Add anyway** is ticked for a close, wrong-type or no-match result. The step then refuses an account already on the list (section 4).
 
-**Screen `review` — "Review supplier"**
-`reviewSummary` rows: Name, Region and country, Currency, Bank, Account (masked, 09 section 3: `ABA 021000021 · ••8841`, `DE89 •••• 3000`, `20-00-00 · ••9911`, `AE07 •••• 3456`, `BOTKJPJT · ••7890`), Usual purpose, Name check (result and, if ticked, "You chose to continue"), Contact email, Note. `consent` (`sup.consent`): "I have checked these details with the supplier" (`mustBeTrue`, message "Tick the confirmation first."). Button "Confirm and send OTP" (sends code, to `otp`). "Edit" (back to `details`).
+**Step 3: Supplier address** (other country only). Button **Review**.
 
-**Screen `otp`** as `supplier-payment`'s authorise screen: the prompt names the change, "Authorise adding {name} to Alpha Trading LLC's suppliers" (dynamic linking, 09 section 9), and the code only works for this supplier. Button "Verify and add supplier". Changing the account or name after the code was sent voids it (`STEP_UP_FAILED`).
+| Field | Type | Required | Rule | Message |
+|---|---|---|---|---|
+| Street and number | text, max 70 | yes | letters, digits, space and `. , ' ’ # & ( ) / -` | "Enter the supplier’s street and number." / "Use letters, numbers and spaces." |
+| Town or city | text, max 35 (half width) | yes | as above | field required |
+| Postcode | text, max 16 (half width) | no | as above | "Use letters, numbers and spaces." |
 
-**Screen `success` — "Supplier added"**
-`result` success. Title "Sent for whitelisting". Text: "{name} is waiting for a company administrator to whitelist them. You can pay them once they are whitelisted. After that, the first 24 hours allow up to USD 500.00." Meta: "Supplier {id}". Status chip **Waiting for whitelisting**. Buttons "View suppliers" (Payments › suppliers), "Back to your payment" (only when opened with `returnTo`; returns to the origin journey, where the supplier is listed greyed out), "Add another", "Done".
+**Step 4: Review**. Button **Send for approval**.
 
-**Screens `failed`, `unavailable`, `denied`, `wrongContext`** as section 4.
+| Row | Value |
+|---|---|
+| Supplier | name |
+| Type | Company or Person (when `allowPerson` is on) |
+| Account name | only when it differs from the supplier name |
+| Country | other country only |
+| Account | masked, as in section 1 |
+| Address | street, town, postcode (other country only) |
+| Approval | "An administrator" |
+| First 24 hours | "Up to $5,000.00 a payment" (only when `newCap` is on) |
 
-States. Loading: spinner on buttons. Error: `failed` with "Nothing was changed."
+**Code prompt** (always asked, a keypad sheet). Title "Authorise adding {supplier} as a supplier". Line "Code sent to ••• 4410." The sandbox code is 482100.
 
-#### 4. Sandbox errors
+**Result** "Sent for approval", line "{supplier} can be paid once an administrator approves it.", amber chip "Waiting for an administrator". Receipt rows: Supplier, Account, Country (other country only), Approval, First 24 hours (when on); then the BankWorkx® reference. Buttons **View suppliers** (Payments › Suppliers), **Add another supplier**.
 
-Field errors use the messages in section 3 and stay on `details`. Codes from 09 section 12 keep the wording given there.
+#### 4. States and errors (codes are for tests; the person sees the message)
 
-| Code | What the person sees | Screen | Button |
+| Code | Message | Where | Button |
 |---|---|---|---|
-| `OTP_INVALID`, `OTP_REQUIRED` | Standard messages S-`OTP_INVALID`, S-`OTP_REQUIRED` (README 1.6) | `otp` / `failed` | Try again / Start again |
-| `STEP_UP_FAILED` | "Too many wrong codes. Start again." or, when the supplier changed after the code was sent, "The details changed, so that code no longer works. Start again." Nothing was added. | `failed` | Start again |
-| `INVALID_ROUTING`, `INVALID_ACCOUNT`, `INVALID_IBAN`, `NOT_SEPA`, `COUNTRY_MISMATCH`, `INVALID_SORT_CODE`, `INVALID_BIC`, `PAYEE_NAME_REQUIRED` | The field messages in section 3 | `details` | Edit details |
-| `PAYEE_NOT_CHECKED` | "Check the payee before you continue." | `check` | Back |
-| `SUPPLIER_EXISTS` (planned) | "You already have a supplier with this account: {name}. Nothing was changed." | `failed` | Edit details |
-| `COUNTRY_NOT_SUPPORTED` (planned) | "We can't pay suppliers in {country} yet. Nothing was changed." | `failed` | Edit details |
-| `SUPPLIER_LIMIT` (planned) | "You have reached 200 suppliers. Remove one to add another. Nothing was changed." | `failed` | View suppliers |
-| `NOT_AUTHORISED` | "Only a Maker can add a supplier. Nothing was changed." | `denied` | Close |
-| `PERMISSION_DENIED` (planned) | Standard message S-`PERMISSION_DENIED` | `denied` | Back |
-| `WRONG_CONTEXT` (planned) | Standard message S-`WRONG_CONTEXT` | `wrongContext` | Switch |
-| `STEP_UP_REQUIRED` (planned) | Standard message S-`STEP_UP_REQUIRED` | `otp` | Confirm |
-| `CORE_UNAVAILABLE` | "We couldn't complete this right now. Nothing was changed." | `failed` | Try again |
-| `TIMEOUT` (planned) | "This is taking longer than expected. Nothing was changed." | `unavailable` | Try again |
-| `SERVICE_UNAVAILABLE` (planned) | Standard message S-`SERVICE_UNAVAILABLE` | `unavailable` | Try again |
+| `SUPPLIER_NAME_EXISTS` | "You already have a supplier with this name." | step 1 banner | change the name |
+| `TOO_MANY_PENDING` | "You have 10 suppliers waiting for approval. Wait for an answer before you add more." | step 1 banner | Cancel |
+| `SUPPLIER_EXISTS` | "You already have a supplier with these bank details." | step 2 banner | change the details |
+| `ADDRESS_REQUIRED` | "We need the supplier’s address for a bank in another country." | defined; the address fields are required, so the form stops it first | fix |
+| `STEP_UP_FAILED` | "We couldn’t confirm this request. Nothing was sent. Start again." | code sheet | start again |
+| `TIMEOUT` | "We didn’t get an answer in time. Check Suppliers before you try again, so you don’t add it twice." | banner on step 2 | check Suppliers |
+| `SERVICE_UNAVAILABLE` | Sheet "We couldn’t reach the bank": "Nothing was sent and you haven’t been charged. Try again in a moment." (the app's shared sheet) | sheet on step 2 | Try again / Cancel |
 
-For the whitelisting step (not part of this journey, see the adapters): `SELF_APPROVAL` "You can't whitelist a supplier you added.", `PERMISSION_DENIED` for a person without `biz.suppliers.whitelist`, and after a decline a later payment gets `BENEFICIARY_NOT_WHITELISTED` (`supplier-payment`).
+Loading: the spinner on step 2 (about 0.6 s). The check on the account runs only on that step, so a timeout or an unavailable bank shows there; after the code the request is saved at once. Empty: none. The 24-hour cap shows on the review and the receipt only; paying is not stopped by it yet (planned, section 7).
 
 #### 5. Adapters
 
-| Integration id | Adapter | Request | Response | Error codes | Status |
-|---|---|---|---|---|---|
-| `validate` | `bank.payees.validate` | `{ region, country?, name, rout?, account?, sort?, iban?, bic? }` | per-field errors and `{ bankName?, valid }` | the field codes of 09 section 12 | **(planned)** |
-| `check` | `bank.payees.check` | `{ region, name, iban? , sort?, account?, rout? }` | `{ result: "match" \| "close" \| "none" \| "na", registeredName? }` | `TIMEOUT`, `SERVICE_UNAVAILABLE` (the journey treats both as `na`). `moneyMoving: false`, `requiresOtp: false` | **(planned)** |
-| `addSupplier` | `corp.suppliers.add` | `{ region, country?, name, purpose, rout?, account?, acctType?, sort?, iban?, bic?, bank?, email?, note?, nameCheck, acknowledged }` | `{ id, name, region, country, currency, status: "waiting_approval", maskedNumber, nameCheck, addedBy, addedAt }` | `OTP_REQUIRED`, `STEP_UP_FAILED`, `PAYEE_NOT_CHECKED`, the field codes, `SUPPLIER_EXISTS`, `COUNTRY_NOT_SUPPORTED`, `SUPPLIER_LIMIT`, `NOT_AUTHORISED`, `PERMISSION_DENIED`, `WRONG_CONTEXT`, `STEP_UP_REQUIRED`, `CORE_UNAVAILABLE`, `TIMEOUT`, `SERVICE_UNAVAILABLE`. `moneyMoving: false`, `requiresOtp: true` (it changes who the company can pay) | **(planned)** |
-| `updateSupplier` | `corp.suppliers.update` | `{ supplierId, ...fields }` | the supplier; changing name or account returns `status: "waiting_approval"` and a new `nameCheck` | as above plus `SUPPLIER_NOT_FOUND` | **(planned)** |
-| `suppliers` | `corp.suppliers.list` | `{ status? }` | `{ items }` (adds `region`, `country`, `purpose`, `whitelistedAt`) | `PERMISSION_DENIED`, `TIMEOUT`, `SERVICE_UNAVAILABLE` | **(planned)** |
-| `otpSend`, `otpVerify` | `bank.otp.send`, `bank.otp.verify` | as `supplier-payment` | as `supplier-payment` | `OTP_INVALID` | Existing |
-
-An administrator whitelists or declines a supplier with `corp.suppliers.decide` (planned; request `{ supplierId, decision: "approve" \| "decline", reason? }`; permission `biz.suppliers.whitelist`; same-person rule as payments: the person who added a supplier cannot whitelist them, `SELF_APPROVAL`). On approve the supplier gets `status: "approved"` and `whitelistedAt`; on decline `status: "disabled"` with the reason. That action belongs to the Approvals inbox (item type "Supplier") and to Payments › suppliers; see open questions.
-
-**Cooling-off rule.** From `whitelistedAt`, a supplier can receive at most USD 500.00 in 24 hours (`BENEFICIARY_COOLING_OFF`, enforced by `supplier-payment`, 09 section 10). The supplier row shows an amber chip "New: up to USD 500.00 in 24 hours" until the 24 hours pass.
+| Integration | Adapter | Status |
+|---|---|---|
+| Check the account details (routing number, sort code, IBAN, SWIFT / BIC, no second copy) | `bank.payees.validate` | Existing, `packages/mock-bank-api/src/payees.ts` (the prototype checks in the page) |
+| Name check | `bank.payees.check` (returns match, close, none or na; errors `TIMEOUT`, `SERVICE_UNAVAILABLE`) | Existing |
+| Ask for the supplier, list requests | `corp.suppliers.request`, `corp.suppliers.list` | (planned) |
+| Approve or reject a request | `corp.suppliers.approve`, `corp.suppliers.reject` (administrator) | (planned) |
+| Company list used by Pay a supplier | `corp.company.get` (fixed list `CorporateSandbox.whitelist`, error `BENEFICIARY_NOT_WHITELISTED`) | Existing, `packages/mock-bank-api/src/corporate.ts` |
 
 #### 6. Permissions, step-up and limits
 
-`biz.suppliers.manage` to add or edit; `biz.suppliers.whitelist` (planned, Admin) to whitelist or decline. Step-up `otp` with dynamic linking. No amount limits on adding. At most 200 suppliers per company. Duplicate test: the same routing and account (US), the same IBAN (Europe, Middle East), the same sort code and account (UK) or the same BIC and account (SWIFT). A SWIFT country outside Canada, India, Japan and Australia is refused (`COUNTRY_NOT_SUPPORTED`).
+`pay.create`. A code is always asked. At most 10 requests wait at once. A person never approves a supplier they asked for (administrator action, planned). The request is stored with the status "waiting", the asker and an audit line "Asked to add supplier {name}".
 
 #### 7. Result and links out
 
-Result `success` as above. Receipt: none. Notifications: to every administrator (users holding `biz.suppliers.whitelist`) "Supplier awaiting whitelisting, Alpha Trading LLC. {name}, added by {name}." When whitelisted: to the Maker "{name} was whitelisted. You can pay them now (up to USD 500.00 in the first 24 hours)." When declined: to the Maker "{name} was not whitelisted. {reason}". Links: View suppliers, the origin journey via `returnTo`, Done.
+The supplier is added to the company list marked waiting, with age 0 hours. Notification (planned): "A supplier is waiting for your approval" to the administrator. Links: View suppliers, Add another supplier. The administrator's approve and reject (`ASUP.approve`, `ASUP.reject` in the file) are not wired to the Admin tab yet (planned). When approved the supplier can be chosen in Pay a supplier, Payment templates and Schedule a supplier payment; a waiting one is refused there with `SUPPLIER_NOT_APPROVED`. Under 24 hours old, a payment to it is capped at 5,000.00 when `newCap` is on (cap enforcement in Pay a supplier is planned).
 
 #### 8. Acceptance criteria
 
-- **AC-1** Only a context with `biz.suppliers.manage` can add a supplier; others (an Approver at Beta) are refused.
-- **AC-2** The fields depend on the region (09 section 3): United States, Europe, United Kingdom, Middle East and SWIFT each ask for their own fields, and the currency is fixed by the region and country.
-- **AC-3** Bad account details are refused with the field's own code and message, and Continue stays disabled: `INVALID_ROUTING`, `INVALID_ACCOUNT`, `INVALID_IBAN`, `NOT_SEPA`, `COUNTRY_MISMATCH`, `INVALID_SORT_CODE`, `INVALID_BIC`.
-- **AC-4** The name is checked when a supplier is added: `match` continues; `close` shows the registered name and a button to use it; `none` and `na` need the person to tick the box; the tick is saved on the supplier.
-- **AC-5** The check label follows the region (Verification of Payee, Confirmation of Payee, Account name check, Name check), and a check that cannot run counts as `na`.
-- **AC-6** A usual purpose is required for every supplier and becomes the default purpose for payments.
-- **AC-7** A new supplier is created as "Waiting for whitelisting" and cannot be paid until a company administrator whitelists them (`BENEFICIARY_NOT_WHITELISTED`).
-- **AC-8** A supplier with the same account as an existing one is refused.
-- **AC-9** The person who added a supplier cannot whitelist them (`SELF_APPROVAL`), and a person without `biz.suppliers.whitelist` cannot whitelist anyone.
-- **AC-10** A declined supplier cannot be paid.
-- **AC-11** A whitelisted supplier can receive at most USD 500.00 in the first 24 hours (cooling-off).
-- **AC-12** Changing the name or the account of a supplier sends it back to "Waiting for whitelisting", runs the name check again and restarts the cooling-off clock.
-- **AC-13** The supplier is not added without the confirmation and a correct six-digit code that names the supplier; three wrong codes, or a change after the code was sent, stop it (`STEP_UP_FAILED`).
-- **AC-14** Opened from `supplier-payment`, the journey returns to the payment with the supplier listed but not selectable.
-- **AC-15** When the bank times out or is unavailable, nothing is added and the person is told so.
+- AC-1: Only a Maker with `pay.create` can start it.
+- AC-2: The bank-detail fields and checks follow the bank's home market; a bank in another country asks for country, account, SWIFT / BIC and an address.
+- AC-3: A name already on the list, an account already on the list and a tenth waiting request are refused with the messages of section 4.
+- AC-4: Where the market has a name check, a close, wrong-type or no-match result needs **Add anyway** before Continue.
+- AC-5: A code is always asked, naming the supplier.
+- AC-6: The result is "Sent for approval" with a waiting chip; the supplier cannot be paid yet.
+- AC-7: A timeout shows the check-Suppliers message and an unavailable bank shows the sheet; nothing is saved.
+- AC-8: Each of the four options hides what it names (type, other country, name check, 24-hour line).
 
 #### 9. Scenarios
 
-Synthetic registry data from 09 section 14. Persona `alpha` is Alex Morgan as Maker at Alpha; `alpha-admin` is the administrator `ravi` at Alpha (planned).
-
-| Id | Name | Covers | Persona, setup, conditions | Outcome |
+| # | Persona and setup | Steps | Expected | Covers |
 |---|---|---|---|---|
-| T-1 | Add a US supplier, name matches | AC-1, AC-2, AC-4, AC-7 | `alpha`; region United States; name "Priya Raman", ABA 021000021, account 987654321, Checking, purpose Goods or services | Green note "✓ Valid routing number · JPMorgan Chase"; check result `match`, Continue without a tick; `success` "Sent for whitelisting"; list shows Waiting for whitelisting; paying them gives `BENEFICIARY_NOT_WHITELISTED` |
-| T-2 | Europe, name matches | AC-2, AC-4, AC-5 | `alpha`; Europe; "Camille Dubois", IBAN FR14 2004 1010 0505 0001 3M02 606 | Heading "Verification of Payee", `match`; `success` |
-| T-3 | Europe, name is close | AC-4 | `alpha`; Europe; "Lena Fisher", IBAN DE89 3704 0044 0532 0130 00 | Amber, registered name "Lena Fischer", button "Use 'Lena Fischer'"; pressing it turns the result green and the name changes; without pressing it, Continue needs the tick |
-| T-4 | Europe, name does not match | AC-4 | `alpha`; Europe; "Bob Smith", the same IBAN | Red; Continue disabled until the box is ticked; after it, the supplier is saved with `nameCheck: "none"` and `acknowledged: true`, and the review shows "You chose to continue" |
-| T-5 | UK, name matches; Middle East; SWIFT unchecked | AC-2, AC-4, AC-5 | `alpha`; UK "James Whitfield", sort code 20-00-00, account 55779911; then Middle East, Saudi Arabia, "Faisal Al-Harbi", IBAN SA03 8000 0000 6080 1016 7519; then SWIFT, Japan, "Aiko Tanaka", BIC BOTKJPJT, account 1234567890 | UK heading "Confirmation of Payee", `match`; Saudi `match` under "Name check"; Japan `na` "We couldn't check this name", Continue needs the tick |
-| T-6 | Field errors by region | AC-3 | `alpha`; one case each: routing 021000022; account `12`; IBAN `DE00 0000 0000 0000 0000 00`; IBAN `AE07 0331 2345 6789 0123 456` typed as Europe; sort code `2000`; UAE IBAN with Saudi Arabia chosen; BIC `BOTK` | `INVALID_ROUTING`, `INVALID_ACCOUNT`, `INVALID_IBAN`, `NOT_SEPA`, `INVALID_SORT_CODE`, `COUNTRY_MISMATCH` ("That IBAN starts with AE, but you chose Saudi Arabia."), `INVALID_BIC`; Continue disabled each time |
-| T-7 | Usual purpose required | AC-6 | `alpha`; every other field valid, purpose empty | "Choose the usual purpose of payments to this supplier."; Continue disabled; after adding, `supplier-payment` offers that purpose as the default |
-| T-8 | Approver cannot add | AC-1 | `beta-alex` | `denied` (`PERMISSION_DENIED`); the hub shows no Add a supplier card |
-| T-9 | Duplicate account | AC-8 | `alpha`; US, ABA 021000021, account 000118841 (Harbour Packaging) | `SUPPLIER_EXISTS`; `failed`, "You already have a supplier with this account: Harbour Packaging." |
-| T-10 | Administrator whitelists; cooling-off starts | AC-7, AC-11 | `alpha` adds "Priya Raman" (as T-1); `alpha-admin` runs `corp.suppliers.decide` approve; `alpha` pays USD 500.00, then USD 500.01 within the hour | Status Approved; the row shows "New: up to USD 500.00 in 24 hours"; USD 500.00 goes to Pending approval; USD 500.01 gives `BENEFICIARY_COOLING_OFF`; at `now` + 25 hours the larger amount is accepted |
-| T-11 | Administrator declines | AC-10 | as T-10 but decision `decline` with reason "Not a known supplier" | Status `disabled`; payment attempt gives `BENEFICIARY_NOT_WHITELISTED`; the Maker's notification shows "was not whitelisted. Not a known supplier" |
-| T-12 | Whitelisting is separate from adding | AC-9 | `alpha` adds a supplier, then `alpha` calls `corp.suppliers.decide`; `alpha-admin` adds a supplier, then calls decide | the Maker gets `PERMISSION_DENIED`; the administrator who added it gets `SELF_APPROVAL` |
-| T-13 | Edit restarts everything | AC-12 | `alpha-admin` whitelisted "Camille Dubois" yesterday; `alpha` edits the name to "Camille Dubo" | status back to Waiting for whitelisting; name check runs again (`close`); `whitelistedAt` cleared |
-| T-14 | Missing confirmation and wrong codes | AC-13 | `alpha`; untick; then `999999` three times | "Tick the confirmation first."; then "Too many wrong codes. Start again." (`STEP_UP_FAILED`); no supplier added |
-| T-15 | Code is tied to the supplier | AC-13 | `alpha`; code sent; person goes Back, edits the account, then enters the old code | `STEP_UP_FAILED`; nothing added |
-| T-16 | Name check unavailable | AC-5 | `alpha`; conditions `unavailable: ["bank.payees.check"]`; Europe "Camille Dubois" | result `na` "We couldn't check this name"; the box must be ticked; the rest works |
-| T-17 | Return to the payment | AC-14 | `alpha`; start `supplier-payment`, "Add supplier", finish | back on `payee`; the new supplier is greyed "Waiting for whitelisting" |
-| T-18 | **Timeout** | AC-15 | `alpha`; conditions `timeout: ["corp.suppliers.add"]` | `unavailable`; no supplier listed |
-| T-19 | **Unavailable** | AC-15 | `alpha`; conditions `unavailable: ["corp.suppliers.add"]` | `unavailable` "Nothing was changed." |
+| T-1 | Alex at Alpha, Market A | Name "Brightline Packaging", same country, routing number and account from Autofill; send with code 482100 | Review shows Account "{routing} · ••{last 4}", Approval "An administrator"; "Sent for approval" | AC-2, AC-5, AC-6 |
+| T-2 | Alex at Alpha, Market B | Sort code and account of a registered holder, name slightly different | "The name is close"; Continue blocked until Use or Add anyway | AC-4 |
+| T-3 | Alex at Alpha | Another country: country, IBAN, SWIFT / BIC, address | Address step shown; review has Country and Address | AC-2 |
+| T-4 | Alex at Alpha | Name "harbour packaging" | "You already have a supplier with this name." | AC-3 |
+| T-5 | Alex at Alpha | Bank details of Harbour Packaging | "You already have a supplier with these bank details." | AC-3 |
+| T-6 | Alex at Alpha, 10 requests waiting (test seed) | Step 1 Continue | "You have 10 suppliers waiting for approval. Wait for an answer before you add more." | AC-3 |
+| T-7 | Alex at Alpha, wrong code three times | Code sheet | "We couldn’t confirm this request. Nothing was sent. Start again."; no supplier | AC-5 |
+| T-8 | Timeout on the bank step | Continue | Banner "Check Suppliers before you try again, so you don’t add it twice."; nothing saved | AC-7 |
+| T-9 | Bank unavailable | Continue | Sheet "We couldn’t reach the bank"; nothing saved | AC-7 |
+| T-10 | Alex at Beta | Open Payments › Suppliers | No Add supplier button | AC-1 |
+| T-11 | Options off | Switch off `allowPerson`, `allowAbroad`, `nameCheck`, `newCap` | No Type chips, no "Their bank is", no name box, no "First 24 hours" row | AC-8 |
 
 #### 10. Expected mutation-check survivors
 
-| Survivor | Reason |
-|---|---|
-| The 200-supplier limit | No scenario fills 200 suppliers; the sandbox seed holds 6. |
-| `COUNTRY_NOT_SUPPORTED` | The country is a list the person chooses from; only a forced adapter call could reach it. Add a scenario that calls the adapter with `country: "BR"` if it should be proved. |
-| The registry names | They are fixture data (09 section 15). |
-| The exact text of each message | Tests check the code, not the words. |
-| The bank names in the green notes | Fixture data. |
+- Changing the limit of 10 waiting requests to 11: survives, T-6 uses the test seed at exactly 10 (an edge at 9 is planned).
+- Changing the 5,000.00 cap: survives, the cap is shown only and no scenario reads the number.
+- Removing a character from the name pattern: survives, no scenario types it.
+- Dropping the registry lookup for one market: survives, only T-2 exercises the name check.
 
 ---
 
-### ★ Payment template — `payment-template`
+### ★ Payment templates — `payment-template`
+
+**Catalog**: slug `payment-template`, workspace business, category Payments, core no, a bank can switch it off (yes). Options: `amountOptional` "Allow a template without an amount" (on by default; the prototype does not read it yet, a template can always be saved without an amount). Permission `pay.create`; moves no money, no code. Prototype file `design/bankworkx-r1/src/journeys/71-templates-schedule.js`: a normal engine journey with three modes (`create`, `use`, `delete`). The list of templates is the view `templates` (next block).
+
+> The screens never name a country or a payment scheme. Money is shown in the supplier's own currency.
 
 #### 1. Summary
 
 | | |
 |---|---|
 | Slug | `payment-template` |
-| Purpose | Save the details of a payment you repeat, so you can start it again in two taps. |
+| Purpose | A Maker saves a payment made often (supplier, amount, reference, purpose), starts it again in two taps, or deletes a template. A template holds no money and no approval. |
 | Release | 1 |
-| Workspace | Business |
-| Status | **New (planned).** No fixture. Needs `corp.templates.*`. |
+| Workspace | Business (planned field `workspace: "business"`) |
+| Status | Built in the prototype. No template adapter exists in the sandbox yet (section 5). |
 | Channels | web, mobile |
-| Starting pattern | The start screen of `corporate-payment` (account, supplier, amount, reference), without the code step. |
-| Who may use it | `biz.templates.manage`. |
+| Who may use it | The context holds `pay.create`. At Alpha Trading LLC: Alex Morgan (Maker). Not offered to Approvers (Alex at Beta). |
+| Seed | Two templates at Alpha: "Monthly packaging" (Harbour Packaging, $4,500.00, PO-STANDING, Goods) and "Quarterly freight" (Whitby Logistics, no amount, FREIGHT-Q, Services). Templates are shared by the company's Makers. At most 20 per company. |
 
-A template stores no money and starts no payment. Using it opens `supplier-payment`, where every normal check and approval still applies.
+**Home market configuration**: none. The supplier's saved currency decides the symbol.
 
 #### 2. Entry points
 
 | Place › label | Passes | Permission |
 |---|---|---|
-| Payments › templates › New / Edit | `{templateId}` optional | `biz.templates.manage` |
-| Payments › tracker › payment › Save as template | `{paymentId}` | `biz.templates.manage` |
-| `supplier-payment` result › Save as template | `{paymentId}` | `biz.templates.manage` |
+| Payments › Templates › Save a template | `{mode: create}` | `pay.create` |
+| Payments › Templates › row › Use | none (starts Pay a supplier at once) | `pay.create` |
+| Payments › Templates › row › Delete | `{mode: delete, templateId}` | `pay.create` |
+| Payment receipt › Save as template | (planned) | `pay.create` |
 
-With `{paymentId}` the fields are filled from that payment (supplier, account, reference, purpose, and the amount as a suggestion).
+Parameters: `{mode}` is `create`, `use` or `delete`; `{templateId}` selects the template (with a template and no mode the mode is `use`); `{supplierId}`, `{amount}`, `{ref}`, `{why}`, `{name}` pre-fill a new template. The **Use** button of the list does not open this journey; it calls the same hand-over (section 7) directly. The journey's `use` mode is for a deep link.
 
 #### 3. Screens
 
-Screen ids: `details`, `review`, `success`, `failed`, `unavailable`, `denied`, `wrongContext`, `confirmDelete` (edit mode).
+Progress text "Step n of N · Payment templates", N counting the screens of the mode. Each screen has **Back** (the first has **Cancel**).
 
-**Screen `details` — "Template details"**
+**Mode create**
 
-| Field | Block | Required | Rule | Error message |
+**Step 1: Choose supplier**. Button **Continue**.
+
+| Field | Type | Required | Rule | Message |
 |---|---|---|---|---|
-| Template name (`tpl.name`) | `textInput` | yes | 2 to 40 characters; unique in the company | "Give the template a name." / "You already have a template with this name." |
-| Supplier (`tpl.beneficiaryId`) | `beneficiaryPicker` (`allowAddNew`, `addNewJourney: "add-supplier"`) | yes | on the approved list | "Choose an approved supplier." |
-| From (`tpl.fromAccountId`) | `accountPicker` | yes | a USD account | "Choose an account." |
-| Amount (`tpl.amount`) | `amountInput` | no | if given: greater than 0 and the currency's decimals; blank means "Variable" | "Enter an amount in USD with at most 2 decimal places." |
-| Reference (`tpl.reference`) | `textInput` | no | up to 35 characters of letters, numbers, spaces, `- / .` | "Use letters, numbers, spaces and - / . only, up to 35 characters." |
-| Purpose (`tpl.purpose`), abroad suppliers only | `select` rows | yes (abroad) | as `supplier-payment` | "Choose a purpose." |
+| Supplier | cards: name, then "{currency} · ••{last 4}" | yes | one of the approved suppliers (a waiting one is not listed) | "Choose a supplier." |
 
-Copy: title "Save as template" (title "Edit template" in edit mode). Helper under Amount: "Leave empty to enter the amount each time." Buttons "Continue" and "Cancel".
+Empty list: "No suppliers yet" / "Add a supplier first." with the button **Add a supplier** (opens `add-supplier`).
 
-**Screen `review` — "Review template"**
-`reviewSummary` (Name, Supplier, From, Amount or "Variable", Reference, Purpose). Info alert: "Using a template starts a new payment that still needs approval." Button "Save template" (calls `corp.templates.save`; no code, no consent). "Back".
+**Step 2: Template details**. Button **Review**.
 
-**Screen `success` — "Template saved"**
-`result` success, title "Template saved", text "{name} is ready. Use it from Payments or here." Buttons "Use it now" (`supplier-payment`, `{templateId}`), "Schedule it" (`schedule-business-payment`, `{templateId}`), "View templates", "Done".
+| Field | Type | Required | Rule | Message |
+|---|---|---|---|---|
+| Template name | text, max 30 | yes | not the name of another template (any case) | "Name the template." / "You already have a template with this name." |
+| Amount | amount with the supplier's symbol, hint "Leave empty to enter it each time", placeholder "0.00" | no | not above 250,000.00 | "That is over your limit of $250,000.00 a payment." |
+| Reference | text, hint "Invoice or PO number", max 35 | no | letters, digits, space and `. , ' - / ( ) + : #` | "Use letters, numbers and spaces only." |
+| Purpose | select, placeholder "Choose a purpose": Goods, Services, Rent, Utilities, Taxes and duties, Other | no | one of the list | none |
 
-**Screen `confirmDelete`** (edit mode, button "Delete template"): `dialog` "Delete this template? Payments already started are not affected." Buttons "Delete template" (calls `corp.templates.delete`) and "Keep it".
+**Step 3: Review**. Busy text "Saving…" (about 0.4 s). Button **Save template**. Rows: Name, Supplier, Amount (or "Each time"), Reference (if set), Purpose (if set).
 
-States. Loading: spinner on buttons. Error: `failed`.
+**Result** "Template saved", line "{name} for {supplier}.", green chip "Saved". Rows: Name, Supplier, Amount (or "Amount each time"), Reference, Purpose. Buttons **Use it now**, **Back to templates**.
 
-#### 4. Sandbox errors
+**Mode use** (one screen, then a result)
 
-| Code | What the person sees | Screen | Button |
+**Use template**. Busy text "Checking…" (about 0.4 s). A card shows the template name and supplier, then rows Amount ("Amount each time" when none), Reference, Purpose. Button **Continue to payment**. Result "Ready to pay", line "{name}", green chip "Ready", rows Supplier, Amount; button **Continue to payment** (opens `supplier-payment`).
+
+**Mode delete** (one screen, then a result)
+
+**Delete this template?** Same card. Button **Delete template**. Result "Template deleted", line "{name} is gone. Payments already sent are not affected.", chip "Deleted", row Template; button **Back to templates**.
+
+If the template cannot be found the card says "Template not found" / "It may have been deleted."
+
+#### 4. States and errors (codes are for tests; the person sees the message)
+
+| Code | Message | Where | Button |
 |---|---|---|---|
-| `TEMPLATE_NAME_TAKEN` (planned) | "You already have a template with this name." | `details` | Change name |
-| `TEMPLATE_LIMIT` (planned) | "You have reached 50 templates. Delete one to save another. Nothing was changed." | `failed` | View templates |
-| `TEMPLATE_NOT_FOUND` (planned) | "We can't find that template. It may have been deleted." | `failed` | View templates |
-| `BENEFICIARY_NOT_WHITELISTED` | "This supplier isn't on Alpha Trading LLC's approved list. Nothing was changed." | `failed` | Choose supplier |
-| `ACCOUNT_NOT_FOUND` | Standard message S-`ACCOUNT_NOT_FOUND` | `failed` | Choose account |
-| `CURRENCY_NOT_SUPPORTED` | "Payments are limited in USD. Choose a USD account. Nothing was changed." | `failed` | Choose account |
-| `INVALID_AMOUNT` | "Enter an amount in USD with at most 2 decimal places." | `details` | Change amount |
-| `NOT_AUTHORISED` / `PERMISSION_DENIED` (planned) | "Your role doesn't allow this. Ask an administrator at Alpha Trading LLC." | `denied` | Back |
-| `WRONG_CONTEXT` (planned) | Standard message S-`WRONG_CONTEXT` | `wrongContext` | Switch |
-| `TIMEOUT` (planned) | "This is taking longer than expected. Nothing was changed." | `unavailable` | Try again |
-| `SERVICE_UNAVAILABLE` (planned) | Standard message S-`SERVICE_UNAVAILABLE` | `unavailable` | Try again |
+| `TEMPLATE_NOT_FOUND` | "We can’t find that template." | use or delete screen banner | Back |
+| `TEMPLATE_NAME_EXISTS` | "You already have a template with this name." | field message, step 2 | change the name |
+| `TEMPLATE_LIMIT` | "You can have up to 20 templates. Delete one to add another." | review banner | Delete one in Templates |
+| `SUPPLIER_NOT_APPROVED` | "That supplier isn’t on your list or is waiting for approval." | review or use banner | choose another |
+| `TIMEOUT` | "We didn’t get an answer in time. Nothing was changed." | banner | Try again |
+| `SERVICE_UNAVAILABLE` | Sheet "We couldn’t reach the bank": "Nothing was sent and you haven’t been charged. Try again in a moment." | sheet | Try again / Cancel |
+
+Loading: the busy text above. Empty: only the supplier step has an empty state. Using a template whose supplier was removed or is waiting shows a short message in the page, "That supplier isn’t on your list any more." or "That supplier is waiting for approval."
 
 #### 5. Adapters
 
-| Integration id | Adapter | Request | Response | Error codes | Status |
-|---|---|---|---|---|---|
-| `company` | `corp.company.get` | as `supplier-payment` | as `supplier-payment` | as there | Existing |
-| `getPayment` | `corp.payments.get` | `{ paymentId }` | the payment | `PAYMENT_NOT_FOUND`, `PERMISSION_DENIED` | Existing |
-| `saveTemplate` | `corp.templates.save` | `{ templateId?, name, beneficiaryId, fromAccountId, amount?, reference?, purpose? }` | the template | `TEMPLATE_NAME_TAKEN`, `TEMPLATE_LIMIT`, `BENEFICIARY_NOT_WHITELISTED`, `ACCOUNT_NOT_FOUND`, `CURRENCY_NOT_SUPPORTED`, `INVALID_AMOUNT`, `PERMISSION_DENIED`, `WRONG_CONTEXT`, `TIMEOUT`, `SERVICE_UNAVAILABLE`. `moneyMoving: false`, `requiresOtp: false` | **(planned)** |
-| `deleteTemplate` | `corp.templates.delete` | `{ templateId }` | `{ deleted: true }` | `TEMPLATE_NOT_FOUND`, `PERMISSION_DENIED`, `TIMEOUT`, `SERVICE_UNAVAILABLE`. `moneyMoving: false`, `requiresOtp: false` | **(planned)** |
-| `templates` | `corp.templates.list` | `{}` | `{ items }` | see shell | **(planned)** |
+| Integration | Adapter | Status |
+|---|---|---|
+| Save, list and delete templates | `corp.templates.save`, `corp.templates.list`, `corp.templates.delete` | (planned) |
+| Approved suppliers | `corp.company.get` | Existing, `packages/mock-bank-api/src/corporate.ts` |
+| Start the payment | `supplier-payment` (`corp.payments.initiate`) | Existing |
 
 #### 6. Permissions, step-up and limits
 
-`biz.templates.manage`; step-up `none`. At most 50 templates per company. A template never bypasses a limit: limits, whitelist and approvals are checked when the payment is started.
+`pay.create`. No code (saving a template moves nothing; the payment it starts asks for its own approval and code). 20 templates per company.
 
 #### 7. Result and links out
 
-Result `success`. Receipt: none. Notifications: none. Buttons: Use it now (`supplier-payment`, `{templateId}`), Schedule it (`schedule-business-payment`, `{templateId}`), View templates, Done (returns to where the person started; from the tracker, back to Payment detail).
+The template is stored for the company, with the person who saved it. **Use** opens `supplier-payment` with `{supplierId, amount, templateId}`; the amount is empty for an "Amount each time" template. Reference and purpose are saved but not carried into the payment yet (planned). Links: Use it now, Back to templates (Payments › Templates).
 
 #### 8. Acceptance criteria
 
-- **AC-1** Only a context with `biz.templates.manage` can save, change or delete a template.
-- **AC-2** A template can only use an approved supplier and a USD account.
-- **AC-3** Template names are unique in the company and limited to 50 templates.
-- **AC-4** Saving from a payment fills in that payment's supplier, account, reference and purpose.
-- **AC-5** Saving a template starts no payment and moves no money.
-- **AC-6** A template whose supplier is no longer approved cannot be used.
-- **AC-7** When the bank times out or is unavailable, nothing is saved and the person is told so.
+- AC-1: Only a Maker with `pay.create` can create, use or delete a template.
+- AC-2: A template needs an approved supplier and a name; the amount, reference and purpose are optional.
+- AC-3: A second template with the same name (any case) is refused; a 21st template is refused.
+- AC-4: A template without an amount shows "Amount each time" and the payment asks for the amount.
+- AC-5: Use opens Pay a supplier with the supplier and amount filled in.
+- AC-6: Delete asks first and does not touch payments already sent.
+- AC-7: A template whose supplier is not approved cannot be used.
+- AC-8: A timeout changes nothing; an unavailable bank shows the sheet and changes nothing.
 
 #### 9. Scenarios
 
-| Id | Name | Covers | Persona, setup, conditions | Outcome |
+| # | Persona and setup | Steps | Expected | Covers |
 |---|---|---|---|---|
-| T-1 | Save a new template | AC-1, AC-5 | `alpha`; name "Monthly packaging", supplier Nile Packaging, amount blank | `success` "Template saved"; no payment in the tracker; balance unchanged |
-| T-2 | Save from a payment | AC-4 | `alpha`; setup: Alex starts a payment (USD 12,500.00, ref INV-1001) | fields prefilled; saved template has amount 12,500.00 and reference INV-1001 |
-| T-3 | Approver cannot save | AC-1 | `beta-alex` | `denied` |
-| T-4 | Unapproved supplier | AC-2 | `alpha`; supplier Cedar Tools | `BENEFICIARY_NOT_WHITELISTED` message shown; nothing saved |
-| T-5 | Euro account refused | AC-2 | `alpha`; Reserve ••6101 | "Payments are limited in USD. Choose a USD account." |
-| T-6 | Duplicate name | AC-3 | `alpha`; setup saves "Monthly packaging"; save the same name | "You already have a template with this name." |
-| T-7 | Fifty templates | AC-3 | `alpha`; setup saves 50 templates | the 51st gives `TEMPLATE_LIMIT` |
-| T-8 | Supplier becomes unapproved | AC-6 | `alpha`; setup: disable the supplier | Templates shows "Supplier not approved"; Use is disabled |
-| T-9 | **Timeout** | AC-7 | conditions `timeout: ["corp.templates.save"]` | `unavailable`; template list unchanged |
-| T-10 | **Unavailable** | AC-7 | conditions `unavailable: ["corp.templates.save"]` | `unavailable` with the standard message |
+| T-1 | Alex at Alpha | Save a template: Harbour Packaging, "Weekly supplies", 1,200.00, PO-STANDING, Goods | "Template saved"; the list shows it with "$1,200.00" | AC-2 |
+| T-2 | Alex at Alpha | Save with no amount | List shows "Amount each time" | AC-2, AC-4 |
+| T-3 | Alex at Alpha | Name "monthly packaging" | "You already have a template with this name." | AC-3 |
+| T-4 | Alex at Alpha, 20 templates (test seed) | Review, Save | "You can have up to 20 templates. Delete one to add another." | AC-3 |
+| T-5 | Alex at Alpha | Use "Monthly packaging" | Pay a supplier opens at step 2 with Harbour Packaging and 4,500.00 | AC-5 |
+| T-6 | Alex at Alpha | Delete "Quarterly freight" | "Template deleted"; the list no longer shows it | AC-6 |
+| T-7 | Alex at Alpha, supplier waiting (test seed) | Open the list | Chip "Waiting for approval" instead of Use | AC-7 |
+| T-8 | Alex at Beta | Open Payments › Templates | No Save a template, Use or Delete | AC-1 |
+| T-9 | Timeout on Save | Review | Banner "Nothing was changed."; list unchanged | AC-8 |
+| T-10 | Bank unavailable | Review | Sheet "We couldn’t reach the bank"; list unchanged | AC-8 |
 
 #### 10. Expected mutation-check survivors
 
-None expected. If the 50-template limit mutant survives in the sandbox seed, T-7 is the scenario that must kill it.
+- Changing the limit of 20 templates to 21: survives, T-4 uses a seed at exactly 20 (an edge at 19 is planned).
+- Changing the 250,000.00 amount limit by one cent: survives, no scenario types it.
+- Removing "#" from the reference pattern: survives, no scenario types it.
+- Dropping reference and purpose from the saved template: survives, only the name, supplier and amount are asserted.
 
 ---
 
-### ★ Schedule a business payment — `schedule-business-payment`
+### ★ Templates list — `templates`
+
+**Catalog**: slug `templates`, workspace business, category Payments, core no, a bank can switch it off (yes). A view, not a journey: the **Templates** tab of Payments. Options: none. Permission `accounts.view` to see it; the buttons need `pay.create`. Prototype file `design/bankworkx-r1/src/journeys/71-templates-schedule.js` (`JR.define` with `view: true, tab: 'pay'`).
+
+#### 1. Summary
+
+| | |
+|---|---|
+| Slug | `templates` |
+| Purpose | Show the company's saved payments with Use and Delete, and a way to save a new one. |
+| Release | 1 |
+| Workspace | Business |
+| Status | Built in the prototype. |
+| Who may see it | Anyone who can see Payments (`accounts.view`). The buttons show only with `pay.create`. |
+| Route | Web `/business/{company}/payments/templates` (planned). Mobile screen `PaymentTemplates` (planned). In the prototype it is the Templates segment of the Payments tab. |
+
+**Home market configuration**: none.
+
+#### 2. Entry points and parameters
+
+Payments › Templates segment. No parameters. Launch points on it: **Save a template** (`payment-template`, create), **Use** (`supplier-payment`), **Delete** (`payment-template`, delete).
+
+#### 3. Screen
+
+From top to bottom:
+
+1. Button **Save a template** (only with `pay.create`).
+2. One card of rows, in the order saved. Each row: bill icon, template name, then "{supplier} · {amount}" where the amount is the saved amount in the supplier's currency or "Amount each time", or "Supplier removed" in place of the supplier. At the end of the row, with `pay.create`: **Use** (a small button) and **Delete**. When the supplier is waiting for approval the Use button is replaced by an amber chip "Waiting for approval"; when the supplier is gone, by a grey chip "Unavailable". A row itself is not a link.
+
+Sort: the order saved. No filters or search (planned: Name, Last used).
+
+Empty (no templates): "No templates yet" / "Save a payment you make often." (the **Save a template** button stays above). Loading and error states are not in the prototype (planned: skeleton rows; "We couldn’t load your templates. Nothing was changed." with **Try again**).
+
+#### 4. Actions and drill-downs
+
+- **Use**: opens `supplier-payment` with the supplier and amount; refused with a short message when the supplier is gone or waiting (see `payment-template`).
+- **Delete**: opens `payment-template` in delete mode.
+- **Save a template**: opens `payment-template` in create mode.
+- After saving or deleting, the receipt button **Back to templates** returns to this view.
+
+#### 5. Adapters
+
+`corp.templates.list` (planned); suppliers from `corp.company.get` (existing).
+
+#### 6. Acceptance criteria
+
+- AC-1: The list shows the company's templates with the supplier and the amount or "Amount each time".
+- AC-2: Use and Delete show only with `pay.create`; an Approver sees the list without buttons.
+- AC-3: A template whose supplier is waiting shows "Waiting for approval" and no Use button.
+- AC-4: With no templates the empty state shows.
+
+#### 7. Scenarios
+
+| # | Persona and setup | Steps | Expected | Covers |
+|---|---|---|---|---|
+| T-1 | Alex at Alpha | Open Templates | Two rows: "Monthly packaging", "Harbour Packaging · $4,500.00"; "Quarterly freight", "Whitby Logistics · Amount each time" | AC-1 |
+| T-2 | Alex at Beta | Open Templates | Empty state "No templates yet" and no Save a template button (Beta has no templates in the seed) | AC-2, AC-4 |
+| T-3 | Alex at Alpha, supplier waiting (test seed) | Open Templates | Chip "Waiting for approval", no Use | AC-3 |
+
+#### 8. Expected mutation-check survivors
+
+- Changing the order of the rows: survives, the order is not asserted.
+- Changing the chip colour: survives, only the text is asserted.
+
+---
+
+### ★ Schedule a supplier payment — `schedule-business-payment`
+
+**Catalog**: slug `schedule-business-payment`, workspace business, category Payments, core no, a bank can switch it off (yes). Options: `allowQuarterly` "Offer “Every 3 months”" (on); `reminder` "Tell the Maker the day before each payment" (on; the prototype shows no reminder yet, planned); `strictCutoff` "Close changes at 09:00 the business day before (default 18:00)" (off). Permission `pay.create`; flagged as money (a timeout or an unavailable bank is treated like a payment) though no money moves at scheduling. Prototype file `design/bankworkx-r1/src/journeys/71-templates-schedule.js`: a normal engine journey with three modes (`new`, `edit`, `cancel`). It uses the supplier and speed rules of `supplier-payment` (`36-supplier-payment.js`) and the date helpers of `schedule-payment`. The list is the view `business-schedules` (next block).
+
+> The screens never name a country or a payment scheme. A scheduled payment always goes at the Standard speed; the bank's rail configuration decides fee, limit and arrival text (`09-payment-rails.md`).
 
 #### 1. Summary
 
 | | |
 |---|---|
 | Slug | `schedule-business-payment` |
-| Purpose | A Maker sets up a payment to a whitelisted supplier in the United States, Europe, the United Kingdom, the Middle East (or a SWIFT country) that starts on a future business day, or repeats. Every run is a normal payment that still needs approval, and it is checked again on the day. |
+| Purpose | A Maker schedules a payment to a saved supplier once, weekly, monthly or every 3 months. Approvers approve it once before the first payment. Before each payment the bank checks again: balance, limits, and that the supplier is still approved. |
 | Release | 1 |
-| Workspace | Business |
-| Status | **New (planned).** No fixture; the Personal `schedule-payment` is the sibling. Needs `corp.schedules.*`, `corp.payments.quote` and `corp.payments.create` (09 section 13). |
+| Workspace | Business (planned field `workspace: "business"`) |
+| Status | The screens are built in the prototype. The run engine (a payment starting on its date) and the approval of a schedule by approvers are not (planned). |
 | Channels | web, mobile |
-| Starting pattern | `corporate-payment` (the same rules per run) plus `datePicker` (planned); the rails, amounts, purpose, scheduling and error codes of `09-payment-rails.md` (called "09" below). |
-| Who may use it | `biz.payments.schedule` and `biz.payments.initiate` (a schedule starts payments as the Maker). |
+| Who may use it | The context holds `pay.create`. At Alpha Trading LLC: Alex Morgan (Maker). Not offered to Approvers (Alex at Beta). |
+| Seed | Alpha: BSC-3001 Harbour Packaging $4,500.00 monthly, next Tue 1 Dec, active, 3 payments made, last "Paid 3 Nov"; BSC-3002 Whitby Logistics £12,000.00 every 3 months, starts Mon 4 Jan 2027, ends after 8 payments, "0 of 1 approved". Person limit 250,000.00 a payment, two approvers above 50,000.00, code from 25,000.00 (USD equivalent). Today in the prototype is Tue 3 Nov 2026, 10:42. |
 
-A schedule is a standing instruction. Each run starts at **09:00 UTC** on the run date (before every cut-off), as a payment started by the person who made the schedule, and waits for approval like any payment. A run never moves money by itself. The supplier's currency, rate and the rail's rules are those of `supplier-payment`; this journey adds dates, repeating, and the checks on the day.
-
-**Business days and cut-offs by region** (09 section 8; the sandbox calendar below is a proposal because 09 does not list holidays). The date picker disables a date that is not a business day for the supplier's region. 9 Nov 2026 is closed for every region (the existing company closed day).
-
-| Supplier's region | Weekend | Other closed days in the sandbox (Nov 2026 to Jan 2027) | Approval deadline on the run date (UTC) |
-|---|---|---|---|
-| United States | Saturday, Sunday | 11 Nov, 26 Nov, 25 Dec, 1 Jan | 16:00 (all US rails; the Same-day ACH and wire cut-offs are later) |
-| Europe | Saturday, Sunday | 25 Dec, 1 Jan | 14:00 for SEPA Credit Transfer; 16:00 for SEPA Instant |
-| United Kingdom | Saturday, Sunday | 25 Dec, 28 Dec, 1 Jan | 16:00 (CHAPS closes at 17:00 UK, later) |
-| UAE | Saturday, Sunday | 2 Dec, 3 Dec, 1 Jan | 11:00 for UAEFTS; 16:00 for Aani |
-| Saudi Arabia | Friday, Saturday | none in the window | 12:00 for SARIE; 16:00 for sarie instant |
-| Jordan | Friday, Saturday | 25 Dec | 11:00 for JoPACC; 16:00 for CliQ |
-| SWIFT countries | Saturday, Sunday | 25 Dec, 1 Jan | 15:00 |
-
-The **approval deadline** is the earlier of the company cut-off (16:00 UTC) and the rail's own cut-off converted to UTC (09 section 2, clocks as in November 2026). An instant rail has no cut-off of its own, so a scheduled instant payment uses the company cut-off of 16:00 UTC: a schedule has a fixed day, so it needs a deadline.
+**Home market configuration**: none. The currency comes from the supplier's saved region. Working days are Monday to Friday.
 
 #### 2. Entry points
 
 | Place › label | Passes | Permission |
 |---|---|---|
-| Payments › hub › Schedule a payment | `{templateId}` optional | `biz.payments.schedule` |
-| Payments › templates › Schedule | `{templateId}` | `biz.payments.schedule` |
-| Payments › scheduled › Schedule a payment | none | `biz.payments.schedule` |
-| `payment-template` result › Schedule it | `{templateId}` | `biz.payments.schedule` |
-| `supplier-payment` › amount screen › "Later" | supplier, amount, rail, purpose, reference, date, repeat; opens at `review` | `biz.payments.schedule` and `biz.payments.initiate` |
+| Payments › Scheduled › Schedule a payment | none (mode new) | `pay.create` |
+| Payments › Scheduled › row › Change | `{scheduleId, mode: edit}` | `pay.create` |
+| Payments › Scheduled › row › Cancel | `{scheduleId, mode: cancel}` | `pay.create` |
+| Pay a supplier › Pay date › Repeat | (planned) | `pay.create` |
+
+Parameters: `{supplierId}` (supplier chosen, step 1 skipped), `{amount}` (pre-fills the amount), `{scheduleId}` with `{mode}` `edit` or `cancel`.
 
 #### 3. Screens
 
-Screen ids: `details`, `when`, `review`, `otp`, `success`, `failed`, `unavailable`, `denied`, `wrongContext`.
+Progress text "Step n of N · Schedule a supplier payment", N counting the screens of the mode. Each screen has **Back** (the first has **Cancel**).
 
-**Screen `details` — "What to pay"**
+**Mode new**
 
-| Field | Block | Required | Rule | Error message |
+**Step 1: Choose supplier** (skipped when a supplier was passed). Button **Continue**.
+
+| Field | Type | Required | Rule | Message |
 |---|---|---|---|---|
-| Use a template (`sch.templateId`) | `select` rows (templates), "Don't use a template" first | no | an existing template | "Choose a template or fill in the details." |
-| Supplier (`sch.beneficiaryId`) | `beneficiaryPicker`, whitelisted suppliers only, each with region, country, masked account and the chip "Whitelisted"; no new-payee form (an "Add supplier" link explains that an administrator whitelists new suppliers) | yes | whitelisted supplier | "Choose a whitelisted supplier." |
-| From (`sch.fromAccountId`) | `accountPicker` | yes | a USD account | "Choose an account." |
-| They receive (`sch.amount`) | `amountInput` in the supplier's currency | yes | greater than 0; the currency's decimals; the USD amount at today's indicative rate at most the person's daily limit (250,000.00) | "Enter an amount." / "Enter an amount in {cur} with at most {n} decimal places." / "That is above your daily limit of USD 250,000.00." (`LIMIT_USER_EXCEEDED`) |
-| Speed (`sch.rail`) | `select` cards of the supplier's region (09 section 2); default is the first rail that fits | yes | a rail the amount fits; an unavailable rail shows "Not available right now" | `RAIL_LIMIT`: "That's over the {rail} limit of {limit}. Choose another way to send it."; `RAIL_NOT_AVAILABLE`: "{rail} isn't available right now. Choose another way to send it." |
-| Purpose (`sch.purpose`) | `select` rows (09 section 7) | yes | one of the list | "Choose a purpose for this payment." (`PURPOSE_REQUIRED`) |
-| Invoice or PO number (`sch.reference`) | `textInput` | yes | up to the region's limit (US 80, Europe 140, UK 18, Middle East and SWIFT 140); allowed characters as 09 section 7 | "Enter the invoice or PO number." |
-| Charges (`sch.charges`), SWIFT only | `select` chips Shared, I pay all, They pay (09 section 6) | yes (SWIFT) | `SHA`, `OUR`, `BEN` | "Choose who pays the charges." |
+| Supplier | cards: name, then "{currency} · ••{last 4}" | yes | one of the approved suppliers | "Choose a supplier." |
 
-Copy: title "Schedule a payment". Info alert: "Each time, the payment waits for approval. It has to be fully approved by the cut-off on the day, or it is not sent." A conversion line appears when the supplier's currency is not USD: "At today's rate 1 USD = 0.926 EUR this is about USD 12,203.02. The rate is set on the day." Buttons "Continue", "Cancel".
+**Step 2: Amount and reference**. A card shows the supplier and "{currency} · ••{last 4}". Button **Continue**.
 
-**Screen `when` — "When"**
-
-| Field | Block | Required | Rule | Error message |
+| Field | Type | Required | Rule | Message |
 |---|---|---|---|---|
-| How often (`sch.frequency`) | `select` chips: "Once", "Every week", "Every month" | yes | one of three | "Choose how often." |
-| First payment on (`sch.startDate`) | `datePicker` (planned) | yes | tomorrow or later; no more than 24 months ahead; a business day for the supplier's region (weekends, the region's closed days and 9 Nov 2026 are disabled) | "Choose a date from tomorrow." / "Choose a date within 24 months." / "Choose a business day for {region}." (`SCHEDULE_DATE_INVALID`) |
-| Ends (`sch.ends`) | `select` chips: "Never", "After a number of payments", "On a date" (not for "Once") | yes if repeating | one of three | "Choose when it ends." |
-| Number of payments (`sch.count`) | `textInput` | if "After a number" | whole number 2 to 60 | "Enter a number from 2 to 60." |
-| End date (`sch.endDate`) | `datePicker` | if "On a date" | after the first payment, within 24 months | "Choose a date after the first payment." |
+| Amount | amount with the supplier's symbol, placeholder "0.00"; label "Amount (EUR)" when the supplier is paid in another currency | yes | greater than 0; fits the Standard limit; USD equivalent within 250,000.00 | "That is over the limit for this payment. Try a smaller amount." / "That is over your limit of $250,000.00 a payment." |
+| Reference | text, hint "Invoice or PO number", max 35 | yes | letters, digits, space and `. , ' - / ( ) + : #` | "Use letters, numbers and spaces only." |
+| Purpose | select, placeholder "Choose a purpose": Goods, Services, Rent, Utilities, Taxes and duties, Other | yes | one of the list | field required |
 
-Copy: title "When". Helper under the date: "Only business days for {region} can be chosen." A disabled date has the tooltip "Closed in {region}". A repeat that lands on a weekend or closed day for the region moves to the next business day, and the list shows "Runs on {date} instead of {date}". A monthly schedule on the 31st: "On shorter months it runs on the last business day." Buttons "Continue", "Back".
+**Step 3: How often**. Button **Continue**.
 
-**Screen `review` — "Review schedule"**
-`reviewSummary` rows: Supplier (name, region, country), From, They receive, Sent by (rail), Rate ("Set on the day"; with a foreign currency also "About USD {n} today"), Fee, Purpose, Invoice or PO number, Charges (SWIFT), How often, First payment, Ends, "Approval needed" ("1 approver" or "2 approvers" by the USD amount, 2 above 50,000.00; "checked again on the day"), and "Approve by" ("{time} UTC on each run date", from the table in section 1). A note when the USD amount is 25,000.00 or more: "Approvers will be asked for an extra security check." Alert info "Nothing leaves your account now. The checks run again on each date." `consent` (`sch.consent`): "I understand each payment still needs approval and I can stop this at any time" (`mustBeTrue`, "Tick the confirmation first."). Button "Confirm and send OTP". "Back".
+| Field | Type | Required | Rule | Message |
+|---|---|---|---|---|
+| (frequency) | chips Once, Weekly, Monthly, Every 3 months (the last when `allowQuarterly` is on) | no | default Monthly; Once clears the end | none |
+| Start date (label "Date" for Once) | select of working days from tomorrow, placeholder "Choose a date" | yes | after today; within 12 months; a weekday | "Choose a date from tomorrow." / "Choose a date within 12 months." / "Choose a weekday." |
+| Ends (not for Once) | cards Never, On a date, After a number of payments | no | default Never | none |
+| Last payment on | select of the run dates after the first (On a date only) | yes | after the start; one of the list | "Choose the last payment." / "Choose an end date after the start." / "Choose a date from the list." |
+| Number of payments | number, placeholder "For example 12", hint "From 2 to {max}." (After a number only) | yes | whole number from 2 to 104 (weekly), 60 (monthly), 40 (every 3 months) | "Enter how many payments." / "Enter a number from 2 to {max}." |
 
-**Screen `otp` — "Authorise this schedule"**
-A schedule is a standing instruction, so the code is always asked. The prompt names the schedule (dynamic linking, 09 section 9): "Authorise EUR 11,300.00 to Nordic Supplies AB, every month from 12 Nov 2026". The code only works for this schedule; changing the amount, supplier, rail or dates after the code was sent voids it (`STEP_UP_FAILED`). `otp` block: 6 digits, 3 attempts, resend after 30 s. Field `otp.code`: required, pattern `^[0-9]{6}$`, message "Enter the 6-digit code." Wrong code: "That code isn't right. {n} tries left." Third wrong code: `failed`, "Too many wrong codes. Start again." Button "Verify and schedule". There is no separate password step.
+A monthly payment keeps its day of the month (the last day of a short month); a date on a weekend moves to the next working day.
 
-**Screen `success` — "Payment scheduled"**
-`result` success: title "Payment scheduled", text "{amount in supplier currency} to {supplier}, {frequency}, from {firstRun}. Each payment waits for approval and must be approved by {time} UTC on the day.", meta "Schedule {id}". Buttons "View scheduled payments" (Payments › scheduled, which shows the next date and the amount in the supplier's currency), "Schedule another", "Done".
+**Step 4: Review**. Busy text "Checking…" (about 0.6 s). Button **Send for approval**.
 
-#### 4. Sandbox errors
+| Row | Value |
+|---|---|
+| Supplier | name |
+| Amount | in the supplier's currency |
+| Reference, Purpose | as entered |
+| How often | Once, Weekly, Monthly, Every 3 months |
+| Date (Once) or Starts | like "Tue 1 Dec 2026" |
+| Ends | Never, a date, or "{n} payments" (not for Once) |
+| Next dates | the next three, like "Tue 1 Dec · Wed 6 Jan · Mon 1 Feb" (not for Once) |
+| Approval | "Needs 1 approval before the first payment" or "Needs 2 approvals before the first payment" |
+| Before each payment | "Balance, limit and supplier are checked" |
 
-| Code | What the person sees | Screen | Button |
+**Code prompt** (only when the USD equivalent is 25,000.00 or more). Title "Authorise {amount} to {supplier}, {how often in lower case}". Line "Code sent to ••• 4410." The sandbox code is 482100.
+
+**Result** "Sent for approval", line "{amount} to {supplier}, {how often}, from {Tue 1 Dec}.", amber chip "Waiting for 1 approval" or "Waiting for 2 approvals". Receipt rows: Supplier, Amount, How often, Date or Starts, Ends, Approval; then the BankWorkx® reference. Buttons **View scheduled**, **Schedule another**.
+
+**Mode edit** (Change)
+
+Step 1 **Change payment**: a card with the payment (supplier, reference, status chip, Amount, How often, Next payment, Ends). Busy text "Getting your payment…" (about 0.45 s). Button **Continue**. Then the Amount and reference screen (supplier fixed, filled in), **Next payment** (the date, and Ends; the frequency cannot change), Review and, from 25,000.00 USD, the code. Result **Change sent for approval**, line "The payment to {supplier} waits until it is approved.", amber chip "Waiting for {n} approval(s)". The payment goes back to waiting; earlier approvals are cleared. Button **View scheduled**.
+
+**Mode cancel**
+
+One screen **Cancel this payment?** with the card. Busy text "Cancelling…" (about 0.45 s). Button **Cancel payment**. No code. Result **Payment cancelled**, line "No more payments will go to {supplier}.", green chip "Cancelled". Rows Supplier, Amount, How often, Cancelled on ("3 Nov 2026"). Buttons **Back to scheduled**, **Schedule a payment**.
+
+**Cut-off for changes.** Change and Cancel are refused once the next payment is due today or earlier, and from 18:00 on the business day before it (from 09:00 when `strictCutoff` is on). The screen where it fails is the first one for Change and the only one for Cancel, and again at Review.
+
+**Checked again before every payment** (`BSCH.check`, shown on the list, the run itself is planned): "The supplier is no longer on your list." / "The amount is over the limit for this payment." / "The amount is over the daily limit." / "There isn’t enough money in the account." A failed run starts nothing and tells the Maker.
+
+#### 4. States and errors (codes are for tests; the person sees the message)
+
+| Code | Message | Where | Button |
 |---|---|---|---|
-| `OTP_INVALID`, `OTP_REQUIRED` | Standard (README 1.6) | `otp` / `failed` | Try again / Start again |
-| `STEP_UP_FAILED` | "Too many wrong codes. Start again." / "The schedule changed, so that code no longer works. Start again." | `failed` | Start again |
-| `SCHEDULE_DATE_INVALID` (planned) | "Choose a business day for {region}, from tomorrow and within 24 months." | `when` | Change date |
-| `SCHEDULE_LIMIT` (planned) | "You have 25 active schedules, the most allowed. Stop one to add another. Nothing was changed." | `failed` | View scheduled |
-| `BENEFICIARY_NOT_WHITELISTED` | "This supplier isn't on Alpha Trading LLC's whitelist. Nothing was changed." | `failed` | Choose supplier |
-| `LIMIT_USER_EXCEEDED` | "This is above your daily limit of USD 250,000.00. Nothing was changed." (tested on the USD amount at the indicative rate) | `failed` | Change amount |
-| `CURRENCY_NOT_SUPPORTED` | "Payments are limited in USD. Choose a USD account. Nothing was changed." | `failed` | Choose account |
-| `INVALID_AMOUNT` | "Enter an amount in {cur} with at most {n} decimal places." | `details` | Change amount |
-| `RAIL_LIMIT`, `RAIL_NOT_AVAILABLE` (planned, 09) | Messages in section 3 | `details` | Choose another speed |
-| `PURPOSE_REQUIRED` (planned, 09) | "Choose a purpose for this payment." | `details` | Choose purpose |
-| `ACCOUNT_NOT_FOUND` | Standard (README 1.6) | `failed` | Choose account |
-| `NOT_AUTHORISED` / `PERMISSION_DENIED` (planned) | Standard S-`PERMISSION_DENIED` | `denied` | Back |
-| `WRONG_CONTEXT`, `STEP_UP_REQUIRED` (planned) | Standard | `wrongContext` / `otp` | Switch / Confirm |
-| `CORE_UNAVAILABLE` | "We couldn't complete this right now. Nothing was changed." | `failed` | Try again |
-| `TIMEOUT` (planned) | "We didn't get an answer in time. Check Scheduled before you try again, so you don't create it twice." | `unavailable` | Check Scheduled |
-| `SERVICE_UNAVAILABLE` (planned) | Standard | `unavailable` | Try again |
+| `SCHEDULE_NOT_FOUND` | "We can’t find that payment." | first screen banner | Back |
+| `SCHEDULE_NOT_ACTIVE` | "This payment has already ended or been cancelled." | first screen banner | Back |
+| `SCHEDULE_RUNNING` | "This payment is being processed. Try again later." | first screen banner | Back |
+| `SCHEDULE_CUTOFF_PASSED` | "This payment can’t be changed any more. Change it after it runs." | first screen or review banner | Back |
+| `SCHEDULE_LIMIT` | "You can have up to 20 scheduled payments. Cancel one to add another." | review banner | Cancel one in Scheduled |
+| `SUPPLIER_NOT_APPROVED` | "Choose a supplier from your list." | review banner | choose another |
+| `RAIL_LIMIT` | "That is over the limit for this payment. Try a smaller amount." | amount field, review banner | change amount |
+| `LIMIT_USER_EXCEEDED` | "That is over your limit." (field: "That is over your limit of $250,000.00 a payment.") | amount field, review banner | change amount |
+| `DATE_TOO_SOON` | "Choose a date from tomorrow." | review banner | change the date |
+| `END_BEFORE_START` | "Choose an end date after the start." | field | change |
+| `INVALID_COUNT` | "Enter a valid number of payments." | defined; the field message covers it | change |
+| `STEP_UP_FAILED` | "We couldn’t confirm this payment. Nothing was scheduled. Start again." | code sheet | start again |
+| `TIMEOUT` | "We didn’t get an answer in time. Check Scheduled payments before you try again, so you don’t schedule it twice." | banner | check Scheduled |
+| `SERVICE_UNAVAILABLE` | Sheet "We couldn’t reach the bank": "Nothing was sent and you haven’t been charged. Try again in a moment." (journey text: "We couldn’t reach the bank. Nothing was scheduled.") | sheet | Try again / Cancel |
 
-**At run time** (not in the journey), the run checks everything again on the date, with the same rules and messages as `supplier-payment`: the supplier is still whitelisted (`BENEFICIARY_NOT_WHITELISTED`), the rail is still available (`RAIL_NOT_AVAILABLE`) and the amount still fits it (`RAIL_LIMIT`), a new quote is taken at the day's rate, the purpose is still given, the account has enough money for **You pay** (`INSUFFICIENT_FUNDS`), and the person and company limits are met on the USD amount at the day's rate (`LIMIT_USER_EXCEEDED`, `LIMIT_COMPANY_EXCEEDED`). A run that fails starts no payment, marks the schedule `failed_last_run` and raises a notification (section 7). No automatic retry and no automatic switch to another rail. A repeating schedule goes on to its next date.
-
-After the run starts the payment, the approval deadline in section 1 applies. A payment that is not fully approved by the deadline is **not sent**: `NOT_APPROVED_IN_TIME`, "This payment wasn't approved in time and has not been sent." It is stored as `rejected` with the reason "Not approved in time", the schedule run is marked failed, and no money moves. Partial approval does not count (1 of 2 is not enough). A later run of the same schedule is not affected.
+Loading: the busy texts above. Empty: no approved supplier gives an empty card list on step 1 (no extra button yet, planned).
 
 #### 5. Adapters
 
-| Integration id | Adapter | Request | Response | Error codes | Status |
-|---|---|---|---|---|---|
-| `company`, `otpSend`, `otpVerify` | as `supplier-payment` | | | | Existing |
-| `templates` | `corp.templates.list` | `{}` | `{ items }` | see shell | **(planned)** |
-| `quote` | `corp.payments.quote` | as `supplier-payment`; used only to show the indicative amount and check rail and limit | as `supplier-payment` | as `supplier-payment` | **(planned)** |
-| `createSchedule` | `corp.schedules.create` | `{ templateId?, beneficiaryId, fromAccountId, amount, currency, rail, purpose, reference, charges?, frequency, startDate, ends, count?, endDate? }` | `{ id, status: "active", nextRunDate, approveBy, ... }` | `OTP_REQUIRED`, `STEP_UP_FAILED`, `SCHEDULE_DATE_INVALID`, `SCHEDULE_LIMIT`, `BENEFICIARY_NOT_WHITELISTED`, `LIMIT_USER_EXCEEDED`, `CURRENCY_NOT_SUPPORTED`, `INVALID_AMOUNT`, `RAIL_LIMIT`, `RAIL_NOT_AVAILABLE`, `PURPOSE_REQUIRED`, `ACCOUNT_NOT_FOUND`, `NOT_AUTHORISED`, `PERMISSION_DENIED`, `WRONG_CONTEXT`, `STEP_UP_REQUIRED`, `CORE_UNAVAILABLE`, `TIMEOUT`, `SERVICE_UNAVAILABLE`. `moneyMoving: false`, `requiresOtp: true` | **(planned)** |
-| `runSchedules` | `corp.schedules.run` | `{ now }` (sandbox clock) | the payments started, the failures with their codes, and the payments that missed their approval deadline (`NOT_APPROVED_IN_TIME`) | `PERMISSION_DENIED` | **(planned, sandbox-only; used by scenarios to move time forward)** |
-
-Each run uses `corp.payments.quote` and `corp.payments.create` (09 section 13) as the Maker. Scenarios may set the sandbox condition `rates: { EUR: 0.92 }` (planned) to move a rate between creation and the run.
+| Integration | Adapter | Status |
+|---|---|---|
+| Suppliers, accounts, remaining limit | `corp.company.get` | Existing |
+| Create, change, cancel and list schedules | `corp.schedules.create`, `corp.schedules.update`, `corp.schedules.cancel`, `corp.schedules.list` | (planned) |
+| Start each payment on its date (waits for approval like any payment) | `corp.payments.initiate` | Existing, `packages/mock-bank-api/src/corporate.ts` |
+| Quote and speed limits | `corp.payments.quote`, bank rail configuration (`09-payment-rails.md`) | (planned) |
 
 #### 6. Permissions, step-up and limits
 
-`biz.payments.schedule` and `biz.payments.initiate`. Step-up: the code at creation with dynamic linking, always; approvers get the extra check from 25,000.00 USD equivalent at each run (`approve-payments`). At most 25 active schedules per company; 24 months ahead at most. Limits, the whitelist, the rail and the funds are checked at creation (on the USD amount at the indicative rate) **and again at each run** (on the USD amount at the day's rate). The number of approvers (1, or 2 above 50,000.00 USD) is decided at each run from the day's USD amount. Rail maximums are in the rail's own currency (09 section 2).
+`pay.create`. Code only from 25,000.00 USD equivalent, never for Cancel. Person limit 250,000.00 per payment at scheduling (the daily total is checked again when a payment runs). Two approvers above 50,000.00 USD equivalent. At most 20 active schedules. Dates: tomorrow up to 12 months ahead, working days.
 
 #### 7. Result and links out
 
-Result `success`. Receipt: none. Notifications: on creation, none; at each run, to the Maker "Scheduled payment started: {amount} to {supplier}. It's waiting for approval." and to approvers "Payment awaiting your approval, Alpha Trading LLC. Approve by {time} UTC."; on a failed run, to the Maker "A scheduled payment didn't start: {message}. Nothing was paid."; on a missed deadline, to the Maker and to the approvers "This payment wasn't approved in time and has not been sent." Buttons: View scheduled payments, Schedule another, Done.
+A new schedule is stored as "awaiting" with the approvals needed. Approvers approve it once (planned in Approve payments; `BSCH.approve` exists in the file) and it becomes "active"; each run is then checked again. A change sends it back to "awaiting". Cancel ends it at once. Notification (planned): "Payment awaiting your approval" to the approvers; the reminder the day before each payment when `reminder` is on. Links: View scheduled, Schedule another, Back to scheduled.
 
 #### 8. Acceptance criteria
 
-- **AC-1** Only a context with `biz.payments.schedule` and `biz.payments.initiate` can schedule a payment.
-- **AC-2** The first date must be tomorrow or later, within 24 months, and a business day for the supplier's region; weekends and the region's closed days are disabled, and a repeat that lands on one moves to the next business day, which the person sees.
-- **AC-3** Only a whitelisted supplier and a USD account can be scheduled; the amount is in the supplier's currency; the USD amount cannot exceed the person's daily limit.
-- **AC-4** Each region schedules with its own rails: the default rail, the choice of other rails, the rail maximum (`RAIL_LIMIT`) and the reference length follow 09; an instant rail can be scheduled and goes at 09:00 UTC on its date.
-- **AC-5** Purpose and the invoice or PO number are required (`PURPOSE_REQUIRED`).
-- **AC-6** Creating a schedule moves no money and starts no payment; the rate is not fixed, and the review says so.
-- **AC-7** Each run takes a new quote, starts a payment that waits for approval, and counts against the limits on the USD amount of that day.
-- **AC-8** On the date the run checks again: whitelist, rail availability, rail maximum, funds and limits. A run that fails starts nothing and tells the Maker why.
-- **AC-9** A scheduled payment not fully approved by the approval deadline for its rail and region is not sent (`NOT_APPROVED_IN_TIME`), money does not move, and the Maker and approvers are told; later runs continue.
-- **AC-10** The review shows the approvers needed and the "Approve by" time for the region and rail.
-- **AC-11** A schedule is not created without the confirmation and a correct six-digit code that names the schedule; three wrong codes, or a change after the code was sent, stop it (`STEP_UP_FAILED`).
-- **AC-12** A schedule whose payments need two approvers (above 50,000.00 USD at the indicative rate) says so at review.
-- **AC-13** When the bank times out or is unavailable, no schedule is created and the person is told so.
+- AC-1: Only saved, approved suppliers can be chosen; the amount, reference and purpose are required.
+- AC-2: The date is a working day from tomorrow within 12 months; Ends and the number of payments follow the limits of section 3.
+- AC-3: The review shows the next three dates and how many approvals are needed; the code is asked only from 25,000.00 USD equivalent and never for Cancel.
+- AC-4: The result is "Sent for approval" with a waiting chip; no money moves.
+- AC-5: Change goes back for approval and clears earlier approvals; Cancel is immediate and asks for no code.
+- AC-6: Change and Cancel are refused after the cut-off, or while a payment is running.
+- AC-7: A 21st active schedule is refused.
+- AC-8: A timeout shows the check-Scheduled message and an unavailable bank shows the sheet; nothing is created or changed.
+- AC-9: The list warns when the next payment would be skipped, with the reason.
 
 #### 9. Scenarios
 
-Persona `alpha` is Alex Morgan as Maker at Alpha. Suppliers as in `supplier-payment` section 9. `now` is `2026-11-03T10:00:00Z` unless stated. Rates: EUR 0.926, GBP 0.781, AED 3.672 unless a scenario sets a rate.
-
-| Id | Name | Covers | Persona, setup, conditions | Outcome |
+| # | Persona and setup | Steps | Expected | Covers |
 |---|---|---|---|---|
-| T-1 | US monthly payment from a template | AC-1, AC-4, AC-6 | `alpha`; template "Monthly packaging" (Harbour Packaging, USD 12,500.00, ACH); every month from 2026-11-20; ends never | `success`; no payment exists; balance unchanged; the review shows "Approve by 16:00 UTC" |
-| T-2 | Approver cannot schedule | AC-1 | `beta-alex` | `denied` |
-| T-3 | Date in the past | AC-2 | `alpha`; start date 2026-11-03 | "Choose a date from tomorrow." |
-| T-4 | Closed Monday cannot be chosen | AC-2 | `alpha`; start date 2026-11-09 | the picker disables 9 Nov 2026 ("Closed in United States"); forced through the adapter gives `SCHEDULE_DATE_INVALID` |
-| T-5 | Over 24 months | AC-2 | `alpha`; start 2029-01-01 | "Choose a date within 24 months." |
-| T-6 | A repeat lands on a weekend | AC-2 | `alpha`; Harbour, every month from 2026-11-30 | the list shows the third run as "Runs on Mon 1 Feb 2027 instead of Sat 30 Jan 2027" |
-| T-7 | The calendar follows the region | AC-2 | `alpha`; pick Wed 2 Dec 2026 for Gulf Trade FZE, then for Harbour Packaging | disabled for Gulf Trade ("Closed in UAE"); allowed for Harbour |
-| T-8 | Europe schedule | AC-3, AC-4, AC-10 | `alpha`; Nordic Supplies AB, EUR 11,300.00, SEPA Credit Transfer, once on 2026-11-12 | review shows "About USD 12,203.02", "Rate: set on the day", "Approve by 14:00 UTC"; `success` |
-| T-9 | UK weekly and Middle East schedules | AC-4 | `alpha`; Whitby Logistics, GBP 5,000.00, Faster Payments, weekly from 2026-11-06; then Gulf Trade FZE, AED 18,360.00, UAEFTS, once on 2026-11-12 | both created; the UK reference field stops at 18 characters; the Gulf review shows "Approve by 11:00 UTC" |
-| T-10 | Rail limit and default | AC-4 | `alpha`; Harbour, USD 25,000.01 | default rail moves to Same-day ACH; forcing ACH gives `RAIL_LIMIT` |
-| T-11 | Purpose and reference required | AC-5 | `alpha`; purpose empty, then reference empty | "Choose a purpose for this payment."; "Enter the invoice or PO number."; Continue disabled |
-| T-12 | Unapproved supplier, euro account, over the limit | AC-3 | `alpha`; Cedar Tools; Reserve ••6101; Harbour USD 250,000.01 | each refused with its message; nothing created |
-| T-13 | A run starts a payment | AC-7 | `alpha`; Harbour, USD 12,500.00 once for 2026-11-04; run `corp.schedules.run` at 2026-11-04T09:00:00Z | one payment Pending approval, started by Alex, value date 2026-11-04; Alex's used limit rises by the amount; approvers notified "Approve by 16:00 UTC" |
-| T-14 | The run takes a new rate and tests the USD limit | AC-7, AC-8 | `alpha`; Nordic, EUR 231,000.00 (USD 249,460.04) once for 2026-11-04; condition `rates: { EUR: 0.92 }` at the run | creation accepted; the run computes USD 251,086.96 and fails with `LIMIT_USER_EXCEEDED`; no payment; schedule `failed_last_run` |
-| T-15 | A failed run: supplier disabled | AC-8 | `alpha`; schedule for 2026-11-04; supplier disabled before the run | no payment; `failed_last_run`; notification "A scheduled payment didn't start" with `BENEFICIARY_NOT_WHITELISTED` |
-| T-16 | A failed run: instant rail down on the day | AC-8 | `alpha`; Nordic, EUR 5,000.00, SEPA Instant, once for 2026-11-04; at the run `unavailable: ["rail:sinst"]` | no payment; `failed_last_run` with `RAIL_NOT_AVAILABLE`; no automatic switch to SEPA Credit Transfer |
-| T-17 | A failed run: not enough money | AC-8 | `alpha-low-balance`; Harbour, USD 12,500.00 for 2026-11-04 | `INSUFFICIENT_FUNDS`; no payment |
-| T-18 | Not approved in time | AC-9 | `alpha`; Nordic, EUR 11,300.00, SEPA Credit Transfer, for 2026-11-12; run at 09:00; no approval; sweep at 2026-11-12T14:00:01Z | `NOT_APPROVED_IN_TIME`; the payment is `rejected` with "Not approved in time"; balance unchanged; Maker and approvers notified |
-| T-19 | Approved just in time | AC-9 | as T-18 but `dana` approves at 2026-11-12T13:59:59Z | the payment is released with value date 2026-11-12 |
-| T-20 | Half approved is not enough | AC-9, AC-12 | `alpha`; Whitby, GBP 40,000.00 (USD 51,216.39) for 2026-11-12; `dana` approves at 15:00; sweep at 2026-11-12T16:00:01Z | review had said "2 approvers"; `NOT_APPROVED_IN_TIME`; nothing sent |
-| T-21 | Large amount shows the extra check | AC-12 | `alpha`; Harbour, USD 60,000.00, Same-day ACH | review: "2 approvers", "Approvers will be asked for an extra security check."; the creation still needs only the code |
-| T-22 | Confirmation and codes | AC-11 | `alpha`; untick; then `999999` three times | "Tick the confirmation first."; then "Too many wrong codes. Start again." (`STEP_UP_FAILED`); no schedule |
-| T-23 | Code is tied to the schedule | AC-11 | `alpha`; code requested; person goes Back and changes the amount; old code entered | `STEP_UP_FAILED`; no schedule |
-| T-24 | **Timeout** | AC-13 | conditions `timeout: ["corp.schedules.create"]` | `unavailable`; Scheduled list unchanged |
-| T-25 | **Unavailable** | AC-13 | conditions `unavailable: ["corp.schedules.create"]` | `unavailable` "Nothing was changed." |
+| T-1 | Alex at Alpha | Harbour Packaging, 4,500.00, INV-2041, Goods, Monthly, start Tue 1 Dec; send | No code; "Sent for approval"; chip "Waiting for 1 approval"; the list shows "Waiting for approval", "0 of 1 approved" | AC-1, AC-3, AC-4 |
+| T-2 | Alex at Alpha | Nordic Supplies AB, 30,000.00 EUR, Once | Code sheet "Authorise €30,000.00 to Nordic Supplies AB, once"; code 482100; waiting | AC-3 |
+| T-3 | Alex at Alpha | Harbour Packaging, 60,000.00, Monthly | Review "Needs 2 approvals before the first payment" | AC-3 |
+| T-4 | Alex at Alpha | Start date today | Date field "Choose a date from tomorrow." | AC-2 |
+| T-5 | Alex at Alpha | Ends: After a number, 1 payment | "Enter a number from 2 to 60." | AC-2 |
+| T-6 | Alex at Alpha | Change BSC-3001 to 5,000.00 | "Change sent for approval"; list shows "Waiting for approval" | AC-5 |
+| T-7 | Alex at Alpha | Cancel BSC-3002 | "Payment cancelled"; the row is gone from the list; no code | AC-5 |
+| T-8 | Alex at Alpha, `strictCutoff` on, a schedule starting Wed 4 Nov | Change it | "This payment can’t be changed any more. Change it after it runs." | AC-6 |
+| T-9 | Alex at Alpha, 20 active schedules (test seed) | Review, Send | "You can have up to 20 scheduled payments. Cancel one to add another." | AC-7 |
+| T-10 | Alex at Alpha, wrong code three times | Code sheet | "We couldn’t confirm this payment. Nothing was scheduled. Start again."; no schedule | AC-3 |
+| T-11 | Timeout on Review | Send | Banner "Check Scheduled payments before you try again, so you don’t schedule it twice."; nothing created | AC-8 |
+| T-12 | Bank unavailable | Review | Sheet "We couldn’t reach the bank"; nothing created | AC-8 |
+| T-13 | Alex at Alpha, Harbour Packaging disabled after BSC-3001 became active (test) | Open Scheduled | Warning "The supplier is no longer on your list. The next payment would be skipped." | AC-9 |
+| T-14 | Alex at Beta | Open Payments › Scheduled | No Schedule a payment, Change or Cancel | AC-1 |
 
 #### 10. Expected mutation-check survivors
 
-| Survivor | Reason |
-|---|---|
-| 25-schedule limit | No scenario creates 25 schedules; listed with the reason that the seed has 2. |
-| Region holiday dates other than 9 Nov, 2 Dec (UAE) and weekends | No scenario uses them; the list is sandbox data. |
-| Saudi Arabia and Jordan weekend (Friday and Saturday) | Alpha has no supplier in those countries; a planned persona variant would prove it. |
-| Monthly "last business day of a short month" rule | No scenario starts a schedule on the 31st. Add one if this should be proved. |
-| The approval deadline of rails not used in a scenario (SARIE, JoPACC, SWIFT) | Only SEPA Credit Transfer, UAEFTS and the company cut-off are asserted. |
-| The text of each message and the specific rates | Tests check the code and a fixed rate table (09 section 15). |
+- Changing the 25,000 or 50,000 constants by one cent: survives, T-1 to T-3 are far from the edge.
+- Changing the 20-schedule limit to 21: survives, T-9 sits at exactly 20.
+- Changing the 18:00 / 09:00 cut-off hours: survives, the scenario time is 10:42 and only the strict case is asserted.
+- Changing the maximum payment counts (104, 60, 40): survives, only the monthly maximum appears in T-5.
+- Removing "#" from the reference pattern: survives, no scenario types it.
 
 ---
 
-### ★ Withdraw a payment — `withdraw-payment`
+### ★ Scheduled supplier payments — `business-schedules`
 
-> The existing journey is `withdraw-a-payment` (`packages/journey-schema/src/fixtures/withdraw-payment.ts`, made by the generator, English only, app `meezan`). README 5.3 calls it `withdraw-payment`. The slug must be aligned (see "README changes needed" in the report of this file). This spec uses `withdraw-payment` and says "today" for the fixture.
+**Catalog**: slug `business-schedules`, workspace business, category Payments, core no, a bank can switch it off (yes). A view, not a journey: the **Scheduled** tab of Payments. Options: none. Permission `accounts.view` to see it; Schedule, Change and Cancel need `pay.create`. Prototype file `design/bankworkx-r1/src/journeys/71-templates-schedule.js` (`JR.define` with `view: true, tab: 'pay'`).
 
 #### 1. Summary
 
 | | |
 |---|---|
-| Slug | `withdraw-payment` (fixture slug today: `withdraw-a-payment`) |
-| Purpose | The person who started a payment takes it back while it waits for approval. |
+| Slug | `business-schedules` |
+| Purpose | Show scheduled and repeating supplier payments, whether they are waiting for approval, and whether the next one would be skipped. |
 | Release | 1 |
 | Workspace | Business |
-| Status | **Existing, upgraded.** 6 criteria, 18 scenarios, proved on both bank APIs. |
+| Status | Built in the prototype. |
+| Who may see it | Anyone who can see Payments (`accounts.view`). The buttons show only with `pay.create`. |
+| Route | Web `/business/{company}/payments/scheduled` (planned). Mobile screen `ScheduledPayments` (planned). In the prototype it is the Scheduled segment of the Payments tab. |
+
+**Home market configuration**: none.
+
+#### 2. Entry points and parameters
+
+Payments › Scheduled segment. No parameters.
+
+#### 3. Screen
+
+1. Button **Schedule a payment** (only with `pay.create`).
+2. One card per schedule, in the order saved; cancelled and ended schedules are not listed. A card has: the supplier's first letter, the supplier name and the reference, and a badge at the end (Active green, Waiting for approval amber, Paused grey; Paused is not set by the prototype yet). Under it: a line "{amount} · {how often} · next {Tue 1 Dec}" (the next date is the first run, moved to a working day); then one of: "{n} of {need} approved" (waiting for approval); an amber box "{reason} The next payment would be skipped." (an active schedule that fails the check before the next run, reasons in `schedule-business-payment`); or the last result, like "Paid 3 Nov". With `pay.create`: buttons **Change** and **Cancel**.
+
+Sort: the order saved. No filters (planned: status chips). Empty: "Nothing scheduled" / "Payments you schedule show here." (the button stays above). Loading and error states are not in the prototype (planned: skeleton cards; "We couldn’t load your scheduled payments. Nothing was changed." with **Try again**).
+
+#### 4. Actions and drill-downs
+
+**Schedule a payment** opens `schedule-business-payment` (new). **Change** opens it in edit mode, **Cancel** in cancel mode, both with `{scheduleId}`. After a result, **View scheduled** and **Back to scheduled** return here. A "last run" link to the payment it started is planned.
+
+#### 5. Adapters
+
+`corp.schedules.list` (planned). The warning text uses the same check as the run (planned run engine).
+
+#### 6. Acceptance criteria
+
+- AC-1: The list shows each schedule with supplier, amount, how often, next date and badge.
+- AC-2: A schedule waiting for approval shows "{n} of {need} approved".
+- AC-3: An active schedule that would fail shows the reason and "The next payment would be skipped."
+- AC-4: Change and Cancel show only with `pay.create`.
+- AC-5: Cancelled schedules are not listed; with none left the empty state shows.
+
+#### 7. Scenarios
+
+| # | Persona and setup | Steps | Expected | Covers |
+|---|---|---|---|---|
+| T-1 | Alex at Alpha | Open Scheduled | Two cards: Harbour Packaging "$4,500.00 · Monthly · next Tue 1 Dec", Active, "Paid 3 Nov"; Whitby Logistics "£12,000.00 · Every 3 months · next Mon 4 Jan", Waiting for approval, "0 of 1 approved" | AC-1, AC-2 |
+| T-2 | Alex at Alpha, balance below 4,500.00 (test) | Open Scheduled | Warning "There isn’t enough money in the account. The next payment would be skipped." | AC-3 |
+| T-3 | Alex at Beta | Open Scheduled | No Change, Cancel or Schedule a payment | AC-4 |
+| T-4 | Alex at Alpha, both cancelled | Open Scheduled | "Nothing scheduled" | AC-5 |
+
+#### 8. Expected mutation-check survivors
+
+- Changing the badge colours: survives, only the text is asserted.
+- Changing the order of the cards: survives, not asserted.
+
+---
+
+### ★ Withdraw a payment — `withdraw-payment`
+
+**Catalog**: slug `withdraw-payment`, workspace business, category Payments, core no, a bank can switch it off (yes). Options: `askReason` "Ask why the payment is withdrawn" (on). Permission `pay.create`; moves no money, no code. Prototype file `design/bankworkx-r1/src/journeys/72-withdraw-tracker.js`: a normal engine journey (`JR.define`, one or two steps). The place where it is started is the view `payment-tracker` (next block).
+
+> The screens never name a country or a payment scheme. Only the Maker's own payments that still wait for approval can be withdrawn; once a payment is released to the bank it can't be (a recall through the bank is outside this journey).
+
+#### 1. Summary
+
+| | |
+|---|---|
+| Slug | `withdraw-payment` |
+| Purpose | A Maker takes back a payment they started while it still waits for approval. Nothing is sent. |
+| Release | 1 |
+| Workspace | Business (planned field `workspace: "business"`) |
+| Status | Existing, upgraded. The sandbox already has the rule (`withdrawPayment` in `packages/mock-bank-api/src/corporate.ts`, adapter `corp.payments.withdraw`, built today as the fixture `withdraw-a-payment`); the prototype journey is the reference for BankWorkx®. |
 | Channels | web, mobile |
-| Starting pattern | The existing `withdraw-a-payment` fixture; adapter `corp.payments.withdraw`. |
-| Who may use it | The context holds `biz.payments.withdraw` **and** is the person who started the payment. |
+| Who may use it | The context holds `pay.create`, and the payment was started by the same person. At Alpha Trading LLC: Alex Morgan (Maker). Not offered to Approvers (Alex at Beta). |
+| Seed | Alpha: PAY-2040, $18,900.00 to Harbour Packaging, Ref PO-5612, started Today 09:30, 0 of 1 approved (Alex's, pending). PAY-1187 is settled and cannot be withdrawn. |
 
-**The screens as built today**
-
-| Screen id | Title | What it does |
-|---|---|---|
-| `who` | Sign in | The sandbox "who am I" choice (`session.userId`). Button "Continue" loads the company and goes to `start`; a user who is not an initiator goes to `denied`. |
-| `start` | Waiting for approval | Calls `corp.payments.pending` with `{ userId, as: "initiator" }`. Caption "Payments you started that are waiting for approval. You can withdraw one before it is approved." If none: "Nothing you started is waiting for approval." Else a `menu`: label "{amount} to {supplier}", text "{reference} · {n} of {required} approved". A tap sets `wd.paymentId` and goes to `review`. Button "Close". |
-| `review` | Withdraw payment | `reviewSummary` (From, To, Amount, Reference, Approved so far, Value date); warning `alert` "Once withdrawn, the payment can no longer be approved, even if an approver has already approved it. To pay this supplier you would start a new payment."; buttons "Withdraw and send code" and "Keep it". There is **no consent block** today. |
-| `otp` | Verify | `otp` block (6 digits, 3 attempts, resend after 60 s); button "Verify and withdraw". Wrong code: toast "Incorrect code"; third wrong code to `failed`. |
-| `withdrawn` | Withdrawn | Reloads the company (`ctx.company`); `result` success "Payment withdrawn", text "{amount} to {supplier} can no longer be approved. No money has left the account."; text "The amount has been given back to your daily limit. You can still start {remainingToday} today."; buttons "Back to the list", "Close". |
-| `failed` | Not withdrawn | `result` error "The payment was not withdrawn", text `ctx.error.message`; caption "Nothing has changed. If an approver has already released or rejected it, it can no longer be withdrawn."; buttons "Back to the list", "Close". |
-| `unavailable` | Not available | `result` error "Not available for this customer"; buttons "Try again" (to `who`), "Close". |
-| `denied` | Not allowed | "You can't do this. Only the person who started a payment can withdraw it." Button "Close". |
-
-Two facts about the fixture the upgrade must fix: the `start` list and the `review` summary read the supplier name through `ctx.company.beneficiaries[item.beneficiaryId].name`, which is blank for a bulk file (`beneficiaryId` is "bulk") or payroll run ("payroll"); the adapter result already carries `payee`, so the upgrade uses `item.payee`. And the sandbox adapter `corp.payments.withdraw` does **not** check the one-time code (no `OTP_REQUIRED` in `index.ts`); the journey asks for it, but only the journey enforces it today.
-
-**What the upgrade changes**
-
-1. No `who` screen; the acting user is the active context's user (`PERMISSION_DENIED` for a different `userId`).
-2. Entry with `{paymentId}` from the tracker skips the `start` list and opens `review`.
-3. `payee` instead of the beneficiary lookup, so bulk and payroll payments read correctly.
-4. A `consent` block ("I understand this payment can no longer be approved").
-5. The adapter enforces the one-time code (`OTP_REQUIRED`) (planned; see open questions).
-6. A `timeline` on the review so the person sees who has already approved.
-7. `PERMISSION_DENIED`, `WRONG_CONTEXT`, `TIMEOUT`, `SERVICE_UNAVAILABLE`, `SESSION_EXPIRED`.
+**Home market configuration**: none.
 
 #### 2. Entry points
 
 | Place › label | Passes | Permission |
 |---|---|---|
-| Payments › tracker › payment › Withdraw | `{paymentId}` | `biz.payments.withdraw` |
-| Payments › hub › Needs your attention › Withdraw | `{paymentId}` | `biz.payments.withdraw` |
-| Payment detail › Withdraw | `{paymentId}` | `biz.payments.withdraw` |
-| Deep link `bankworkx://business/alpha/j/withdraw-payment?paymentId=pay_1` | `{paymentId}` | `biz.payments.withdraw` |
+| Payments › Tracker › payment › Withdraw | `{paymentId}` | `pay.create`, own pending payment |
+| Payments › Tracker › Pending | none (pick one) (planned button) | `pay.create` |
 
-Without `{paymentId}` (for example from the ⌘K bar) the journey opens on `start`.
+With `{paymentId}` the pick step is skipped.
 
 #### 3. Screens
 
-Screen ids: `start`, `review`, `otp`, `withdrawn`, `failed`, `unavailable`, `denied`, `wrongContext`.
+Progress text "Step n of 2 · Withdraw a payment" (1 of 1 when a payment was passed). Each screen has **Back** (the first has **Cancel**).
 
-**Screen `start` — "Waiting for approval"**
-Unchanged copy. List fed by `corp.payments.pending` `{ as: "initiator" }`. Row label "{amount} to {payee}", row text "{reference} · {n} of {required} approved". Empty: "Nothing you started is waiting for approval." with button "Pay a supplier" (`supplier-payment`) in addition to "Close". Loading: skeleton rows. Error: `unavailable`.
+**Step 1: Withdraw a payment** (skipped when a payment was passed). Button **Continue**.
 
-**Screen `review` — "Withdraw payment"**
-
-| Field | Block | Required | Rule | Error message |
+| Field | Type | Required | Rule | Message |
 |---|---|---|---|---|
-| I understand this payment can no longer be approved (`wd.consent`) | `consent`, `termsVersion: "corporate-v1"` (planned upgrade) | yes | `mustBeTrue` | "Tick the confirmation first." |
+| Payment | cards: "{amount} to {supplier}", then "{id} · {started}", and a chip "{n} of {need} approved" | yes | one of this person's payments that are pending and not fully approved | "Choose a payment." |
 
-Other blocks: `reviewSummary` (From, To (`payee`), Amount, Reference, Approved so far, Value date), `timeline` (Started by me; each approval so far), warning `alert` as today, buttons "Withdraw and send code" (validate, send code, `otp`) and "Keep it" (to `start`, or exit when opened by `{paymentId}`).
+Empty list: "Nothing to withdraw" / "Only payments waiting for approval can be withdrawn."
 
-**Screen `otp`** as today; button "Verify and withdraw"; field `otp.code` required, pattern `^[0-9]{6}$`, message "Enter the 6-digit code."; resend after 30 s (upgrade from 60).
+**Step 2: Withdraw this payment?** A card with the payment: "{amount} to {supplier}", "{id} · Ref {reference}", status chip. Busy text "Withdrawing…" (about 0.5 s). Button **Withdraw payment**.
 
-**Screen `withdrawn`** as today, plus a `statusChip` **Withdrawn**, buttons "Track payment" (Payment detail), "Back to the list", "Pay a supplier" (`supplier-payment`), "Done". For a payroll run: extra line "The pay period {period} is free again. You can run payroll for it."
-
-**Screen `failed`** as today (the message comes from the error table); caption "Nothing has changed." **Screen `unavailable`**, **`denied`**, **`wrongContext`**: see section 4.
-
-#### 4. Sandbox errors
-
-| Code | Adapter message today | What the person sees | Screen | Button |
+| Field | Type | Required | Rule | Message |
 |---|---|---|---|---|
-| `PAYMENT_NOT_PENDING` | "This payment is already {status}" (status is "released" or "rejected") | "This payment was not withdrawn. It is already {released, rejected or withdrawn}. Nothing has changed." | `failed` | Back to the list |
-| `NOT_AUTHORISED` | "{name} can only withdraw payments they started" | "Only the person who started a payment can withdraw it. Nothing has changed." | `failed` / `denied` | Back to the list / Close |
-| `PAYMENT_NOT_FOUND` | "No payment {id}" | "We can't find that payment." | `failed` | Back to the list |
-| `USER_NOT_FOUND` | "No user {id} at {company}" | "We can't find your user at {company}. Sign in again." | `failed` | Sign in |
-| `OTP_INVALID` | "Incorrect code" | "That code isn't right. {n} tries left." After the third: "Too many wrong codes. Start again." (the payment keeps waiting) | `otp` / `failed` | Try again / Start again |
-| `OTP_REQUIRED` (planned for this adapter) | none today | "Confirm with your one-time code first." | `otp` | Back to code |
-| `PERMISSION_DENIED` (planned) | none today | "Your role doesn't allow this. Ask an administrator at Alpha Trading LLC." | `denied` | Back |
-| `WRONG_CONTEXT` (planned) | none today | "This belongs to your Business banking. Switch to Business to continue." | `wrongContext` | Switch |
-| `STEP_UP_REQUIRED` | not used | Not used: withdrawing is `otp` level. | none | none |
-| `CORE_UNAVAILABLE` | "Core banking unavailable" (not raised by this adapter today) | "We couldn't complete this right now. Nothing has changed." | `failed` | Try again |
-| `TIMEOUT` (planned) | none | "We didn't get an answer in time. Open the payment to see whether it was withdrawn before you try again." | `unavailable` | Open payment |
-| `SERVICE_UNAVAILABLE` (planned) | none | "This service is not available right now. Nothing was changed. Please try again in a few minutes." | `unavailable` | Try again |
-| `SESSION_EXPIRED` (planned) | none | Standard (README 1.6) | `unavailable` | Sign in |
+| Reason (optional) | select, placeholder "Choose a reason": Wrong amount, Wrong supplier, Wrong reference, Not needed any more, Other (shown when `askReason` is on) | no | one of the list | none |
+| Note | text, max 100 (shown when the reason is Other) | no | none | none |
+
+No code is asked.
+
+**Result** "Payment withdrawn", line "Nothing was sent to {supplier}.", green chip "Withdrawn". Receipt rows: Payment, To, Amount, Reason (if given); then the BankWorkx® reference. Buttons **Back to payments** (Payments › Tracker), **New supplier payment**.
+
+#### 4. States and errors (codes are for tests; the person sees the message)
+
+| Code | Message | Where | Button |
+|---|---|---|---|
+| `PAYMENT_NOT_FOUND` | "We can’t find that payment." | step 2 banner | Back |
+| `NOT_YOUR_PAYMENT` | "You can only withdraw payments you started." | step 2 banner | Back |
+| `PAYMENT_RELEASED` | "This payment has already been released to the bank. It can’t be withdrawn." | step 2 banner | Back to payments |
+| `PAYMENT_NOT_PENDING` | "This payment is no longer waiting for approval." | step 2 banner | Back to payments |
+| `TIMEOUT` | "We didn’t get an answer in time. Check Payments before you try again." | banner | check Payments |
+| `SERVICE_UNAVAILABLE` | Sheet "We couldn’t reach the bank": "Nothing was sent and you haven’t been charged. Try again in a moment." (journey text: "We couldn’t reach the bank. Nothing was changed.") | sheet | Try again / Cancel |
+
+Loading: the busy text above. Empty: the pick step's "Nothing to withdraw". A payment that an approver released while the screen was open is refused with `PAYMENT_RELEASED`.
 
 #### 5. Adapters
 
-| Integration id | Adapter | Request | Response | Error codes | Status |
-|---|---|---|---|---|---|
-| `people` | `corp.users.list` | none | the company's people | none | Existing (removed from the Business journey after step 2) |
-| `company` | `corp.company.get` | `{ userId }` (today) | company with `me.remainingToday` | as `supplier-payment` | Existing |
-| `pending` | `corp.payments.pending` | today `{ userId, as: "initiator" }`; upgrade `{ as: "initiator" }` | payments by id, each with `payee`, `required`, `approvals`, `valueDate` | `USER_NOT_FOUND`, `PERMISSION_DENIED`, `WRONG_CONTEXT`, `TIMEOUT`, `SERVICE_UNAVAILABLE` | Existing |
-| `payment` | `corp.payments.get` | `{ paymentId }` | the payment | `PAYMENT_NOT_FOUND`, `PERMISSION_DENIED` (the payment must belong to the active company) | Existing; the access check is planned |
-| `otpSend`, `otpVerify` | `bank.otp.send`, `bank.otp.verify` | as `supplier-payment` | as there | `OTP_INVALID` | Existing |
-| `withdraw` | `corp.payments.withdraw` | today `{ userId, paymentId }`; upgrade `{ paymentId }` | the payment, `status: "rejected"`, `rejectReason: "Withdrawn by the person who started it"`, `rejectedBy`, `rejectedAt` | `NOT_AUTHORISED`, `PAYMENT_NOT_PENDING`, `PAYMENT_NOT_FOUND`, `USER_NOT_FOUND`; planned `OTP_REQUIRED`, `PERMISSION_DENIED`, `WRONG_CONTEXT`, `TIMEOUT`, `SERVICE_UNAVAILABLE`. `moneyMoving: false` (it only gives the Maker's daily limit back), `requiresOtp`: no today, **yes** after the upgrade | Existing, extended |
-
-Checks the sandbox makes, in order: user, payment, pending, initiator. Side effects: the payment becomes `rejected`; the Maker's `usedToday` goes down by the payment amount (never below 0); for payroll the period is free again (`PAYROLL_ALREADY_RUN` no longer applies).
+| Integration | Adapter | Status |
+|---|---|---|
+| List this person's pending payments | `corp.payments.pending` with `as: initiator` | Existing, `packages/mock-bank-api/src/corporate.ts` |
+| Withdraw (errors `PAYMENT_NOT_PENDING`, `NOT_AUTHORISED`; the payment becomes `rejected` with the reason "Withdrawn by the person who started it"; the person's daily limit is given back) | `corp.payments.withdraw` | Existing |
+| Reason and note stored with the withdrawal | extra field on `corp.payments.withdraw` | (planned) |
 
 #### 6. Permissions, step-up and limits
 
-`biz.payments.withdraw` (checks 1 to 3) plus the sandbox rule that only the starter can withdraw (so an Admin or another Maker is refused with `NOT_AUTHORISED`). Step-up `otp`. Limits: none are consumed; the Maker's remaining daily limit increases by the payment amount. A payment one approver has already approved can still be withdrawn. A released payment cannot.
+`pay.create`. Only the person who started it (`NOT_YOUR_PAYMENT`; the sandbox says `NOT_AUTHORISED`). A partly approved payment can still be withdrawn; a fully approved or released one cannot. No code. Withdrawing gives the amount back to the person's daily limit.
 
 #### 7. Result and links out
 
-Result `withdrawn` with status **Withdrawn**. Receipt: none (the timeline records it). Notifications: to approvers who had approved or were waiting "{name} withdrew a payment you were asked to approve. No action needed." The payment disappears from their inbox. Buttons: Track payment (Payment detail), Back to the list, Pay a supplier (`supplier-payment`), Done.
+The payment's status becomes Withdrawn ("Withdrawn · {reason}" on its timeline) and it leaves the Approvers' inbox. An audit line is added: "Withdrew payment {id} of {amount}". Notification (planned): the approvers are told it was withdrawn. Links: Back to payments (Tracker), New supplier payment.
 
 #### 8. Acceptance criteria
 
-(The first six are the fixture's own criteria. AC-7 to AC-10 are the upgrade.)
-
-- **AC-1** Someone who is not an initiator, or who has not said who they are, cannot continue; a non-initiator is told only the person who started a payment can withdraw it.
-- **AC-2** Only the payments the person started that are still waiting for approval are listed, and the screen says so when there are none.
-- **AC-3** A correct six-digit code is needed; with a wrong or short code the payment keeps waiting; three wrong codes end the journey without withdrawing.
-- **AC-4** A withdrawn payment is closed, moves no money, and its amount comes back to the initiator's daily limit, even if one of two approvers had approved it.
-- **AC-5** A payment that is already closed (released, rejected or withdrawn) cannot be withdrawn and nothing changes.
-- **AC-6** A customer who is not a company is told it is not available.
-- **AC-7** The acting person comes from the active context; a call that names a different user is refused (`PERMISSION_DENIED`), and a context without `biz.payments.withdraw` is refused.
-- **AC-8** Opened with a `paymentId`, the journey goes straight to the review of that payment; a bulk or payroll payment shows its payee text.
-- **AC-9** The withdrawal is not sent without the confirmation.
-- **AC-10** When the bank times out or is unavailable, the payment keeps waiting and the person is told what to do.
+- AC-1: Only the Maker's own pending payments can be withdrawn; others are refused with the message of section 4.
+- AC-2: The confirm screen shows the payment and, when `askReason` is on, an optional reason; Other adds a note.
+- AC-3: The result is "Payment withdrawn", status Withdrawn, and says nothing was sent.
+- AC-4: A released or settled payment can't be withdrawn.
+- AC-5: With nothing to withdraw the pick step shows the empty state.
+- AC-6: A timeout shows the check-Payments message and changes nothing; an unavailable bank shows the sheet and changes nothing.
 
 #### 9. Scenarios
 
-Existing scenarios T-1 to T-18 in the fixture cover AC-1 to AC-6 (an approver is refused; unknown company user; no "who"; a person with both roles sees their own waiting payment; another person's payment is not listed; a released payment is not listed; nothing waiting; another person's payment cannot be withdrawn by id; wrong code; three wrong codes; short code; withdrawing frees the limit; one approver already approved; only the withdrawn amount returns; full-limit return; already released, already rejected, already withdrawn; non-company customer). Persona `acme`, `now` 2026-11-03T10:00:00Z. The upgrade adds the following (persona `alpha` is Alex as Maker; `dana` is the approver).
-
-| Id | Name | Covers | Persona, setup, conditions | Outcome |
+| # | Persona and setup | Steps | Expected | Covers |
 |---|---|---|---|---|
-| T-19 | Context user, no "who" screen | AC-7 | `alpha`; setup: Alex starts a payment USD 12,500.00 | the journey opens on `start` with the payment listed; withdrawing it works without choosing a user |
-| T-20 | Other user in the request | AC-7 | `alpha`; call `corp.payments.withdraw` with `userId: "dana"` | `PERMISSION_DENIED`; payment still pending |
-| T-21 | Approver context | AC-7 | `beta-alex` | `denied`; Withdraw is not shown on the tracker |
-| T-22 | Another Maker's payment | AC-7 | persona `beta-priya` withdraws a payment started by `omar` at Beta | `NOT_AUTHORISED` "Only the person who started a payment can withdraw it." |
-| T-23 | Straight to review | AC-8 | `alpha`; open with `paymentId` | `review` is the first screen; "Keep it" exits |
-| T-24 | Bulk payment label | AC-8 | `alpha`; setup: a bulk file of 3 lines started by Alex | the row reads "USD 150,000.00 to 3 payments" |
-| T-25 | Payroll period freed | AC-4, AC-8 | `alpha`; setup: payroll run 2026-10; withdraw it | `withdrawn` shows "The pay period 2026-10 is free again."; starting payroll 2026-10 again works |
-| T-26 | Without the confirmation | AC-9 | `alpha` | stays on `review`; "Tick the confirmation first." |
-| T-27 | **Timeout** | AC-10 | `alpha`; conditions `timeout: ["corp.payments.withdraw"]` | `unavailable` with the TIMEOUT text; the payment still shows Pending approval in the tracker; the daily limit is unchanged |
-| T-28 | **Unavailable** | AC-10 | `alpha`; conditions `unavailable: ["corp.payments.pending"]` | `unavailable`; "Nothing was changed." |
-| T-29 | No code, no withdrawal (planned adapter rule) | AC-3 | `alpha`; call `corp.payments.withdraw` without verifying a code | `OTP_REQUIRED`; the payment keeps waiting |
+| T-1 | Alex at Alpha | Tracker › PAY-2040 › Withdraw; reason "Wrong amount"; confirm | "Payment withdrawn"; "Nothing was sent to Harbour Packaging."; row Reason "Wrong amount"; tracker shows Withdrawn | AC-2, AC-3 |
+| T-2 | Alex at Alpha | Same, reason "Other", note "Wrong invoice" | Receipt reason "Wrong invoice" | AC-2 |
+| T-3 | Alex at Alpha, `askReason` off | Withdraw | No reason field | AC-2 |
+| T-4 | Alex at Alpha, PAY-1187 (settled) | Open it in the tracker | No Withdraw button | AC-4 |
+| T-5 | Alex at Alpha, PAY-2040 released meanwhile (test) | Confirm | "This payment has already been released to the bank. It can’t be withdrawn." | AC-4 |
+| T-6 | Alex at Alpha, a payment started by someone else (test) | Confirm | "You can only withdraw payments you started." | AC-1 |
+| T-7 | Alex at Alpha, no pending payments | Start with no payment | "Nothing to withdraw" | AC-5 |
+| T-8 | Timeout on confirm | Withdraw | Banner "Check Payments before you try again."; status unchanged | AC-6 |
+| T-9 | Bank unavailable | Withdraw | Sheet "We couldn’t reach the bank"; status unchanged | AC-6 |
+| T-10 | Alex at Beta | Open Tracker | No Withdraw button | AC-1 |
 
 #### 10. Expected mutation-check survivors
 
-The fixture's own survivors are listed in `packages/finx-mcp/src/scenarios.test.ts`. Expected additions for the upgrade:
+- Removing the note's 100-character limit: survives, no scenario types a long note.
+- Changing the list of reasons: survives, only "Wrong amount" and "Other" are used.
+- Letting a payment with all approvals but not yet released be withdrawn: caught by T-5 only if the test seed sets it up.
 
-| Survivor | Reason |
+---
+
+### ★ Payment tracker — `payment-tracker`
+
+**Catalog**: slug `payment-tracker`, workspace business, category Payments, core no, a bank can switch it off (yes). A view, not a journey: the **Tracker** tab of Payments, the first tab. Options: none. Permission `accounts.view`; Withdraw needs `pay.create`. Prototype file `design/bankworkx-r1/src/journeys/72-withdraw-tracker.js` (`JR.define` with `view: true, tab: 'pay'`), embedded by the Payments tab in `src/js/80-business.js`.
+
+#### 1. Summary
+
+| | |
 |---|---|
-| The `consent` block on `review` is removed | Killed by T-26 only after the block is added; until then no scenario can notice it. |
-| `OTP_REQUIRED` rule on the adapter switched off | Killed by T-29 once the rule exists. Before then it is not mutable. |
-| The sandbox check "only the starter" (`NOT_AUTHORISED`) is hidden behind the permission check | If `biz.payments.withdraw` is held by every Maker, T-22 kills it; if the permission layer stops the case first, the sandbox rule survives with that reason. |
-| The unchanged mutants of the six fixture criteria | None expected beyond those already listed in `scenarios.test.ts`. |
+| Slug | `payment-tracker` |
+| Purpose | Find any payment the company started and see where it is: waiting for approval, released, settled, rejected or withdrawn, with a status timeline and, for the Maker's own pending payments, Withdraw. |
+| Release | 1 |
+| Workspace | Business |
+| Status | Built in the prototype. The sandbox has `corp.payments.get` and `corp.payments.pending`; a full list is planned (section 5). |
+| Who may see it | Anyone who can see Payments (`accounts.view`): a Maker sees every payment of the company. |
+| Route | Web `/business/{company}/payments/tracker` and `/business/{company}/payments/tracker/{paymentId}`; deep link `bankworkx://business/{company}/payments/{paymentId}` (all planned). Mobile screens `PaymentTracker` and `PaymentDetail` (planned). In the prototype it is the Tracker segment of the Payments tab. |
+| Seed | Alpha: PAY-2040 (pending, $18,900.00, Harbour Packaging), PAY-1187 (settled, $12,450.00), PAY-1180 and PAY-1190 (settled supplier batches); rows keep the stored order and a payment started later goes to the top. Beta: PAY-2041 and PAY-2039 (pending), PAY-2012 (settled). |
+
+**Home market configuration**: none. The cut-off shown is 16:00 UTC.
+
+#### 2. Entry points and parameters
+
+Payments › Tracker segment, the Overview recent payments and the Approvals inbox rows (they open the payment through `S.sub`). A "Track payment" button on the result of Pay a supplier opens the payment here. Launch points on it: **Withdraw** (`withdraw-payment`, `{paymentId}`).
+
+#### 3. Screen
+
+At the top of the Payments tab, whatever segment is chosen: with `pay.create` the button **New supplier payment** (`supplier-payment`); without it a note "Your role here is {role}. It can’t create payments, so this button isn’t offered. The bank refuses it too." Below it the segments **Tracker**, **Templates**, **Scheduled**, **Suppliers**, **Bulk & payroll**. Tracker is the first.
+
+**List.** A row of filter chips: All, Pending, Released, Settled, Rejected, Withdrawn (one at a time; All by default). Under it a table of the company's payments, newest started first, with these columns on the web (cards on phones, the first value as the title):
+
+| Column | Content |
+|---|---|
+| Payment | the id like `PAY-2040`, and the start time under it ("Today 09:30") |
+| To | supplier, or "Bulk · {n} payments" |
+| Amount | in dollars, right aligned |
+| Status | a chip |
+
+Status chips: **Pending approval** (amber), **Released to bank** (blue), **Settled** (green), **Rejected** (red), **Withdrawn** (grey). The filter chip "Released" matches only Released to bank.
+
+Empty with no payments: "No payments yet" / "Payments you start will show here with their status." Empty after a filter: "Nothing here" / "No payment has this status." Loading and error states are not in the prototype (planned: 8 skeleton rows; "We couldn’t load your payments. Nothing was changed." with **Try again**).
+
+**Detail.** On wide screens the list is on the left and the detail of the selected payment on the right (the first row is selected at first; "Pick a payment" / "Its status timeline appears here." when none). On phones a tap opens the detail with **‹ Back**. The detail card has: the id and the status chip; the amount; "To {supplier} · Ref {reference}" and the speed when known; the status timeline; then buttons.
+
+| Timeline step | Text | State |
+|---|---|---|
+| Created | "{name} · {started}" | done |
+| Approval | "{n} of {need} approved ({names})"; or "Rejected"; or "Withdrawn" plus " · {reason}" | current while pending; done once approved; red when rejected or withdrawn |
+| Released to bank | "Before the 16:00 cut-off" | current when released; done when settled |
+| Settled | none | done when settled |
+
+Released to bank and Settled are shown only for payments that were not rejected or withdrawn. Buttons: **Withdraw** (only for the Maker's own payment that is pending and not fully approved, with `pay.create`; opens `withdraw-payment` with `{paymentId}`); **View receipt** (settled or released; the prototype only shows "Receipt downloaded", the real receipt is planned).
+
+**Planned, not in the prototype** (from the earlier shell text): filters by date range, type, started by, and search; sort by column; a "Mine" toggle; the columns Approvals, Value date and Started by; the overflow actions Save as template, Repeat and Repair rejected lines (the last for bulk payments; today it is the **Fix and resend** button of Batch status); a full timeline with each approver's time and "Goes out on {date} because it was started after the cut-off"; a Lines table for bulk and payroll; "Go to approvals" for a person who is also an Approver.
+
+#### 4. States and errors
+
+A payment that cannot be found: "Payment not found." in the card. Timeout and unavailable: shown by the page (planned, see above). No money moves here.
+
+#### 5. Adapters
+
+| Integration | Adapter | Status |
+|---|---|---|
+| One payment: status, amounts, who started it, who approved, value date, release reference or rejection reason | `corp.payments.get` | Existing, `packages/mock-bank-api/src/corporate.ts` |
+| The Maker's pending payments (`as: initiator`) | `corp.payments.pending` | Existing |
+| List all payments with filters and paging (`status`, `from`, `to`, `kind`, `startedBy`, `q`, `sort`, `page`; 25 a page) | `corp.payments.list` | (planned) |
+| Withdrawn and Settled as states (the sandbox stores a withdrawn payment as `rejected` with the reason "Withdrawn by the person who started it", and has no `settled`) | status mapping in the view-model | (planned) |
+| Access check: the payment must belong to the active company, else `PERMISSION_DENIED` | `corp.payments.get` | (planned) |
+
+#### 6. Acceptance criteria
+
+- AC-1: The list shows the company's payments with id, start time, supplier, amount and a status chip.
+- AC-2: The filter chips narrow the list by status; All shows everything.
+- AC-3: The detail shows a timeline that matches the status, including who approved and the withdraw reason.
+- AC-4: Withdraw shows only on the Maker's own pending payments that are not fully approved, and only with `pay.create`.
+- AC-5: A withdrawn payment shows Withdrawn and no release steps.
+- AC-6: With no payments the empty state shows; with a filter that matches none, "Nothing here".
+- AC-7: An Approver sees the same list and no Withdraw.
+
+#### 7. Scenarios
+
+| # | Persona and setup | Steps | Expected | Covers |
+|---|---|---|---|---|
+| T-1 | Alex at Alpha | Open Payments | Tracker is shown; first row selected; the chips and a table with PAY-2040 "Pending approval" | AC-1 |
+| T-2 | Alex at Alpha | Chip Settled | Only settled payments; PAY-2040 is gone | AC-2 |
+| T-3 | Alex at Alpha | Chip Rejected | "Nothing here" / "No payment has this status." | AC-6 |
+| T-4 | Alex at Alpha | Open PAY-2040 | Timeline: Created "Alex Morgan · Today 09:30", Approval "0 of 1 approved"; button Withdraw | AC-3, AC-4 |
+| T-5 | Alex at Alpha | Open PAY-1187 | Timeline ends at Settled; no Withdraw; View receipt | AC-3, AC-4 |
+| T-6 | Alex at Alpha | Withdraw PAY-2040 | Row shows Withdrawn; timeline "Withdrawn · {reason}"; no Released or Settled steps | AC-5 |
+| T-7 | Alex at Beta | Open Payments | The same list for Beta; no New supplier payment button, a role note instead; no Withdraw | AC-7 |
+| T-8 | A company with no payments (test seed) | Open Payments | "No payments yet" | AC-6 |
+
+#### 8. Expected mutation-check survivors
+
+- Changing the cut-off text "Before the 16:00 cut-off": survives, not asserted.
+- Changing the order of the chips: survives, only their effect is asserted.
+- Changing the colour of a chip: survives, only the words are asserted.
+
+---
 
 ## Business: Bulk and payroll
 
@@ -1526,494 +1527,397 @@ The order the bank checks a row in: bulk is approved list, then amount, then dup
 
 ### ★ Bulk payment — `bulk-payment`
 
+**Catalog**: slug `bulk-payment`, workspace business, category Payments, core no, a bank can switch it off (yes). Permission `pay.create`, moves money. Options (all shown in the catalog panel): **Allow entering payments by hand** (default on), **Also accept bank file formats** (`bankFormats`, default off), **Offer the Same day speed** (`allowSameDay`, default on), **Offer the Instant speed** (`allowInstant`, default on). Prototype file `design/bankworkx-r1/src/journeys/40-bulk-payment.js`, with `bulk-status` and the resend mode in the same file.
+
+> Lean and country-neutral. Screens never name a country or a payment scheme. One standard for every bank: the account format in each line decides which checks apply. Bank file formats (for example the bank's own XML file) are only offered, and only named on screen as "Bank file", when `bankFormats` is on. Pasting lines, per-line approval, partial acceptance and the sample-file picker by scheme name of the earlier version are gone.
+
 #### 1. Summary
-| Item | Value |
+
+| | |
 |---|---|
 | Slug | `bulk-payment` |
-| Purpose | A Maker pays many approved suppliers from one file. Every row is checked first. Only the rows that pass are sent, as one payment, for approval. |
-| Release | 1 |
-| Workspace | Business (`workspace: "business"` *(planned)*) |
-| Status | Existing: `fixtures/bulk-payment.ts` (id `jrn_bulk_payment`, 10 acceptance criteria, 27 scenarios, made by the generator, passes on both corporate bank APIs). Upgraded here: file upload, table, context permissions, timeout and unavailable states. |
-| Channels | web, mobile |
-| Starting pattern | Upload → check → review → consent → one-time code → result |
-| Who may use it | A user whose active context holds `biz.payments.bulk` (Alex Morgan as Maker at Alpha). Not Alex at Beta. |
-
-#### 2. Entry points
-| Place › label | Passes | Permission |
-|---|---|---|
-| Overview › **+** › Upload payments | – | `biz.payments.bulk` |
-| Payments › hub › Upload a file | – | `biz.payments.bulk` |
-| Deep link `bankworkx://business/alpha/j/bulk-payment` | – | `biz.payments.bulk` |
-| ⌘K command bar › "Upload payments" | – | `biz.payments.bulk` |
-The launch point is hidden without the permission (check 1). A forced link opens the refusal screen (check 2).
-
-#### 3. Screens
-
-**As built today (`fixtures/bulk-payment.ts`).** Ten screens: `who` (sandbox: choose who you are), `start` (Payment file), `check` (Check the file), `nothing` (branch: Nothing to pay), `review` (Review bulk payment), `otp` (Verify), `success` (Sent for approval), `failed`, `unavailable`, `denied`. A `stepper` shows `start, check, review, otp`. Bound data: `session.userId`, `bulk.fromAccountId`, `bulk.file`, `bulk.go`, `bulk.reference`, `bulk.consent`, `otp.code`. Pasted rows are `beneficiary,amount,reference`; an optional header row, blank lines and spaces are ignored; a bad amount becomes an invalid amount, not a crash.
-
-**Upgrade.** `who` is removed. `start` gains the planned `fileUpload` block beside the existing paste box. `check` shows the rows in a `dataTable`. `failed` gains buttons for the new codes. A new screen `repairOffer` is not needed: the `success` screen links to `repair-bulk-lines`. The screens below are the upgraded ones; "as built" copy is kept word for word and the new copy is marked *(new)*.
-
-##### Screen `start` — "Payment file"
-Blocks: `stepper` (`start, check, review, otp`), `accountPicker`, `select` (chips: "Upload a file" / "Paste rows") *(new)*, `fileUpload` *(planned)*, `textInput` (`lines: 8`), `text` (caption), two conditional `alert`s, two `button`s.
-
-| Label | Block | Required | Validation | Error message |
-|---|---|---|---|---|
-| Pay from | `accountPicker` `bind: bulk.fromAccountId`, `showBalance`, source `ctx.company.accounts` | Yes | An account of the company | "Choose the account to pay from." (new). The bank adds `CURRENCY_NOT_SUPPORTED` if it is not USD. |
-| How do you want to add the payments | `select` chips `bulk.mode` *(new)* | Yes, default "Upload a file" | one of two | – |
-| Payment file | `fileUpload` *(planned)* `bind: bulk.upload`, `accept: [".csv", ".xml"]`, max 256 KB *(proposed)* | Yes when mode is upload | Extension `.csv` or `.xml`; size at most 256 KB; readable text | "Choose a CSV or XML file." / "That file is too big. The limit is 256 KB." / "We can't read that file. Check that it is a CSV or XML file." |
-| Payment file (paste) | `textInput` `bind: bulk.file`, `lines: 8`, placeholder `sup_textile,250000,INV-1001`, pattern `^[\s\S]*\S[\s\S]*$` | Yes when mode is paste | At least one non-space character | "Paste the payment file first: one row per payment" (exact, `patternMessage`) |
-
-Copy:
-- Title: "Payment file". Caption under the file box: "One row per payment: beneficiary,amount,reference. Up to 50 rows. Only suppliers on the company's approved list can be paid."
-- Upload help *(new)*: "CSV: one row per payment, columns beneficiary, amount, reference. XML: one `<Payment>` element per payment with `<Beneficiary>`, `<Amount>` and `<Reference>`. Download a sample." (link opens a sample file; a CSV and an XML sample ship with the sandbox)
-- Conditional alert when `ctx.error.code == 'EMPTY_BATCH'`: "The file has no payment rows. Add at least one row: beneficiary,amount,reference."
-- Conditional alert when `ctx.error.code == 'BATCH_TOO_LARGE'`: "The file has more than 50 rows. Split it into files of 50 rows or fewer."
-- *(new)* Conditional alert for the file codes (table in section 4).
-
-Buttons:
-| Button | Does | Leads to |
-|---|---|---|
-| **Check** (primary) | `validate`; clears `bulk.go` and `ctx.error`; if mode is upload, calls `importBulk` (turns the file into rows); calls `checkBulk`; on error toast "The file was not accepted" and stays | `check` |
-| **Close** (secondary) | `exit` | where the person started |
-
-States: Loading: **Check** shows a spinner and is disabled; after 10 s the timeout state (alert + **Try again**). Empty: nothing chosen yet shows the helper text only. Error: see section 4.
-
-##### Screen `check` — "Check the file"
-Blocks: `reviewSummary`, `text`, `alert`s, `dataTable` *(planned)* (as built this is two `menu` lists: all problems), `button`s.
-
-`reviewSummary` rows (exact): "Will be paid" = "{validCount} of {validCount + invalidCount} rows"; "Total" = amount in the account currency; "Approvers needed" = "{requiredApprovers} approver(s)".
-
-| Condition | Element | Exact text |
-|---|---|---|
-| `requiredApprovers > 1` | caption | "Above {dualApprovalAbove} a bulk payment needs two approvers." |
-| `invalidCount > 0 && validCount > 0` | alert, warning | "{invalidCount} row(s) cannot be paid and will be left out. Fix the file and check again, or continue with only the rows that pass." |
-| `validCount == 0` | alert, error | "No row in this file can be paid. Fix the file and check again." |
-| `invalidCount > 0` | section header | "Rows that cannot be paid" |
-| `validCount > 0 && total > me.remainingToday` | alert, warning | "The total is above what you can still send today ({remainingToday}). The bank will refuse it: take some rows out first." |
-
-`dataTable` *(planned)* columns (replaces the problem list; the whole file is shown, not only problems):
-| Column | Content | Sort / filter |
-|---|---|---|
-| Row | `n` | sort |
-| Payee | `payee` (name) or the raw id when unknown | search |
-| Amount | `amount` in account currency | sort |
-| Reference | `reference` | search |
-| Result | `statusChip`: "Will be paid" (green) or the row message (red, with an icon) | filter: All / Will be paid / Left out |
-Default sort: row number. Default filter: All. Page size 25 (a file has at most 50 rows). Tap a red row to see the message and the hint "Fix this row in your file, then check again." (the old behaviour of returning to `start` stays as the button **Fix the file**). Empty state is not reachable (an empty file is refused earlier).
-
-Buttons: **Continue with the rows that pass** (primary: sets `bulk.go = true`, goes to `review`); **Fix the file** (secondary: `bulk.go = false`, goes to `start`). Navigation rule: if `bulk.go && validCount == 0` go to `nothing`.
-
-##### Screen `nothing` — branch
-Alert, error: "No row in this file can be paid, so there is nothing to send for approval. Fix the file and check again." Button **Fix the file** to `start`.
-
-##### Screen `review` — "Review bulk payment"
-Blocks: `reviewSummary`, `textInput`, `alert`, `consent`, `button`s.
-
-`reviewSummary` rows: "From" = account name and masked number; "Payments" = `validCount`; "Total"; "Left out" = "{invalidCount} row(s)"; "Approvers needed" = "{requiredApprovers} approver(s)".
-
-| Label | Block | Required | Validation | Error message |
-|---|---|---|---|---|
-| Name for this batch (optional) | `textInput` `bulk.reference`, placeholder "Suppliers November" | No | up to 35 characters *(new)* | "Use 35 characters or fewer." |
-| I confirm the payments in this file are correct | `consent` `bulk.consent`, `termsVersion: "corporate-bulk-v1"` | Yes | `mustBeTrue` | "Tick the confirmation first" (exact) |
-
-Alert, info (exact): "The whole file is sent for approval as one payment and counts as one payment against your and the company's daily limits. No money moves until it is approved."
-Buttons: **Confirm and send OTP** (sends the code with `otpSend`; on error toast "We couldn't send the code. Try again." and stays) → `otp`; **Back** → `check` (sets `bulk.go = false`).
-
-##### Screen `otp` — "Verify"
-`otp` block: `length: 6`, `maxAttempts: 3`, `resendAfterSeconds: 60` (as built; README 1.4 says 30 s: the fixture keeps 60 until reworded), hint "Enter the code sent to {maskedPhone}". Button **Verify and send for approval**: `validate`, then `otpVerify` (on error toast "Incorrect code", stay, lock after 3 to `failed`), then `submitBulk`, then `success`. `otp.code` must match `^[0-9]{6}$`. Resend failure toast: "We couldn't send a new code. Try again."
-
-##### Screen `success` — "Sent for approval" (terminal)
-`result` (success): title "Sent for approval"; text "{payee} totalling {amount} now wait for {required} approver(s) as one bulk payment. Nothing has left the account yet."; meta "Payment {id} · value date {valueDate}". Alert, info, only when `afterCutoff`: "It was started after the cut-off, so it goes out on {valueDate}."
-New in the upgrade: alert, warning, when `leftOutCount > 0`: "{n} row(s) were left out. You can fix them and send them as a second payment." Buttons: **Track payment** (Payments › tracker › payment `{paymentId}`), **Repair rejected lines** (only when `leftOutCount > 0`, opens `repair-bulk-lines` with `{paymentId}`), **View receipt** (receipts, planned engine feature), **Done** (primary, `exit`).
-
-##### Screen `failed` — "Bulk payment not sent" (terminal)
-`result` (error): title "Bulk payment not sent", text `{ctx.error.message}`; caption "Nothing was sent for approval. No money has left the account." Buttons: **Try again** (clears `bulk.go`, to `start`), **Close**.
-
-##### Screen `unavailable` — "Not available" (terminal)
-`result` (error): title "Not available for this customer"; text "Bulk payments are only for company customers. {ctx.error.message}". Buttons **Try again** (to `start` after the upgrade; to `who` today), **Close**.
-
-##### Screen `denied` — "Not allowed" (terminal)
-`result` (error): title "You can't do this"; text "Only an initiator can send a bulk payment." Upgrade wording: "Your role doesn't allow this. Ask an administrator at {company}." Button **Close**.
-
-#### 4. Sandbox errors
-Rows marked *(planned)* come with steps 2 (identity, conditions) and the new file adapter.
-| Code | Message the person sees | Screen | Button |
-|---|---|---|---|
-| `NOT_AUTHORISED` | "{name} is not allowed to initiate payments" (bank text, shown through `ctx.error.message`) | `denied` / `failed` | Close |
-| `PERMISSION_DENIED` *(planned)* | S-PERMISSION_DENIED: "Your role doesn't allow this. Ask an administrator at Alpha Trading LLC." | `denied` | Back to Overview |
-| `USER_NOT_FOUND` | "No user {id} at {company}" | `denied` | Close |
-| `ACCOUNT_NOT_FOUND` | "Account not found" | `start` toast "The file was not accepted" | Choose account |
-| `EMPTY_BATCH` | "The file has no payment rows. Add at least one row: beneficiary,amount,reference." (the bank says "The file has no payment lines") | `start` alert | stay |
-| `BATCH_TOO_LARGE` | "The file has more than 50 rows. Split it into files of 50 rows or fewer." (the bank says "A file may have at most 50 payment lines") | `start` alert | stay |
-| `NO_VALID_LINES` | "None of the lines can be paid" | `failed` | Try again |
-| `CURRENCY_NOT_SUPPORTED` | "Payments are limited in USD: choose a USD account" | `failed` | Try again (to `start`) |
-| `INSUFFICIENT_FUNDS` | "Insufficient funds" + caption "No money has left the account." | `failed` | Try again |
-| `LIMIT_USER_EXCEEDED` | "This is above Alex Morgan's daily limit" | `failed` | Try again |
-| `LIMIT_COMPANY_EXCEEDED` | "This is above the company's daily limit" | `failed` | Try again |
-| `OTP_REQUIRED` | S-OTP_REQUIRED: "Confirm with your one-time code first." (bank text "OTP not verified") | `failed` | Back to code |
-| `OTP_INVALID` | Toast "Incorrect code" with the standard "{n} tries left"; after three, `failed`: "Too many wrong codes. Start again." | `otp` / `failed` | Try again / Start again |
-| `CORE_UNAVAILABLE` | S-CORE_UNAVAILABLE: "We couldn't complete this right now. No money has left your account." (bank text "Core banking unavailable") | `failed` | Try again |
-| `NOT_SUPPORTED` | "Not available for this customer" | `unavailable` | Try again |
-| `FILE_FORMAT_UNSUPPORTED` *(planned)* | "That file type isn't supported. Use a CSV or XML file." | `start` alert | Choose another file |
-| `FILE_TOO_LARGE` *(planned)* | "That file is too big. The limit is 256 KB." | `start` alert | Choose another file |
-| `FILE_UNREADABLE` *(planned)* | "We can't read that file. Check that it is a CSV or XML file with the columns shown in the help." | `start` alert | Choose another file |
-| `TIMEOUT` *(planned)* at `checkBulk` | "This is taking longer than expected. Nothing was changed." | `start` alert | Try again |
-| `TIMEOUT` *(planned)* at `submitBulk` | "We didn't get an answer in time. Check Activity before you try again, so you don't pay twice." | `failed` | Check Activity (Payments › tracker) |
-| `SERVICE_UNAVAILABLE` *(planned)* | "This service is not available right now. Nothing was changed. Please try again in a few minutes." | `failed` | Try again |
-| `SESSION_EXPIRED` *(planned)* | S-SESSION_EXPIRED | sign-in | Sign in |
-| Row codes | the row table at the top of this module | `check` rows | Fix the file |
-
-#### 5. Adapters
-| Integration id | Adapter | Request | Response | Error codes | Money moving | OTP | Status |
-|---|---|---|---|---|---|---|---|
-| `company` | `corp.company.get` | `{ userId }` | company, accounts, `me`, limits, `dualApprovalAbove`, `cutoff` | `NOT_SUPPORTED` | No | No | Existing |
-| `importBulk` | `corp.bulk.import` | `{ userId, format: "csv" or "xml", content }` | `{ file }` (rows normalised to `beneficiary,amount,reference` lines), `rowCount` | `FILE_FORMAT_UNSUPPORTED`, `FILE_TOO_LARGE`, `FILE_UNREADABLE`, `PERMISSION_DENIED`, `NOT_SUPPORTED` | No | No | Planned |
-| `checkBulk` | `corp.bulk.check` | `{ userId, fromAccountId, file }` | `{ lines{}, problems{}, validCount, invalidCount, total, requiredApprovers, currency }` | `NOT_AUTHORISED`, `ACCOUNT_NOT_FOUND`, `EMPTY_BATCH`, `BATCH_TOO_LARGE` | No | No | Existing |
-| `otpSend` | `bank.otp.send` | `{ channel: "sms" }` | `{ maskedPhone }` | – | No | – | Existing |
-| `otpVerify` | `bank.otp.verify` | `{ code }` | ok | `OTP_INVALID` (carries `attempt`) | No | – | Existing |
-| `submitBulk` | `corp.bulk.submit` | `{ userId, fromAccountId, file, reference }` | the payment: `id`, `status: "pending_approval"`, `amount`, `currency`, `required`, `valueDate`, `afterCutoff`, `payee` ("N payments"), `lines`; planned: `leftOut[]` | `OTP_REQUIRED`, `NOT_AUTHORISED`, `NO_VALID_LINES`, `EMPTY_BATCH`, `BATCH_TOO_LARGE`, `INSUFFICIENT_FUNDS`, `LIMIT_USER_EXCEEDED`, `LIMIT_COMPANY_EXCEEDED`, `CURRENCY_NOT_SUPPORTED`, `CORE_UNAVAILABLE` | Moves no money; creates a pending payment | Yes (OTP verified first, reset after use) | Existing; `leftOut` *(planned)* |
-
-Bank B parity: both corporate bank APIs answer the same journey. Bank B's calls are `batches.validate` and `batches.create` with its own row shape (`creditorRef`, `amountValue`, `remark`), row verdicts `B-201` (not on the approved list), `B-202` (invalid amount), `B-203` (duplicate) and errors `ERR-4101` (empty), `ERR-4102` (too large), `ERR-4103` (no valid lines), all mapped to our codes in `mappings/bank-b.corporate.json`. The planned `corp.bulk.import` is journey-side parsing and needs no Bank B call. The planned `leftOut` list needs one mapping entry (Bank B's verdicts for failed rows). The journey bytes must not contain any Bank B word (`gate` test).
-
-#### 6. Permissions, step-up and limits
-- Permission: `biz.payments.bulk` (three checks: launch point, the journey's `authorisation`, the sandbox). Today's `authorisation` is `{ role: "initiator", rolesFrom: "ctx.company.me.roles", deniedScreen: "denied" }`; the upgrade reads `session.permissions` *(planned)* instead.
-- Step-up level: `otp` (one-time code at the last step). No further step-up for a Maker.
-- Limits: the whole file counts once against Alex's daily limit (250,000 at Alpha) and Alpha's daily limit (1,000,000). The person's limit is used when the file is sent; the company's when it is released. A file may have 1 to 50 rows. Two approvers above 50,000 total (one up to and including it).
-- Cut-off: after 16:00 UTC, on a weekend or on 9 Nov 2026 the value date is the next working day (`afterCutoff`).
-- File: 256 KB, `.csv` or `.xml` *(proposed)*.
-
-#### 7. Result and links out
-- Result: `success` (pending approval, nothing moved), reference "Payment {id}", value date.
-- Receipt *(planned engine receipts)*: payment id, name of the batch, from-account, payee count, total, approvers needed, value date, started by and when, "Left out: {n} rows".
-- Notifications raised: to every user who can approve at the company, "Payment awaiting your approval, Alpha Trading LLC" (deep link to `approve-payments` with `{companyId, paymentId}`); to the Maker, none on send.
-- Links out: **Track payment**, **View receipt**, **Repair rejected lines** (`repair-bulk-lines`), **Done**.
-
-#### 8. Acceptance criteria
-- AC-1. Only a user whose context holds `biz.payments.bulk` can start a bulk payment; Alex at Beta is refused, even when the call is forced.
-- AC-2. An empty file (nothing pasted, only spaces, or only a header row) or one with more than 50 rows is refused on `start` with a clear message; exactly 50 rows is accepted.
-- AC-3. Every row is checked, and each failing row is listed with its row number and why (not on the approved list, invalid amount, duplicate).
-- AC-4. The person sees how many rows will be paid, their total and the approvers needed: 1 up to and including 50,000 and 2 above it.
-- AC-5. When no row can be paid the person cannot continue; when some fail, only the rows that pass are sent.
-- AC-6. Sending needs a correct six-digit one-time code; a wrong or short code sends nothing; three wrong codes end the journey with nothing sent.
-- AC-7. The whole file counts as one payment against the person's and the company's daily limits; when the bank refuses (limit, funds, currency) the reason is shown and nothing is sent.
-- AC-8. A customer who is not a company is told it is not available.
-- AC-9. Without the confirmation the bulk payment cannot be sent.
-- AC-10. After the cut-off the payment goes out the next working day and the person is told the date; before it, the same day.
-- AC-11. A CSV file and an XML file with the same rows give the same check result; a file of the wrong type, too big or unreadable is refused with its message and nothing is checked.
-- AC-12. When rows are left out, the result offers **Repair rejected lines** and the payment keeps the list of left-out rows with their codes.
-- AC-13. When the bank times out on sending, nothing is sent and the person is told to check Activity before trying again; when it is unavailable, the person is told nothing was changed.
-- AC-14. The journey gives the same results on Bank B as on the reference bank.
-
-#### 9. Scenarios
-The 27 existing scenarios (T-1 to T-27 in the fixture) carry over, re-pointed to Alpha and USD amounts, with the three "who am I" scenarios (T-1 to T-3) replaced by T-1 and T-2 below. The table lists the scenarios that define the upgrade and one representative for each existing group. `persona` `alex-alpha` = Alex Morgan, active context Alpha (Maker); `alex-beta` = Alex, active context Beta (Approver); clock `2026-11-03T10:00:00Z` unless stated.
-
-| Id | Name | Covers | Persona and setup | Conditions | Expected |
-|---|---|---|---|---|---|
-| T-1 | Alex as Maker at Alpha can start a bulk payment | AC-1 | `alex-alpha` | – | `start` opens; **Check** is enabled |
-| T-2 | Alex at Beta is refused, also when the journey is forced | AC-1 | `alex-beta`; open the journey directly | – | `denied` with "Your role doesn't allow this. Ask an administrator at Beta Services Ltd."; forced `corp.bulk.submit` answers `PERMISSION_DENIED`; no payment exists |
-| T-3 | Nothing, only spaces, header only, 51 rows | AC-2 | `alex-alpha` | – | stays on `start`; messages as in section 3; no call to the bank beyond the check |
-| T-4 | Exactly 50 rows is accepted | AC-2, AC-4 | `alex-alpha`, 50 rows of `sup_textile,1000,R<n>` | – | `check` shows "50 of 50 rows" and "USD 50,000.00" and "1 approver(s)" |
-| T-5 | Failing rows listed with row number and why | AC-3 | rows: valid, `sup_unknown`, `sup_logistics,abc`, a repeat of row 1, valid | – | "2 of 5 rows" will be paid; table shows "Not on the company's approved list", "The amount is not valid for this account's currency", "Same payee, amount and reference as an earlier line" |
-| T-6 | Zero, negative and 3-decimal amounts are invalid | AC-3 | rows `0`, `-500`, `10.123`, `10.12` | – | only `10.12` passes (USD has 2 decimals) |
-| T-7 | Exactly 50,000 needs one approver, above needs two | AC-4 | two files: 50,000.00 and 50,000.01 | – | "1 approver(s)" then "2 approver(s)"; bank `required` equals the screen |
-| T-8 | Fix the file and check again | AC-4 | one bad row, **Fix the file**, new file | – | second check "3 of 3 rows" |
-| T-9 | No payable row cannot continue | AC-5 | all rows bad | – | alert "No row in this file can be paid. Fix the file and check again."; if forced, `nothing` |
-| T-10 | Only passing rows are sent | AC-5, AC-7 | 2 good, 1 bad | – | payment `lines` has 2 rows, total of those 2; `leftOut` has 1 |
-| T-11 | Clean file sent, nothing moves | AC-4, AC-6, AC-7 | `alex-alpha`, 3 good rows | – | `success`; payment `pending_approval`; balance unchanged |
-| T-12 | Wrong code, three wrong codes, short code | AC-6 | `alex-alpha` | – | "Incorrect code" toast; third wrong code lands on `failed`; `otp.code` of 3 digits stays on `otp`; no payment |
-| T-13 | Two rows each under the limit, together over | AC-7 | rows 150,000 + 150,000 (limit 250,000) | – | `failed` "This is above Alex Morgan's daily limit"; no payment |
-| T-14 | A file exactly at the daily limit is sent; earlier payments count | AC-7 | 250,000 file; second run with 10,000 already used | – | sent; refused |
-| T-15 | A file from a EUR account | AC-7 | EUR Collections as source | – | `failed` "Payments are limited in USD: choose a USD account" |
-| T-16 | A customer who is not a company | AC-8 | persona `sam` (no company) | – | `unavailable` "Not available for this customer" |
-| T-17 | Not ticking the confirmation | AC-9 | – | – | stays on `review` with "Tick the confirmation first" |
-| T-18 | After and before the cut-off | AC-10 | clock `2026-11-03T17:00:00Z` and `2026-11-03T10:00:00Z` | – | "value date 2026-11-04" with the cut-off alert; "value date 2026-11-03" |
-| T-19 | CSV and XML give the same result | AC-11 | the same 4 rows in both formats | – | equal `validCount`, `total` and row codes |
-| T-20 | Wrong type, too big, unreadable | AC-11 | `.pdf`; 300 KB file; text with no commas | – | the three messages; `checkBulk` not called |
-| T-21 | Left-out rows are offered for repair | AC-12 | 1 bad row of 3 | – | `success` shows "1 row(s) were left out" and **Repair rejected lines**; `corp.payments.get` shows `leftOut[0].code` |
-| T-22 | Timeout on send | AC-13 | `alex-alpha`, good file | `timeout: ["corp.bulk.submit"]`, `latencyMs: 10000` | `failed` with the "Check Activity" wording; no payment; limit not used |
-| T-23 | Timeout on check | AC-13 | – | `timeout: ["corp.bulk.check"]` | `start` alert "This is taking longer than expected. Nothing was changed." |
-| T-24 | Service unavailable | AC-13 | – | `unavailable: ["corp.bulk.submit"]` | `failed` "This service is not available right now. Nothing was changed. Please try again in a few minutes."; no payment |
-| T-25 | Same results on Bank B | AC-14 | run T-5, T-10, T-11 | `provider: "bank-b"` | identical outcomes and wording |
-
-#### 10. Expected mutation-check survivors
-Carried over from `packages/finx-mcp/src/scenarios.test.ts` (key `bulk-payment`), unchanged in meaning:
-- `no-error-path` for the company lookup after "who am I": gone in the upgrade because the screen is gone; the lookup is replaced by `bank.session.get`, which cannot fail for a signed-in person.
-- `no-error-path` for the two calls the sandbox never fails (code sender and resend): "The sandbox never fails here", except where T-22 to T-24 now reach them with `conditions`. Those mutants are expected to be killed in the upgrade.
-- `bank-roles`: the journey's own permission check sends a person without the role to `denied` before the bank is called, so the bank's own check is covered by its unit tests.
-- `bank-companyLimit`: Alpha's company limit (1,000,000) is above the most Alex can send (250,000); kill it by adding a second Maker's setup if wanted.
-All other mutants are expected to be killed (row checks, 50-line limit, duplicate check, consent, code check, threshold, cut-off).
-
----
-### ★ Repair rejected lines — `repair-bulk-lines` (planned)
-
-#### 1. Summary
-| Item | Value |
-|---|---|
-| Slug | `repair-bulk-lines` |
-| Purpose | A bulk payment left some rows out (not on the approved list, a bad amount, a duplicate). The Maker corrects those rows and sends them as a second payment, without uploading the whole file again. |
+| Purpose | Pay many approved payees from a file or a short list. Every payment is checked first; then the batch goes for approval as one payment. Payments the bank rejected are fixed and resent with this same journey (resend mode). |
 | Release | 1 |
 | Workspace | Business |
-| Status | New *(planned)*. Needs the sandbox change that keeps the left-out rows on the payment (`leftOut`) and the `repairOf` link. |
+| Status | Existing, upgraded (`corp.bulk.check`, `corp.bulk.submit` exist). The prototype is the reference. |
 | Channels | web, mobile |
-| Starting pattern | List the left-out rows → edit each row → check → review → consent → one-time code → result |
-| Who may use it | A user whose context holds `biz.payments.bulk` (Alex as Maker at Alpha). |
+| Who may use it | `pay.create`: Alex at Alpha (Maker). Not offered at Beta. |
+| Limits | Up to 50 payments, file up to 256 KB, person 250,000.00 a day, company 1,000,000.00 a day (USD equivalent), two approvers above 50,000.00, extra code from 25,000.00. |
 
-Decision: a repair is a **new payment** with its own approval, linked to the original by `repairOf`. The original keeps its rows and its approval; it is never changed. This keeps four-eyes simple and the audit trail honest.
+**Home market configuration** (the only place a country fact appears). The template asks for the identifiers of the account format; the check in each line reads the account format it finds.
+
+| Market | Account format in a line | Checks |
+|---|---|---|
+| Market A (routing number and account) | routing number in "Bank code" plus account number | routing number passes its check digit; account number 4 to 17 digits |
+| Market B (sort code and account) | sort code in "Bank code" (6 digits, dashes allowed) plus 8-digit account number | both formats |
+| Market C (IBAN) | IBAN in "Account number or IBAN", "Bank code" empty | check digits and length |
+| Market D (IBAN, mobile alias) | IBAN as Market C; a mobile alias is not used in bulk files | check digits and length |
+
+The template sample row follows the home market (Market A gets a routing-number row, the others an IBAN row). The currency of a line follows its account format; the speed's rail, fee and limit are bank configuration (`09-payment-rails.md`). The edit panel names the code field "Routing number", "Sort code" or "Bank code" to match.
 
 #### 2. Entry points
+
 | Place › label | Passes | Permission |
 |---|---|---|
-| Payments › tracker › bulk payment › Repair rejected lines (shown only when `leftOut` is not empty) | `{paymentId}` | `biz.payments.bulk` |
-| `bulk-payment` result screen › Repair rejected lines | `{paymentId}` | `biz.payments.bulk` |
-| Notification "Bulk payment sent with {n} rows left out" | `{paymentId}` | `biz.payments.bulk` |
-| Deep link `bankworkx://business/alpha/j/repair-bulk-lines?paymentId=pay_7` | `{paymentId}` | `biz.payments.bulk` |
-The journey cannot be opened without `paymentId`. Without it, `start` shows "Open a bulk payment from Payments first." with a button **Go to Payments**.
+| Payments › Bulk & payroll › Upload or enter payments | none | `pay.create` |
+| Overview › + › Bulk payment | none | `pay.create` |
+| Batch status › Fix and resend | `{repairOf}` (batch id) | `pay.create` |
 
 #### 3. Screens
-##### Screen `start` — "Rows to fix"
-Blocks: `text` (title), `reviewSummary` (original payment), `dataTable` *(planned)* with editable cells, `alert`, `button`s.
 
-On entry: `corp.payments.get {paymentId}` and `corp.bulk.leftOut {paymentId}` *(planned)*. The summary rows: "Original payment" = payment id and batch name; "Sent" = date; "Paid so far" = "{lines} of {lines + leftOut} rows, {amount}"; "Status" = `statusChip`.
+Progress text "Step n of 4 · Bulk payment" (3 steps in resend mode). Each screen has Back (the first has Cancel).
 
-Table columns:
-| Column | Block | Editable | Validation | Error message |
+**Step 1: Add payments** (not shown in resend mode). Intro "Upload a file or enter the payments." Busy "Checking the payments…" (about 0.7 s). Button **Continue**.
+
+| Field | Type | Required | Rule | Message |
 |---|---|---|---|---|
-| Row (in the original file) | text | No | – | – |
-| Payee | `textInput`, or `select` of the approved list when the code is `BENEFICIARY_NOT_WHITELISTED` | Yes | Must be one of the company's approved suppliers (`ctx.company.beneficiaries`) | "Choose a supplier from the approved list." |
-| Amount | `amountInput` in the account currency | Yes | Greater than 0, at most 2 decimals for USD | "Enter an amount in USD with at most 2 decimal places." |
-| Reference | `textInput` | Yes | Up to 35 characters | "Use 35 characters or fewer." |
-| Why it was left out | `statusChip` with the row message (see row table) | No | – | – |
-| Keep | `toggle`, default on | Yes | – | – |
-A row switched off is dropped from the repair (left out again, not retried).
+| How | chips "Upload a file", "Enter payments" (shown only when `allowEnter` is on) | no | default Upload | none |
+| Pay from | select: "Operating ••2001 · $480,000.00", "Reserve ••2044 · €95,200.00" | yes | one of the company accounts | "Choose the account to pay from." |
+| Format | chips "Template (CSV)", "Bank file" (only when `bankFormats` is on and Upload is chosen) | no | default Template (CSV) | none |
+| File | file field, placeholder "Choose a file (up to 256 KB)" | yes (Upload) | readable file of the chosen format | "Choose a file first." / "Use a CSV file." / "Use a bank file." |
+| Download template | link; the file is `payment_template.csv` with the header "Payee name, Account number or IBAN, Bank code, Amount, Reference" and one sample row | no | none | toast "Downloaded" |
+| Payee | select, placeholder "Choose a payee" (saved suppliers) | yes to add (Enter) | one supplier | "Choose a payee and enter an amount" (toast) |
+| Amount | amount, placeholder "0.00" | yes to add | above zero | same toast |
+| Reference | text, placeholder "INV-1001", max 35 | no | none | none |
+| Add payment | button (Enter) | no | at most 50 payments | toast "A batch can have up to 50 payments." |
 
-Copy: title "Fix the rows that were left out"; body "{n} row(s) of payment {id} were not paid. Correct them here and send them as a new payment. The first payment is not changed." Alert, info: "A repaired payment needs approval again. It counts once against your daily limit."
-Alert, warning, when the original is `pending_approval`: "The first payment is still waiting for approval. You can send the repair now; each payment is approved on its own."
-Buttons: **Check rows** (primary: runs `checkBulk` with the corrected rows written as a file; goes to `check`), **Cancel** (secondary: `exit`).
+When Enter is chosen a card "{n} added" lists each payment with a **Remove** button. Continuing with nothing added shows "Add at least one payment."
 
-States: Loading skeleton for the table. Empty (no left-out rows): "Nothing to repair. Every row of this payment was paid." with button **Back to payment**. Error: section 4.
+File refusals (the field shows the message and the step cannot continue): "You already sent this file on 30 Oct." (same file sent before), "We can’t read this file type.", "This file is too big. The limit is 256 KB.", "There are no payments in this file." A file with more than 50 payments shows the banner "A batch can have up to 50 payments."
 
-##### Screen `check` — "Check the corrected rows"
-Same layout and exact copy as `bulk-payment` `check` (summary rows "Will be paid", "Total", "Approvers needed"; problems list "Rows that cannot be paid"; warning for the daily-limit total). Buttons: **Continue with the rows that pass** → `review`; **Fix the rows** → `start`. If no row passes: alert "No row can be paid yet. Fix the rows and check again." and the continue button is disabled.
+**Step 2: Check payments**. Intro "Fix or remove anything marked, then continue." Three tiles: **Valid**, **Need fixing**, **Total** (USD). If lines need fixing: buttons **Fix lines** (opens the first one) and **Remove all errors**. A table with columns Payee, Account (••last 4, or "None"), Amount (with currency), Status. Status is a green "Ready" chip or a red "Needs fixing" chip with the first message below. Tapping a row opens its edit card "Payment {n}": the messages for the line, then fields **Payee name**, **Account number**, **Routing number** / **Sort code** / **Bank code** (shown when the line has one or uses those formats), **Amount**; buttons **Done**, **Use saved details** (only when the line does not match the saved account), **Remove**. Button **Continue** stays disabled until nothing needs fixing: "Fix or remove the payments that need fixing." (or "Add at least one payment.").
 
-##### Screen `review` — "Review repair"
-`reviewSummary`: "Repairs" = original payment id; "From" = same account as the original (not editable); "Payments" = count; "Total"; "Approvers needed". Alert, info: "This is a new payment. No money moves until it is approved." `consent` bound to `repair.consent`, text "I confirm the corrected payments are right", `mustBeTrue`, message "Tick the confirmation first". Buttons: **Confirm and send OTP** → `otp`; **Back** → `check`.
+Messages per payment (one short sentence each, no codes on screen):
 
-##### Screen `otp` — "Verify"
-As `bulk-payment` `otp`. Button **Verify and send for approval** calls `otpVerify`, then `submitBulk` with `repairOf`.
+| Check | Message |
+|---|---|
+| Payee name empty / over 70 characters | "Enter the payee name." / "The name is too long." |
+| Amount not a number with up to 2 decimals above zero | "Enter an amount above zero." |
+| Account not recognised, or number wrong | "Check the account number." |
+| Bank code wrong | "Check the routing number." / "Check the sort code." |
+| Payee not on the approved list | "Not an approved payee." |
+| Account differs from the saved supplier's | "Doesn’t match the saved account details." |
+| Above the person's limit (USD equivalent) | "Above your payment limit." |
+| Same payee, account, amount and reference as an earlier line | "Same as payment {n}." |
+| Message returned by the bank (resend mode) | the bank's own sentence, until the line is edited |
 
-##### Screen `success` — "Repair sent for approval" (terminal)
-`result` success: title "Repair sent for approval"; text "{payee} totalling {amount} now wait for {required} approver(s). Nothing has left the account yet."; meta "Payment {id} repairs {originalId} · value date {valueDate}". If rows are still left out: alert warning "{n} row(s) are still left out." Buttons: **Track payment**, **Repair rejected lines** (again, if any left), **Done**.
+**Step 3: Speed and date**. Fields:
 
-##### Screens `failed`, `denied`
-`failed` as `bulk-payment` (title "Repair not sent"; caption "Nothing was sent for approval. No money has left the account."). `denied`: "Your role doesn't allow this. Ask an administrator at {company}."
+| Field | Type | Required | Rule | Message |
+|---|---|---|---|---|
+| Speed | cards: Standard ("1 to 3 business days"), Same day ("Today", when `allowSameDay` is on), Instant ("In seconds", when `allowInstant` is on). Right side: total fee or "No fee". | yes | a speed is disabled with "Some payments are too large" when a line exceeds the rail limit | field required |
+| Send | chips "Today", "Later" (hidden for Instant) | no | Instant always sends today | none |
+| Date | select of working days, next 30 days | yes when Later | working day | "Choose a date." |
 
-#### 4. Sandbox errors
-All the codes of `bulk-payment` section 4 apply to the check and send steps with the same messages. Additional ones:
-| Code | Message the person sees | Screen | Button |
+**Step 4: Review**. Busy "Checking limits and funds…" (about 0.8 s). A summary card: "Total" (or "Total in USD, about" when several currencies) and "{n} payments". Rows: Pay from, Payments, Amounts (several currencies only), Speed, Send ("Today" or the date), Fees ("None" or amount), **You pay** (in the account's currency), **Approvals needed** (1, or 2 above 50,000.00). Field **Batch name (optional)**, placeholder "Suppliers November", max 35. Button **Submit for approval**. Checks on continue: nothing payable, person limit, company limit, funds.
+
+**Code prompt** (always asked for a batch). Title "Authorise {USD total} in {n} payments". Line "Code sent to ••• 4410." plus "This amount needs an extra code." from 25,000.00.
+
+**Result** "Sent for approval", line "{n} payments, {totals}. Nothing has left the account yet.", amber chip "Waiting for 1 approver" or "Waiting for 2 approvers". Receipt rows: Batch, Payments, Total, You pay, Speed, Send, Approvals needed; then the BankWorkx® reference. Buttons **View batch** (opens `bulk-status`), **Track in Payments**, **Done**.
+
+**Resend mode** (`{repairOf}`): step 1 is skipped. The account is the original batch's; the batch name is "Resend of {name}" (35 characters at most); the lines are the original's failed lines, each carrying the bank's message. Everything else is the same. If the batch is not paid or has no failed lines, step 2 shows the empty state "Nothing to resend" / "All payments in this batch went through." and Continue says "There is nothing to resend." After sending, the resent lines are marked "Resent" on the original, so they cannot be sent twice.
+
+#### 4. States and errors
+
+| Code | Message | Where | Button |
 |---|---|---|---|
-| `PAYMENT_NOT_FOUND` | "No payment {id}" | `failed` | Back to Payments |
-| `REPAIR_NOT_ALLOWED` *(planned)* | "This payment can't be repaired because it was rejected or withdrawn. Start a new bulk payment." | `failed` | Start a bulk payment (`bulk-payment`) |
-| `NOTHING_TO_REPAIR` *(planned)* | "Nothing to repair. Every row of this payment was paid." | `start` empty state | Back to payment |
-| `TIMEOUT` *(planned)* | check: "This is taking longer than expected. Nothing was changed."; send: "We didn't get an answer in time. Check Activity before you try again, so you don't pay twice." | `start` / `failed` | Try again / Check Activity |
-| `SERVICE_UNAVAILABLE` *(planned)* | S-SERVICE_UNAVAILABLE | `failed` | Try again |
+| `EMPTY_BATCH` | "Add at least one payment." | step 1 | add payments |
+| `BATCH_TOO_LARGE` | "A batch can have up to 50 payments." | step 1 | change file |
+| `NO_VALID_LINES` | "None of the payments can be sent." | review | go back |
+| `INSUFFICIENT_FUNDS` | "There isn’t enough money in this account." | review | change account |
+| `LIMIT_USER_EXCEEDED` | "This is above your payment limit." | review | remove lines |
+| `LIMIT_COMPANY_EXCEEDED` | "This is above the company limit." | review | wait or reduce |
+| `DATE_NOT_WORKING_DAY` | "Choose a working day." | step 3 | change date |
+| `REPAIR_NOT_ALLOWED` | "There is nothing to resend." | resend step 2 | back |
+| `TIMEOUT` | "We didn’t get an answer in time. Check Payments before you try again, so you don’t pay twice." | banner | check Payments |
+| `SERVICE_UNAVAILABLE` | sheet "We couldn’t reach the bank": "Nothing was sent and you haven’t been charged. Try again in a moment." | sheet | Try again / Cancel |
+
+Loading: spinners on steps 1 and 4. Empty: the check table shows "No payments" / "Go back to add some."
 
 #### 5. Adapters
-| Integration id | Adapter | Request | Response | Error codes | Money moving | OTP | Status |
-|---|---|---|---|---|---|---|---|
-| `payment` | `corp.payments.get` | `{ paymentId }` | the payment | `PAYMENT_NOT_FOUND` | No | No | Existing (needs an access check, README 2.3) |
-| `leftOut` | `corp.bulk.leftOut` | `{ userId, paymentId }` | `{ rows[]: n, beneficiaryId, amount, reference, code, message, repaired }`, `originalCount` | `PAYMENT_NOT_FOUND`, `REPAIR_NOT_ALLOWED`, `NOTHING_TO_REPAIR`, `PERMISSION_DENIED` | No | No | Planned |
-| `checkBulk` | `corp.bulk.check` | as `bulk-payment` | as `bulk-payment` | as `bulk-payment` | No | No | Existing |
-| `submitBulk` | `corp.bulk.submit` | as `bulk-payment` plus `repairOf: paymentId` | the payment with `repairOf`; marks the repaired rows `repaired: true` on the original | as `bulk-payment` plus `REPAIR_NOT_ALLOWED` | Creates a pending payment | Yes | `repairOf` *(planned)* |
-| `otpSend`, `otpVerify` | `bank.otp.send`, `bank.otp.verify` | as `bulk-payment` | | `OTP_INVALID` | No | – | Existing |
-Sandbox change *(planned)*: `initiateBulk` stores the failed rows on the payment as `leftOut` (today it keeps only the rows that passed). Bank B parity: mapping of the failed rows' verdicts `B-201` to `B-203`.
+
+| Integration | Adapter | Status |
+|---|---|---|
+| Company, accounts, approved payees | `corp.company.get` | Existing |
+| Check the lines | `corp.bulk.check` (file text in, per-line result out; codes `EMPTY_BATCH`, `BATCH_TOO_LARGE`) | Existing, `corporate.ts` |
+| Send as one batch for approval | `corp.bulk.submit` (needs the code first; `NO_VALID_LINES`, `INSUFFICIENT_FUNDS`, `LIMIT_USER_EXCEEDED`, `LIMIT_COMPANY_EXCEEDED`) | Existing |
+| Account-format checks (routing number, sort code, IBAN) and bank-file parsing | the bank's account validation service | (planned) |
+| Resend failed lines from a settled batch | `corp.bulk.submit` with the batch id | (planned) |
 
 #### 6. Permissions, step-up and limits
-Permission `biz.payments.bulk`. Step-up `otp`. The repair counts as a new payment against the daily limits (Alex 250,000, Alpha 1,000,000). A row repaired once is marked `repaired` and cannot be sent twice from the same original (the duplicate check also catches the same payee, amount and reference inside one file, not across payments; across payments `repaired` is the guard).
+
+`pay.create`. The code is always asked; from 25,000.00 USD equivalent the prompt adds "This amount needs an extra code." Person limit counts the person's batches and payments today that are not rejected or withdrawn. Company limit counts everyone's. Two approvers above 50,000.00.
 
 #### 7. Result and links out
-Result `success`; receipt shows "Repairs {originalId}"; notification to approvers as for any payment ("Payment awaiting your approval, Alpha Trading LLC"); links **Track payment** (the tracker shows the repair linked under the original), **Repair rejected lines**, **Done**.
+
+The batch is recorded as one waiting payment "Bulk · {n} payments" (id `PAY-n`) and shows in Payments and the approvers' inbox. Notification (planned): "Payment awaiting your approval". Links: `bulk-status`, Payments tracker. Resend marks the original lines "Resent".
 
 #### 8. Acceptance criteria
-- AC-1. Only a user with `biz.payments.bulk` can repair; a user without it is refused, also when the call is forced.
-- AC-2. The journey lists exactly the rows the original left out, each with its row number, its values and the reason.
-- AC-3. A corrected row is checked again by the bank with the same rules as in `bulk-payment`; rows that still fail are listed and left out again.
-- AC-4. A repair is a new payment with its own approval and counts once against the daily limits; the original payment is not changed.
-- AC-5. A row that has been repaired cannot be repaired a second time; when nothing is left the person is told.
-- AC-6. A rejected or withdrawn payment cannot be repaired.
-- AC-7. Sending needs a confirmation and a correct six-digit one-time code; three wrong codes end the journey with nothing sent.
-- AC-8. On a timeout or when the service is unavailable nothing is sent and the person is told what to do.
+
+- AC-1: A file of at most 256 KB and 50 payments is read; an unreadable, oversized, repeated or empty file is refused with the message of step 1.
+- AC-2: Every line is checked and shows one short message; the batch cannot continue until each marked line is fixed or removed.
+- AC-3: A line whose payee is not on the approved list, or whose account differs from the saved one, is marked.
+- AC-4: Duplicate lines are marked "Same as payment {n}."
+- AC-5: Speeds offered follow the options; a speed too small for a line is disabled; Instant has no date.
+- AC-6: Review shows total, fees, what the account pays and approvals needed; limits and funds are checked on submit.
+- AC-7: A code is always asked; the result is "Sent for approval" and no money moves.
+- AC-8: Resending failed lines creates a new batch and marks them "Resent" on the original.
+- AC-9: With `bankFormats` off no bank file choice appears and no format name is on screen.
+- AC-10: A timeout shows the check-Payments message; an unavailable bank shows the sheet; neither creates a batch.
 
 #### 9. Scenarios
-Persona `alex-alpha` unless stated. Setup creates, as Alex with a verified code, payment `{{setup.p}}` from the file `sup_textile,100000,A / sup_unknown,5000,B / sup_logistics,abc,C` (rows 2 and 3 are left out); clock `2026-11-03T10:00:00Z`.
-| Id | Name | Covers | Setup and steps | Conditions | Expected |
-|---|---|---|---|---|---|
-| T-1 | Maker repairs two rows | AC-2, AC-3, AC-4 | open with `paymentId`; set row 2 payee `sup_packaging`, row 3 amount `2500`; **Check rows**; consent; code `482100` | – | `success`; new payment `repairOf` the original; original `status` and `lines` unchanged; original `leftOut` rows marked `repaired` |
-| T-2 | The table shows exactly the left-out rows | AC-2 | open with `paymentId` | – | two rows, codes `BENEFICIARY_NOT_WHITELISTED` and `INVALID_AMOUNT`, with the row messages |
-| T-3 | A row still wrong is left out again | AC-3 | set row 2 to `sup_unknown2` | – | `check` shows "1 of 2 rows" and the message "Not on the company's approved list" |
-| T-4 | Switch a row off | AC-3 | set row 3 Keep off | – | only row 2 is sent |
-| T-5 | Repair counts against the limit | AC-4 | setup uses 200,000 of Alex's 250,000 first; repair 60,000 | – | `failed` "This is above Alex Morgan's daily limit" |
-| T-6 | Cannot repair twice | AC-5 | repair both rows; open again | – | empty state "Nothing to repair. Every row of this payment was paid." |
-| T-7 | Rejected original | AC-6 | setup: Dana at Alpha rejects the original | – | `failed` "This payment can't be repaired because it was rejected or withdrawn. Start a new bulk payment." |
-| T-8 | Alex at Beta, forced | AC-1 | `alex-beta` | – | `PERMISSION_DENIED`; no new payment |
-| T-9 | No confirmation, wrong code, three wrong codes | AC-7 | – | – | "Tick the confirmation first"; "Incorrect code"; `failed`, no payment |
-| T-10 | Timeout on send | AC-8 | – | `timeout: ["corp.bulk.submit"]` | `failed` with the "Check Activity" wording; no new payment |
-| T-11 | Unavailable | AC-8 | – | `unavailable: ["corp.bulk.leftOut"]` | `start` error "This service is not available right now. Nothing was changed. Please try again in a few minutes." |
+
+| # | Persona and setup | Steps | Expected | Covers |
+|---|---|---|---|---|
+| T-1 | Alex at Alpha; sandbox clean file (5 lines) | Upload, Continue, Continue, Standard, Submit, code 482100 | All 5 "Ready"; "Sent for approval"; waiting chip | AC-1, AC-2, AC-6, AC-7 |
+| T-2 | Alex at Alpha; sandbox file with errors (10 lines) | Upload | Tiles show valid and need fixing; messages for name, amount, account, payee, match, limit, duplicate; Continue disabled | AC-2, AC-3, AC-4 |
+| T-3 | Same | Remove all errors, continue | Only valid lines go on | AC-2 |
+| T-4 | Sandbox files: already sent, unreadable type, 3.4 MB, empty | choose each | Messages of step 1 | AC-1 |
+| T-5 | `allowSameDay` and `allowInstant` off | Step 3 | Only Standard | AC-5 |
+| T-6 | Choose Instant | Step 3 | No Send or Date | AC-5 |
+| T-7 | `bankFormats` on, Bank file chosen with a CSV | Step 1 | "Use a bank file." | AC-9 |
+| T-8 | Batch PAY-1190 with one failed line | Fix and resend, fix, send | New batch "Resend of Supplier batch 19"; original line "Resent" | AC-8 |
+| T-9 | Batch with nothing failed | Resend | "Nothing to resend" | AC-8 |
+| T-10 | Batch over 250,000.00 | Submit | "This is above your payment limit." | AC-6 |
+| T-11 | Timeout, then unavailable | Submit | Timeout banner; sheet; no batch | AC-10 |
 
 #### 10. Expected mutation-check survivors
-- `bank-roles` and `bank-companyLimit`: the same reasons as `bulk-payment` (the journey's permission check comes first; Alpha's company limit is above one Maker's limit).
-- `no-error-path` for `corp.payments.get` on entry: the payment always exists for a link from the tracker; a forced bad id is covered by `PAYMENT_NOT_FOUND` in the bank's unit tests.
-Everything else is expected to be killed.
+
+- The 70-character name limit and the 35-character batch name: survive, no scenario reaches the edge.
+- Changing 50 lines or 256 KB by one: survives (the sandbox files are far from the edge; an edge file is planned).
+- The Market B pattern of dashes in a sort code: survives, only one sample line uses it.
+- The order of the three speed cards: survives.
+
+---
+
+### ★ Repair rejected lines — `repair-bulk-lines`
+
+**Catalog**: slug `repair-bulk-lines`, workspace business, category Payments, core no, a bank can switch it off (only together with `bulk-payment`, of which it is a mode). Options: those of `bulk-payment`. No file of its own in the prototype.
+
+Alias of `bulk-payment`: reached by launching `bulk-payment` with `{repairOf: paymentId}` from Batch status › **Fix and resend**, or from an old `repair-bulk-lines` link. The prototype registers no separate alias entry for it (`06-aliases.js` has none), so today it has no switch of its own and is turned off with `bulk-payment` (a catalog alias row is planned). It works only for a settled batch that still has failed lines. The full text is in `bulk-payment` ("Resend mode").
+
+What differs from a new batch:
+
+- No "Add payments" step. The journey starts at **Check payments**. The account is the original batch's and the name is "Resend of {name}" (35 characters at most).
+- The lines are the original's failed lines, each showing the bank's own sentence (for example "The account name didn’t match.") until it is edited. All the checks, the speed, the review and the code are the same.
+- If the batch has nothing left to resend, the step shows the empty state **Nothing to resend** / "All payments in this batch went through." and Continue says "There is nothing to resend." (`REPAIR_NOT_ALLOWED`).
+- On submit a new batch is made and the resent lines show "Resent" on the original, so they cannot be sent twice. Acceptance criterion and scenarios: AC-8, T-8 and T-9 of `bulk-payment`.
+
+---
+
+### ★ Batch status — `bulk-status`
+
+**Catalog**: slug `bulk-status`, workspace business, category Payments, core no, a bank can switch it off (yes; the View batch button then disappears). Options: none (it follows `bulk-payment`; the Fix and resend button needs `bulk-payment` on). It is a screen inside the Payments tab (`view`, tab `pay`, not in the Lean preset), not a stepped journey. Permission `pay.create`; does not move money. Prototype file `design/bankworkx-r1/src/journeys/40-bulk-payment.js`.
+
+#### 1. Summary
+
+| | |
+|---|---|
+| Slug | `bulk-status` |
+| Purpose | Shows one bulk batch: its name, total, status, the status of every payment in it, a report to download and the way to fix and resend payments that failed. |
+| Release / workspace | 1 / Business |
+| Status | Built as a screen. No stepped journey and no code. |
+| Channels | web, mobile |
+| Who may use it | `pay.create`: Alex at Alpha. |
+| Parameters | `{id}` of a batch; with none, the company's latest bulk batch. |
+
+**Home market configuration**: none. The account column shows only "••" and the last 4 digits.
+
+Seed: two earlier batches at Alpha. `PAY-1180` "Supplier batch 18", 30 Oct, 6 payments, all paid, approved by Dana Cruz. `PAY-1190` "Supplier batch 19", 28 Oct, 4 payments, approved by Lee Park; the fourth (Gulf Trade FZE) failed at the bank with the message "The account name didn’t match." A batch just sent from `bulk-payment` appears first as "Waiting for approval".
+
+#### 2. Entry points
+
+| Place › label | Passes | Permission |
+|---|---|---|
+| Payments › Bulk & payroll › a batch | `{id}` | `pay.create` |
+| `bulk-payment` receipt › View batch | `{id}` | `pay.create` |
+
+#### 3. Screen
+
+One screen, no steps.
+
+- **Card**: batch name, status chip, the total in USD, and "{n} payments · {id}". Buttons: **Fix and resend** (only when some payments failed and are not yet resent; starts `bulk-payment` in resend mode with `{repairOf}`) and a link **Download report**.
+- **Status chip**: "Waiting for approval", "Sent to bank", "Paid", "Partly paid" (settled with failed payments), or the payment's own status (rejected, withdrawn).
+- **Table** with columns Payee, Account, Amount, Status. Payee is "{n}. {name}"; Account is "••" and the last 4 digits; Amount is the line amount and currency. Status chip per payment: Waiting for approval, Sent to bank, Paid, Failed (with the bank's sentence in red under it), Resent, Cancelled (batch rejected), Withdrawn.
+- **Other batches** list below (name, "{n} payments · {date}", status chip); tapping one shows it.
+- **Report**: a CSV file named `{id}_report.csv` with columns Line, Payee, Amount, Currency, Status, Note (the bank's sentence). Toast "Downloaded".
+
+There are no input fields.
+
+States. Empty: "No batches yet" / "Batches you send show here." with the button **New bulk payment**. Loading and error: the screen reads the company's payments from the tab; a failed read is the shared bank-down sheet (planned for this screen; the prototype does not call a service here). The download shows "Download works in the browser" when the device cannot save a file.
+
+#### 4. Errors
+
+No message of its own (`PERMISSION_DENIED` hides the entry). `TIMEOUT` and `SERVICE_UNAVAILABLE` are (planned) and would show the tab's retry state.
+
+#### 5. Adapters
+
+| Integration | Adapter | Status |
+|---|---|---|
+| List the company's payments | `corp.payments.list` | (planned) |
+| One payment with its lines | `corp.payments.get` | Existing |
+| Report download | built in the client from the batch | Existing in prototype |
+
+#### 6. Permissions, step-up and limits
+
+`pay.create`. No code. No limit.
+
+#### 7. Result and links out
+
+Links: **Fix and resend** (`bulk-payment` resend mode), **New bulk payment** (empty state), other batches. No notification.
+
+#### 8. Acceptance criteria
+
+- AC-1: The card shows name, total, line count, id and a status chip that follows the batch.
+- AC-2: Every payment has its own status chip; failed ones show the bank's sentence.
+- AC-3: Fix and resend appears only when a payment failed and is not resent.
+- AC-4: The report has one row per payment with the columns of section 3.
+- AC-5: With no batches the empty state and its button show.
+
+#### 9. Scenarios
+
+| # | Persona and setup | Steps | Expected | Covers |
+|---|---|---|---|---|
+| T-1 | Alex at Alpha | Open `PAY-1190` | "Partly paid"; line 4 "Failed" with its sentence; Fix and resend shown | AC-1, AC-2, AC-3 |
+| T-2 | Same | Open `PAY-1180` | "Paid"; no Fix and resend | AC-1, AC-3 |
+| T-3 | Same | Fix and resend, fix, send, return | Line 4 shows "Resent"; Fix and resend gone | AC-3 |
+| T-4 | Same | Download report | CSV with 4 rows and the Note on line 4 | AC-4 |
+| T-5 | Company with no batches | Open | Empty state | AC-5 |
+| T-6 | Send a new batch | Open it | "Waiting for approval" on card and every line | AC-1, AC-2 |
+| T-7 | Timeout and unavailable | (planned) | Retry state; nothing changes | none yet |
+
+#### 10. Expected mutation-check survivors
+
+- Chip colours: survive, scenarios check text only.
+- Order of "Other batches": survives.
+- Timeout and unavailable: no behaviour in the prototype, so no mutant exists (planned).
 
 ---
 
 ### ★ Payroll run — `payroll-run`
 
+**Catalog**: slug `payroll-run`, workspace business, category Payments, core no, a bank can switch it off (yes). Permission `pay.create`, moves money. Options: **Allow bonus lines** (`allowBonus`, default on), **Allow deduction lines** (`allowDeduction`, default on), **Ask for a reason when the total changes by more than 20%** (`varianceCheck`, default on), **Offer to send payslips** (`payslips`, default on). Prototype file `design/bankworkx-r1/src/journeys/41-payroll-run.js`.
+
+> Lean and country-neutral. The run starts from the employee register (net pay already worked out in the company's payroll system; tax and insurance are not calculated here). There is no payroll file upload, no wage-protection file and no sample file picker; those were removed. The rail behind each currency (fee and cut-off) is bank configuration (`09-payment-rails.md`) and never named on screen.
+
 #### 1. Summary
-| Item | Value |
+
+| | |
 |---|---|
 | Slug | `payroll-run` |
-| Purpose | A Maker pays the company's employees for one pay period from a file, checked row by row against the payroll register, and sent for approval as one run that always needs two different approvers. |
+| Purpose | Pay employees for one pay period from the register: change an amount, add a bonus or deduction, take someone out, review and send for approval. |
 | Release | 1 |
 | Workspace | Business |
-| Status | Existing: `fixtures/payroll-run.ts` (id `jrn_payroll_run`, 13 criteria, 28 scenarios). Upgraded here: file upload, table, context permissions, timeout and unavailable states, period from the launch point. |
+| Status | Existing, upgraded (`corp.payroll.check`, `corp.payroll.submit` exist, but they read a pasted file; the register-based flow is (planned) in the adapters). |
 | Channels | web, mobile |
-| Starting pattern | Period and file → check → review → consent → one-time code → result |
-| Who may use it | A user whose context holds `biz.payroll.run` (Alex as Maker at Alpha). |
+| Who may use it | `pay.create`: Alex at Alpha. Not offered at Beta. |
+| Seed | Register for Alpha Trading LLC, 9 people in USD, GBP, AED, SAR and JOD. Eight have bank details and are in the run by default; Faris Qasem has none and is listed under "Not in this run" with the chip "No bank details". An earlier run for October 2026 (`PAY-1120`, 8 employees, paid) exists. |
+| Limits | Maximum pay per person 1.5 times the monthly salary; person 250,000.00 a day; company 1,000,000.00 a day; two approvers above 50,000.00; extra code from 25,000.00 (USD equivalent). |
+
+**Home market configuration**: none on screen. Each employee is paid in the currency on the register and the bank account behind it; the fee and the latest start time come from the bank's rail configuration (planned detail in `09-payment-rails.md`). Market A, B, C and D see identical screens.
 
 #### 2. Entry points
+
 | Place › label | Passes | Permission |
 |---|---|---|
-| Overview › **+** › Run payroll | – | `biz.payroll.run` |
-| Payments › hub › Run payroll | `{period}` optional (default: the current month, `2026-11` on the sandbox clock) | `biz.payroll.run` |
-| Payments › bulk and payroll history › New run | – | `biz.payroll.run` |
-| Deep link `bankworkx://business/alpha/j/payroll-run?period=2026-10` | `{period}` | `biz.payroll.run` |
+| Payments › Bulk & payroll › Run payroll | none | `pay.create` |
+| Overview › + › Run payroll | `{period}` optional (default November 2026) | `pay.create` |
 
 #### 3. Screens
-**As built today.** `who`, `start` (Payroll file), `check` (Check the payroll), `nothing`, `review` (Review payroll run), `otp`, `success`, `failed`, `unavailable`, `denied`. Bound data: `session.userId`, `pay.period`, `pay.fromAccountId`, `pay.file`, `pay.go`, `pay.consent`, `otp.code`. Pasted rows are `employee,amount,reference`.
-**Upgrade.** `who` removed; `start` gets `fileUpload` and a month picker; `check` shows the whole file in a `dataTable`; the period can arrive from the launch point.
 
-##### Screen `start` — "Payroll file"
-Blocks: `stepper` (`start, check, review, otp`), `textInput` (period) or `datePicker` *(planned)* in month mode, `accountPicker`, `select` chips (upload or paste) *(new)*, `fileUpload` *(planned)*, `textInput` (`lines: 8`), `text`, conditional `alert`s, `button`s.
-| Label | Block | Required | Validation | Error message |
+Progress text "Step n of 3 · Payroll run". Back on every step (Cancel on the first).
+
+**Step 1: Pay period and date** (button **Continue**)
+
+| Field | Type | Required | Rule | Message |
 |---|---|---|---|---|
-| Pay period (YYYY-MM) | `textInput` `bind: pay.period`, placeholder `2026-10`, pattern `^[0-9]{4}-[0-9]{2}$` (upgrade: `datePicker` month mode) | Yes | Format YYYY-MM here; the bank decides whether it is a real month and not later than this month | "Enter the pay period as YYYY-MM, for example 2026-10" (exact `patternMessage`) |
-| Pay from | `accountPicker` `bind: pay.fromAccountId`, `showBalance` | Yes | An account of the company | "Choose the account to pay from." (new) |
-| Payroll file | `textInput` `bind: pay.file`, `lines: 8`, placeholder `emp_ali,3600,Salary October` | Yes (paste mode) | At least one non-space character | "Paste the payroll file first: one row per employee" (exact) |
-| Payroll file (upload) | `fileUpload` *(planned)* `bind: pay.upload`, `.csv` or `.xml`, 256 KB | Yes (upload mode) | as `bulk-payment` | the three file messages of `bulk-payment` section 4 |
-Caption (exact): "One row per employee: employee,amount,reference. Up to 50 rows. Only employees on the payroll register can be paid, once each, and at most 1.5 times their monthly salary."
-Alerts: `INVALID_PERIOD` or `PAYROLL_ALREADY_RUN` show `{ctx.error.message}`; `EMPTY_BATCH`: "The file has no employee rows. Add at least one row: employee,amount,reference."; `BATCH_TOO_LARGE`: "The file has more than 50 rows. Split it into files of 50 rows or fewer."
-Buttons: **Check** → runs `checkPayroll`, goes to `check`; **Close** → `exit`. States as `bulk-payment` `start`.
+| Pay period | select: November 2026, October 2026, September 2026 | yes | not already sent (waiting, sent or paid); not later than this month | "Payroll for this period was already sent." / "Choose this month or an earlier one." |
+| Pay date | select of working days, next 25 days | yes | working day | "Choose the pay date." |
+| Pay from | select, "Operating ••2001 · $480,000.00" and the other account | yes | a company account | "Choose the account to pay from." |
 
-##### Screen `check` — "Check the payroll"
-`reviewSummary` rows (exact): "Pay period" = period; "Will be paid" = "{validCount} of {validCount + invalidCount} rows"; "Total"; "Approvers needed" = "{requiredApprovers} different approvers". Caption: "A payroll run always needs 2 different approvers, whatever its total."
-Alerts: warning when some rows fail "{n} row(s) cannot be paid and will be left out. Fix the file and check again, or continue with only the rows that pass."; error when none pass "No row in this file can be paid. Fix the file and check again."; warning for the daily-limit total as in `bulk-payment`.
-`dataTable` *(planned)* (as built: a "Rows in the file" list plus a "Rows left out and why" list):
-| Column | Content | Sort / filter |
-|---|---|---|
-| Row | `n` | sort |
-| Employee | `payee` (name) or raw id | search |
-| Amount | in the account currency | sort |
-| Salary cap | "up to {1.5 x salary}" *(new)* | – |
-| Reference | `reference` | search |
-| Result | "will be paid" or the row message | filter All / Will be paid / Left out |
-Buttons: **Continue with the rows that pass** → `review` (rule: if `pay.go && validCount == 0` go to `nothing`); **Fix the file** → `start`.
+**Step 2: Employees** (intro "Check each person’s pay."; button **Review**)
 
-##### Screen `nothing` — branch
-As `bulk-payment` `nothing`. Exact: "No row in this file can be paid, so there is nothing to send for approval. Fix the file and check again."
+- A summary card: **Total** (per currency, joined by "+"; "None" when nobody is in), "{n} employees · from {account}" and, when funds allow, "balance after {amount}". If the debit exceeds the balance the card adds "There isn’t enough money in this account."
+- When `varianceCheck` is on and the total differs from last month's by more than 20%: a notice "The total is up {n}% on last month." (or "down") and the required field **Reason for the change** (textarea, max 140, placeholder "For example: bonus month"; message "Add a short reason.").
+- A table with columns Employee (name, department, and under it each line "Bonus +{amount}" or "Deduction -{amount}" with **Remove**), Net pay (an editable amount with the currency below it), Pay, Actions. Pay is net pay plus bonuses minus deductions. Actions: **Bonus** (when `allowBonus`), **Deduction** (when `allowDeduction`), **Remove** (takes the person out of the run).
+- Row messages: "Enter an amount with up to 2 decimals.", "Pay must be above zero.", "Above the maximum of {1.5 times monthly salary}."
+- Adding a line opens a card with the person's name, a choice **Bonus** / **Deduction** (only the allowed ones), **Amount ({currency})** (placeholder "0.00") and buttons **Add** and **Cancel**. Zero or empty shows the toast "Enter an amount above zero".
+- **Not in this run** card lists removed people with **Add back**, or the chip "No bank details".
+- Empty: "Nobody in this run" / "Add someone back to continue." The step cannot continue with nobody ("Add at least one person.") or with rows marked ("Fix or remove the people marked.").
 
-##### Screen `review` — "Review payroll run"
-Summary rows: "Pay period", "From", "Employees paid", "Total", "Left out" = "{n} row(s)", "Approvers needed" = "{n} different approvers". Alert, info (exact): "The whole payroll is sent for approval as one run and counts once against your and the company's daily limits. It needs 2 different approvers. No money moves until the second one approves." `consent` `pay.consent`, `termsVersion: "corporate-payroll-v1"`, text "I confirm the salaries in this payroll are correct", message "Tick the confirmation first". Buttons **Confirm and send OTP** → `otp`; **Back** → `check`.
+**Step 3: Review** (busy "Checking limits and funds…", about 0.8 s; button **Submit for approval**). A card with the total and "{n} employees". Rows: Pay period, Pay date, Employees, Pay from, Fees ("None" or amount), **You pay** (in the account's currency), Approvals needed. A switch **Send payslips** (default on; only when `payslips` is on). On continue: limits and funds are checked.
 
-##### Screen `otp`, `success`, `failed`, `unavailable`, `denied`
-`otp`: as `bulk-payment` (button **Verify and send for approval**, calls `otpVerify` then `submitPayroll`). `success` (exact): title "Sent for approval"; text "{payee} totalling {amount} now waits for {required} different approvers. Nothing has left the account yet."; meta "Payment {id} · value date {valueDate}"; payee reads "Payroll 2026-10 · 3 employees". Buttons: **Track payment**, **View receipt**, **Go to approvals** (not shown: Alex at Alpha cannot approve), **Done**. `failed`: title "Payroll not sent", text `{ctx.error.message}`, caption "Nothing was sent for approval. No money has left the account.", buttons **Try again** (to `start`) and **Close**. `unavailable`: "Not available for this customer" / "Payroll runs are only for company customers. {ctx.error.message}". `denied`: upgrade wording "Your role doesn't allow this. Ask an administrator at {company}." (today: "Only an initiator can send a payroll run.").
+**Code prompt** (always asked). Title "Authorise payroll {period}: {USD total}". Line "Code sent to ••• 4410." plus "This amount needs an extra code." from 25,000.00.
 
-#### 4. Sandbox errors
-| Code | Message the person sees | Screen | Button |
+**Result** "Sent for approval", line "Payroll for {period}, {totals}. Nothing has left the account yet.", chip "Waiting for 1 approver" or "Waiting for 2 approvers". Receipt rows: Pay period, Pay date, Employees, Total, You pay, Approvals needed; then the BankWorkx® reference. Buttons **Track payment**, **Done**.
+
+#### 4. States and errors
+
+| Code | Message | Where | Button |
 |---|---|---|---|
-| `INVALID_PERIOD` | "Choose a pay period as YYYY-MM, not later than this month" | `start` alert | stay |
-| `PAYROLL_ALREADY_RUN` | "Payroll for {period} has already been started" | `start` alert | stay; the period is free again after the run is withdrawn or rejected |
-| `NOT_AUTHORISED`, `PERMISSION_DENIED` *(planned)*, `USER_NOT_FOUND`, `ACCOUNT_NOT_FOUND`, `NOT_SUPPORTED` | as `bulk-payment` | `denied` / `start` / `unavailable` | as there |
-| `EMPTY_BATCH`, `BATCH_TOO_LARGE` | as in the alerts above | `start` | stay |
-| `NO_VALID_LINES` | "None of the lines can be paid" | `failed` | Try again |
-| `CURRENCY_NOT_SUPPORTED` | "Payments are limited in USD: choose a USD account" | `failed` | Try again |
-| `INSUFFICIENT_FUNDS` | "Insufficient funds" | `failed` | Try again |
-| `LIMIT_USER_EXCEEDED` | "This is above Alex Morgan's daily limit" | `failed` | Try again |
-| `LIMIT_COMPANY_EXCEEDED` | "This is above the company's daily limit" | `failed` | Try again |
-| `OTP_REQUIRED`, `OTP_INVALID`, `CORE_UNAVAILABLE` | standard messages S-OTP_REQUIRED, S-OTP_INVALID, S-CORE_UNAVAILABLE | `otp` / `failed` | as standard |
-| Row codes | table at the top of this module | `check` | Fix the file |
-| File codes *(planned)* | as `bulk-payment` | `start` | Choose another file |
-| `TIMEOUT` *(planned)* | check: "This is taking longer than expected. Nothing was changed." Send: "We didn't get an answer in time. Check Activity before you try again, so you don't pay twice." | `start` / `failed` | Try again / Check Activity |
-| `SERVICE_UNAVAILABLE` *(planned)* | S-SERVICE_UNAVAILABLE | `failed` | Try again |
+| `PAYROLL_ALREADY_RUN` | "Payroll for this period was already sent." | step 1 | choose another period |
+| `EMPTY_BATCH` | "Add at least one person." | step 2 | add back |
+| `NO_VALID_LINES` | "None of the payments can be sent." | review | go back |
+| `INSUFFICIENT_FUNDS` | "There isn’t enough money in this account." | step 2, review | change account |
+| `LIMIT_USER_EXCEEDED` | "This is above your payment limit." | review | reduce |
+| `LIMIT_COMPANY_EXCEEDED` | "This is above the company limit." | review | wait |
+| `DATE_NOT_WORKING_DAY` | "Choose a working day." | step 1 | change date |
+| `TIMEOUT` | "We didn’t get an answer in time. Check Payments before you try again, so you don’t pay twice." | banner | check Payments |
+| `SERVICE_UNAVAILABLE` | sheet "We couldn’t reach the bank": "Nothing was sent and you haven’t been charged. Try again in a moment." | sheet | Try again / Cancel |
+
+Row codes used by the check (not shown as codes): `ABOVE_SALARY_CAP`, `NOT_AN_EMPLOYEE`, `DUPLICATE_LINE`.
 
 #### 5. Adapters
-| Integration id | Adapter | Request | Response | Error codes | Money moving | OTP | Status |
-|---|---|---|---|---|---|---|---|
-| `company` | `corp.company.get` | `{ userId }` | company, accounts, `employees`, `me`, limits | `NOT_SUPPORTED` | No | No | Existing |
-| `importBulk` | `corp.bulk.import` | `{ userId, format, content }` | `{ file, rowCount }` (rows `employee,amount,reference`) | file codes | No | No | Planned |
-| `checkPayroll` | `corp.payroll.check` | `{ userId, fromAccountId, period, file }` | `{ lines{}, problems{}, validCount, invalidCount, total, requiredApprovers: 2, period, currency }` | `NOT_AUTHORISED`, `ACCOUNT_NOT_FOUND`, `INVALID_PERIOD`, `PAYROLL_ALREADY_RUN`, `EMPTY_BATCH`, `BATCH_TOO_LARGE` | No | No | Existing |
-| `otpSend`, `otpVerify` | `bank.otp.send`, `bank.otp.verify` | | | `OTP_INVALID` | No | – | Existing |
-| `submitPayroll` | `corp.payroll.submit` | `{ userId, fromAccountId, period, file }` | the payment: `status: "pending_approval"`, `required: 2`, `period`, `payee` ("Payroll 2026-10 · 3 employees"), `lines` | `OTP_REQUIRED`, `NOT_AUTHORISED`, `INVALID_PERIOD`, `PAYROLL_ALREADY_RUN`, `NO_VALID_LINES`, `INSUFFICIENT_FUNDS`, `LIMIT_USER_EXCEEDED`, `LIMIT_COMPANY_EXCEEDED`, `CURRENCY_NOT_SUPPORTED`, `CORE_UNAVAILABLE` | Creates a pending payment, moves no money | Yes | Existing |
-Rules enforced by the bank: the period matches `^(\d{4})-(0[1-9]|1[0-2])$` and is not later than the current month; a period is taken while a run for it is pending or released (a rejected or withdrawn run frees it); a line may be at most `SALARY_CAP_FACTOR = 1.5` times the monthly salary (exactly 1.5 passes); an employee appears once per run; the run is one payment against the limits and has `required: 2` however small. Bank B parity: verdicts `B-201` to `B-205` (the last two are `NOT_AN_EMPLOYEE` and `ABOVE_SALARY_CAP`) and errors `ERR-4111` (period), `ERR-4112` (already run), plus `ERR-4101` to `ERR-4103`; all mapped in `bank-b.corporate.json`.
+
+| Integration | Adapter | Status |
+|---|---|---|
+| Company, accounts | `corp.company.get` | Existing |
+| Employee register with last month's net pay | `corp.payroll.register` | (planned) |
+| Check a run | `corp.payroll.check` (`INVALID_PERIOD`, `PAYROLL_ALREADY_RUN`, `EMPTY_BATCH`) | Existing, takes pasted text today |
+| Send the run | `corp.payroll.submit` (needs the code; `NO_VALID_LINES`, limits, funds) | Existing |
+| Payslip notice to employees | `corp.payroll.payslips` | (planned) |
 
 #### 6. Permissions, step-up and limits
-- Permission `biz.payroll.run`. Step-up `otp`.
-- Limits: one payment against Alex's limit (250,000) and Alpha's (1,000,000); 1 to 50 rows; always 2 different approvers regardless of the dual-approval threshold.
-- Salary cap 1.5 x the monthly salary on the register: Ali 5,400.00; Sana 7,200.00; Bilal 4,500.00; Hina 9,600.00.
-- No cut-off rule of its own: a late run just gets the next working day as value date.
+
+`pay.create`. The code is always asked. Two approvers above 50,000.00 USD equivalent, otherwise one (the earlier rule of two for every run is replaced in the prototype; confirm in open questions). Amounts convert to USD at the bank's rate for the limit checks.
 
 #### 7. Result and links out
-Result `success`; receipt: period, employees paid, total, approvers needed (2), value date, left out; notification to approvers "Payment awaiting your approval, Alpha Trading LLC"; links **Track payment** (tracker shows "Payroll 2026-11 · 3 employees" with the two-signature timeline), **View receipt**, **Done**.
+
+The run is recorded as one waiting payment "Payroll {period} · {n} employees" (kind payroll), shown in Payments and the approvers' inbox. Notification (planned): "Payment awaiting your approval". Payslip notice to employees after release (planned, only if the switch was on). Links: Track payment.
 
 #### 8. Acceptance criteria
-- AC-1. Only a user whose context holds `biz.payroll.run` can start a payroll run; Alex at Beta is refused, also when forced.
-- AC-2. A customer who is not a company is told it is not available.
-- AC-3. A period not written as YYYY-MM is refused on the screen; a period that is not a real month or is later than this month is refused with the bank's reason; this month or an earlier month is accepted.
-- AC-4. A period already started is refused with the bank's reason; when that run is withdrawn or rejected, the period is free again.
-- AC-5. Each row left out is listed with why (not on the register, paid twice, above 1.5 x salary, invalid amount); the total counts only the rows that pass; only those rows are sent.
-- AC-6. Exactly 1.5 x the monthly salary is paid; one cent above is left out.
-- AC-7. When no row can be paid the person cannot continue and nothing is sent.
-- AC-8. The run needs 2 different approvers, even for a small total, and the bank records 2.
-- AC-9. Sending moves no money; after one approval it is still pending; the second, different approver releases it and the money moves.
-- AC-10. The total counts once against the daily limit: rows each under it but together over it are refused with the reason; a total exactly at the limit is sent.
-- AC-11. Sending needs a correct six-digit code; a wrong or short code sends nothing; three wrong codes end the journey.
-- AC-12. The approval list shows the run as "Payroll 2026-10 · N employees".
-- AC-13. Without the confirmation the run cannot be sent.
-- AC-14. A file of the wrong type, too big or unreadable is refused and nothing is checked; CSV and XML give the same result.
-- AC-15. On a timeout nothing is sent and the person is told to check Activity; when unavailable, nothing was changed.
-- AC-16. The journey gives the same results on Bank B.
+
+- AC-1: A period already sent, or in the future, cannot be chosen.
+- AC-2: The register is the source; people without bank details are not in the run but can be seen.
+- AC-3: Pay is net plus bonus minus deduction; a pay above 1.5 times the monthly salary, zero or invalid is marked and blocks the step.
+- AC-4: Bonus and Deduction buttons follow the options; Remove and Add back work.
+- AC-5: A total more than 20% from last month asks for a reason when `varianceCheck` is on.
+- AC-6: A debit above the balance blocks the step with the message.
+- AC-7: A code is always asked; the result is "Sent for approval" and no money moves.
+- AC-8: Approvals needed is 2 above 50,000.00 USD equivalent, otherwise 1.
+- AC-9: Timeout and unavailable create no run.
 
 #### 9. Scenarios
-Persona `alex-alpha` unless stated; clock `2026-11-03T10:00:00Z`; period `2026-10` unless stated. The 28 existing scenarios carry over with USD amounts (the three "who am I" ones become T-1 and T-2).
-| Id | Name | Covers | Setup and steps | Conditions | Expected |
-|---|---|---|---|---|---|
-| T-1 | Maker can start a run; Alex at Beta cannot | AC-1 | `alex-alpha` opens; `alex-beta` opens and forces `corp.payroll.submit` | – | `start` opens; `denied` and `PERMISSION_DENIED`; no payment |
-| T-2 | An approver-only user is refused | AC-1 | `dana` at Alpha (approver, cannot initiate) opens it | – | `denied` |
-| T-3 | Not a company | AC-2 | persona `sam` | – | "Not available for this customer" |
-| T-4 | Period format, non-month, next month, this month | AC-3 | `2026-1`, `2026-13`, `2026-12`, `2026-11` | – | format message; "Choose a pay period as YYYY-MM, not later than this month" for `2026-13` and `2026-12`; `2026-11` accepted |
-| T-5 | Period already started; withdrawn; rejected | AC-4 | start `2026-10`, start again; withdraw; reject by Dana | – | "Payroll for 2026-10 has already been started"; after withdraw or reject the check passes |
-| T-6 | Each row left out has a reason | AC-5 | rows: `emp_ali,3600`, `emp_sana,7200.01`, `emp_zzz,1000`, `emp_bilal,abc`, `emp_ali,100` | – | the four messages in the row table; total counts Ali only |
-| T-7 | Zero and negative amounts | AC-5 | `emp_ali,0`, `emp_sana,-1` | – | both "The amount is not valid for this account's currency" |
-| T-8 | Exactly 1.5 x pays; one cent above is out | AC-6 | `emp_ali,5400.00` then `emp_ali,5400.01` | – | passes; "More than 1.5 times this employee's monthly salary" |
-| T-9 | No row can be paid | AC-7 | all rows bad; **Continue** is forced | – | alert; `nothing` |
-| T-10 | Small run needs 2 approvers, moves nothing; one approval still pending; second releases | AC-8, AC-9 | Alex sends `emp_bilal,1000`; Dana approves; Lee approves | – | `required` 2; after sending and after Dana: `pending_approval`, balance unchanged; after Lee: `released`, balance down by 1,000 |
-| T-11 | Rows each under the limit, together over | AC-10 | rows 130,000 + 130,000 | – | `failed` "This is above Alex Morgan's daily limit" |
-| T-12 | Total exactly at the limit | AC-10 | total 250,000.00 | – | sent |
-| T-13 | Wrong code, three wrong codes, short code | AC-11 | – | – | "Incorrect code"; `failed`; stays on `otp` |
-| T-14 | Approver sees the run's name | AC-12 | Dana opens `approve-payments` | – | row "Payroll 2026-10 · 3 employees" |
-| T-15 | No confirmation | AC-13 | – | – | "Tick the confirmation first" |
-| T-16 | Wrong type, too big, unreadable; CSV equals XML | AC-14 | `.pdf`, 300 KB, junk; same 3 rows in CSV and XML | – | file messages; equal results |
-| T-17 | Timeout on send | AC-15 | good file | `timeout: ["corp.payroll.submit"]` | `failed` "We didn't get an answer in time. Check Activity before you try again, so you don't pay twice."; period still free |
-| T-18 | Unavailable on check and on send | AC-15 | – | `unavailable: ["corp.payroll.check"]`, then `["corp.payroll.submit"]` | `start` and `failed` show "This service is not available right now. Nothing was changed. Please try again in a few minutes."; no payment |
-| T-19 | Bank B | AC-16 | run T-6, T-8, T-10 | `provider: "bank-b"` | same outcomes and wording |
+
+| # | Persona and setup | Steps | Expected | Covers |
+|---|---|---|---|---|
+| T-1 | Alex at Alpha | November 2026, next working day, Operating; Review; Submit; code 482100 | 8 employees; total about 30,858 USD equivalent; extra code line; "Sent for approval", 1 approver | AC-2, AC-7, AC-8 |
+| T-2 | Same | Choose October 2026 | "Payroll for this period was already sent." | AC-1 |
+| T-3 | Same | Set Ali Hamdan net pay to 6000 | "Above the maximum of $5,400.00." | AC-3 |
+| T-4 | Same | Add bonus 500 to Sana Malik | Pay 5,300.00; line under the name | AC-3, AC-4 |
+| T-5 | `allowBonus` off | Step 2 | No Bonus button | AC-4 |
+| T-6 | Same | Remove Hina Rauf, then Add back | Total changes and returns | AC-4 |
+| T-7 | Same | Remove Sana Malik, Hina Rauf and Bilal Ahmed | "The total is down {n}% on last month." and the Reason field; empty blocks Review | AC-5 |
+| T-8 | Operating balance below the debit | Step 2 | Funds message; Review blocked | AC-6 |
+| T-9 | Remove everyone | Step 2 | "Nobody in this run"; "Add at least one person." | AC-2 |
+| T-10 | Timeout, then unavailable | Review | Banner; sheet; no run | AC-9 |
 
 #### 10. Expected mutation-check survivors
-From `scenarios.test.ts` (key `payroll-run`):
-- `no-error-path` for the company lookup: replaced by `bank.session.get`, which cannot fail for a signed-in person.
-- `no-error-path` for the code sender and its resend: killed in the upgrade by T-17 and T-18 `conditions`.
-- `bank-roles`: the journey's permission check comes first.
-- `bank-whitelist`: a payroll run pays the payroll register, not the approved suppliers, so this rule does not apply (the employee checks have their own mutants).
-- `bank-companyLimit`: Alpha's company limit is above what one Maker can send.
-- `bank-cutoff`: no cut-off rule for payroll; a late run only gets the next working day's value date.
+
+- The 20% threshold at exactly 20%: survives (no scenario sits on the edge).
+- The 1.5 cap at exactly 1.5: survives.
+- The 25-day pay date window: survives.
+- Payslips switch default: survives, not asserted.
 
 ---
 
@@ -2166,723 +2070,726 @@ Row → the payment detail (signatory progress shell above). No journey is start
 
 ### ★ Approve payments — `approve-payments`
 
+**Catalog**: slug `approve-payments`, workspace business, category Approvals, core no, a bank can switch it off (yes), kept in the Lean preset (basic). Permission `pay.approve`, moves money (the last approval releases the payment). Options: **Allow approving several at once** (`batch`, default on), **Ask for a code from 25,000.00** (`stepUp`, default on), **Allow passing a payment to another approver** (`delegation`, default off). Prototype file `design/bankworkx-r1/src/journeys/44-approve-payments.js`. It is a screen in the Approvals tab (`view`, tab `apr`), not a stepped journey.
+
+> Lean. The earlier version had a long filter panel, per-line approval, "ask for changes" and a consent tick; the prototype has a search box, three status buttons, a detail with Approve, Reject and (optionally) Pass to someone, and a History tab.
+
 #### 1. Summary
-| Item | Value |
+
+| | |
 |---|---|
 | Slug | `approve-payments` |
-| Purpose | An Approver reviews one or several payments started by others, then approves or rejects them. The last approval moves the money. |
+| Purpose | Review payments colleagues started, then approve or reject them one by one or several at once. An extra code is asked from 25,000.00. |
 | Release | 1 |
 | Workspace | Business |
-| Status | Existing: the pattern `corporate-approval` in `fixtures/corporate-payments.ts` (id `jrn_corporate_approval`, 9 criteria, 11 scenarios, `meezan` app, company Acme). Upgraded here: opens from the inbox with a payment or a selection, no "who am I", permissions from the context, step-up above a threshold, batch approve with a result for every payment, timeout and unavailable states. |
-| Channels | web, mobile |
-| Starting pattern | Review → consent → (step-up) → one-time code → result; batch: select → review list → consent → step-up → one code → per-payment result list |
-| Who may use it | A user whose context holds `biz.approvals.approve` (Alex Morgan as Approver at Beta). Not Alex at Alpha. |
+| Status | Existing, upgraded (`corp.payments.pending`, `.approve`, `.reject` exist). |
+| Channels | web (list beside detail), mobile (list, then detail) |
+| Who may use it | `pay.approve`: Alex at Beta (Approver). At Alpha (Maker) the screen shows the no-access card (section 3). |
+| Cut-off | 16:00; the sandbox clock is 10:42, so "Cut-off in 5h 18m" shows on payments due today (amber under 90 minutes, red under 30). |
+
+**Home market configuration**: none. Amounts are shown in the company currency with "The payee gets about {amount}" under foreign-currency payments. Account lines show a masked number only.
+
+Seed at Beta (people: Priya Nair and Omar Haddad start payments; Lee Park, Maria Silva, Sam Okafor also approve): `PAY-2041` 8,200.00 Nimbus Logistics, Priya, name matches; `PAY-2039` 64,500.00 Nimbus Logistics, Omar, two approvals, Lee Park approved first, so Alex is next; `PAY-2043` 27,500.00 Rhine Freight GmbH, Priya, close name match; `PAY-2044` 9,800.00 Nimbus Logistics, started by Alex; `PAY-2046` 56,000.00 Rhine Freight GmbH, two approvals; `PAY-2047` 72,000.00 Nimbus Logistics, two approvals, Lee Park must approve first; `PAY-2048` 6,100.00 Gulf Trade FZE, no name match; `PAY-2036` rejected (history); `PAY-2012` paid (history).
 
 #### 2. Entry points
+
 | Place › label | Passes | Permission |
 |---|---|---|
-| Overview › Approvals queue › payment | `{paymentId}` | `biz.approvals.approve` |
-| Approvals › inbox › Open, Approve, Reject | `{paymentId}` | `biz.approvals.approve` |
-| Approvals › inbox › Select several › Approve {n} / Reject {n} | `{paymentIds}` | `biz.approvals.approve` |
-| Notification "Payment awaiting your approval, {company}" | `{companyId, paymentId}` (switches context first) | `biz.approvals.approve` |
-| Payment detail › Approve / Reject | `{paymentId}` | `biz.approvals.approve` |
-| Deep link `bankworkx://business/beta/j/approve-payments?paymentId=pay_3` | `{paymentId}` | `biz.approvals.approve` |
-If neither `paymentId` nor `paymentIds` is passed, the journey starts on the list screen `start` (as today). One payment goes to `review`; two or more go to `reviewBatch`.
+| Overview › Approvals queue | none | `pay.approve` |
+| Approvals tab | none | `pay.approve` |
+| Notification › Payment awaiting your approval | `{paymentId}` (opens that payment) | `pay.approve` (checked after a context switch) |
 
-#### 3. Screens
+#### 3. Screen
 
-**As built today (`corporateApproval`).** Ten screens: `who` (sandbox: choose who you are), `start` ("Waiting for you"), `review` ("Review payment"), `otp` ("Verify"), `reject` ("Reject payment"), `approved` ("Approved", terminal), `rejected` ("Rejected", terminal), `failed` ("Not completed", terminal), `unavailable`, `denied` ("Not allowed", terminal). Bound data: `session.userId`, `appr.paymentId`, `appr.consent`, `appr.reason`, `otp.code`. Reads `corp.payments.pending`, `corp.payments.get`; writes `corp.payments.approve`, `corp.payments.reject`.
+**Inbox | History** (two buttons, "Inbox ({n})" and "History").
 
-**Upgrade.** `who` removed. `start` is only used when the journey is opened without a payment. New screens `reviewBatch`, `stepUp` and `batchResult`. Everything else keeps its exact copy.
+*Inbox.* A search box (placeholder "Search"; matches payee, starter, id, reference and amount), three buttons **All**, **Ready for you**, **Waiting**, and the list. When `batch` is on, a row that can be approved and whose name check matches has a checkbox; with any selected a bar shows "{n} selected", **Clear** and **Approve {n}**.
 
-##### Screen `start` — "Waiting for you"
-Shown only when no payment was passed. On enter: `corp.payments.pending {userId}` saved as `ctx.pending`; on error go to `unavailable`.
-- Empty (exact): "Nothing is waiting for your approval." (`visibleWhen: len(ctx.pending) == 0`).
-- List: a `menu` over `ctx.pending`. Row label "{amount} to {payee}" (for example "USD 120,000.00 to Crescent Textiles", "USD 35,600.00 to 3 payments"); row text "{reference} · started by {initiatedBy} · {approvals} of {required} approved"; icon `send`. Tapping a row saves `appr.paymentId`, loads `corp.payments.get`, goes to `review`.
-- Upgrade: the row is a `dataTable` *(planned)* with checkboxes; **Review selected** goes to `reviewBatch`.
-- Button **Close** (secondary) → `exit`.
+Each row: "{amount} to {payee}", the starter's name, then chips: "Started by you", "You approved" or "Waiting for others" (when you cannot act), "Needs 2 approvals", and "Cut-off in …" (due today) or "Due {date}".
 
-##### Screen `review` — "Review payment" (single)
-Blocks: `reviewSummary`, `alert`s, `consent`, `button`s.
-`reviewSummary` rows (exact labels): "From" = account name and masked number; "To" = `payee`; "Amount"; "Reference"; "Started by"; "Approved so far" = "{n} of {required}"; "Value date". Upgrade adds: "Risk note" only when the amount is above the step-up threshold: "Large payment. You will be asked to confirm it's you."
-For bulk and payroll the summary adds "Rows" = count and a link "View the rows" opening the `lines` table.
-| Label | Block | Required | Validation | Error message |
+*Detail* (beside the list on desktop, a full screen with **‹ Back** on mobile): payee and amount, "The payee gets about {amount}" when foreign; rows Account, Purpose, Speed, Reference, Started by; Name check (only when not a match): chip "Close match" or "No match" with a sentence such as "The bank’s record says “Rhine Fracht GmbH”."; Reason (rejected payments). An **Approvals** card lists each signatory with "Approved", "Next", "Waiting" or "Can approve", with "(you)" after your own name, and the cut-off chip. Under it:
+
+- When you can act: buttons **Approve {amount}**, **Reject**, and **Pass to someone** (when `delegation` is on); the line "You’ll be asked for a code." when the amount is 25,000.00 or more and `stepUp` is on.
+- When you cannot: one sentence instead of buttons: "You started this payment. Another approver must approve it.", "You approved this payment. Waiting for the next approver.", "Waiting for {name} to approve first.", "Passed to {name}.", or the matching refusal.
+
+*Approve.* If the name check is not a match, a panel shows the chip and the sentence, the tick **I checked the payee details** and buttons **Approve {amount}** and **Cancel**; without the tick: "Confirm that you checked the payee details." From 25,000.00 (and when `stepUp` is on) a code sheet follows: title "Approve {amount}", line "Code sent to ••• 4410." For several at once: title "Approve {n} payments", line "One code covers them all. Sent to ••• 4410." Several at once only include payments you can act on whose name matches.
+
+*Reject.* A panel "Reason" with buttons **Wrong amount**, **Wrong payee**, **Unknown supplier**, **Duplicate**, **Other**. **Other** shows **Note** (3 rows, max 300, at least 10 characters). Buttons **Reject payment** and **Cancel**. Without a reason: "Choose a reason."
+
+*Pass to someone.* A select **Pass to** (Lee Park, Maria Silva, Sam Okafor, without yourself), then **Pass on** and **Cancel**. The person who started it, or someone who already approved, is refused.
+
+*Result screen* (replaces the list; button **Back to approvals**):
+
+| Action | Title | Line | Chip | Receipt |
 |---|---|---|---|---|
-| I have checked this payment and approve it | `consent` `appr.consent`, `termsVersion: "corporate-v1"` | Yes | `mustBeTrue` | "Tick the confirmation first" (exact) |
-Alert, info (new) when `afterCutoff`: "It was started after the cut-off, so it goes out on {valueDate}."
-Buttons:
-| Button | Does | Leads to |
+| Approve, last approval | "Approved" (or "{n} payments approved") | "{amount} to {payee}" | "Sent to the bank" | Payments, Total, Sent to the bank "{x} of {y}" |
+| Approve, more needed | "Approved, one more needed" | same | "Waiting for another approver" | same |
+| Reject | "Payment rejected" | "{amount} to {payee}. Nothing was sent." | "Rejected" | Payment, Reason, Told {starter} |
+| Pass on | "Passed to {name}" | "{name} can now approve this payment." | "Passed on" | Payment, Passed to |
+
+Each result also shows the BankWorkx® reference (prefix APR).
+
+*History.* A table with columns Payment (id and time), Payee (and starter), Amount, Status; tapping a row opens the detail.
+
+*No access (Alpha, Maker).* Card "You don’t have access to the approvals inbox" / "Your role at this company doesn’t include it. The bank checks this on its side too, so hiding the button isn’t the only guard." and, below, "Your requests waiting for approval" with each of your own waiting payments ("{id} · {n} of {need} approved"; tapping opens it in Payments).
+
+#### 4. States and errors
+
+| Code | Message | Where |
 |---|---|---|
-| **Approve and send OTP** (primary) | `validate`; if the amount is at or above the step-up threshold *(planned)* go to `stepUp`, else `otpSend` (toast "We couldn't send the code. Try again." and stay on error) | `otp` or `stepUp` |
-| **Reject** (secondary) | – | `reject` |
-| **Back** (ghost, only if opened from the list) | – | `start` |
-States: Loading: skeleton summary. Error: toast "We couldn't load the payment. Try again." and **Back**. Empty: not reachable.
+| `PERMISSION_DENIED` | "You can’t approve payments at this company." | no-access card; refusal |
+| `SELF_APPROVAL` | "You started this payment, so another approver must approve it." | detail |
+| `ALREADY_APPROVED` | "You already approved this payment." | detail |
+| `OUT_OF_SEQUENCE` | "Another approver goes first." | detail |
+| `APPROVAL_EXPIRED` | "The cut-off has passed. This payment can’t be approved today." | detail |
+| `DELEGATED` | "This payment was passed to another approver." | detail |
+| `NOT_PENDING` | "This payment is no longer waiting for approval." | detail |
+| `NAME_CHECK_ACK` | "Confirm that you checked the payee details." | confirm panel |
+| `REASON_REQUIRED` | "Choose a reason." | reject panel |
+| `DELEGATE_CONFLICT` | "That person started this payment. Choose someone else." | pass panel |
+| `DELEGATE_ALREADY_APPROVED` | "That person already approved this payment. Choose someone else." | pass panel |
+| `STEPUP_FAILED` | "The code didn’t work. Nothing was approved." | code sheet |
+| `SERVICE_UNAVAILABLE` | Sheet "We couldn’t reach the bank": "Nothing was sent and you haven’t been charged. Try again in a moment." (screen text: "We couldn’t reach the bank. Nothing was approved. Try again.") | sheet |
 
-##### Screen `reviewBatch` — "Review {n} payments" *(new)*
-Blocks: `text` (title), `dataTable` *(planned)*, `reviewSummary`, `alert`s, `consent`, `button`s.
-Table columns: Payment (payee and reference), Amount, Started by, Progress ("{approvals} of {required}"), Value date, Include (`toggle`, default on). Rows can be switched off here. A row that this person cannot approve (it is theirs, or already approved) never appears: the inbox does not offer it.
-`reviewSummary`: "Payments" = count included; "Total" = sum in the company currency (all selected must be in it; payments always are, `CURRENCY_NOT_SUPPORTED` blocks others); "Needs a second approver after you" = count with `required` 2 and one approval so far.
-Alerts: info "You are approving {n} payments with one code. Each is checked on its own; if one can't be released, the others are not affected." Warning when the total is at or above the step-up threshold: "Large total. You will be asked to confirm it's you."
-`consent` `appr.consent`: text "I have checked these payments and approve them", message "Tick the confirmation first".
-Buttons: **Approve {n} and send OTP** (primary) → `stepUp` or `otp`; **Reject {n}** (secondary) → `reject`; **Back** → inbox (`exit`).
-Limit: at most 20 payments *(proposed)*; more answers `SELECTION_TOO_LARGE` *(planned)*.
-Empty (all switched off): button disabled, caption "Switch on at least one payment."
-
-##### Screen `stepUp` — "Confirm it's you" *(new)*
-Shown when the single amount, or the batch total, is at or above the company's step-up amount (*planned*, proposed seed: 25,000 USD at Beta). Blocks: `text` title "Confirm it's you", body "For your security, confirm it's you first. This is a large approval.", `textInput` secure "Password" (`bind: stepup.password`, required, message "Enter your password."), `button` **Confirm** (calls `stepUp`, goes to `otpSend` then `otp`), **Cancel** → `review` or `reviewBatch`. Failure `STEP_UP_REQUIRED`: "For your security, confirm it's you first." (button Confirm). A wrong password shows "That password isn't right." (code `STEP_UP_FAILED` *(planned)*, three tries then `failed`).
-
-##### Screen `otp` — "Verify"
-`otp` block: `length: 6`, `maxAttempts: 3`, `resendAfterSeconds: 60`, hint "Enter the code sent to {maskedPhone}". Button label: **Verify and approve** (single) / **Verify and approve {n}** (batch). Actions: `validate`; `otpVerify` (on error toast "Incorrect code", stay, lock after 3 to `failed`); then single: `approve` → `approved`; batch: `approveMany` *(planned)* → `batchResult`. `otp.code` must match `^[0-9]{6}$`.
-
-##### Screen `reject` — "Reject payment"
-Title "Why are you rejecting it?". `textInput` `appr.reason`, label "Reason (optional)", placeholder "Wrong supplier" (upgrade: up to 140 characters, message "Use 140 characters or fewer."). Buttons: **Reject payment** (calls `reject`, or `rejectMany` *(planned)* for a selection, goes to `rejected`), **Back** (to `review`/`reviewBatch`). No one-time code is needed for a rejection (existing rule). The reason is shown to the Maker.
-
-##### Screen `approved` — "Approved" (terminal, single)
-Two `result` blocks, one shown at a time:
-- `status == 'released'`: title "Payment released"; text "{releaseReference}: {amount} has been sent."
-- `status != 'released'`: title "Approved"; text "It needs {required} approvers: {n} so far. It is released when the next one approves."
-Upgrade: the signatory-progress shell is shown under the result. Buttons: **Back to the list** (to `start`, or to Approvals › inbox), **Track payment**, **View receipt**, **Close**.
-
-##### Screen `batchResult` — "Approvals done" *(new, terminal)*
-The per-item result list. It always appears after a batch, whatever happened, because one code covers many payments and the person must see each outcome.
-- Header `result` block, tone by outcome: all succeeded (success) "All {n} approved"; some failed (warning) "{ok} of {n} approved, {bad} not approved"; none succeeded (error) "None of the {n} payments could be approved".
-- Text: "No payment was approved twice. Payments that were not approved are untouched."
-- A `dataTable` *(planned)* "What happened to each payment": 
-| Column | Content |
-|---|---|
-| Payment | `payee` and reference |
-| Amount | with currency |
-| Result | `statusChip`: Released (green, with `releaseReference`), Approved, waiting for second approver (amber, "{n} of {required}"), Not approved (red, with the reason below) |
-| Reason | Empty on success; otherwise the message of the code (table in section 4) |
-| Action | For a failure that can be retried (`INSUFFICIENT_FUNDS`, `LIMIT_COMPANY_EXCEEDED`): **Try again later** (opens the payment detail); for others none |
-- Failed rows are listed first. The summary under the table: "Released: {n} · Waiting for a second approver: {n} · Not approved: {n}".
-- Buttons: **Back to approvals** (primary; the list drops the payments no longer pending), **Retry the {k} that failed** (shown only when at least one failed with a retryable code; it returns to `reviewBatch` with only those rows on and needs a new code), **Close**.
-- Partial failure rules: the bank processes the payments in the order of the list (oldest first); one failure never stops the others; an earlier release in the same batch uses part of the company's daily limit, so a later payment can fail with `LIMIT_COMPANY_EXCEEDED` even though it would have passed alone (the result says so: "This is above the company's daily limit. Earlier payments in this batch used part of it."). A payment that fails at release has its approval taken back (existing: `approvals.pop()`), so nothing is half-approved.
-
-##### Screen `rejected` — "Rejected" (terminal)
-Single: `result` success, title "Payment rejected", text "Nothing has left the account. The person who started it can see your reason." Batch *(new)*: the same per-item list as `batchResult` with the title "{ok} of {n} rejected". Buttons: **Back to the list**, **Close**.
-
-##### Screen `failed` — "Not completed" (terminal)
-`result` error: title "Not completed", text `{ctx.error.message}`; caption "No money has left the account." Buttons: **Try again** (to `start`), **Close**. Upgrade: the button depends on the code (section 4).
-
-##### Screen `unavailable` and `denied` (terminal)
-`unavailable`: title "We can't open this right now", text `{ctx.error.message}`; **Try again**, **Close**. `denied` today: title "You can't do this", text "Only an approver can use this. You are signed in as {name}." Upgrade wording: "Your role doesn't allow this. Ask an administrator at {company}." with button **Back to Overview**.
-
-#### 4. Sandbox errors
-Bank text is what the sandbox says today; "Shown as" is what the person sees. Rows marked *(planned)* arrive with step 2 and the new adapters.
-| Code | Shown as | Screen | Button |
-|---|---|---|---|
-| `NOT_AUTHORISED` | "{name} is not allowed to approve payments" (bank text; for reject "{name} is not allowed to reject payments") | `failed` / `denied` | Close |
-| `PERMISSION_DENIED` *(planned)* | S-PERMISSION_DENIED: "Your role doesn't allow this. Ask an administrator at {company}." | `denied` | Back to Overview |
-| `SELF_APPROVAL` | "You cannot approve a payment you started" | single: `failed`; batch: row reason | Back to the list |
-| `ALREADY_APPROVED` | "You have already approved this payment" | single: `failed`; batch: row reason | Back to the list |
-| `PAYMENT_NOT_PENDING` | "This payment is already {released/rejected}" (bank: "This payment is already released") | `failed` / row reason | Back to the list |
-| `PAYMENT_NOT_FOUND` | "No payment {id}" | `failed` / row reason | Back to the list |
-| `USER_NOT_FOUND` | "No user {id} at {company}" | `denied` | Close |
-| `INSUFFICIENT_FUNDS` | "Insufficient funds" (the approval is taken back; the payment stays pending) + "No money has left the account." | `failed` / row reason | Back to the list |
-| `LIMIT_COMPANY_EXCEEDED` | "This is above the company's daily limit" (approval taken back; stays pending) | `failed` / row reason | Back to the list |
-| `OTP_REQUIRED` | S-OTP_REQUIRED: "Confirm with your one-time code first." (bank: "OTP not verified") | `failed` | Back to code |
-| `OTP_INVALID` | Toast "Incorrect code" + "{n} tries left"; after 3: "Too many wrong codes. Start again." | `otp` / `failed` | Try again / Start again |
-| `CORE_UNAVAILABLE` | S-CORE_UNAVAILABLE | `failed` | Try again |
-| `NOT_SUPPORTED` | "Not available for this customer" | `unavailable` | Try again |
-| `STEP_UP_REQUIRED` *(planned)* | S-STEP_UP_REQUIRED: "For your security, confirm it's you first." | `stepUp` | Confirm |
-| `STEP_UP_FAILED` *(planned)* | "That password isn't right." | `stepUp` | Confirm |
-| `NOT_YOUR_TURN` *(planned, sequential groups)* | "This payment is waiting for an earlier approver first." | `failed` / row reason | Back to the list |
-| `SELECTION_TOO_LARGE` *(planned)* | "You can approve up to 20 payments at a time." | inbox hint / `failed` | Back to the list |
-| `EMPTY_SELECTION` *(planned)* | "Choose at least one payment." | `start` | stay |
-| `TIMEOUT` *(planned)* | Single or batch approve: "We didn't get an answer in time. Check Activity before you try again, so you don't approve twice." Reject: "This is taking longer than expected. Nothing was changed." | `failed` | Check Activity / Try again |
-| `SERVICE_UNAVAILABLE` *(planned)* | S-SERVICE_UNAVAILABLE: "This service is not available right now. Nothing was changed. Please try again in a few minutes." | `failed` | Try again |
-| `SESSION_EXPIRED` *(planned)* | S-SESSION_EXPIRED | sign-in | Sign in |
-| `WRONG_CONTEXT` *(planned)* | S-WRONG_CONTEXT, from a notification opened in the other workspace | switch | Switch |
-
-Planned fix that comes with this journey (README 2.3): `rejectPayment` must also answer `SELF_APPROVAL`-style refusal for the person who started the payment; today only the role is checked. A Maker who wants their own payment back uses `withdraw-payment`.
+Empty states: "All caught up" / "No payments are waiting for approval."; "Nothing found" / "Try another search or status."; "Pick a payment" / "Open one to approve or reject it."; "No history yet" / "Payments you approve or reject are listed here." A timeout on approve (planned in this view) would say "We didn’t get an answer in time. Check Payments before you try again, so you don’t approve twice."
 
 #### 5. Adapters
-| Integration id | Adapter | Request | Response | Error codes | Money moving | OTP | Status |
-|---|---|---|---|---|---|---|---|
-| `company` | `corp.company.get` | `{ userId }` | company, accounts, `me`, limits, `dualApprovalAbove`, `cutoff` | `NOT_SUPPORTED` | No | No | Existing |
-| `pending` | `corp.payments.pending` | `{ userId, as? }` | object keyed by payment id (payments with `payee`) | `USER_NOT_FOUND`, `NOT_SUPPORTED` | No | No | Existing |
-| `payment` | `corp.payments.get` | `{ paymentId }` | the payment | `PAYMENT_NOT_FOUND` | No | No | Existing (access check *planned*) |
-| `stepUp` | `bank.session.stepUp` | `{ password }` | `{ stepUpUntil }` | `STEP_UP_FAILED` | No | No | Planned |
-| `otpSend`, `otpVerify` | `bank.otp.send`, `bank.otp.verify` | `{ channel }` / `{ code }` | | `OTP_INVALID` | No | – | Existing |
-| `approve` | `corp.payments.approve` | `{ userId, paymentId }` | the payment: `released` with `releaseReference`, or `pending_approval` with `approvals` | `OTP_REQUIRED`, `NOT_AUTHORISED`, `PAYMENT_NOT_FOUND`, `PAYMENT_NOT_PENDING`, `SELF_APPROVAL`, `ALREADY_APPROVED`, `INSUFFICIENT_FUNDS`, `LIMIT_COMPANY_EXCEEDED`, `CORE_UNAVAILABLE` | Yes: the last approval moves the money | Yes (reset after each approval) | Existing |
-| `approveMany` | `corp.payments.approveMany` | `{ userId, paymentIds[] (1 to 20) }` | `{ results[]: { paymentId, ok, status, releaseReference?, approvals?, code?, message? }, released, pending, failed }` | whole call: `OTP_REQUIRED`, `NOT_AUTHORISED`, `PERMISSION_DENIED`, `EMPTY_SELECTION`, `SELECTION_TOO_LARGE`, `STEP_UP_REQUIRED`, `CORE_UNAVAILABLE`; per payment: `PAYMENT_NOT_FOUND`, `PAYMENT_NOT_PENDING`, `SELF_APPROVAL`, `ALREADY_APPROVED`, `INSUFFICIENT_FUNDS`, `LIMIT_COMPANY_EXCEEDED`, `NOT_YOUR_TURN` | Yes | Yes: one verified code covers the whole call and is used up when the call ends | Planned |
-| `reject` | `corp.payments.reject` | `{ userId, paymentId, reason? }` | the payment, `rejected` | `NOT_AUTHORISED`, `PAYMENT_NOT_FOUND`, `PAYMENT_NOT_PENDING` | No (gives the Maker's daily limit back) | No | Existing |
-| `rejectMany` | `corp.payments.rejectMany` | `{ userId, paymentIds[], reason? }` | `{ results[] }` as above | as `reject` | No | No | Planned |
-Behaviour of `approveMany` (specified so the sandbox, the journey and Bank B agree): each payment is processed by the same code as `corp.payments.approve`; the order is `initiatedAt`, then id; a failure is recorded in `results` and the loop goes on; the call itself succeeds (`ok` per row); only the whole-call codes above throw. Bank B parity: implemented as a loop over Bank B's `payments.authorise` inside the mapping layer, with its own per-item error codes mapped (`ERR-4093` self approval, `ERR-4094` already approved, `ERR-4095` not pending, `ERR-4091` funds, `ERR-4292` company limit).
+
+| Integration | Adapter | Status |
+|---|---|---|
+| Waiting payments | `corp.payments.pending` | Existing |
+| One payment | `corp.payments.get` | Existing |
+| Approve (the last approval releases) | `corp.payments.approve` (needs the code; `SELF_APPROVAL`, `ALREADY_APPROVED`, `PAYMENT_NOT_PENDING`, `INSUFFICIENT_FUNDS`, `LIMIT_COMPANY_EXCEEDED`) | Existing |
+| Reject with a reason | `corp.payments.reject` | Existing |
+| Pass to someone | `corp.payments.delegate` | (planned) |
+| Name check result on a payee | `corp.payees.nameCheck` | (planned) |
+| History | `corp.payments.list` | (planned) |
 
 #### 6. Permissions, step-up and limits
-- Permission `biz.approvals.approve` (three checks: launch point, `authorisation`, sandbox). Today: `authorisation { role: "approver", rolesFrom: "ctx.company.me.roles", deniedScreen: "denied" }`.
-- Separation of duties: `SELF_APPROVAL` and `ALREADY_APPROVED`, enforced in the bank whatever the screen shows. This is the proof for the Alex demo: Alex as Approver at Beta approves a payment started by `priya`; Alex as Maker at Alpha is refused even when the call is forced (today the sandbox says `NOT_AUTHORISED`; with the identity step it says `PERMISSION_DENIED`; both must be accepted by the scenario until step 2 lands).
-- Step-up level: `otp` for amounts under the step-up amount; `stepup` (password, then code) at or above it *(planned, proposed seed 25,000 USD per payment; for a batch the total of the included payments)*.
-- Limits: approving does not use the approver's own limit. It uses the company's daily limit when the money is released (Beta proposed 1,000,000 USD); the funds are checked again at release.
-- Two approvers: above `dualApprovalAbove` (proposed 50,000 USD), and always for payroll.
-- Batch: 1 to 20 payments *(proposed)*, one code, one step-up, a result for each.
+
+`pay.approve`. Four-eyes: not your own payment, not twice. Sequential payments go in order. The code is asked from 25,000.00 (option). The company limit is counted at release. The audit trail records Approved, Rejected and Passed with the time (3 Nov 10:42).
 
 #### 7. Result and links out
-- Single result: `approved` ("Payment released" or "Approved"), or `rejected`. Batch result: `batchResult`.
-- Receipt *(planned)*: payment id, payee, amount, started by, approved by (all names and times), release reference, value date.
-- Notifications raised: to the Maker "Your payment {id} was approved" / "was released" / "was rejected: {reason}"; to the next approver in line "Payment awaiting your approval, {company}" when one approval is still needed.
-- Links out: **Back to the list** (Approvals › inbox), **Track payment** (Payments › tracker), **View receipt**, **Close** (returns to where the person started).
+
+Approve releases the payment at the last approval and sends it to the bank. Reject tells the starter (notification planned: "Your payment was rejected"). Links: the result's **Back to approvals**, Payments tab for the starter's own requests.
 
 #### 8. Acceptance criteria
-- AC-1. Only a user whose context holds `biz.approvals.approve` can approve or reject; Alex as Maker at Alpha is refused, also when the call is forced.
-- AC-2. An approver is never offered a payment they started or already approved.
-- AC-3. Approving a payment that needs one approver releases it and moves the money.
-- AC-4. A payment that needs two approvers is not released by the first; the second, different approver releases it.
-- AC-5. Rejecting records the reason, moves no money and gives the Maker's daily limit back.
-- AC-6. Approving needs the confirmation and a correct six-digit one-time code; three wrong codes end the journey with nothing approved.
-- AC-7. Alex as Approver at Beta approves the payment started by `priya` and sees it released (or pending the second approver) with its reference.
-- AC-8. A bulk payment or a payroll run is shown as one payment (how many payees or employees, the total) and one approval counts for all of it.
-- AC-9. At or above the step-up amount the person must confirm with their password before the code.
-- AC-10. A batch is approved with one code; every selected payment gets its own result; a failure of one does not stop or undo the others; a payment that fails stays pending and untouched.
-- AC-11. In a batch, an earlier release can use up the company's daily limit; the later payment then fails with the limit message and stays pending.
-- AC-12. In a batch, a payment that was already released by someone else, or that the person already approved, shows its own reason and the rest go through.
-- AC-13. On a timeout, nothing is approved and the person is told to check Activity before trying again; when unavailable, the person is told nothing was changed.
-- AC-14. Sequential signatory order is respected: a later signatory cannot approve before the earlier one (planned groups).
-- AC-15. The journey gives the same results on Bank B.
+
+- AC-1: Only a holder of `pay.approve` sees the inbox; others see the no-access card and their own waiting requests.
+- AC-2: A payment you started, or already approved, shows the sentence and no Approve button.
+- AC-3: A sequential payment shows "Waiting for {name} to approve first." until that person has approved.
+- AC-4: Approving needs a code from 25,000.00 when `stepUp` is on, and none below.
+- AC-5: A name check that is not a match needs the tick before approval, and cannot be included in a multiple approval.
+- AC-6: A payment needing two approvals shows "Approved, one more needed" after the first.
+- AC-7: Reject needs a reason; "Other" needs a note of at least 10 characters.
+- AC-8: With `batch` off no checkboxes show; with `delegation` off no Pass to someone button.
+- AC-9: After the cut-off no approval is possible.
+- AC-10: Unavailable bank: nothing is approved.
 
 #### 9. Scenarios
-Personas: `alex-beta` = Alex Morgan with the active context Beta Services Ltd (Approver); `alex-alpha` = Alex with the context Alpha Trading LLC (Maker); `priya`, `omar` = Beta makers; `noor` = Beta admin; `dana`, `lee` = Alpha approvers. Setup lines use the real adapters, always with a verified code first (`bank.otp.send`, `bank.otp.verify {code: "482100"}`), `saveAs: "p"`. Clock `2026-11-03T10:00:00Z`. The 11 existing scenarios of `corporate-approval` carry over (re-pointed to Beta and USD).
-| Id | Name | Covers | Persona and setup | Conditions | Expected |
-|---|---|---|---|---|---|
-| T-1 | Alex at Beta approves a payment started by priya | AC-7, AC-3 | `alex-beta`; setup: `priya` starts 12,000 USD to `sup_logistics`, reference "INV-9" | – | open from `{paymentId}`; consent; code `482100`; `approved`, "Payment released"; Beta's balance down 12,000 |
-| T-2 | Alex at Alpha is refused even when forced | AC-1 | `alex-alpha`; setup: Alex (Maker) starts 5,000 USD; forced `corp.payments.approve` on it | – | `denied` with "Your role doesn't allow this. Ask an administrator at Alpha Trading LLC."; the forced call answers `NOT_AUTHORISED` today and `PERMISSION_DENIED` after step 2; the payment is still `pending_approval` |
-| T-3 | A person never sees their own payment | AC-2 | `dana` is Approver; a user with both roles starts a payment | – | the list shows "Nothing is waiting for your approval." |
-| T-4 | Self approval is refused in the bank | AC-2 | forced `corp.payments.approve` by the starter | – | `SELF_APPROVAL` "You cannot approve a payment you started" |
-| T-5 | Already approved is refused | AC-2, AC-4 | 60,000 USD payment (needs two); `alex-beta` approves; forced second approve | – | `ALREADY_APPROVED` "You have already approved this payment"; payment still pending |
-| T-6 | First of two does not release; second does | AC-4 | 60,000 USD; Alex approves; a second Beta approver (`sofia`, a planned seed addition) approves | – | after Alex: "It needs 2 approvers: 1 so far."; balance unchanged; after the second: `released` |
-| T-7 | Reject records the reason and keeps the money | AC-5 | 8,000 USD; `alex-beta` presses **Reject** with "Wrong supplier" | – | `rejected`; `corp.payments.get` `rejectReason` "Wrong supplier"; balance unchanged; Priya's `usedToday` reduced by 8,000 |
-| T-8 | No confirmation, wrong code, three wrong codes, short code | AC-6 | single payment | – | "Tick the confirmation first"; "Incorrect code"; `failed` after three; stays on `otp` for 3 digits; payment still pending |
-| T-9 | Bulk and payroll are one payment | AC-8 | `priya` sends a bulk of 2 rows (40,000 + 20,000); another Maker sends a payroll | – | row "USD 60,000.00 to 2 payments" and "Payroll 2026-10 · 3 employees"; approving the bulk releases all rows once |
-| T-10 | Step-up above the threshold | AC-9 | 30,000 USD payment (above 25,000) | – | after consent the `stepUp` screen shows; wrong password "That password isn't right."; right password then code; `approved` |
-| T-11 | Below the threshold needs no step-up | AC-9 | 12,000 USD | – | goes straight to `otp` |
-| T-12 | Batch approve: all succeed | AC-10 | three payments of 5,000, 7,000, 9,000 from `priya` and `omar`; select all; consent; one code | – | `batchResult` "All 3 approved"; three "Released" rows with references; one code used; balance down 21,000 |
-| T-13 | Batch with partial failure | AC-10, AC-12 | three payments; before Alex acts, another Beta approver releases payment 2 (setup) | – | `batchResult` "2 of 3 approved, 1 not approved"; the failed row first with "This payment is already released"; the other two released |
-| T-14 | Batch: a payment Alex already approved is in the selection | AC-12 | three payments; one needs two approvers and Alex approved it earlier; the three ids are passed by deep link | – | that row "You have already approved this payment"; the other two go through |
-| T-15 | Batch: company limit used up by earlier payments | AC-11 | company daily limit set so the first two releases fit and the third does not | – | third row "This is above the company's daily limit. Earlier payments in this batch used part of it."; it stays `pending_approval`; balance down by the first two only |
-| T-16 | Batch: funds run out at release | AC-10 | the third payment is larger than the remaining balance | – | third row "Insufficient funds"; approvals of the third `[]`; the first two released |
-| T-17 | Batch needs one code and one step-up | AC-9, AC-10 | 3 payments totalling 40,000 (each under 25,000) | – | step-up screen appears (total above threshold); one code |
-| T-18 | Batch limits | AC-10 | select 21 payments | – | "You can approve up to 20 payments at a time."; `SELECTION_TOO_LARGE` if forced |
-| T-19 | Retry the failed ones | AC-10 | after T-13 press **Retry the 1 that failed** | – | `reviewBatch` with one row on; a new code is asked |
-| T-20 | Timeout on approve | AC-13 | single payment | `timeout: ["corp.payments.approve"]` | `failed` "We didn't get an answer in time. Check Activity before you try again, so you don't approve twice."; payment still pending, no approval recorded |
-| T-21 | Timeout on batch | AC-13 | three payments | `timeout: ["corp.payments.approveMany"]` | same message; none approved |
-| T-22 | Unavailable | AC-13 | single and batch | `unavailable: ["corp.payments.approve"]` / `["corp.payments.approveMany"]` | "This service is not available right now. Nothing was changed. Please try again in a few minutes."; no approval |
-| T-23 | Sequential order | AC-14 | group with two steps; step 2 user tries first | – | not in the inbox; forced approve answers `NOT_YOUR_TURN` |
-| T-24 | Bank B | AC-15 | run T-1, T-6, T-7, T-13 | `provider: "bank-b"` | same outcomes and wording |
-| T-25 | Open from a notification into the wrong workspace | AC-1 | `alex-alpha` opens a link for Beta | – | switch prompt (S-WRONG_CONTEXT); after switching, step-up and the review screen |
+
+| # | Persona and setup | Steps | Expected | Covers |
+|---|---|---|---|---|
+| T-1 | Alex at Beta | Open `PAY-2041`, Approve | No code (8,200.00); "Approved", "Sent to the bank" | AC-4, AC-6 |
+| T-2 | Same | Open `PAY-2039`, Approve, code 482100 | Code asked (64,500.00); two signed; "Sent to the bank" | AC-3, AC-4 |
+| T-3 | Same | Open `PAY-2044` | "You started this payment…"; no buttons | AC-2 |
+| T-4 | Same | Open `PAY-2047` | "Waiting for Lee Park to approve first." | AC-3 |
+| T-5 | Same | Open `PAY-2043`, Approve | Panel with the close-match sentence; without the tick the message | AC-5 |
+| T-6 | Same | Tick two matching rows, Approve 2 | One code if any is 25,000.00 or more; "2 payments approved" | AC-4, AC-8 |
+| T-7 | Same | Open `PAY-2046`, Approve | "Approved, one more needed" | AC-6 |
+| T-8 | Same | Reject `PAY-2048` with no reason, then "Wrong payee" | "Choose a reason."; then "Payment rejected" | AC-7 |
+| T-9 | Alex at Alpha | Open Approvals | No-access card and own waiting payments | AC-1 |
+| T-10 | Clock after 16:00 (planned) | Open a payment due today | Cut-off message | AC-9 |
+| T-11 | Bank unavailable | Approve | Sheet; payment still waiting | AC-10 |
+| T-12 | `delegation` on | Pass `PAY-2041` to Lee Park | "Passed to Lee Park" | AC-8 |
 
 #### 10. Expected mutation-check survivors
-From `scenarios.test.ts` (key `corporate-approval`), updated for the upgrade:
-- `no-error-path` for the calls that never fail in the sandbox (company lookup, people list, code sender): killed where T-20 to T-22 reach them with `conditions`; otherwise "The sandbox never fails here".
-- `no-error-path` after a right code, for a payment someone else released at the same moment: killed in the upgrade by T-13, which sets the race up in the setup (the old comment said it could not be arranged from one session).
-- `no-error-path` when rejecting a payment already closed: killed by T-13 on `rejectMany` if added; else survives with "A refusal when rejecting a payment that closed cannot be arranged from one session".
-- `bank-roles`: the journey's own permission check sends a person without the role to `denied` first; the bank's check is covered by its unit tests.
-- `bank-companyLimit`: killed by T-15 (the per-item limit failure).
-- `bank-fourEyes`: expected to survive in the single-payment path ("The pending list never offers a person their own payment"), and killed by T-4 and T-14, which force the call.
-Any other survivor fails the test.
+
+- The cut-off chip colour thresholds (30 and 90 minutes): survive, only the text is asserted.
+- The search fields searched: survives beyond payee name.
+- The list of reasons: survives, only two are used.
+- Timeout: no behaviour in the prototype (planned).
 
 ---
 
 ## Business: Admin
 
-Shell screens for the **Admin** tab, and three journeys: `manage-user`, `change-limits`, `edit-signatory-group`. Release 1. The tab is shown only to a person with at least one of `biz.admin.users`, `biz.admin.limits`, `biz.admin.signatories` or `biz.audit.view`. In the demo, Alex is Maker at Alpha and Approver at Beta, so he sees **no** Admin tab at either company except *Audit trail* at Beta (an Approver holds `biz.audit.view`). `ravi` (Alpha) and `noor` (Beta) are the admins.
+The **Admin** tab and three journeys: `manage-user`, `change-limits`, `edit-signatory-group`. Release 1. The tab is a view (`admin`) with four sections: People, Limits, Approval groups and Activity log. The three journeys are started from buttons on it. Every change goes through a code prompt, is written to the activity log, and (while the option is on) waits for a **second administrator** to approve it when it raises a limit, adds or changes an administrator, or changes an approval group.
 
-**What exists today.** `CorporateSandbox` knows users with `roles: CorpRole[]` (`initiator`, `approver`), `dailyLimit` and `usedToday`; the company has `companyDailyLimit`, `dualApprovalAbove` (a payment above this needs two different approvers) and `cutoff`. `corp.company.get` returns them and `corp.users.list` returns `{ id, name, sub }`. There is no way to change any of it, no admin role, no signatory groups, no audit trail. Everything that changes data below is *planned*.
+> The earlier version of this section described six shell screens (Users, Roles, Account permissions, Limits, Signatory groups, Audit trail), a role list of Maker, Approver and Admin, an audit export and a `biz.audit.view` permission. The prototype has none of those: one `admin` view, five roles (Maker, Approver, Maker and approver, Viewer, Administrator) and one activity log. Account-by-account permissions, a roles page and an export are not in Release 1.
 
-**Role names.** The README says Maker, Approver, Admin. The sandbox says `initiator` and `approver`. In this spec "Maker" is the label for `initiator`. A new role `admin` (planned) is added to `CorpRole`. A person can hold more than one role (as `nadia` does today), but the four-eyes rule still applies (`SELF_APPROVAL`).
+**What exists today in the sandbox.** `CorporateSandbox` knows users with `roles` (`initiator`, `approver`), `dailyLimit` and `usedToday`, and the company has `companyDailyLimit`, `dualApprovalAbove` and `cutoff` (`corp.company.get`, `corp.users.list`, `packages/mock-bank-api/src/corporate.ts`). There is no way to change any of it. Every adapter named in this section that changes data is (planned); the prototype keeps people, limits, groups and the change queue on the company record in memory, and a sandbox reset clears them.
 
-**Planned data (sandbox, `business/admin.ts`)**
+**Seed values** (identical to the prototype; USD, one table for the section):
 
-| Thing | Shape |
-|---|---|
-| User | `{ id, name, email, phone, roles: ("initiator" or "approver" or "admin")[], status: "invited" or "active" or "disabled", accountIds: string[], dailyLimit, usedToday, invitedAt, lastSignInAt? }` |
-| Signatory group | `{ id, name, mode: "sequential" or "parallel", members: userId[] (ordered for sequential), required: number, appliesAbove: number, accountIds: string[], version }` |
-| Audit entry | `{ id, at, actorId, action, target, before?, after?, outcome: "ok" or "refused", code? }` |
+| | Alpha Trading LLC | Beta Services Ltd |
+|---|---|---|
+| People | Alex Morgan (Maker, limit $250,000.00), Dana Cruz (Approver), Lee Park (Approver), Maria Silva (Approver), Priya Nair (Maker, $100,000.00), Omar Haddad (Maker, $150,000.00), Sam Okafor (Approver, Invited), Ravi Menon (Administrator), Mina Das (Administrator) | Alex Morgan (Approver), Lee Park, Maria Silva, Sam Okafor (Approvers), Priya Nair (Maker, $100,000.00), Omar Haddad (Maker, $150,000.00), Noor Sayegh (Administrator), Karim Aziz (Administrator) |
+| Limits | Per person $250,000.00; company daily $1,000,000.00; bank ceiling $2,000,000.00; two approvers above $50,000.00; extra code from $25,000.00 | the same |
+| Approval groups | "Payments over 50,000": in order, Dana Cruz then Lee Park. "Payments up to 50,000": any one of Dana Cruz, Lee Park | "Payments over 50,000": in order, Alex Morgan then Lee Park. "Payments up to 50,000": any one of Alex Morgan, Lee Park |
+| Waiting for a second administrator | CHG-1042, sent by Mina Das, "Raise the extra code threshold from $25,000.00 to $30,000.00", 3 Nov 09:20 | CHG-1043, sent by Karim Aziz, "Raise the two-approver threshold from $50,000.00 to $60,000.00", 3 Nov 08:50 |
+| Requests | REQ-30418, Cheque book, "Cheque book, Operating", Done, Priya Nair, 28 Oct | none |
 
-**Admin changes and the demo.** Every admin journey needs `stepup` (README 4.3) and writes an audit entry, including refused attempts. Changes apply at once in Release 1 (open question 3 asks whether a second admin must confirm).
+The acting administrator in the preview is **Ravi** at Alpha and **Noor** at Beta. Alex Morgan is Maker at Alpha and Approver at Beta and is never an administrator, so he does not see the tab's content at either company.
 
-### Shell: Users
+### ★ Admin — `admin`
 
-| | |
-|---|---|
-| Purpose | See everyone who can act at this company, and start inviting, editing or disabling. |
-| Route | Web: `/{project}/business/{companyId}/admin/users`. Mobile: `Business/Admin/Users`. |
-| Data source | `adminUsers(ctx)` (planned) over `corp.users.list` (existing name; planned extension: returns the full user record above, with `sub` kept for the sandbox "who" screens). |
-| Permission | `biz.admin.users` |
+**Catalog**: slug `admin`, workspace business, category Admin, core no, a bank can switch it off (yes), kept in the Lean preset (basic). A view (tab `adm`), not a journey. Permission `admin`. Options: *Show the activity log* (default on). Prototype file `design/bankworkx-r1/src/journeys/75-admin.js` (it also holds the shared people, limits and group data, `ADM`, used by the three journeys).
 
-**Columns** (`dataTable`): Name (and email below), Roles (chips: Maker, Approver, Admin), Status (`statusChip`: Active green tick, Invited blue envelope, Disabled grey slash), Accounts ("All 3" or "2 of 3"), Daily limit (company currency; "Not set" for an approver-only user), Last sign-in (`12 Nov 2026 09:15` or "Never"). **Filters**: role, status, search (name or email). **Default sort**: Name A to Z; Disabled users last. **Page size** 25.
-
-**Buttons**: *Invite user* (top right) → `manage-user` `{mode: "invite"}`; row menu *Edit* → `manage-user` `{mode: "edit", userId}`; *Disable* / *Enable* → `manage-user` `{mode: "disable" or "enable", userId}`; *Resend invite* (invited users only; calls `corp.users.invite` again, see below).
-
-**States**: loading (skeleton rows); empty (never, an admin always exists); filtered to nothing "No users match. Clear filters."; error / timeout as in Accounts. A "Disabled" count appears in the header ("12 users · 2 disabled").
-
-### Shell: Roles
+#### 1. Summary
 
 | | |
 |---|---|
-| Purpose | Show what each role can do, so an admin knows what they are granting. Read-only in Release 1. |
-| Route | Web: `/{project}/business/{companyId}/admin/roles`. Mobile: `Business/Admin/Roles`. |
-| Data source | `adminRoles()` (planned) over `corp.roles.list` (planned; request none; response record keyed by role `{ id, name, description, permissions: string[], userCount }`; errors `PERMISSION_DENIED`, `TIMEOUT`, `SERVICE_UNAVAILABLE`; read-only). |
-| Permission | `biz.admin.users` |
+| Slug | `admin` |
+| Purpose | An administrator sees who can act at the company, the limits in force and the approval groups, starts the three admin journeys, decides on changes another administrator sent, and reads the activity log. |
+| Release | 1 |
+| Workspace | Business (tab **Admin**, between Approvals and More) |
+| Status | Built in the prototype. Replaces the earlier shell screens. |
+| Channels | web, mobile |
+| Who may use it | A context that holds `admin`. Alex Morgan does not, at either company. |
+| Journey type | View with three launch points and an approve or decline action. No code prompt on the view itself; the three journeys ask for it. |
 
-**Layout**: three cards: Maker, Approver, Admin. Each lists the `biz.*` permissions from README 4.2 in plain words and the number of people. Example copy, Maker: "Starts payments, uploads files, runs payroll, saves templates, withdraws its own pending payments." Approver: "Approves or rejects payments that others started. Cannot start payments." Admin: "Invites and edits users, sets limits and signatory groups. Cannot start or approve payments unless also given those roles."
-**States**: loading skeleton; error as above. **Drill-down**: *See users with this role* → Users filtered by role. Custom roles are out of Release 1.
+**Home market configuration**: none. All amounts are in the company's currency (USD for Alpha and Beta).
 
-### Shell: Account permissions
+#### 2. Entry points
 
-| | |
+| Place › label | Passes | Permission |
+|---|---|---|
+| Tab bar › Admin | none | none to open; the content needs `admin` |
+| Section People › Invite user | `manage-user` `{mode: "invite"}` | `admin` |
+| People › row › Edit | `manage-user` `{mode: "edit", userId}` | `admin` |
+| People › row › Disable | `manage-user` `{mode: "disable", userId}` | `admin` |
+| People › row › Enable (disabled people) | `manage-user` `{mode: "enable", userId}` | `admin` |
+| Limits › Change limits | `change-limits` `{}` | `admin` |
+| Approval groups › card › Edit group | `edit-signatory-group` `{group: "over" or "upto"}` | `admin` |
+
+Switching context closes the preview (see "Administrator preview").
+
+#### 3. Screens
+
+**Without access.** A person who does not hold `admin` sees a lock screen: title "You don’t have access", line "Only administrators can manage people and limits.", button **Preview as {Ravi at Alpha, Noor at Beta} (administrator)**. The button switches the preview on (section "Administrator preview"). Nothing else is shown.
+
+**With access** (a real administrator, or the preview). From top to bottom:
+
+1. **Preview bar** (only in the preview): "Previewing as {name}, an administrator." and a link **Exit**.
+2. **Waiting for a second administrator** card (only when something is waiting). One row per waiting change: the text in bold ("Raise the extra code threshold from $25,000.00 to $30,000.00"), a small line "Sent by {name} · {date and time}" ("Sent by you" for the acting administrator's own), then either the buttons **Approve** and **Decline**, or, for a change the acting administrator sent, the chip "Waiting for another administrator". Approve applies the change at once, writes "Approved {text} ({id})" to the activity log and shows the toast "Approved. The change is live." Decline writes "Declined …" and shows "Declined. Nothing was changed." A person cannot decide on their own change (toast "Another administrator has to approve this.", not reachable from the buttons). Declining an invitation for a new administrator removes that person.
+3. **Section buttons**: People, Limits, Approval groups, and Activity log (only while the option is on). The first section, People, is open when the tab is entered.
+
+**People.** Button **Invite user** above a table with columns Person, Role, Daily limit, Status and an actions column.
+
+| Column | Content |
 |---|---|
-| Purpose | A grid of who can see and use which account. |
-| Route | Web: `/{project}/business/{companyId}/admin/account-permissions`. Mobile: `Business/Admin/AccountPermissions` (a list per user). |
-| Data source | `adminAccountPermissions(ctx)` (planned) over `corp.accountPermissions.get` (planned; request none; response `{ users: [...], accounts: [...], grants: record keyed by "userId:accountId" `{ view, initiate, approve }` }`; errors `PERMISSION_DENIED`, `TIMEOUT`, `SERVICE_UNAVAILABLE`; read-only). |
-| Permission | `biz.admin.users` to read and to change |
+| Person | Name; the acting administrator's own row adds "(you)" |
+| Role | Maker, Approver, Maker and approver, Viewer, Administrator |
+| Daily limit | The amount for a Maker or a Maker and approver, otherwise "-" |
+| Status | Chip: "Active" green, "Invited" blue, "Disabled" grey, "Change waiting" amber (a change by this person's record is waiting for a second administrator), "Waiting for approval" amber (a new administrator not yet approved) |
+| Actions | **Edit** and **Disable**; for a disabled person only **Enable**. None on your own row, on a row with a change waiting, or on a person waiting for approval |
 
-**Grid**: rows are users; columns are accounts; each cell shows up to three small chips: View, Start, Approve (a chip is present only if granted; the cell is empty when none). **Filters**: user search, account select. **Change**: a cell opens a sheet with three `toggle`s (View, Start payments, Approve payments) and *Save* → `corp.accountPermissions.set` (planned; request `{ userId, accountId, view, initiate, approve }`; response the new grant; error codes `USER_NOT_FOUND`, `ACCOUNT_NOT_FOUND`, `GRANT_NOT_ALLOWED` (a grant needs the matching role: "Start" needs Maker, "Approve" needs Approver), `LAST_ADMIN_ACCESS` not used, `PERMISSION_DENIED`, `TIMEOUT`, `SERVICE_UNAVAILABLE`; `moneyMoving: false`; needs `stepup`). Messages: `GRANT_NOT_ALLOWED` → "{name} doesn't have the {role} role, so this can't be granted. Edit the user's roles first." This save is a single step, not a journey; if it must be proved it becomes a journey after Release 1 (open question 4). It writes an audit entry.
-**States**: loading skeleton grid; empty "No accounts at this company."; error as above.
+Order is the order of creation (a new person goes to the bottom). There is no search, filter or paging in the prototype (planned if lists grow). No empty state is needed: an administrator always exists.
 
-### Shell: Limits
+**Limits.** One card with five rows and a button **Change limits**:
 
-| | |
+| Row | Alpha and Beta |
 |---|---|
-| Purpose | Show every limit in force and who is close to theirs. |
-| Route | Web: `/{project}/business/{companyId}/admin/limits`. Mobile: `Business/Admin/Limits`. |
-| Data source | `adminLimits(ctx)` (planned) over `corp.limits.get` (planned; request none; response `{ currency, company: { daily, usedToday, ceiling }, approvalThreshold, cutoff, users: record keyed by user id `{ id, name, daily, usedToday, remaining }` }`; errors `PERMISSION_DENIED`, `TIMEOUT`, `SERVICE_UNAVAILABLE`; read-only). |
-| Permission | `biz.admin.limits` |
+| Limit per person | $250,000.00 |
+| Company daily limit | $1,000,000.00 |
+| Ceiling set by the bank | $2,000,000.00 |
+| Two approvers above | $50,000.00 (Beta: $60,000.00 once CHG-1043 is approved) |
+| Extra code from | $25,000.00 (Alpha: $30,000.00 once CHG-1042 is approved) |
 
-**Widgets**: (1) *Company* card: "Daily limit {daily}", a bar "Used today {usedToday} ({pct}%)", "Bank ceiling {ceiling}"; (2) *Approval rule* card: "Payments above {approvalThreshold} need two different approvers"; (3) *Cut-off* card: "Payments after {cutoff} UTC are paid on the next working day"; (4) *People* table. **People columns**: Name, Role chips, Daily limit, Used today, Remaining, a bar. **Default sort**: used percentage, high to low. **Buttons**: *Change* on the company card and each row → `change-limits` `{userId}` or `{}` for company-wide (README 5.3 passes `{userId or accountId}`: `accountId` is reserved for account limits in a later release; Release 1 only changes user and company limits).
-**States**: loading skeletons; error as above.
+**Approval groups.** Two cards, "Payments over {amount}" and "Payments up to {amount}" (the amount follows the two-approver limit, shown without decimals: "Payments over 50,000"). Each card has one line of who and how, and the button **Edit group**.
 
-### Shell: Signatory groups
-
-| | |
+| Mode | Line |
 |---|---|
-| Purpose | See who must sign payments, in what order, above what amount. |
-| Route | Web: `/{project}/business/{companyId}/admin/signatories`. Mobile: `Business/Admin/Signatories`. |
-| Data source | `adminSignatoryGroups(ctx)` (planned) over `corp.signatories.list` (planned; request none; response record keyed by group id with the group shape above and `memberNames`; errors `PERMISSION_DENIED`, `TIMEOUT`, `SERVICE_UNAVAILABLE`; read-only). |
-| Permission | `biz.admin.signatories` |
+| Any one | "Any one of Dana Cruz, Lee Park" |
+| In order | "In order: Dana Cruz, then Lee Park" |
+| Several together | "2 of 3 together: Dana Cruz, Lee Park, Maria Silva" |
 
-**Cards**, one per group: name; a mode label (`statusChip`-style): "Sequential: one after another" or "Parallel: any {required} of {n}"; a visual of the members (sequential: numbered chain 1 → 2 → 3; parallel: a row of avatars with "{required} of {n} needed"); "Applies to payments above {appliesAbove}" and the accounts it covers. Button on each: *Edit* → `edit-signatory-group` `{groupId}`. **Sort**: by `appliesAbove`, low to high. **States**: loading skeleton cards; empty "No signatory groups. Payments need one approver." (this is today's default rule); error as above.
+**Activity log.** A table with columns When, Who, What, Result, newest first, the latest 15 entries. Seed entries (shared by both companies): "3 Nov 10:14 · Alex Morgan · Signed in to Alpha Trading LLC as Maker · Done", "3 Nov 09:58 · ravi · Changed Dana Cruz’s daily limit from 100,000.00 to 150,000.00 · Done", "2 Nov 16:02 · Omar Haddad · Started payment PAY-2039 of USD 64,500.00 · Done", "2 Nov 11:20 · ravi · Invited Priya Nair as Maker · Done", "1 Nov 08:45 · unknown · Sign in attempt · Refused (the chip says only "Refused"; the code stays in the data)". New entries are written by the admin journeys and by Approve and Decline ("Invited Sam Okafor as Maker (sam.okafor@example.com)", "Changed {name}: role, accounts", "Disabled {name}. Reason: {reason}", "Enabled {name}", "Raise the company daily limit from $1,000,000.00 to $1,200,000.00"). Result chip: "Done" green; "Waiting" amber (a change that waits for a second administrator); anything else "Refused" red. Empty state (planned in code, not reachable with the seed): "No activity yet" / "Changes made by administrators are listed here."
 
-**How the groups relate to today's rule.** Today a payment needs one approver, or two different approvers above `dualApprovalAbove` (`required` on the payment). A group replaces that threshold rule for payments above its `appliesAbove`. A *sequential* group needs the members in order (member 2 cannot approve until member 1 has). A *parallel* group needs any `required` of its members, in any order. The payment keeps a snapshot of the group version it started with (`payment.signatoryProgress`, planned: `[ { userId, state: "waiting" or "approved" or "rejected", at? } ]`). Editing a group never changes a payment already waiting.
+**Administrator preview.** The prototype has no real administrator sign-in. The preview button adds the `admin` permission to every company for this session and acts as Ravi (Alpha) or Noor (Beta). **Exit** removes it. Switching to another context or workspace, or resetting the sandbox, ends the preview. In the product the tab simply shows content to a person whose role holds `admin`.
 
-### Shell: Audit trail
+#### 4. States and errors
 
-| | |
+| State | What the person sees |
 |---|---|
-| Purpose | A read-only history of who did what at this company, including refused attempts. |
-| Route | Web: `/{project}/business/{companyId}/admin/audit`. Mobile: `Business/Admin/Audit`. |
-| Data source | `adminAudit(ctx, filters)` (planned) over `corp.audit.list` (planned; request `{ from?, to?, actorId?, action?, outcome?, page?, pageSize? }`; response `{ rows: record keyed by id, total }`; errors `INVALID_RANGE`, `PERMISSION_DENIED`, `TIMEOUT`, `SERVICE_UNAVAILABLE`; read-only). |
-| Permission | `biz.audit.view` (Admin and Approver) |
+| No access | The lock screen above |
+| Loading | none in the prototype (data is local); the product shows skeleton rows (planned) |
+| Empty | Activity log only, as above |
+| Error | Not shown on this view; the journeys show their own errors |
+| Timeout, unavailable | Not applicable to the view (planned: "We couldn’t load this. Nothing was changed." with **Try again**) |
 
-**Columns**: When (`12 Nov 2026 10:42:07 UTC`), Who (name), What (plain sentence: "Alex Morgan started payment pay_1 of USD 12,500.00", "ravi changed Dana Cruz's daily limit from 100,000.00 to 150,000.00"), Result (`statusChip`: Done green tick, Refused red cross with the code). Click a row for before and after values. **Filters**: date range (`datePicker`), person, action type (Payments, Users, Limits, Signatory groups, Sign-in), result. **Default sort**: When, newest first. **Page size** 50. **Export**: hidden in Release 1 (open question 5).
-**What is recorded**: every adapter call that changes data, and every refusal with its code (`PERMISSION_DENIED`, `SELF_APPROVAL`, `NOT_AUTHORISED`, …), plus context switches ("Alex Morgan switched to Alpha Trading LLC as Maker").
-**States**: loading (skeleton rows); empty "Nothing has been recorded in this period."; error as above.
+#### 5. Adapters
+
+| Integration | Adapter | Status |
+|---|---|---|
+| Company limits and approval rule | `corp.company.get` | Existing |
+| People | `corp.users.list` (extension to the full record below is planned) | Existing, thin |
+| Full people record `{ id, name, email, phone, role, limit, accounts, status }`, limits, groups, waiting changes, activity | `corp.users.get`, `corp.limits.get`, `corp.signatories.list`, `corp.changes.list`, `corp.audit.list` | (planned) |
+| Approve or decline a waiting change | `corp.changes.decide` (errors `PERMISSION_DENIED`, `SELF_APPROVAL`, `CHANGE_NOT_FOUND`) | (planned) |
+
+#### 6. Permissions, step-up and limits
+
+`admin` to see the content. The preview is a prototype device only. Approve and Decline need no extra code in the prototype (planned: a code prompt, as for the journeys). A person never decides on their own change.
+
+#### 7. Result and links out
+
+Approve or Decline shows a toast and refreshes the view. Links out: the three admin journeys. No notification in the prototype (planned: "A change is waiting for your approval" to the other administrators).
+
+#### 8. Acceptance criteria
+
+- AC-1: A person without `admin` sees "You don’t have access" and the preview button, and no people, limits or groups.
+- AC-2: The preview shows People, Limits, Approval groups and Activity log, with the seed values of the active company.
+- AC-3: A change sent by another administrator shows Approve and Decline; the acting administrator's own change shows only "Waiting for another administrator".
+- AC-4: Approve applies the change and writes an activity entry; Decline leaves everything as it was.
+- AC-5: Switching company ends the preview, and the other company shows its own people and its own waiting change.
+- AC-6: With the option *Show the activity log* off, the Activity log section is not offered.
+
+#### 9. Scenarios
+
+| # | Persona and setup | Steps | Expected | Covers |
+|---|---|---|---|---|
+| T-1 | Alex at Alpha | Open Admin | Lock screen with "Preview as Ravi (administrator)" and no data | AC-1 |
+| T-2 | Alex at Alpha | Preview | Bar "Previewing as Ravi Menon, an administrator."; People lists nine people, Sam Okafor Invited, Ravi "(you)" without buttons | AC-2 |
+| T-3 | Preview at Alpha | Look at the waiting card | CHG-1042 by Mina Das with Approve and Decline | AC-3 |
+| T-4 | Preview at Alpha | Approve CHG-1042; open Limits | Toast "Approved. The change is live."; Extra code from $30,000.00; log has the entry | AC-4 |
+| T-5 | Preview at Alpha | Decline CHG-1042 | Toast "Declined. Nothing was changed."; Extra code from $25,000.00 | AC-4 |
+| T-6 | Preview at Alpha, then switch to Beta | Open Admin | Lock screen again; after preview, Noor and CHG-1043 by Karim Aziz; Alpha's people are not shown | AC-5 |
+| T-7 | Preview, option off | Open Admin | Three sections only | AC-6 |
+| T-8 | Preview at Alpha | Send a limit increase with `change-limits`, return | The waiting card shows it with "Waiting for another administrator" and no Approve | AC-3 |
+
+#### 10. Expected mutation-check survivors
+
+- The activity log length of 15: survives, no scenario writes sixteen entries.
+- The order of the section buttons: survives, only the content is asserted.
+- The minute counter of new log entries ("3 Nov 11:05" and up): survives, times are not asserted.
+- Chip colours: survive, only the text is asserted.
 
 ---
 
 ### ★ Invite, edit or disable a user — `manage-user`
+
+**Catalog**: slug `manage-user`, workspace business, category Admin, core no, a bank can switch it off (yes), kept in the Lean preset (basic). Permission `admin`, does not move money. Options: *Second administrator approves new administrators* (default on), *Ask for a reason when disabling* (default on). Prototype file `design/bankworkx-r1/src/journeys/76-users-limits.js`, a normal engine journey with modes.
 
 #### 1. Summary
 
 | | |
 |---|---|
 | Slug | `manage-user` |
-| Purpose | An administrator invites a new user, edits a user's name, roles, accounts and limit, or disables or re-enables a user. |
+| Purpose | An administrator invites a person, changes a person's name, mobile number, role, accounts or daily limit, disables a person, or enables a disabled one. Anything that involves an administrator needs a second administrator to approve. |
 | Release | 1 |
 | Workspace | Business |
-| Status | New (planned) |
-| Channels | Web, mobile |
-| Starting pattern | `corporate-payments.ts` (`authorisation`, `ctx.error`, review, consent, OTP). Not money-moving, but it changes who can move money, so it is a security change. |
-| Who may use it | `biz.admin.users` (Admin: `ravi` at Alpha, `noor` at Beta) |
-| Journey type | Security journey: carries timeout and unavailable scenarios. |
+| Status | Built in the prototype; sandbox adapters (planned). |
+| Channels | web, mobile |
+| Who may use it | A context holding `admin`: Ravi Menon (Alpha), Noor Sayegh (Beta), reached through the administrator preview of the `admin` view. |
+| Journey type | Security journey (it changes who can move money): a code prompt, timeout and unavailable scenarios. |
+
+**Home market configuration**: none. The mobile number hint uses an international format for every market.
 
 #### 2. Entry points
 
-| Place | Label | Values passed in | Permission |
-|---|---|---|---|
-| Admin › users | Invite user | `{mode: "invite"}` | `biz.admin.users` |
-| Admin › users › row | Edit | `{mode: "edit", userId}` | `biz.admin.users` |
-| Admin › users › row | Disable / Enable | `{mode: "disable" or "enable", userId}` | `biz.admin.users` |
-| Admin › users › row (invited) | Resend invite | `{mode: "resend", userId}` | `biz.admin.users` |
-| Admin › account permissions | Edit roles | `{mode: "edit", userId}` | `biz.admin.users` |
+| Place › label | Passes | Permission |
+|---|---|---|
+| Admin › People › Invite user | `{mode: "invite"}` | `admin` |
+| Admin › People › row › Edit | `{mode: "edit", userId}` | `admin` |
+| Admin › People › row › Disable | `{mode: "disable", userId}` | `admin` |
+| Admin › People › row › Enable (disabled people) | `{mode: "enable", userId}` | `admin` |
+
+No resend-invite mode and no entry from an account permission grid (both of the earlier version are gone).
 
 #### 3. Screens
 
-Stepper: **Details**, **Access**, **Review**, **Confirm**, then the result. In `disable`, `enable` and `resend` modes the journey opens on `review` (no details to type). Blocks: `stepper`, `textInput`, `select`, `toggle`, `amountInput`, `alert`, `reviewSummary`, `consent`, `otp`, `button`, `result`.
+Progress text "Step n of m · Manage a user". **Invite** and **Edit** have steps Who is it?, Role and access, Review. **Disable** has Why disable? (only while the option is on) and Review. **Enable** has Review only. Each step has Back (the first has Cancel). A step that calls the bank shows a spinner and "Checking…" (about 0.55 s).
 
-**Screen `details` — "User details"** (invite and edit)
+**Step "Who is it?"** (invite and edit). Button **Continue**.
 
-| Field | Block | Required | Validation | Error message |
+| Field | Type | Required | Rule | Message |
 |---|---|---|---|---|
-| Full name | `textInput` | Yes | 2 to 60 characters; letters, spaces, hyphen, apostrophe | "Enter the person's full name." |
-| Work email | `textInput` (pattern `^[^@\s]+@[^@\s]+\.[^@\s]+$`) | Yes (locked in edit mode) | Valid email; not already a user | "Enter a valid work email, like name@company.com." / `USER_EXISTS` below |
-| Mobile number | `textInput` (pattern `^\+[0-9 ]{8,16}$`) | Yes | International format; used for one-time codes | "Enter a mobile number with the country code, like +1 415 555 0100." |
+| Full name | text, max 60 | yes | starts with a letter; letters, space, apostrophe, hyphen, full stop; 2 to 60 characters | "Enter their full name." |
+| Work email (invite) | email, hint "We send the invitation here.", max 80 | yes | valid email; not already a person at this company | "Enter a valid work email, like name@company.com." / "This email already has access. Edit that person instead." |
+| Work email (edit) | read-only row | no | cannot be changed | none |
+| Mobile number | tel, hint "With the country code. Used for codes." | yes | `+` then 8 to 16 digits and spaces | "Enter a mobile number with the country code, like +1 415 555 0100." |
 
-Copy: title "User details"; helper under email: "We'll send the invitation here. The link works for 7 days."
-Buttons: *Next* → `access`; *Cancel* → exit.
+Edit opens with the person's current values. Autofill sample: Sam Okafor, sam.okafor@example.com, +1 415 555 0100.
 
-**Screen `access` — "Roles and access"**
+**Step "Role and access"** (invite and edit). Button **Review**, disabled while the notes below show a red message or "Change something to continue."
 
-| Field | Block | Required | Validation | Error message |
+| Field | Type | Required | Rule | Message |
 |---|---|---|---|---|
-| Roles | `select` (`tiles`, multiple): Maker, Approver, Admin | Yes | At least one. "Maker" and "Approver" together allowed (a person still can't approve their own). | "Choose at least one role." |
-| Accounts | `select` (`rows`, multiple) of the company's accounts, with "All accounts" | Yes | At least one | "Choose at least one account." |
-| Daily limit | `amountInput` in the company currency | Yes if Maker | Above 0; not above the company daily limit | "Enter a daily limit above zero." / "The limit can't be above the company's daily limit of {companyDailyLimit}." |
+| Role | cards: Maker "Starts payments"; Approver "Approves payments others start"; Maker and approver "Starts and approves, never their own"; Viewer "Sees accounts and payments"; Administrator "Manages people and limits" (with the amber chip "Needs a second approval" while the option is on) | yes, default Maker on invite | one of the five | "Choose a role." |
+| Accounts | one switch per company account, labelled "Operating ••2001", "Reserve ••2044" (Alpha); all on by default | yes | at least one on | "Choose at least one account." |
+| Daily limit | amount in $, hint "Up to $250,000.00 for one person.", placeholder "0.00" | yes, shown only for Maker and for Maker and approver | greater than 0; not above the company daily limit; not above the per-person limit | "That is above the company limit of $1,000,000.00." / "The most one person can have is $250,000.00." |
 
-Hidden when Maker is not chosen: Daily limit. Copy: title "Roles and access"; role helper: "Makers start payments. Approvers approve payments others started. Admins manage users and limits."; alert (info) when Maker and Approver are both chosen: "This person can start and approve payments, but never approve their own." Alert (warning) in edit mode when the edited person has payments waiting: "{name} has {n} payments waiting for approval. They keep waiting; changing roles doesn't change them."
-Buttons: *Review* → `review`; *Back* → `details`.
+Live notes under the fields: red "Choose at least one account."; grey "Change something to continue." (edit with no change); grey "They can start and approve payments, but never approve their own." (Maker and approver); grey "A second administrator has to approve this." (Administrator); red "{name} has {n} payment(s) waiting for approval. Remove the Maker role after they are approved or rejected." (edit that removes the Maker role from a person with waiting payments).
 
-**Screen `review` — "Check and confirm"** `reviewSummary` rows by mode:
-- Invite: Name, Email, Mobile, Roles, Accounts, Daily limit, Company.
-- Edit: only changed rows, as "Before → After".
-- Disable: Name, Roles, "Status: Active → Disabled"; alert (warning) "{name} will be signed out now and can't sign in until you enable them again. Payments they started and that are waiting stay as they are."
-- Enable: Name, "Status: Disabled → Active".
-- Resend: Name, Email; "A new link replaces the old one."
-Buttons: *Continue* → `confirm`; *Edit* → `details` (not in disable, enable, resend).
+**Step "Why disable?"** (disable, option on). Button **Review**. If the person has payments waiting, a notice: "{n} payment(s) waiting. They stay as they are after {name} is disabled."
 
-**Screen `confirm` — "Confirm it's you"**: `consent` (`mustBeTrue`): "I confirm this change is correct and I'm allowed to make it for {company}." Then `otp` (6 digits, 3 attempts, resend after 30 s) after a step-up. The step-up asks for the password or fingerprint first (`bank.session.stepUp`), then the code (`bank.otp.send` then `bank.otp.verify`, integration id `otpVerify`). Button: *{Invite user | Save changes | Disable user | Enable user | Resend invite}* → calls the matching adapter.
-States: submit shows a spinner; 10 s → timeout.
+| Field | Type | Required | Rule | Message |
+|---|---|---|---|---|
+| Reason | chips: Left the company, Changed role, Security concern, Other | yes | one | "Choose a reason." |
+| Note | text area, max 200, shown for Other | yes for Other | at least 5 characters | "Add a few words." |
 
-**Screen `done` — result**: Invite: "Invitation sent" / "We emailed {email}. They can sign in after they accept." Edit: "Changes saved". Disable: "{name} is disabled". Enable: "{name} can sign in again". Resend: "Invitation sent again". Reference: audit id ("Audit {auditId}"). Buttons: *Go to users* → Admin › Users; *Invite another* (invite mode) → `details`; *Done* → exit.
+**Step "Review"**. Busy "Checking…". Button **Confirm**. Rows by mode:
 
-#### 4. Sandbox errors
+| Mode | Rows |
+|---|---|
+| Invite | Name, Work email, Mobile, Role, Accounts ("All accounts" or the names), Daily limit (Makers only), Company, and "Approval: Second administrator needed" for an administrator |
+| Edit | Person, then one row per change as "before → after" (Name, Mobile, Role, Accounts, Daily limit), then the approval row when an administrator is involved |
+| Disable | Person, Role, "Status: Active → Disabled", Reason, approval row for an administrator |
+| Enable | Person, Role, "Status: Disabled → Active", approval row for an administrator |
 
-| Code | Message | Screen | Button |
+Checks when **Confirm** is tapped (section 4). **Code prompt** (always): a keypad sheet. Title "Invite {name}", "Save changes for {name}", "Disable {name}" or "Enable {name}"; line "Code sent to ••• 4410." The sandbox code is 482100.
+
+**Result.**
+
+| Case | Title and line | Chip | Rows | Buttons |
+|---|---|---|---|---|
+| Approval needed (any involvement of an administrator, option on) | "Sent for approval" / "Another administrator has to approve this before it takes effect." | "Waiting for approval" (amber) | Person, then Role and Email (invite), Changed (edit, the changed labels), Status and Reason (disable), Status (enable); Company; Approval "Second administrator" | Back to people |
+| Invite | "Invitation sent" / "We emailed {email}. They can sign in after they accept." | Invited | Person, Role, Email, Company | Back to people, Invite another |
+| Edit | "Changes saved" | Saved | Person, Changed, Company | Back to people |
+| Disable | "{name} is disabled" / "They are signed out now." | Disabled | Person, Status, Reason, Company | Back to people |
+| Enable | "{name} can sign in again" | Active | Person, Status, Company | Back to people |
+
+"Involves an administrator" means: inviting an administrator; editing, disabling or enabling a person who is an administrator; or changing a person to be one. While waiting, a new administrator shows the chip "Waiting for approval" in People and an existing person shows "Change waiting", with no buttons. Approval is done on the `admin` view (Approve or Decline).
+
+#### 4. States and errors (codes are for tests; the person sees the message)
+
+| Code | Message | Where | Button |
 |---|---|---|---|
-| `USER_EXISTS` (planned) | "{email} already has access at {company}. Edit that person instead." | `details` | *Edit that person* → `manage-user` `{mode: "edit", userId}` |
-| `EMAIL_INVALID` (planned) | "Enter a valid work email, like name@company.com." | `details` | *Edit* |
-| `USER_NOT_FOUND` (existing code) | "We can't find that user. They may have been removed." | `review` | *Go to users* |
-| `ROLE_NOT_FOUND` (planned) | "That role isn't available. Choose Maker, Approver or Admin." | `access` | *Edit* |
-| `ACCOUNT_NOT_FOUND` (existing) | "We can't find that account. Choose another." | `access` | *Choose account* |
-| `LIMIT_ABOVE_COMPANY` (planned) | "The limit can't be above the company's daily limit of {companyDailyLimit}." | `access` | *Change limit* |
-| `INVALID_AMOUNT` (existing) | "Enter a daily limit in {currency} with at most {digits} decimal places." | `access` | *Change limit* |
-| `CANNOT_DISABLE_SELF` (planned) | "You can't disable yourself. Ask another administrator." | `review` | *Back* |
-| `LAST_ADMIN` (planned) | "{company} must keep at least one active administrator. Add another administrator first." | `review` | *Back* |
-| `USER_HAS_PENDING_PAYMENTS` (planned; only for removing the Maker role) | "{name} has {n} payments waiting for approval. Remove the Maker role after they are approved, rejected or withdrawn." | `review` | *View payments* → Payments tracker |
-| `OTP_INVALID` | S-`OTP_INVALID` | `confirm` | *Try again* / *Start again* |
-| `OTP_REQUIRED` | S-`OTP_REQUIRED` | `confirm` | *Back to code* |
-| `STEP_UP_REQUIRED` (planned) | S-`STEP_UP_REQUIRED` | `confirm` | *Confirm* |
-| `PERMISSION_DENIED` (planned) | S-`PERMISSION_DENIED` | `denied` | *Back* |
-| `WRONG_CONTEXT` (planned) | S-`WRONG_CONTEXT` ({workspace} = Business) | `denied` | *Switch* |
-| `SESSION_EXPIRED` (planned) | S-`SESSION_EXPIRED` | `denied` | *Sign in* |
-| `CORE_UNAVAILABLE` (existing) | "We couldn't save this right now. Nothing was changed." (reworded from S-`CORE_UNAVAILABLE`: no money is involved) | `confirm` | *Try again* |
-| `TIMEOUT` (planned) | "This is taking longer than expected. Nothing was changed." | `confirm` | *Try again* |
-| `SERVICE_UNAVAILABLE` (planned) | S-`SERVICE_UNAVAILABLE` | `confirm` | *Try again* / *Back* |
+| `USER_EXISTS` | "This email already has access. Edit that person instead." | email field | change the email |
+| `LIMIT_ABOVE_COMPANY` | "The limit is above what the company allows." | review banner (invite) | back |
+| `CANNOT_DISABLE_SELF` | "You can’t disable yourself. Ask another administrator." | review banner | back |
+| `LAST_ADMIN` | "The company must keep one active administrator. Add another one first." | review banner (disable, or removing the Administrator role) | back |
+| `USER_HAS_PENDING_PAYMENTS` | "This person has payments waiting for approval. Remove the Maker role after they are approved or rejected." | review banner | back |
+| `USER_NOT_FOUND` | "We can’t find that person. They may have been removed." | review banner | back |
+| `PERMISSION_DENIED` | "You can’t manage people at this company." | lock or banner | back |
+| `STEPUP_FAILED` | "The code didn’t work. Nothing was changed." | code sheet, after three wrong codes | start again |
+| `TIMEOUT` | "We didn’t get an answer in time. Nothing was changed." | banner | try again |
+| `SERVICE_UNAVAILABLE` | "We couldn’t reach the bank. Nothing was changed." | sheet or banner | try again |
+
+Loading: spinner on the review step. Empty: not applicable.
 
 #### 5. Adapters
 
-| Integration id | Adapter | Request | Response | Error codes | Status |
-|---|---|---|---|---|---|
-| `company` | `corp.company.get` | none (acting user from the context; `userId` is accepted today) | company, accounts, users, `me`, limits | `NOT_SUPPORTED`, `PERMISSION_DENIED` | Existing |
-| `user` | `corp.users.get` | `{ userId }` | the full user record | `USER_NOT_FOUND`, `PERMISSION_DENIED`, `TIMEOUT`, `SERVICE_UNAVAILABLE` | Planned |
-| `otpSend` | `bank.otp.send` | `{ channel? }` | `{ sent, maskedPhone, channel }` | none | Existing |
-| `otpVerify` | `bank.otp.verify` | `{ code }` | `{ verified }` | `OTP_INVALID` (with `attempt`) | Existing |
-| `stepUp` | `bank.session.stepUp` | `{ method: "password" or "biometric", secret? }` | `{ stepUpUntil }` | `STEP_UP_REQUIRED`, `SESSION_EXPIRED` | Planned |
-| `invite` | `corp.users.invite` | `{ name, email, phone, roles, accountIds, dailyLimit? }` | the new user, `status: "invited"`, plus `auditId` | `USER_EXISTS`, `EMAIL_INVALID`, `ROLE_NOT_FOUND`, `ACCOUNT_NOT_FOUND`, `LIMIT_ABOVE_COMPANY`, `INVALID_AMOUNT`, `OTP_REQUIRED`, `STEP_UP_REQUIRED`, `PERMISSION_DENIED`, `TIMEOUT`, `SERVICE_UNAVAILABLE` | Planned; `moneyMoving: false`, `requiresOtp: true` |
-| `update` | `corp.users.update` | `{ userId, name?, phone?, roles?, accountIds?, dailyLimit? }` | the user and `auditId` | `USER_NOT_FOUND`, `ROLE_NOT_FOUND`, `ACCOUNT_NOT_FOUND`, `LIMIT_ABOVE_COMPANY`, `INVALID_AMOUNT`, `USER_HAS_PENDING_PAYMENTS`, `LAST_ADMIN`, `OTP_REQUIRED`, `STEP_UP_REQUIRED`, `PERMISSION_DENIED`, `TIMEOUT`, `SERVICE_UNAVAILABLE` | Planned; `requiresOtp: true` |
-| `setStatus` | `corp.users.disable` / `corp.users.enable` | `{ userId }` | the user and `auditId` | `USER_NOT_FOUND`, `CANNOT_DISABLE_SELF`, `LAST_ADMIN`, `OTP_REQUIRED`, `STEP_UP_REQUIRED`, `PERMISSION_DENIED`, `TIMEOUT`, `SERVICE_UNAVAILABLE` | Planned; `requiresOtp: true` |
-| `resend` | `corp.users.invite` with `{ userId }` | `{ userId }` | the user | `USER_NOT_FOUND`, `PERMISSION_DENIED`, `TIMEOUT`, `SERVICE_UNAVAILABLE` | Planned (a user in status `active` answers `USER_EXISTS`) |
-
-Disabling signs the user out at once: any later call by that user answers `SESSION_EXPIRED`.
+| Integration | Adapter | Status |
+|---|---|---|
+| People list (to check duplicates) | `corp.users.list` | Existing, `packages/mock-bank-api/src/corporate.ts` |
+| Invite, edit, disable, enable | `corp.users.invite`, `corp.users.update`, `corp.users.disable`, `corp.users.enable` (errors above) | (planned) |
+| Queue a change for a second administrator | `corp.changes.create` | (planned) |
+| Code | `bank.otp.send`, `bank.otp.verify` | Existing in the OTP sandbox |
 
 #### 6. Permissions, step-up and limits
 
-- Permission `biz.admin.users`. Check 3: forcing `corp.users.invite` as Alex at Alpha (Maker) answers `PERMISSION_DENIED`.
-- Step-up: `stepup` (password or biometrics, then a one-time code). The sandbox answers `STEP_UP_REQUIRED` if the last step-up is older than 5 minutes.
-- Limits: a user's daily limit may not exceed the company daily limit; the company daily limit is changed by `change-limits`, not here.
-- Separation: an admin who is also a Maker or Approver keeps the four-eyes rule on payments.
-- A denied screen (`denied`): "You can't do this", the S-`PERMISSION_DENIED` message, button *Back*.
+`admin`. A code for every confirmed change. Daily limit between 0 and the company limit and the per-person limit. At least one active administrator must remain. A person cannot disable themselves.
 
 #### 7. Result and links out
 
-Result screens above. Receipt: an on-screen summary with the audit id (print/share: planned receipts engine feature). Notifications raised: to the invited person, an email "You're invited to {company} on BankWorkx®" (not shown in-app); to every admin, an in-app notification "Admin change at {company}: {name} {invited | updated | disabled | enabled}" tagged with the company (visible in Business only). Links out: *Go to users*, *Invite another*, *Done*.
+The change is written to the activity log: "Invited {name} as {role} ({email})", "Changed {name}: {labels}", "Disabled {name}. Reason: {reason}", "Enabled {name}", or, when it waits, the same text with the result "Waiting". Notification (planned): the invited person gets an email; the other administrators are told a change is waiting. Links: Back to people (Admin tab, People), Invite another (this journey).
 
 #### 8. Acceptance criteria
 
-- **AC-1** An admin can invite a user with a name, email, mobile, at least one role and at least one account; the user appears in Users as Invited.
-- **AC-2** A Maker must be given a daily limit above zero and not above the company daily limit.
-- **AC-3** Inviting an email that already has access is refused with `USER_EXISTS` and creates nothing.
-- **AC-4** An admin can change a user's roles, accounts and limit, and the audit trail shows before and after.
-- **AC-5** Disabling needs consent, step-up and a correct one-time code; a wrong code three times ends the attempt and changes nothing.
-- **AC-6** An admin cannot disable themselves, and cannot disable or remove the last active administrator.
-- **AC-7** A disabled user cannot sign in or act; a call they make answers `SESSION_EXPIRED`.
-- **AC-8** Payments a disabled user started stay pending and can still be approved by someone else.
-- **AC-9** A person without `biz.admin.users` cannot invite, edit or disable, even if the call is forced.
-- **AC-10** Every change, and every refused attempt, appears in the audit trail.
-- **AC-11** On timeout or unavailability nothing changes and the person can retry.
-- **AC-12** Changes at Alpha never show at Beta.
+- AC-1: An invitation needs a name, a valid new work email, a mobile number, a role, at least one account and, for a Maker, a daily limit within the company and per-person limits.
+- AC-2: An email already in use is refused with the message of section 4.
+- AC-3: Edit shows only what changed as "before → after" and cannot be reviewed without a change.
+- AC-4: Removing the Maker role from a person with waiting payments is refused; disabling such a person is allowed and the payments stay as they are.
+- AC-5: An administrator cannot disable themselves and the last active administrator cannot be disabled or demoted.
+- AC-6: Anything involving an administrator ends in "Sent for approval" and changes nothing until a second administrator approves; with the option off it applies at once.
+- AC-7: The code prompt names the action; three wrong codes change nothing.
+- AC-8: Every outcome is written to the activity log.
 
 #### 9. Scenarios
 
-| # | Persona and setup | Conditions | Covers | Expected |
+| # | Persona and setup | Steps | Expected | Covers |
 |---|---|---|---|---|
-| T-1 | `ravi` (Alpha admin) invites "Tess Hart", Maker, all accounts, limit 20,000.00 | none | AC-1, AC-2, AC-10 | Users lists Tess as Invited; audit has "ravi invited Tess Hart". |
-| T-2 | `ravi` invites a Maker with limit 0, then 1,200,000 (company limit 1,000,000) | none | AC-2 | Both stopped on `access` with their messages; no user added. |
-| T-3 | `ravi` invites `dana`'s email | none | AC-3 | `USER_EXISTS`; user count unchanged. |
-| T-4 | `ravi` edits `dana`: adds Maker, limit 15,000.00 | none | AC-4, AC-10 | `dana` has both roles and the limit; audit shows before and after. |
-| T-5 | `ravi` disables `lee`; code `482100` | none | AC-5, AC-7, AC-10 | `lee` is Disabled; a call as `lee` answers `SESSION_EXPIRED`. |
-| T-6 | `ravi` disables `lee`; code wrong 3 times | none | AC-5 | "Too many wrong codes. Start again."; `lee` still Active. |
-| T-7 | `ravi` tries to disable `ravi`; then disables the only admin | none | AC-6 | `CANNOT_DISABLE_SELF`; `LAST_ADMIN`; both unchanged. |
-| T-8 | `priya` (Beta Maker) has a pending payment; `noor` disables `priya` | none | AC-8 | `priya` Disabled; payment still pending; Alex can approve it. |
-| T-9 | Alex (Maker at Alpha) forces `corp.users.invite` | none | AC-9, AC-10 | `PERMISSION_DENIED`; audit has a Refused row. |
-| T-10 | `ravi` disables `lee` | `timeout: ["corp.users.disable"]` | AC-11 | Timeout message; `lee` still Active; retry after clearing works. |
-| T-11 | `ravi` invites a user | `unavailable: ["corp.users.invite"]` | AC-11 | `SERVICE_UNAVAILABLE`; no user added. |
-| T-12 | `ravi` invites "Tess Hart" at Alpha | none | AC-12 | Beta's Users does not list Tess; `noor` forcing `corp.users.get {userId: "tess"}` at Beta answers `USER_NOT_FOUND`. |
+| T-1 | Ravi (preview at Alpha) | Invite Sam Okafor, Maker, all accounts, 100,000.00; code 482100 | "Invitation sent"; chip Invited; a new row in People; log "Invited Sam Okafor as Maker (…)" | AC-1, AC-8 |
+| T-2 | Ravi | Invite a Maker with 1,200,000.00, then 300,000.00 | "That is above the company limit of $1,000,000.00." then "The most one person can have is $250,000.00."; no one added | AC-1 |
+| T-3 | Ravi | Invite using Dana Cruz’s email (dana.cruz@alpha.example) | "This email already has access. Edit that person instead." | AC-2 |
+| T-4 | Ravi | Edit Dana Cruz to Maker and approver with limit 15,000.00 | Review shows Role and Daily limit as "before → after"; "Changes saved"; grey note about never approving their own | AC-3, AC-8 |
+| T-5 | Ravi | Open Edit and change nothing | Review stays disabled with "Change something to continue." | AC-3 |
+| T-6 | Noor (Beta), Priya Nair has a payment waiting | Edit Priya to Approver | Review refused: "This person has payments waiting for approval…" | AC-4 |
+| T-7 | Noor | Disable Priya, reason Left the company | "Priya Nair is disabled"; the payment still waits | AC-4 |
+| T-8 | Ravi; and a sandbox run with a single active administrator | Look at Ravi’s own row; force a disable of the only administrator | No buttons on the own row; the forced calls answer `CANNOT_DISABLE_SELF` and `LAST_ADMIN` with their messages and change nothing | AC-5 |
+| T-9 | Ravi | Invite an Administrator | "Sent for approval"; People shows "Waiting for approval"; Approve on the admin view needs another administrator | AC-6 |
+| T-10 | Ravi, option *Second administrator approves new administrators* off | Same | Applies at once, "Invitation sent" | AC-6 |
+| T-11 | Ravi | Disable Lee Park; wrong code three times | "The code didn’t work. Nothing was changed."; Lee still Active | AC-7 |
+| T-12 | Ravi | Disable Lee Park with option *Ask for a reason* on, choose Other, note "ok" | "Add a few words." | AC-1 |
+| T-13 | Timeout on submit | Review | "We didn’t get an answer in time. Nothing was changed." | AC-7 |
+| T-14 | Bank unavailable | Review | "We couldn’t reach the bank. Nothing was changed." | AC-7 |
+| T-15 | Alex at Alpha | Open Admin | Lock screen, no Invite button | AC-6 |
 
 #### 10. Expected mutation-check survivors
 
-- Journey-side email pattern and limit-above-company `validate`: survive because the sandbox rules (`EMAIL_INVALID`, `LIMIT_ABOVE_COMPANY`) also stop the same input (layer 3); T-2 proves the sandbox rule.
-- The `resend` mode: survives unless a scenario resends; add T-13 if wanted (listed as an open question). All others: none expected.
+- The mobile number length (8 to 16): survives, one sample is used.
+- Changing the order of the five roles: survives, the chosen role is asserted, not the order.
+- The 5-character minimum on the note: survives unless T-12 uses the edge.
+- The "(you)" marker: survives, no scenario asserts the label.
 
 ---
 
 ### ★ Change limits — `change-limits`
+
+**Catalog**: slug `change-limits`, workspace business, category Admin, core no, a bank can switch it off (yes), kept in the Lean preset (basic). Permission `admin`, does not move money. Options: *Second administrator approves increases* (default on). Prototype file `design/bankworkx-r1/src/journeys/76-users-limits.js`.
 
 #### 1. Summary
 
 | | |
 |---|---|
 | Slug | `change-limits` |
-| Purpose | An administrator changes a person's daily limit, the company's daily limit, or the approval threshold (the amount above which two approvers are needed). |
+| Purpose | An administrator changes one of four company settings: the limit per person, the company daily limit, the amount above which two approvers are needed, and the amount from which an extra code is asked. A decrease applies at once; an increase waits for a second administrator. |
 | Release | 1 |
 | Workspace | Business |
-| Status | New (planned) |
-| Channels | Web, mobile |
-| Starting pattern | `corporate-payments.ts` (it already shows the person's remaining limit and the review) |
-| Who may use it | `biz.admin.limits` (Admin) |
-| Journey type | Security journey (limits govern money): timeout and unavailable scenarios included. |
+| Status | Built in the prototype; sandbox adapters (planned). The earlier version (a reason field, a per-user limit, an account limit, a minimum below today’s use) is gone. |
+| Channels | web, mobile |
+| Who may use it | A context holding `admin` (Ravi at Alpha, Noor at Beta through the preview). |
+| Journey type | Security journey: code prompt, timeout and unavailable scenarios. |
+| Seed | Per person $250,000.00; company $1,000,000.00; bank ceiling $2,000,000.00; two approvers above $50,000.00; extra code from $25,000.00. Alpha has CHG-1042 waiting (extra code to $30,000.00); Beta has CHG-1043 waiting (two approvers to $60,000.00). |
+
+**Home market configuration**: none; amounts are in the company currency.
 
 #### 2. Entry points
 
-| Place | Label | Values passed in | Permission |
-|---|---|---|---|
-| Admin › limits › company card | Change | none (target = company) | `biz.admin.limits` |
-| Admin › limits › people row | Change | `{userId}` | `biz.admin.limits` |
-| Admin › users › row | Change limit | `{userId}` | `biz.admin.limits` |
+| Place › label | Passes | Permission |
+|---|---|---|
+| Admin › Limits › Change limits | none | `admin` |
+
+The journey accepts `{which}` (`person`, `company`, `two`, `code`) to skip the first step; no button passes it yet. A single person’s own limit is changed in `manage-user` (edit), not here.
 
 #### 3. Screens
 
-Stepper: **What**, **New value**, **Review**, **Confirm**, then the result.
+Progress text "Step n of 3 · Change limits" (2 of 2 when `{which}` was passed). Back on every step; the first has Cancel.
 
-**Screen `target` — "What do you want to change?"**: `select` (`rows`): "A person's daily limit", "The company's daily limit", "The approval threshold". If `{userId}` is passed, the first is preselected and the journey opens on `value`. A person is chosen with a second `select` of the company's Makers (label "Person"; error "Choose a person."). Buttons: *Next* → `value`; *Cancel* → exit.
+**Step 1: What to change?** (skipped with `{which}`). Button **Continue**.
 
-**Screen `value` — "New limit"**
-
-| Field | Block | Required | Validation | Error message |
+| Field | Type | Required | Rule | Message |
 |---|---|---|---|---|
-| New value | `amountInput` in the company currency, `quickAmounts` none | Yes | Above 0; at most the currency's decimals; person limit not above the company limit; company limit not above the bank ceiling; not below what is already used today; approval threshold not above the company limit | "Enter an amount above zero." / "Enter an amount in {currency} with at most {digits} decimal places." / "A person's limit can't be above the company's daily limit of {companyDailyLimit}." / "The company's limit can't be above the bank ceiling of {ceiling}." / "{name} has already used {usedToday} today. Choose a higher limit, or change it tomorrow." |
-| Reason | `textInput` (`lines: 2`) | Yes | 5 to 200 characters | "Add a short reason. It is kept in the audit trail." |
+| What to change | cards with the current amount on the right: "Limit per person" (sub "Most one person can send in a day"), "Company daily limit" ("Most the company can send in a day"), "Two approvers above" ("Payments above this need two approvers"), "Extra code from" ("Payments from this amount need a code") | yes | one | "Choose what to change." |
 
-Copy: title "New limit"; a line shows the current value ("Now: {current}"), the used amount ("Used today: {usedToday}") and, for people, "Company limit: {companyDailyLimit}". Alert (info) for the approval threshold: "Payments above this amount need two different approvers. A lower number means more payments need two."
-Alert (warning), shown when the change raises a limit by more than 50%: "You are raising this limit by {pct}%. Make sure this is what you intend."
-Buttons: *Review* → `review`; *Back* → `target`.
+**Step 2: New amount.** Button **Review**. A live box beside or under the field: **Now** (current amount) and **New** (the entered amount, "-" until valid); for the person limit a row "Company daily limit", for the company limit a row "Ceiling set by the bank"; when valid a row "Increase" or "Decrease" with the difference, and the line "A second administrator has to approve this." (increase, option on) or "This applies straight away." (decrease).
 
-**Screen `review`**: `reviewSummary`: What ("Dana Cruz's daily limit"), Now, New, Change ("+50,000.00" or "−20,000.00"), Reason, Company. Alert (info): "The new limit applies to new payments from now on. Payments already waiting for approval are not affected." Buttons: *Continue* → `confirm`; *Edit* → `value`.
+| Field | Type | Required | Rule | Message |
+|---|---|---|---|---|
+| New {limit per person / company daily limit / two-approver threshold / extra code threshold} | amount in $, placeholder "0.00" | yes | greater than 0; different from now; person limit not above the company daily limit; company limit not above the bank ceiling and not below the highest of the other three; a threshold not above the company daily limit | "That is the same as now. Enter a different amount." / "It can’t be above the company daily limit of $1,000,000.00." / "The bank’s ceiling is $2,000,000.00." / "It can’t be below $250,000.00, the highest limit or threshold set now." |
 
-**Screen `confirm`**: `consent`: "I confirm this change is approved by {company} and I'm allowed to make it." Then step-up and `otp` as in `manage-user`. Button: *Save new limit* → calls `corp.limits.set`.
+Autofill sample: 200000.
 
-**Screen `done`**: `result`: "Limit changed"; body "{What} is now {New}."; reference "Audit {auditId}". Buttons: *Go to limits* → Admin › Limits; *Change another* → `target`; *Done*.
+**Step 3: Review.** Busy "Checking…" (about 0.55 s). Button **Confirm**.
 
-#### 4. Sandbox errors
+| Row | Value |
+|---|---|
+| Setting | the setting’s name |
+| Now | current amount |
+| New | new amount |
+| Change | "Increase of $…" or "Decrease of $…" |
+| Takes effect | "After a second administrator approves" (increase, option on) or "Straight away" |
+| Company | company name |
 
-| Code | Message | Screen | Button |
+**Code prompt.** Title "Change {limit per person / company daily limit / two-approver threshold / extra code threshold} to {amount}", line "Code sent to ••• 4410." The sandbox code is 482100.
+
+**Result.**
+
+| Case | Title and line | Chip | Rows | Button |
+|---|---|---|---|---|
+| Increase, option on | "Sent for approval" / "Another administrator has to approve this increase. Your current limit stays until then." | "Waiting for approval" | Setting, Now, New, Company, Approval "Second administrator" | Back to limits |
+| Decrease, or option off | "Limit changed" / "{Setting} is now {amount}." | Applied | Setting, Now, New, Company | Back to limits |
+
+#### 4. States and errors (codes are for tests; the person sees the message)
+
+| Code | Message | Where | Button |
 |---|---|---|---|
-| `USER_NOT_FOUND` (existing) | "We can't find that user. They may have been removed." | `target` | *Choose person* |
-| `INVALID_AMOUNT` (existing) | "Enter an amount in {currency} with at most {digits} decimal places." | `value` | *Change amount* |
-| `LIMIT_ABOVE_COMPANY` (planned) | "A person's limit can't be above the company's daily limit of {companyDailyLimit}." | `value` | *Change amount* |
-| `LIMIT_ABOVE_CEILING` (planned) | "The company's limit can't be above the bank ceiling of {ceiling}." | `value` | *Change amount* |
-| `LIMIT_BELOW_USED_TODAY` (planned) | "{name} has already used {usedToday} today. Choose a higher limit, or change it tomorrow." | `value` | *Change amount* |
-| `THRESHOLD_ABOVE_LIMIT` (planned) | "The approval threshold can't be above the company's daily limit of {companyDailyLimit}." | `value` | *Change amount* |
-| `OTP_INVALID` / `OTP_REQUIRED` / `STEP_UP_REQUIRED` / `PERMISSION_DENIED` / `WRONG_CONTEXT` / `SESSION_EXPIRED` | Standard messages S-`…` (README 1.6) | as in `manage-user` | as there |
-| `CORE_UNAVAILABLE` (existing) | "We couldn't save this right now. Nothing was changed." | `confirm` | *Try again* |
-| `TIMEOUT` (planned) | "This is taking longer than expected. Nothing was changed." | `confirm` | *Try again* |
-| `SERVICE_UNAVAILABLE` (planned) | S-`SERVICE_UNAVAILABLE` | `confirm` | *Try again* / *Back* |
+| `CHANGE_PENDING` | "A change to this is already waiting for approval." | review banner (a waiting change already covers this setting; Alpha’s extra code and Beta’s two-approver limit at the start) | back |
+| `LIMIT_ABOVE_CEILING` | "The bank’s ceiling is lower than that." | review banner | back |
+| `PERMISSION_DENIED` | "You can’t change limits at this company." | banner | back |
+| `STEPUP_FAILED` | "The code didn’t work. Nothing was changed." | code sheet | start again |
+| `TIMEOUT` | "We didn’t get an answer in time. Nothing was changed." | banner | try again |
+| `SERVICE_UNAVAILABLE` | "We couldn’t reach the bank. Nothing was changed." | sheet or banner | try again |
+
+The field messages of step 2 are checked again on Confirm. Loading: spinner on the review step. Empty: not applicable.
 
 #### 5. Adapters
 
-| Integration id | Adapter | Request | Response | Error codes | Status |
-|---|---|---|---|---|---|
-| `company` | `corp.company.get` | none | includes `me`, `companyDailyLimit`, `companyUsedToday`, `dualApprovalAbove`, `cutoff` | `NOT_SUPPORTED` | Existing |
-| `limits` | `corp.limits.get` | none | see Limits shell | `PERMISSION_DENIED`, `TIMEOUT`, `SERVICE_UNAVAILABLE` | Planned |
-| `otpSend`, `otpVerify`, `stepUp` | as in `manage-user` | | | | Existing / planned |
-| `setLimit` | `corp.limits.set` | `{ target: "user" or "company" or "threshold", userId?, value, reason }` | `{ target, before, after, auditId }` | `USER_NOT_FOUND`, `INVALID_AMOUNT`, `LIMIT_ABOVE_COMPANY`, `LIMIT_ABOVE_CEILING`, `LIMIT_BELOW_USED_TODAY`, `THRESHOLD_ABOVE_LIMIT`, `OTP_REQUIRED`, `STEP_UP_REQUIRED`, `PERMISSION_DENIED`, `TIMEOUT`, `SERVICE_UNAVAILABLE` | Planned; `moneyMoving: false`, `requiresOtp: true` |
-
-Sandbox seed ceiling: Alpha 1,000,000.00 USD company limit with ceiling 2,000,000.00; Beta 1,000,000.00 with ceiling 2,000,000.00 (planned seed).
+| Integration | Adapter | Status |
+|---|---|---|
+| Company limits and approval rule | `corp.company.get` | Existing |
+| Set a limit | `corp.limits.set` (request `{ which, value }`; errors above) | (planned) |
+| Queue an increase | `corp.changes.create` | (planned) |
 
 #### 6. Permissions, step-up and limits
 
-`biz.admin.limits`; `stepup` plus one-time code. Check 3: Alex at Alpha forcing `corp.limits.set` answers `PERMISSION_DENIED`. Effect on existing rules: `LIMIT_USER_EXCEEDED` is read from the new person limit on the next payment; `LIMIT_COMPANY_EXCEEDED` from the new company limit (also at release; the planned fix makes `release` honour `flaws.companyLimit`); `dualApprovalAbove` from the new threshold for payments started after the change.
+`admin`. A code for every confirmed change. Increases need a second administrator while the option is on; decreases never do. The bank ceiling cannot be raised here. A payment that is already waiting keeps the rule it started with (planned: `required` is fixed at start).
 
 #### 7. Result and links out
 
-Result "Limit changed" with the audit id. Notifications: the affected person gets "Your daily limit at {company} is now {New}" (tagged with the company); other admins get "Admin change at {company}". Links out: *Go to limits*, *Change another*, *Done*.
+Activity log entry "Raise the {setting} from $X to $Y" or "Lower the …"; the result is Done, or Waiting for an increase. When a second administrator approves, the limit changes at once and the log gets "Approved raise the … (CHG-n)". Notification (planned): the other administrators are told a change is waiting. Link: Back to limits.
 
 #### 8. Acceptance criteria
 
-- **AC-1** An admin can change a person's daily limit, and that person's next payment is checked against the new limit.
-- **AC-2** An admin can change the company's daily limit, and a payment that would exceed the new company limit is refused with `LIMIT_COMPANY_EXCEEDED`.
-- **AC-3** An admin can change the approval threshold, and a payment above it needs two different approvers.
-- **AC-4** A person's limit above the company limit, a company limit above the bank ceiling, and a threshold above the company limit are each refused with their message.
-- **AC-5** A limit below what is already used today is refused.
-- **AC-6** A reason is required and appears in the audit trail with before and after values.
-- **AC-7** Saving needs consent, step-up and a correct one-time code.
-- **AC-8** A person without `biz.admin.limits` cannot change a limit, even when the call is forced.
-- **AC-9** Payments already waiting for approval are not changed by a limit change.
-- **AC-10** On timeout or unavailability nothing changes.
+- AC-1: The four settings are listed with their current amounts.
+- AC-2: A new amount that equals the current one, is zero, or breaks a rule of step 2 is refused with its message and the Review button stays disabled.
+- AC-3: The live box shows Now, New and the difference, and says whether a second administrator is needed.
+- AC-4: An increase ends in "Sent for approval" and the limit stays as it was; a decrease ends in "Limit changed" and the new amount shows under Limits.
+- AC-5: A setting that already has a change waiting cannot be changed again (`CHANGE_PENDING`).
+- AC-6: The code prompt names the setting and the amount; three wrong codes change nothing.
+- AC-7: Approving a waiting increase on the admin view applies it.
 
 #### 9. Scenarios
 
-| # | Persona and setup | Conditions | Covers | Expected |
+| # | Persona and setup | Steps | Expected | Covers |
 |---|---|---|---|---|
-| T-1 | `ravi` sets the daily limit of an Alpha Maker (`tess_m`, planned seed) to 20,000.00; then `tess_m` starts a payment of 25,000.00 | none | AC-1, AC-6, AC-7 | `LIMIT_USER_EXCEEDED` on the payment; audit shows 20,000.00 and the reason. |
-| T-2 | `ravi` sets the company limit to 30,000.00; Alex starts a payment of 25,000.00 and `dana` approves; a second of 10,000.00 is approved | none | AC-2 | The second approval answers `LIMIT_COMPANY_EXCEEDED` and stays pending. |
-| T-3 | `ravi` sets the threshold to 10,000.00; Alex starts 12,500.00 | none | AC-3 | The payment has `required: 2`. |
-| T-4 | `ravi` tries person 1,200,000; company 2,500,000; threshold 1,500,000 (company limit 1,000,000, ceiling 2,000,000) | none | AC-4 | Each refused with its code and message; limits unchanged. |
-| T-5 | A Maker has used 8,000.00 today; `ravi` sets 5,000.00 | none | AC-5 | `LIMIT_BELOW_USED_TODAY`. |
-| T-6 | `ravi` leaves the reason empty | none | AC-6 | Stopped on `value`: "Add a short reason. It is kept in the audit trail." |
-| T-7 | `ravi` enters a wrong code 3 times | none | AC-7 | "Too many wrong codes. Start again."; limit unchanged. |
-| T-8 | Alex (Alpha Maker) forces `corp.limits.set` | none | AC-8 | `PERMISSION_DENIED`; audit has a Refused row. |
-| T-9 | Alex has a 12,500.00 payment waiting; `ravi` lowers the threshold to 10,000.00 | none | AC-9 | The waiting payment still has `required: 1`. |
-| T-10 | `ravi` changes a limit | `timeout: ["corp.limits.set"]` | AC-10 | Timeout message; limit unchanged. |
-| T-11 | `ravi` changes a limit | `unavailable: ["corp.limits.set"]` | AC-10 | `SERVICE_UNAVAILABLE`; limit unchanged. |
+| T-1 | Ravi at Alpha | Limit per person to 200,000.00; code 482100 | Live box "Decrease $50,000.00 · This applies straight away."; "Limit changed"; Limits shows $200,000.00 | AC-1, AC-3, AC-4 |
+| T-2 | Ravi at Alpha | Company daily limit to 1,200,000.00 | "Sent for approval", chip "Waiting for approval"; Limits still $1,000,000.00; the card on Admin shows "Waiting for another administrator" | AC-4 |
+| T-3 | Ravi at Alpha | Limit per person to 1,200,000.00; to 250,000.00; company to 2,500,000.00; company to 200,000.00 | The four field messages in order; Review disabled each time | AC-2 |
+| T-4 | Ravi at Alpha | Extra code from, any amount | Review: "A change to this is already waiting for approval." | AC-5 |
+| T-5 | Ravi at Alpha | Approve CHG-1042 on the admin view | Extra code from $30,000.00 | AC-7 |
+| T-6 | Ravi at Alpha | Two approvers above to 40,000.00; wrong code three times | "The code didn’t work. Nothing was changed."; Limits unchanged | AC-6 |
+| T-7 | Timeout on submit | Review | "We didn’t get an answer in time. Nothing was changed."; unchanged | AC-6 |
+| T-8 | Bank unavailable | Review | "We couldn’t reach the bank. Nothing was changed."; unchanged | AC-6 |
+| T-9 | Ravi at Alpha, option off | Company daily limit to 1,200,000.00 | Applies at once, "Limit changed" | AC-4 |
+| T-10 | Alex at Alpha | Open Admin | Lock screen, no Change limits button | AC-1 |
 
 #### 10. Expected mutation-check survivors
 
-Journey-side ceiling and "above company" checks survive because the sandbox repeats them (layer 3); T-4 proves the sandbox side. The "raising by more than 50%" warning: survives (a warning only; no behaviour); a scenario can check its text, otherwise it is listed. Others: none expected.
+- The "below the highest of the other three" rule: survives unless a scenario sets the company limit below the person limit (T-3 does).
+- The cents on the difference row: survive, amounts are round.
+- The sample value 200000: survives, it is autofill only.
+- The order of the four cards: survives.
 
 ---
 
-### ★ Edit a signatory group — `edit-signatory-group`
+### ★ Edit an approval group — `edit-signatory-group`
+
+**Catalog**: slug `edit-signatory-group`, workspace business, category Admin, core no, a bank can switch it off (yes), kept in the Lean preset (basic). Permission `admin`, does not move money. Options: *Second administrator approves group changes* (default on), *Allow approvers in order* (default on). Prototype file `design/bankworkx-r1/src/journeys/77-groups-requests.js`.
 
 #### 1. Summary
 
 | | |
 |---|---|
 | Slug | `edit-signatory-group` |
-| Purpose | An administrator changes who must sign (approve) payments, whether they sign in order (sequential) or in any order (parallel), how many are needed, and above what amount the group applies. |
+| Purpose | An administrator chooses who approves payments in one of the two approval groups ("Payments over 50,000" and "Payments up to 50,000") and how: any one of them, in order, or several together. A second administrator approves the change. |
 | Release | 1 |
 | Workspace | Business |
-| Status | New (planned). Builds on today's `required` and `dualApprovalAbove` fields. |
-| Channels | Web, mobile |
-| Starting pattern | `corporate-approval.ts` (it shows how many approvers are needed and who has approved) |
-| Who may use it | `biz.admin.signatories` (Admin) |
-| Journey type | Security journey: timeout and unavailable scenarios included. |
+| Status | Built in the prototype; sandbox adapters (planned). The earlier group fields (name, account list, threshold, version) are gone: the two groups are fixed by the two-approver limit. |
+| Channels | web, mobile |
+| Who may use it | A context holding `admin` (Ravi at Alpha, Noor at Beta through the preview). |
+| Journey type | Security journey: code prompt, timeout and unavailable scenarios. |
+| Seed | Alpha: over, in order, Dana Cruz then Lee Park; up to, any one of Dana Cruz, Lee Park. Beta: the same with Alex Morgan and Lee Park. Candidates are active people with the Approver or Maker and approver role: Alpha Dana, Lee, Maria; Beta Alex, Lee, Maria, Sam. |
+
+**Home market configuration**: none.
 
 #### 2. Entry points
 
-| Place | Label | Values passed in | Permission |
-|---|---|---|---|
-| Admin › signatory groups › card | Edit | `{groupId}` | `biz.admin.signatories` |
-| Admin › signatory groups | New group | none | `biz.admin.signatories` |
+| Place › label | Passes | Permission |
+|---|---|---|
+| Admin › Approval groups › card › Edit group | `{group: "over" or "upto"}` | `admin` |
+
+Parameters also accepted: `{mode}` (`any`, `seq`, `par`) and `{need}` (for tests). Without `{group}` the first step asks which group.
 
 #### 3. Screens
 
-Stepper: **Group**, **Members**, **Review**, **Confirm**, then the result.
+Progress text "Step n of 3 · Edit approval group" (2 of 2 with `{group}`). Back on every step; the first has Cancel.
 
-**Screen `group` — "Group rules"**
+**Step 1: Which group?** (skipped with `{group}`). Button **Continue**. A required card choice, message "Choose a group.": "Payments over 50,000" and "Payments up to 50,000", each with its current line ("In order: Dana Cruz, then Lee Park").
 
-| Field | Block | Required | Validation | Error message |
+**Step 2: Approvers.** Button **Review**, disabled while a red message shows. The group name sits at the top; under it the live message of the rule that fails (red), or "Change something to continue." (grey).
+
+| Field | Type | Required | Rule | Message |
 |---|---|---|---|---|
-| Group name | `textInput` | Yes | 3 to 40 characters | "Enter a name for the group, like 'Large payments'." |
-| How they sign | `select` (`tiles`): "One after another (sequential)", "Any of them, in any order (parallel)" | Yes | One of two | "Choose how the group signs." |
-| Applies to payments above | `amountInput` in the company currency | Yes | 0 or more; two groups may not apply from the same amount | "Enter an amount, or 0 for all payments." / `GROUP_OVERLAP` below |
-| Accounts | `select` (`rows`, multiple) with "All accounts" | Yes | At least one | "Choose at least one account." |
+| How they approve | chips: Any one; In order (only while *Allow approvers in order* is on); Several together. Hint: "One approver is enough." / "One after another, in the order below." / "A set number of them approve, in any order." | yes | one | "Choose how they approve." |
+| How many must approve | chips 2 to the number of chosen approvers (at least 2), shown for Several together | no | 1 to the number of approvers | "Choose how many must approve, up to {n}." |
+| Approvers | one switch per candidate (up to 6), by name | yes | at least one on | "Choose at least one approver." |
+| Goes first | select, placeholder "Choose who goes first", shown for In order with two or more approvers | no | one of the chosen | none (the first switched-on person goes first if left empty) |
 
-Copy: title "Group rules"; helper under How they sign: "One after another: member 1 signs first, then member 2, and so on. Any of them: it's enough that {required} of the members sign, in any order." Buttons: *Next* → `members`; *Cancel* → exit.
+Rules shown as messages, in this order: at least one approver; Several together needs a number up to the count; the group "Payments over {amount}" needs at least two approvers ("Payments over 50,000 need two approvers. Choose In order or Several together."); "Add at least {n} approvers."; a lone Maker ("The person who starts payments can’t be the only approver."); "If {name} starts a payment, there would not be enough other approvers."; and "Change something to continue." when the result equals the current group. In order means every chosen person, in the order given; Any one needs one.
 
-**Screen `members` — "Who signs"**
+**Step 3: Review.** Busy "Checking…" (about 0.55 s). Button **Confirm**.
 
-| Field | Block | Required | Validation | Error message |
+| Row | Value |
+|---|---|
+| Group | "Payments over 50,000" |
+| Now | the current line |
+| New | the new line ("Several together" reads "2 of 3 together: Dana Cruz, Lee Park, Maria Silva") |
+| Takes effect | "After a second administrator approves" (option on) or "Straight away" |
+| Payments waiting | "Keep their current approvers" (only when payments are waiting at this company) |
+
+**Code prompt.** Title "Change payments over 50,000" (the group name in lower case), line "Code sent to ••• 4410." The sandbox code is 482100.
+
+**Result.**
+
+| Case | Title and line | Chip | Rows | Button |
 |---|---|---|---|---|
-| Members | `select` (`rows`, multiple) of users with the Approver role, ordered by choice in sequential mode (a number badge shows the order) | Yes | At least 2 for a sequential group, at least 2 for a parallel group; each an active Approver; no duplicates | "Choose at least two approvers." / `MEMBER_NOT_APPROVER` / `DUPLICATE_MEMBER` |
-| People needed | `select` (`chips`: 1, 2, 3 …, up to the member count); sequential: fixed to all members and shown disabled as "All {n}, in order" | Yes (parallel) | 1 to the member count; 2 or more when the group applies above 0 | "Choose how many people must sign." / "A group for large payments needs at least two signatures." |
+| Option on | "Sent for approval" / "Another administrator has to approve this. The current group stays until then." | "Waiting for approval" | Group, Approvers (names), How ("Any one", "In order" or "2 of 3"), Company, Approval "Second administrator" | Back to groups |
+| Option off | "Group updated" / "{Group} now has the new approvers." | Applied | Group, Approvers, How, Company | Back to groups |
 
-Copy: title "Who signs"; helper: "The person who starts a payment can't sign it, even if they are in this group." Alert (info), edit mode: "{n} payments are waiting under the old rule. They keep it. Only new payments use the new rule."
-Buttons: *Review* → `review`; *Back* → `group`.
+#### 4. States and errors (codes are for tests; the person sees the message)
 
-**Screen `review`**: `reviewSummary`: Name, How they sign ("Sequential: Dana, then Lee" or "Parallel: any 2 of Dana, Lee, Omar"), Applies above, Accounts, Before → After (edit mode), Company. Buttons: *Continue* → `confirm`; *Edit* → `group`.
-
-**Screen `confirm`**: `consent`: "I confirm this change is approved by {company} and I'm allowed to make it." Then step-up and `otp`. Button: *Save group* → `corp.signatories.update`.
-
-**Screen `done`**: `result`: "Group saved"; body "{Name}: {How they sign}. It applies to new payments above {amount}."; reference "Audit {auditId}". Buttons: *Go to signatory groups* → shell; *Done*.
-
-#### 4. Sandbox errors
-
-| Code | Message | Screen | Button |
+| Code | Message | Where | Button |
 |---|---|---|---|
-| `GROUP_NOT_FOUND` (planned) | "We can't find that group. It may have been removed." | `group` | *Go to groups* |
-| `GROUP_TOO_SMALL` (planned) | "Choose at least two approvers." | `members` | *Edit* |
-| `REQUIRED_TOO_LOW` (planned) | "A group for large payments needs at least two signatures." | `members` | *Edit* |
-| `REQUIRED_ABOVE_MEMBERS` (planned) | "You can't ask for more signatures than there are members." | `members` | *Edit* |
-| `MEMBER_NOT_APPROVER` (planned) | "{name} doesn't have the Approver role. Edit the user's roles first." | `members` | *Edit* |
-| `DUPLICATE_MEMBER` (planned) | "{name} is in the list twice." | `members` | *Edit* |
-| `MEMBER_DISABLED` (planned) | "{name} is disabled. Choose someone else." | `members` | *Edit* |
-| `GROUP_OVERLAP` (planned) | "Another group already applies from {amount}. Choose a different amount." | `group` | *Edit* |
-| `ACCOUNT_NOT_FOUND` (existing) | "We can't find that account. Choose another." | `group` | *Choose account* |
-| `USER_NOT_FOUND` (existing) | "We can't find that user. They may have been removed." | `members` | *Edit* |
-| `INVALID_AMOUNT` (existing) | "Enter an amount in {currency} with at most {digits} decimal places." | `group` | *Change amount* |
-| `OTP_INVALID` / `OTP_REQUIRED` / `STEP_UP_REQUIRED` / `PERMISSION_DENIED` / `WRONG_CONTEXT` / `SESSION_EXPIRED` | Standard messages | as in `manage-user` | as there |
-| `CORE_UNAVAILABLE` (existing), `TIMEOUT`, `SERVICE_UNAVAILABLE` | as in `change-limits` | `confirm` | *Try again* |
+| `CHANGE_PENDING` | "A change to this group is already waiting for approval." | review banner | back |
+| `NOT_ENOUGH_APPROVERS` | "There would not be enough approvers." | review banner (the step 2 messages are checked again) | back |
+| `SEPARATION` | "The person who starts a payment can’t approve it." | review banner | back |
+| `PERMISSION_DENIED` | "You can’t change approval groups at this company." | banner | back |
+| `STEPUP_FAILED` | "The code didn’t work. Nothing was changed." | code sheet | start again |
+| `TIMEOUT` | "We didn’t get an answer in time. Nothing was changed." | banner | try again |
+| `SERVICE_UNAVAILABLE` | "We couldn’t reach the bank. Nothing was changed." | sheet or banner | try again |
+
+Loading: spinner on the review step. Empty: not applicable.
 
 #### 5. Adapters
 
-| Integration id | Adapter | Request | Response | Error codes | Status |
-|---|---|---|---|---|---|
-| `company` | `corp.company.get` | none | accounts, users with roles | `NOT_SUPPORTED` | Existing |
-| `group` | `corp.signatories.get` | `{ groupId }` | the group | `GROUP_NOT_FOUND`, `PERMISSION_DENIED`, `TIMEOUT`, `SERVICE_UNAVAILABLE` | Planned |
-| `otpSend`, `otpVerify`, `stepUp` | as in `manage-user` | | | | Existing / planned |
-| `save` | `corp.signatories.update` | `{ groupId?, name, mode, memberIds (ordered), required, appliesAbove, accountIds }` (no `groupId` creates) | the group with `version`, plus `auditId` | `GROUP_NOT_FOUND`, `GROUP_TOO_SMALL`, `REQUIRED_TOO_LOW`, `REQUIRED_ABOVE_MEMBERS`, `MEMBER_NOT_APPROVER`, `DUPLICATE_MEMBER`, `MEMBER_DISABLED`, `GROUP_OVERLAP`, `ACCOUNT_NOT_FOUND`, `USER_NOT_FOUND`, `INVALID_AMOUNT`, `OTP_REQUIRED`, `STEP_UP_REQUIRED`, `PERMISSION_DENIED`, `TIMEOUT`, `SERVICE_UNAVAILABLE` | Planned; `moneyMoving: false`, `requiresOtp: true` |
-
-Engine rules this journey relies on (planned, in the corporate sandbox): `approvePayment` in a sequential group answers `NOT_YOUR_TURN` (planned; "It's not your turn yet. {name} must sign first.") when an earlier member has not signed; in a parallel group any member signs. The payment is released when `required` signatures are in (the existing release check applies). `SELF_APPROVAL` and `ALREADY_APPROVED` still apply.
+| Integration | Adapter | Status |
+|---|---|---|
+| Approvers today (one, or two above the limit) | `corp.company.get`, `corp.users.list` | Existing |
+| Group list and update | `corp.signatories.list`, `corp.signatories.update` (errors above) | (planned) |
+| Queue the change | `corp.changes.create` | (planned) |
 
 #### 6. Permissions, step-up and limits
 
-`biz.admin.signatories`; `stepup` plus one-time code. Check 3: Alex at Alpha forcing `corp.signatories.update` answers `PERMISSION_DENIED`. A group applying above 0 must ask for at least 2 signatures (the four-eyes principle for larger payments). Payments started before the edit keep the group version they started with.
+`admin`. A code for every confirmed change. A group over the two-approver limit needs two approvers. A payment already waiting keeps its current approvers; only payments started after the change use the new group (planned in the sandbox: the payment stores the group it started with).
 
 #### 7. Result and links out
 
-"Group saved" with audit id. Notifications: members newly added get "You are now a signatory in {Name} at {company}" (company-tagged); removed members get "You were removed from {Name} at {company}". Links out: *Go to signatory groups*, *Done*.
+Activity log "Change approvers for payments over 50,000 to: In order: Dana Cruz, then Lee Park" with result Waiting (or Done when the option is off). When the second administrator approves, the group changes and the log gets the "Approved" entry. Notification (planned): the other administrators are told. Link: Back to groups.
 
 #### 8. Acceptance criteria
 
-- **AC-1** An admin can change a group from parallel to sequential, with the members in order.
-- **AC-2** In a sequential group, the second member cannot approve before the first (`NOT_YOUR_TURN`); in a parallel group any member can approve first.
-- **AC-3** A parallel group needing 2 of 3 releases the payment on the second signature, from any two members.
-- **AC-4** Only active Approvers can be members; others are refused with their message.
-- **AC-5** A group that applies above an amount must need at least two signatures, and cannot need more than it has members.
-- **AC-6** Two groups cannot apply from the same amount.
-- **AC-7** A payment already waiting keeps the rule it started with.
-- **AC-8** Saving needs consent, step-up and a correct one-time code, and writes an audit entry.
-- **AC-9** A person without `biz.admin.signatories` cannot save, even when the call is forced.
-- **AC-10** On timeout or unavailability nothing changes.
-- **AC-11** The person who started a payment can never sign it, even if they are a member.
+- AC-1: Edit group opens on step 2 with the group’s current mode and approvers.
+- AC-2: Any one, In order and Several together can be chosen (In order only while the option is on); Several together asks how many.
+- AC-3: Each rule of step 2 shows its message and keeps Review disabled; an unchanged group says "Change something to continue."
+- AC-4: The group over 50,000 cannot be set to Any one.
+- AC-5: The result is "Sent for approval" and the current group stays; with the option off it is "Group updated".
+- AC-6: A group that already has a change waiting is refused with `CHANGE_PENDING`.
+- AC-7: The code prompt names the group; three wrong codes change nothing.
+- AC-8: Payments already waiting keep their approvers (the review says so).
 
 #### 9. Scenarios
 
-| # | Persona and setup | Conditions | Covers | Expected |
+| # | Persona and setup | Steps | Expected | Covers |
 |---|---|---|---|---|
-| T-1 | `ravi` edits "Large payments" to sequential: `dana` then `lee`; Alex starts 60,000.00; `lee` tries first | none | AC-1, AC-2 | `lee` gets `NOT_YOUR_TURN`; after `dana` signs, `lee` signs and it releases. |
-| T-2 | `ravi` sets "Large payments" parallel, 2 of 3 (`dana`, `lee`, `ravi_a`, planned approver); Alex starts 60,000.00; `lee` signs, then `dana` signs | none | AC-3 | Pending after one; released after two. |
-| T-3 | `ravi` adds Alex (a Maker, not an Approver) as a member; then a disabled user | none | AC-4 | `MEMBER_NOT_APPROVER`; `MEMBER_DISABLED`; group unchanged. |
-| T-4 | `ravi` sets required 1 with appliesAbove 50,000; then required 4 with 3 members | none | AC-5 | `REQUIRED_TOO_LOW`; `REQUIRED_ABOVE_MEMBERS`. |
-| T-5 | `ravi` creates a second group above 50,000 | none | AC-6 | `GROUP_OVERLAP`. |
-| T-6 | A payment of 60,000.00 waits (parallel 2 of 3); `ravi` changes the group to sequential | none | AC-7 | The waiting payment's progress still shows parallel rules. |
-| T-7 | `ravi` saves with a wrong code 3 times; then correctly | none | AC-8 | First: unchanged. Second: saved; audit has the entry. |
-| T-8 | Alex at Alpha forces `corp.signatories.update` | none | AC-9 | `PERMISSION_DENIED`. |
-| T-9 | `ravi` saves a group | `timeout: ["corp.signatories.update"]` | AC-10 | Timeout message; group unchanged. |
-| T-10 | `ravi` saves a group | `unavailable: ["corp.signatories.update"]` | AC-10 | `SERVICE_UNAVAILABLE`; group unchanged. |
-| T-11 | `dana` is a member of a group and starts a payment (she is also a Maker, planned) | none | AC-11 | `dana` approving her own: `SELF_APPROVAL`. |
+| T-1 | Ravi at Alpha | Edit group over; Several together, 2 of Dana, Lee, Maria; code 482100 | Review "New: 2 of 3 together: …"; "Sent for approval"; Approval groups still show the old line | AC-1, AC-2, AC-5 |
+| T-2 | Ravi at Alpha | Edit group over; choose Any one | Red "Payments over 50,000 need two approvers. Choose In order or Several together."; Review disabled | AC-4 |
+| T-3 | Ravi at Alpha | Edit group up to; switch off both approvers | "Choose at least one approver." | AC-3 |
+| T-4 | Ravi at Alpha | Open Edit group on "Payments up to 50,000" and change nothing | "Change something to continue." | AC-3 |
+| T-5 | Ravi at Alpha | In order, three approvers, Goes first Lee Park | Review "In order: Lee Park, then Dana Cruz, then Maria Silva" | AC-2 |
+| T-6 | Ravi at Alpha, option *Allow approvers in order* off | Open Edit group | In order is not offered | AC-2 |
+| T-7 | Ravi at Alpha, a change to this group is already waiting | Review | "A change to this group is already waiting for approval." | AC-6 |
+| T-8 | Ravi at Alpha, payments waiting | Review | Row "Payments waiting: Keep their current approvers" | AC-8 |
+| T-9 | Ravi at Alpha | Confirm; wrong code three times | "The code didn’t work. Nothing was changed." | AC-7 |
+| T-10 | Ravi at Alpha, option off | Confirm | "Group updated"; Approval groups show the new line | AC-5 |
+| T-11 | Timeout on submit | Review | "We didn’t get an answer in time. Nothing was changed." | AC-7 |
+| T-12 | Bank unavailable | Review | "We couldn’t reach the bank. Nothing was changed." | AC-7 |
+| T-13 | Alex at Alpha | Open Admin | Lock screen, no Edit group button | AC-1 |
 
 #### 10. Expected mutation-check survivors
 
-Journey-side member-role and duplicate checks survive (the sandbox repeats them; T-3 proves the sandbox). Others: none expected.
+- The upper limit of six approver switches: survives, no company has six candidates.
+- The "Goes first" default when left empty: survives unless T-5 omits it.
+- The order of the three mode chips: survives.
+- The wording of the group name when the two-approver limit changes (for example 60,000 at Beta after CHG-1043): survives, no scenario reads it.
 
 ---
 
 ## Business: More
 
-Shell screens for the **More** tab, and the journeys `business-service-request` and (stretch) `kyb-onboarding`.
+Shell screens for the **More** tab, the view `business-requests`, the journey `business-service-request`, and the public journey `kyb-onboarding` (Open a business account, reached from the landing page).
 
 ### Shell: Business profile
 
@@ -2893,20 +2800,12 @@ Shell screens for the **More** tab, and the journeys `business-service-request` 
 | Data source | `businessProfile(ctx)` (planned) over `corp.profile.get` (planned; request none; response `{ id, name, legalName, registrationNo, taxId, address, country, currency, industry, signatories: string[], relationshipManager: { name, phone, email }, since }`; errors `PERMISSION_DENIED`, `TIMEOUT`, `SERVICE_UNAVAILABLE`; read-only). |
 | Permission | any business permission (everyone in the company) |
 
-**Widgets**: Company card (name, legal name, registration number masked to the last 4, address); Banking card (currency, accounts count, approval rule, cut-off, from `corp.company.get`); Contacts card (relationship manager with *Call* and *Email* buttons; on web, a mailto link); *Request a change* → `business-service-request` `{type: "change_details"}` (needs `biz.requests.create`). Stretch: *Business onboarding* → `kyb-onboarding` (needs `biz.admin.users`).
+**Widgets**: Company card (name, legal name, registration number masked to the last 4, address); Banking card (currency, accounts count, approval rule, cut-off, from `corp.company.get`); Contacts card (relationship manager with *Call* and *Email* buttons; on web, a mailto link); *Request a change* → `business-service-request` `{type: "change_details"}` (needs `biz.requests.create`). The journey `kyb-onboarding` is not started from here: it is a public journey reached from the landing page (Business › Open a business account).
 **States**: loading skeleton cards; error and timeout as in Accounts. No empty state (a company always has a profile).
 
 ### Shell: Service requests
 
-| | |
-|---|---|
-| Purpose | See requests the company made to the bank and their progress; start a new one. |
-| Route | Web: `/{project}/business/{companyId}/more/requests`. Mobile: `Business/More/Requests`. |
-| Data source | `businessRequests(ctx)` (planned) over `corp.requests.list` (planned; request `{ status? }`; response record keyed by id `{ id, type, subject, status ("received" or "in_progress" or "done" or "declined"), createdAt, createdBy, updatedAt, reply? }`; errors `PERMISSION_DENIED`, `TIMEOUT`, `SERVICE_UNAVAILABLE`; read-only). |
-| Permission | `biz.requests.create` to start; any business user to read their company's requests |
-
-**Columns**: Reference, Type, Subject, Status (`statusChip`: Received blue, In progress amber, Done green, Declined grey), Created by, Updated. **Filter**: status chips, type select. **Sort**: Updated, newest first. **Page size** 25. **Buttons**: *New request* → `business-service-request`. Row → detail with a `timeline` (planned) of status changes and the bank's reply.
-**States**: loading; empty "No requests yet." with *New request* (only with permission); error as above.
+This screen is the view `business-requests` (block below, after `business-service-request`).
 
 ### Shell: Messages
 
@@ -2952,209 +2851,375 @@ Shell screens for the **More** tab, and the journeys `business-service-request` 
 
 ### ★ Business service request — `business-service-request`
 
+**Catalog**: slug `business-service-request`, workspace business, category More, core no, a bank can switch it off (yes), kept in the Lean preset (basic). Permission `accounts.view`, does not move money. Options: *Offer cheque books* (default on). Prototype file `design/bankworkx-r1/src/journeys/77-groups-requests.js`.
+
 #### 1. Summary
 
 | | |
 |---|---|
 | Slug | `business-service-request` |
-| Purpose | A company user asks the bank for something that is not a payment: a new chequebook, a statement copy by post, a change of company details, a limit review, or a complaint. |
+| Purpose | A person at the company asks the bank for something that is not a payment: add an account, close an account, update company details, order a cheque book, or something else. The request is listed under Service requests. |
 | Release | 1 |
 | Workspace | Business |
-| Status | New (planned) |
-| Channels | Web, mobile |
-| Starting pattern | `cab.ts` (`contact-support`) for the form and reference number |
-| Who may use it | `biz.requests.create` (Maker, Admin) |
-| Journey type | Not money-moving. It changes no balance or limit; a change request is only a request. It still includes timeout and unavailable scenarios because it creates a record. |
+| Status | Built in the prototype; adapter `corp.requests.create` (planned). The earlier "change details", "review our limits" and attachment steps are gone, and no code is asked. |
+| Channels | web, mobile |
+| Who may use it | Any person with `accounts.view` at the company (Alex at Alpha and at Beta). |
+| Seed | Alpha accounts Operating ••2001 USD and Reserve ••2044 EUR; Beta Operating ••3001 and Payroll ••3002. The requests are recorded as "Alex Morgan". |
+
+**Home market configuration**: none. The account currencies offered are USD, EUR, GBP and AED.
 
 #### 2. Entry points
 
-| Place | Label | Values passed in | Permission |
-|---|---|---|---|
-| More › requests | New request | `{type?}` | `biz.requests.create` |
-| More › profile | Request a change | `{type: "change_details"}` | `biz.requests.create` |
-| Accounts › detail | Request a chequebook (row menu, planned) | `{type: "chequebook", accountId}` | `biz.requests.create` |
-| Admin › limits | Ask the bank for a higher ceiling (planned) | `{type: "limit_review"}` | `biz.requests.create` |
+| Place › label | Passes | Permission |
+|---|---|---|
+| More › Service requests › New request (also the button on an empty list) | none | `accounts.view` |
+| Accounts › detail › Order a cheque book | `{type: "cheque", accountId}` | `accounts.view` (the account screen has no such button yet; the entry exists in the journey) |
+
+With `{type}` the first step is skipped.
 
 #### 3. Screens
 
-Stepper: **Type**, **Details**, **Review**, then the result.
+Progress text "Step n of 3 · Service request" (2 of 2 with `{type}`). Back on every step; the first has Cancel.
 
-**Screen `type` — "What do you need?"**: `select` (`rows`): "New chequebook", "Statement copy by post", "Change company details", "Review our limits", "Make a complaint", "Something else". Required. Error: "Choose what you need." Buttons: *Next* → `details`; *Cancel* → exit. If `{type}` is passed the journey opens on `details`.
+**Step 1: What do you need?** Button **Continue**. A required card choice, message "Choose what you need.": Add an account, Close an account, Update company details, Cheque book (only while the option is on), Other.
 
-**Screen `details` — "Tell us more"**
+**Step 2: Tell us more.** Button **Review**. Fields shown by type:
 
-| Field | Block | Required | Validation | Error message |
-|---|---|---|---|---|
-| Account | `accountPicker` | Yes for chequebook and statement copy | A permitted account | "Choose an account." |
-| Subject | `textInput` | Yes | 5 to 80 characters | "Add a short subject (at least 5 characters)." |
-| Details | `textInput` (`lines: 5`) | Yes | 10 to 1,000 characters | "Tell us a little more (at least 10 characters)." |
-| Number of cheque leaves | `select` (`chips`: 25, 50, 100) | Yes for chequebook | One of the three | "Choose how many leaves." |
-| Contact phone | `textInput` (pattern `^\+[0-9 ]{8,16}$`) | Yes | International format | "Enter a phone number with the country code." |
+| Field | Shown for | Type | Required | Rule | Message |
+|---|---|---|---|---|---|
+| Currency | Add | select USD, EUR, GBP, AED, placeholder "Choose a currency" | yes | one | field required |
+| What it is for | Add | select: Day-to-day payments, Payroll, Tax, Savings, Other | yes | one | field required |
+| Account | Close, Cheque book | select of the company’s accounts ("Operating ••2001 · USD") | yes | one; Close needs two or more accounts | "Choose an account." / "You can’t close the only account." |
+| Move the balance to | Close, when the account has a balance | select of the other accounts | yes | one | field required |
+| Reason | Close | select: No longer needed, Moving to another bank, Company is closing, Other | yes | one | field required |
+| What to update | Update | select: Registered address, Contact details, Company name, Owners or directors, Signatories | yes | one | field required |
+| Number of leaves | Cheque book | chips 25, 50, 100 | yes | one | "Choose how many leaves." |
+| Delivery | Cheque book | select: Collect at a branch, Post to the registered address | yes | one | field required |
+| Subject | Other | text, max 80 | yes | at least 5 characters | "Add a short subject (at least 5 characters)." |
+| Details | Update, Other | text area, max 1000 | yes | at least 10 characters | "Tell us a little more (at least 10 characters)." |
+| Contact phone | all | tel, hint "With the country code." | yes | `+` then 8 to 16 digits and spaces | "Enter a phone number with the country code, like +1 415 555 0100." |
 
-Copy: title "Tell us more"; helper for complaints: "Tell us what happened and when. A manager will reply within 3 working days." Alert (info) for "Change company details": "Changes to legal details may need documents. We'll contact you if we do."
-Buttons: *Review* → `review`; *Back* → `type`.
+Autofill samples: Question about statements; Please change our registered address to the new office.; +1 415 555 0100.
 
-**Screen `review`**: `reviewSummary`: Type, Account (if any), Subject, Details, Phone, Company. `consent` (`mustBeTrue`): "I confirm these details are correct and I'm allowed to ask for this for {company}." Buttons: *Send request* → `corp.requests.create`; *Edit* → `details`. No one-time code (open question 7).
+**Step 3: Review.** Busy "Sending…" (about 0.65 s). Button **Send request**.
 
-**Screen `done`**: `result`: "Request sent"; body "We'll update you under More › Requests."; reference "Request {requestId}". Buttons: *Go to requests* → shell; *Send another* → `type`; *Done*.
+| Row | Value |
+|---|---|
+| Request | the type name |
+| About | the subject: "New EUR account", "Close Reserve ••2044", "Update registered address", "Cheque book, Operating", or the typed subject |
+| Leaves, Delivery | Cheque book only |
+| Balance goes to | Close with a balance |
+| Phone | as typed |
+| Company | company name |
 
-#### 4. Sandbox errors
+A required tick: "I confirm these details are correct and I’m allowed to ask for this for {company}." (message "Confirm to send."). No code is asked.
 
-| Code | Message | Screen | Button |
+**Result** "Request sent", line "We’ll update you under Service requests.", chip "Received", then the reference (REQ-nnnnn). Rows: Request, About, Company. Buttons **Go to requests** (opens `business-requests`), **Send another**.
+
+#### 4. States and errors (codes are for tests; the person sees the message)
+
+| Code | Message | Where | Button |
 |---|---|---|---|
-| `ACCOUNT_NOT_FOUND` (existing) | "We can't find that account. Choose another." | `details` | *Choose account* |
-| `REQUEST_TYPE_INVALID` (planned) | "That kind of request isn't available. Choose another." | `type` | *Edit* |
-| `REQUEST_DUPLICATE` (planned) | "You already have an open request about this ({requestId}). Wait for our reply or add to that request." | `review` | *Go to requests* |
-| `VALIDATION_FAILED` (planned) | "Check the highlighted fields and try again." | `details` | *Edit* |
-| `PERMISSION_DENIED`, `WRONG_CONTEXT`, `SESSION_EXPIRED` | Standard messages | `denied` | as there |
-| `TIMEOUT` (planned) | "This is taking longer than expected. Nothing was changed." | `review` | *Try again* |
-| `SERVICE_UNAVAILABLE` (planned) | S-`SERVICE_UNAVAILABLE` | `review` | *Try again* / *Back* |
+| `REQUEST_DUPLICATE` | "You already have an open request about this. Wait for our reply." | review banner (same type and subject, not yet Done or Declined) | back |
+| `REQUEST_LIMIT_REACHED` | "You have sent the most requests allowed today (5). Try again tomorrow." | review banner | back |
+| `ACCOUNT_NOT_FOUND` | "We can’t find that account. Choose another." | review banner | back |
+| `PERMISSION_DENIED` | "You can’t send requests at this company." | banner | back |
+| `TIMEOUT` | "We didn’t get an answer in time. Nothing was sent." | banner | try again |
+| `SERVICE_UNAVAILABLE` | "We couldn’t reach the bank. Nothing was sent." | banner | try again |
+
+Loading: spinner on the review step. Empty: not applicable.
 
 #### 5. Adapters
 
-| Integration id | Adapter | Request | Response | Error codes | Status |
-|---|---|---|---|---|---|
-| `accounts` | `corp.accounts.list` | none | accounts | `PERMISSION_DENIED`, `TIMEOUT`, `SERVICE_UNAVAILABLE` | Planned |
-| `create` | `corp.requests.create` | `{ type, accountId?, subject, details, leaves?, phone }` | `{ id, status: "received", createdAt }` | `ACCOUNT_NOT_FOUND`, `REQUEST_TYPE_INVALID`, `REQUEST_DUPLICATE`, `VALIDATION_FAILED`, `PERMISSION_DENIED`, `TIMEOUT`, `SERVICE_UNAVAILABLE` | Planned; `moneyMoving: false`, `requiresOtp: false` |
+| Integration | Adapter | Status |
+|---|---|---|
+| Accounts of the company | `corp.company.get` | Existing |
+| Create a request | `corp.requests.create` (request `{ type, subject, details?, accountId?, phone }`; response `{ id, status: "received" }`; errors above) | (planned) |
+| List requests | `corp.requests.list` | (planned), see `business-requests` |
 
 #### 6. Permissions, step-up and limits
 
-`biz.requests.create`; step-up `none`. Check 3: an Approver at Beta (Alex) forcing `corp.requests.create` answers `PERMISSION_DENIED`. Limit: 5 requests per user per day (`VALIDATION_FAILED` is not used for this; the sandbox answers `REQUEST_LIMIT_REACHED` (planned): "You have sent the most requests allowed today (5). Try again tomorrow.").
+`accounts.view`. No code (open question 7 asks whether company details and limits should need one). Up to 5 requests a day per person; no second open request with the same type and subject.
 
 #### 7. Result and links out
 
-Result with reference. Receipt: on-screen summary. Notifications: to the company's admins "New request at {company}: {subject}" (tagged); later, status changes raise "Your request {id} is {status}". Links out: *Go to requests*, *Send another*, *Done*.
+A new request is added at the top of Service requests with status Received and date "Today". Notification (planned): the bank’s operations team; the person gets an update when the status changes. Links: Go to requests, Send another.
 
 #### 8. Acceptance criteria
 
-- **AC-1** A Maker or Admin can send a request of each type, and it appears in Requests as Received.
-- **AC-2** Subject, details and phone are validated, with the messages above.
-- **AC-3** A chequebook request needs an account the person may see and a number of leaves.
-- **AC-4** A second open request with the same type, account and subject is refused.
-- **AC-5** A person without `biz.requests.create` cannot send, even when forced.
-- **AC-6** A request sent at one company is not visible at another.
-- **AC-7** On timeout or unavailability nothing is created.
+- AC-1: The five types are offered; Cheque book only while the option is on.
+- AC-2: The fields of step 2 follow the type; every required one blocks Review.
+- AC-3: The only account cannot be closed; closing an account with a balance asks where it goes.
+- AC-4: A request cannot be sent without the confirmation tick.
+- AC-5: The result gives a reference and the request appears at the top of Service requests as Received.
+- AC-6: A second open request with the same type and subject, and a sixth request in a day, are refused with their messages.
+- AC-7: A timeout or an unavailable bank sends nothing.
 
 #### 9. Scenarios
 
-| # | Persona and setup | Conditions | Covers | Expected |
+| # | Persona and setup | Steps | Expected | Covers |
 |---|---|---|---|---|
-| T-1 | Alex at Alpha sends a chequebook request, Operating, 50 leaves | none | AC-1, AC-3 | Request listed as Received; result shows its id. |
-| T-2 | Alex sends a complaint with subject "Hi" and details "short" | none | AC-2 | Stopped on `details` with both messages. |
-| T-3 | Alex sends the same chequebook request again | none | AC-4 | `REQUEST_DUPLICATE` with the first id. |
-| T-4 | Alex at Beta (Approver) forces `corp.requests.create` | none | AC-5 | `PERMISSION_DENIED`. |
-| T-5 | Alex sends at Alpha; switches to Beta | none | AC-6 | Beta's requests list is empty of it. |
-| T-6 | Alex sends a request | `timeout: ["corp.requests.create"]` | AC-7 | Timeout message; list unchanged. |
-| T-7 | Alex sends a request | `unavailable: ["corp.requests.create"]` | AC-7 | `SERVICE_UNAVAILABLE`; list unchanged. |
+| T-1 | Alex at Alpha | Add an account: EUR, Savings, +1 415 555 0100; tick; send | "Request sent", chip Received, About "New EUR account"; the list shows it first | AC-1, AC-2, AC-5 |
+| T-2 | Alex at Alpha | Close an account: Reserve, move the balance to Operating, reason Other | Review "Balance goes to Operating ••2001"; sent | AC-3 |
+| T-3 | A company with one account | Close an account | "You can’t close the only account." | AC-3 |
+| T-4 | Alex at Alpha | Cheque book, Operating, 50 leaves, branch | About "Cheque book, Operating"; REQ-30418 already Done, so no duplicate | AC-1, AC-6 |
+| T-5 | Alex at Alpha | Other: subject "Hi" | "Add a short subject (at least 5 characters)." | AC-2 |
+| T-6 | Alex at Alpha | Leave the tick off | Send disabled with "Confirm to send." | AC-4 |
+| T-7 | Alex at Alpha | Send the same Update request twice | "You already have an open request about this. Wait for our reply." | AC-6 |
+| T-8 | Alex at Alpha, five requests sent today | Send another | "You have sent the most requests allowed today (5). Try again tomorrow." | AC-6 |
+| T-9 | Option off | Open | Cheque book is not offered | AC-1 |
+| T-10 | Timeout on submit | Review | "We didn’t get an answer in time. Nothing was sent."; no request | AC-7 |
+| T-11 | Bank unavailable | Review | "We couldn’t reach the bank. Nothing was sent." | AC-7 |
 
 #### 10. Expected mutation-check survivors
 
-The journey-side length validations survive where the sandbox `VALIDATION_FAILED` repeats them (T-2 proves the sandbox). The leaves chips (`select`): none expected if T-1 covers them. Others: none expected.
+- The 5-per-day limit: survives unless T-8 sends exactly five.
+- The list of "What to update" values: survives, one value is used.
+- The 25/50/100 leaf counts: survive, one is used.
+- The rule that the new request goes to the top: survives if only one request exists.
 
 ---
 
-### ★ KYB business onboarding (stretch) — `kyb-onboarding`
+### ★ Service requests — `business-requests`
 
-Stretch scope: only after the other 14 SME journeys are proved. It is written as a summary plus the screens, because several blocks it needs are Batch B (planned).
+**Catalog**: slug `business-requests`, workspace business, category More, core no, a bank can switch it off (yes), kept in the Lean preset (basic). A view (tab `more`), not a journey. Permission `accounts.view`. Options: none. Prototype file `design/bankworkx-r1/src/journeys/77-groups-requests.js`.
+
+#### 1. Summary
+
+| | |
+|---|---|
+| Slug | `business-requests` |
+| Purpose | Lists the requests sent to the bank from this company and where each one stands, and starts a new one. |
+| Release | 1 |
+| Workspace | Business (More tab) |
+| Status | Built in the prototype; adapter `corp.requests.list` (planned). Replaces the earlier "Shell: Service requests" screen (filters, sort, a detail timeline and reply text are not in the prototype). |
+| Channels | web, mobile |
+| Who may use it | Any person with `accounts.view`. |
+| Seed | Alpha: REQ-30418, Cheque book, "Cheque book, Operating", Done, 28 Oct. Beta: none. |
+
+**Home market configuration**: none.
+
+#### 2. Entry points
+
+| Place › label | Passes | Permission |
+|---|---|---|
+| More › Service requests | none | `accounts.view` |
+| Result of `business-service-request` › Go to requests | none | `accounts.view` |
+
+The More row appears only while this entry is on. Turning off `business-service-request` hides the New request button but keeps the list.
+
+#### 3. Screens
+
+**List.** Heading "Service requests" with the button **New request** on the right (starts `business-service-request`). A table with columns:
+
+| Column | Content |
+|---|---|
+| Reference | the id ("REQ-30418") and the date below in small text ("28 Oct", "Today") |
+| Type | Add an account, Close an account, Update company details, Cheque book, Other |
+| About | the subject |
+| Status | chip: Received (blue), In progress (amber), Done (green), Declined (grey) |
+
+Newest first (a request sent now goes to the top). No filter, search, paging or detail page in the prototype (planned: a status filter and a detail with the bank’s reply).
+
+#### 4. States and errors
+
+| State | What the person sees |
+|---|---|
+| Empty (Beta, or no requests) | "No requests yet" / "Requests you send to the bank are listed here." with the button **New request** |
+| Loading, error, timeout | not shown in the prototype (planned: skeleton rows; "We couldn’t load this. Nothing was changed." with **Try again**) |
+
+#### 5. Adapters
+
+| Integration | Adapter | Status |
+|---|---|---|
+| List this company’s requests | `corp.requests.list` (request `{ status? }`; response record keyed by id `{ id, type, subject, status, createdAt, createdBy }`; errors `PERMISSION_DENIED`, `TIMEOUT`, `SERVICE_UNAVAILABLE`) | (planned) |
+
+#### 6. Permissions, step-up and limits
+
+`accounts.view`. Read-only. Requests are kept per company: Alpha’s never show at Beta.
+
+#### 7. Result and links out
+
+Link: New request (`business-service-request`). Notification (planned): "Your request REQ-n is Done".
+
+#### 8. Acceptance criteria
+
+- AC-1: The list shows the company’s own requests with reference, type, about and status chip, newest first.
+- AC-2: A request just sent appears at the top with the status Received and the date "Today".
+- AC-3: An empty list shows the empty message and a New request button.
+- AC-4: Requests of the other company are not shown.
+
+#### 9. Scenarios
+
+| # | Persona and setup | Steps | Expected | Covers |
+|---|---|---|---|---|
+| T-1 | Alex at Alpha | More › Service requests | One row, REQ-30418, Cheque book, chip Done | AC-1 |
+| T-2 | Alex at Alpha | Send a request, tap Go to requests | New row first with Received and "Today"; REQ-30418 second | AC-2 |
+| T-3 | Alex at Beta | More › Service requests | "No requests yet" and a New request button | AC-3, AC-4 |
+| T-4 | Alex at Alpha, then Beta | Switch company | Beta shows none of Alpha’s requests | AC-4 |
+
+#### 10. Expected mutation-check survivors
+
+- The chip colour per status: survives, only the text is asserted.
+- The small date line: survives unless the date is asserted.
+- The "In progress" and "Declined" statuses: survive, the seed has only Done.
+
+---
+
+### ★ Open a business account — `kyb-onboarding`
+
+**Catalog**: slug `kyb-onboarding`, workspace public (before sign-in), category Onboarding, core no, a bank can switch it off (yes), not in the Lean preset. Options: *Ask for an ownership chart* (default off), *Email each owner and director an ID check* (default on; listed in the catalog but not read by any screen yet). Prototype file `design/bankworkx-r1/src/journeys/78-kyb.js`. The catalog row in `10-journey-catalog.md` still files it under Business: More.
 
 #### 1. Summary
 
 | | |
 |---|---|
 | Slug | `kyb-onboarding` |
-| Purpose | A company's administrator completes "know your business" checks: company details, owners, documents, declarations and signatures. |
-| Release | 1 (stretch) |
-| Workspace | Business (an existing company whose profile is `kyb_status: "incomplete"` or `"refresh_due"`) |
-| Status | New (planned) |
-| Channels | Web, mobile |
-| Starting pattern | `cab.ts` enrolment, plus planned `fileUpload`, `documentViewer`, `signature`, `idCapture` |
-| Who may use it | `biz.admin.users` (Admin) |
-| Journey type | File and security journey: timeout and unavailable scenarios. |
+| Purpose | A company applies for business banking without signing in: company details, owners and directors, what the business does, documents, a tax declaration, a review with two agreements, and a status tracker. |
+| Release | 1 (the earlier "stretch") |
+| Workspace | Public (Landing › Business) |
+| Status | Built in the prototype; adapter `corp.kyb.submit` (planned). The earlier save-and-resume, e-signature, upload-checks and per-owner screens are gone. |
+| Channels | web, mobile |
+| Who may use it | Anyone before sign-in. No permission, no code. |
+| Journey type | Onboarding: timeout and unavailable scenarios. |
 
 #### 2. Entry points
 
-| Place | Label | Values passed in | Permission |
-|---|---|---|---|
-| More › profile | Business onboarding | none | `biz.admin.users` |
-| Notification | "Your company details need a refresh" (planned) | none | `biz.admin.users` |
+| Place › label | Passes | Permission |
+|---|---|---|
+| Landing › Business › Open a business account | none | none |
 
 #### 3. Screens
 
-Stepper: **Company**, **Owners**, **Documents**, **Declarations**, **Sign**, then the result. Progress is saved after each screen (`corp.kyb.save`), so the admin can leave and resume ("Resume your application" on the profile card).
+Progress text "Step n of 6 · Open a business account". Back on every step (the first has Cancel). A step that calls the bank shows a spinner and the busy text.
 
-| Screen | Blocks | Fields (label, required, rule, message) |
-|---|---|---|
-| `company` — "Company details" | `textInput`, `select` | Legal name (required, 2 to 120 chars, "Enter the company's legal name."); Registration number (required, 6 to 20 letters or digits, "Enter the registration number."); Country (required, "Choose a country."); Industry (required, "Choose an industry."); Registered address (required, 10 to 200 chars, "Enter the registered address."); Tax ID (required, 6 to 20 characters, "Enter the tax ID.") |
-| `owners` — "Owners and directors" | `textInput`, `amountInput`, `toggle`, `idCapture` (planned) | One block per person, up to 6: Full name (required, "Enter the person's full name."); Role (Owner or Director, required); Ownership % (owners: 0.01 to 100; "Enter a percentage between 0.01 and 100."); Date of birth (`datePicker`, planned, 18 or older, "Owners and directors must be 18 or older."); ID photo and selfie (`idCapture`, required for owners of 25% or more, "We need a photo of the ID."). Rule: owners of 25% or more are named; total ownership listed must be at least 75% ("List owners holding at least 75% of the company between them.") |
-| `documents` — "Documents" | `fileUpload` (planned) | Certificate of incorporation (required, PDF, JPG or PNG, at most 5 MB, "Upload the certificate of incorporation (PDF, JPG or PNG, up to 5 MB)."); Proof of address (required, same rule); Board resolution (optional) |
-| `declarations` — "Declarations" | `documentViewer` (planned), `toggle` | Read the terms to the end (required, "Read the terms to the end to continue."); Tax residency (FATCA/CRS) self-certification (required, "Confirm your tax residency."); Source of funds (`select`, required, "Choose the main source of funds."); `consent` (`mustBeTrue`): "I confirm the information I gave is true and complete." |
-| `sign` — "Sign" | `signature` (planned), `otp` | Signature drawn or typed (required, "Sign to continue."); one-time code |
+**Home market configuration**
 
-Result `done`: "Application sent" / "We'll review it within 3 working days. You can keep using {company}." Reference "KYB {applicationId}". Buttons: *Go to profile*, *Done*.
-
-#### 4. Sandbox errors
-
-| Code | Message | Screen |
-|---|---|---|
-| `VALIDATION_FAILED` (planned) | "Check the highlighted fields and try again." | the screen that failed |
-| `FILE_TOO_LARGE` (planned) | "That file is bigger than 5 MB. Choose a smaller file." | `documents` |
-| `FILE_TYPE_NOT_ALLOWED` (planned) | "Upload a PDF, JPG or PNG file." | `documents` |
-| `OWNERSHIP_INCOMPLETE` (planned) | "List owners holding at least 75% of the company between them." | `owners` |
-| `UNDERAGE` (planned) | "Owners and directors must be 18 or older." | `owners` |
-| `DOCUMENT_UNREADABLE` (planned; sandbox returns it for a file named `blurry.png`) | "We couldn't read that document. Upload a clearer copy." | `documents` |
-| `APPLICATION_EXISTS` (planned) | "An application is already waiting for review." | `company` |
-| `OTP_INVALID`, `OTP_REQUIRED`, `STEP_UP_REQUIRED`, `PERMISSION_DENIED`, `SESSION_EXPIRED` | Standard messages | as in `manage-user` |
-| `TIMEOUT`, `SERVICE_UNAVAILABLE` | as in `manage-user` | the screen that failed |
-
-#### 5. Adapters (all planned)
-
-| Integration id | Adapter | Request | Response | Error codes |
+| | Market A (routing number and account) | Market B (sort code and account) | Market C (IBAN) | Market D (IBAN, mobile alias) |
 |---|---|---|---|---|
-| `status` | `corp.kyb.status` | none | `{ status, savedStep?, applicationId? }` | `PERMISSION_DENIED`, `TIMEOUT`, `SERVICE_UNAVAILABLE` |
-| `save` | `corp.kyb.save` | `{ step, data }` | `{ savedStep }` | `VALIDATION_FAILED`, `OWNERSHIP_INCOMPLETE`, `UNDERAGE`, `APPLICATION_EXISTS`, `PERMISSION_DENIED`, `TIMEOUT`, `SERVICE_UNAVAILABLE` |
-| `upload` | `corp.kyb.upload` | `{ kind, fileName, mime, sizeKb }` | `{ documentId }` | `FILE_TOO_LARGE`, `FILE_TYPE_NOT_ALLOWED`, `DOCUMENT_UNREADABLE`, `TIMEOUT`, `SERVICE_UNAVAILABLE` |
-| `otpSend`, `otpVerify`, `stepUp` | as in `manage-user` | | | existing / planned |
-| `submit` | `corp.kyb.submit` | `{ signature }` | `{ applicationId, status: "in_review" }` | `VALIDATION_FAILED`, `OTP_REQUIRED`, `STEP_UP_REQUIRED`, `PERMISSION_DENIED`, `TIMEOUT`, `SERVICE_UNAVAILABLE` |
+| Tax ID | 9 digits | 10 digits | 8 to 14 letters or digits | 15 digits |
+| Tax ID message | "Enter the 9 digits." | "Enter the 10 digits." | "Use 8 to 14 letters or digits." | "Enter the 15 digits." |
+| Autofill sample | 123456789 | 1234567890 | DE12345678 | 100123456700003 |
+| Money bands use | $ | £ | € | AED |
+| Postal code | required | required | required | optional |
 
-All have `moneyMoving: false`; `corp.kyb.submit` has `requiresOtp: true`.
+**Step 1: Your company.** Button **Continue**.
+
+| Field | Type | Required | Rule | Message |
+|---|---|---|---|---|
+| Legal name | text, max 100 | yes | at least 2 characters | field required |
+| Trading name (if different) | text, max 100 | no | | none |
+| Registration number | text, max 20 | yes | 5 to 20 letters, digits, `-`, `/`, space | "Use 5 to 20 letters or digits." |
+| Type of company | select: Private company, Public company, Partnership, Sole trader, Non-profit organisation | yes | one | field required |
+| Date of incorporation | text, placeholder "DD/MM/YYYY" | yes | a real date; not in the future; year 1900 or later | "Enter the date as DD/MM/YYYY." / "The date can’t be in the future." / "Check the year." |
+| Country of registration | select of 16 countries | yes | one | field required |
+| Registered address | text, max 80 | yes | | field required |
+| City | text, max 40, half width | yes | | field required |
+| Postal code | text, max 12, half width | per market | | field required |
+
+Autofill samples: Harbour Trading Ltd, Harbour, REG-2015-0412, 14/03/2015, 12 Example Street, Springfield, 62704.
+
+**Step 2: Owners and directors.** Button **Continue**, disabled while a red line shows. Up to five people; person 1 starts as "Owner and director". Buttons **Add another person** (until five) and **Remove last** (when more than one).
+
+| Field (per person) | Type | Required | Rule | Message |
+|---|---|---|---|---|
+| Full name | text, max 60 | yes | starts with a letter; letters, space, apostrophe, hyphen, full stop | "Enter their full name." |
+| Email | email, hint "We send an ID check here.", max 80 | yes | valid email | "Enter a valid email, like name@company.com." |
+| Role | select: Owner and director, Owner, Director | yes | one | field required |
+| Ownership (%) | number, hint "25 to 100. Smaller owners go under other owners." | yes, for Owner roles | 25 to 100 | "Enter 25 to 100." |
+
+After the people: **Other owners (%)**, number, hint "Owners with less than 25% each, combined.", 0 to 75, default 0, message "Enter 0 to 75." A live box: "Ownership listed {n}%" and either "Ownership adds up to 100%." or a red line "Ownership adds up to {n}%. It must be 100%." / "Add at least one director." Autofill: Maya Chen, maya.chen@example.com, 100.
+
+**Step 3: Your business.** Button **Continue**. All required, selects unless noted:
+
+| Field | Values or rule | Message |
+|---|---|---|
+| Industry | Retail and wholesale, Transport and logistics, Construction, Food and hospitality, Professional services, Technology, Manufacturing, Health and education, Other | field required |
+| What the company does | text area, max 300, at least 10 characters | "Tell us a little more." |
+| Main country of trade | the country list | field required |
+| Yearly turnover | four bands in the market’s money sign: Under 100,000; 100,000 to 500,000; 500,000 to 2M; Over 2M | field required |
+| Expected money in each month | Under 50,000; 50,000 to 250,000; 250,000 to 1M; Over 1M | field required |
+| Payments each month | Up to 20, 21 to 100, 101 to 500, Over 500 | field required |
+| Where the money comes from | Sales to customers, Investors or owners, Loans, Grants, Other | field required |
+
+**Step 4: Documents.** Intro "PDF, JPG or PNG, up to 10 MB." Button **Continue**. Uploads: Registration certificate (required, "Add the certificate."), Proof of registered address (required, "Add a proof of address."), Ownership chart (optional, shown only while the option is on). Autofill adds sample files (document-1.pdf 1.2 MB, document-2.pdf 0.9 MB, document-3.pdf 0.6 MB).
+
+**Step 5: Tax declaration.** Button **Continue**.
+
+| Field | Type | Required | Rule | Message |
+|---|---|---|---|---|
+| Country of tax residence | select, country list | yes | one | field required |
+| Tax ID | text, max 20, placeholder as the market table | yes | the market’s pattern; spaces and hyphens ignored | the market’s message |
+| Does most of the income come from investments? | chips No, Yes (default No) | no | | none |
+
+**Step 6: Review and agree.** Busy "Sending…" (about 0.9 s). Button **Submit**. Rows: Company, Registration number, Type, Registered in, People (the count), Industry, Tax ID ("•••• " and the last 3 characters). Two required ticks: "I agree to the terms and the privacy notice." (message "Please agree to continue.") and "I confirm these details are true and I can apply for the company." (message "Please confirm to continue."). No code is asked.
+
+**Step 7: Your application** (after submit). A tick, "Application received", "Reference KYB-nnnnn", and a tracker: Received (done: "We have your application."), Checking your documents (current: "This usually takes 1 to 2 working days."), Identity checks ("We email each owner and director."), Account ready ("You can sign in and pay."). Button **Finish**.
+
+**Result** "You’re all set", line "We’ll email you when your account is ready.", amber chip "Checking your documents", the reference, rows Company and Registration number.
+
+#### 4. States and errors (codes are for tests; the person sees the message)
+
+| Code | Message | Where | Button |
+|---|---|---|---|
+| `DUPLICATE_APPLICATION` | "We already have an application for this registration number." (the prototype triggers it with the registration number DUPLICATE) | review banner | back |
+| `SERVICE_UNAVAILABLE` | "We couldn’t reach the bank. Nothing was sent. Try again." | sheet or banner | try again |
+| `TIMEOUT` | "We didn’t get an answer in time. Nothing was sent." | banner | try again |
+
+Loading: spinner on step 6. Empty: not applicable.
+
+#### 5. Adapters
+
+| Integration | Adapter | Status |
+|---|---|---|
+| Submit the application with documents | `corp.kyb.submit` (errors above) | (planned) |
+| Upload a document | `corp.kyb.upload` | (planned) |
+| Email the ID check to each person | `bank.notify.send` | (planned) |
+
+Nothing in the mock bank handles company applications today.
 
 #### 6. Permissions, step-up and limits
 
-`biz.admin.users`; step-up `stepup` before `sign`. Uploads at most 5 MB each; 3 files per kind.
+None before sign-in. Documents up to 10 MB, PDF, JPG or PNG. At most five named people plus a combined share for smaller owners. The tax ID is shown masked on review and in the result.
 
 #### 7. Result and links out
 
-Notifications: to all admins, "Business onboarding submitted"; later "Your company details are confirmed". Links out: *Go to profile*, *Done*.
+A reference KYB-nnnnn is created. Notification (planned): an email to the applicant and an ID-check email to each owner and director (option). Links: none (the Finish button returns to the landing page).
 
 #### 8. Acceptance criteria
 
-- **AC-1** An admin can fill the five screens and submit; the profile shows "In review".
-- **AC-2** Progress is saved and the admin can resume.
-- **AC-3** Owners of 25% or more need an ID photo; listed ownership must reach 75%.
-- **AC-4** Wrong file types, files over 5 MB and unreadable documents are refused with their messages.
-- **AC-5** The terms must be read to the end before the declaration can be ticked.
-- **AC-6** Submitting needs a signature, step-up and a correct one-time code.
-- **AC-7** A second application cannot be started while one is in review.
-- **AC-8** A person without `biz.admin.users` cannot start or submit.
-- **AC-9** On timeout or unavailability no application is created and the saved progress is kept.
+- AC-1: The six steps run in order; each required field blocks Continue with its message.
+- AC-2: Owners and directors cannot continue unless ownership adds up to 100% and at least one person is a director.
+- AC-3: The tax ID follows the bank’s home market and the money bands use its sign; the screens name no country.
+- AC-4: The registration certificate and proof of address are required; the ownership chart appears only while its option is on.
+- AC-5: Submit needs both ticks.
+- AC-6: The tax ID is masked on review.
+- AC-7: A registration number already applied for is refused with the message of section 4.
+- AC-8: A timeout or an unavailable bank sends nothing.
 
 #### 9. Scenarios
 
-| # | Persona and setup | Conditions | Covers | Expected |
+| # | Persona and setup | Steps | Expected | Covers |
 |---|---|---|---|---|
-| T-1 | `ravi` completes all screens, 2 owners (60% and 40%) | none | AC-1, AC-3, AC-5, AC-6 | Result "Application sent"; status In review. |
-| T-2 | `ravi` leaves after `owners`, returns | none | AC-2 | Journey resumes at `documents`. |
-| T-3 | `ravi` lists one owner at 50% | none | AC-3 | `OWNERSHIP_INCOMPLETE`. |
-| T-4 | `ravi` uploads a `.exe`, a 6 MB file, `blurry.png` | none | AC-4 | Three different messages. |
-| T-5 | `ravi` tries to tick before reading to the end | none | AC-5 | The checkbox is disabled; message shown. |
-| T-6 | `ravi` starts a second application | none | AC-7 | `APPLICATION_EXISTS`. |
-| T-7 | Alex at Alpha forces `corp.kyb.submit` | none | AC-8 | `PERMISSION_DENIED`. |
-| T-8 | `ravi` submits | `timeout: ["corp.kyb.submit"]` | AC-9 | Timeout; no application; progress kept. |
-| T-9 | `ravi` uploads | `unavailable: ["corp.kyb.upload"]` | AC-9 | `SERVICE_UNAVAILABLE`; progress kept. |
+| T-1 | Visitor, Market A | Autofill all steps; tick both; Submit; Finish | Tracker "Application received"; result "You’re all set"; chip "Checking your documents" | AC-1, AC-5 |
+| T-2 | Visitor | Two people at 60% and 40%, other owners 0 | Continue enabled | AC-2 |
+| T-3 | Visitor | One owner at 50%, other owners 0 | "Ownership adds up to 50%. It must be 100%." | AC-2 |
+| T-4 | Visitor | One person with role Owner only, 100% | "Add at least one director." | AC-2 |
+| T-5 | Visitor, Market B | Tax ID 123 | "Enter the 10 digits." | AC-3 |
+| T-6 | Visitor, Market D | Open step 1 | Postal code is optional | AC-3 |
+| T-7 | Visitor | Leave a document out; then option on | Required ones block; the chart field appears only with the option | AC-4 |
+| T-8 | Visitor | Review without ticks | Submit disabled with the two messages | AC-5 |
+| T-9 | Visitor | Review | Tax ID shown as "•••• 789" | AC-6 |
+| T-10 | Visitor | Registration number DUPLICATE | "We already have an application for this registration number." | AC-7 |
+| T-11 | Timeout on submit | Submit | "We didn’t get an answer in time. Nothing was sent." | AC-8 |
+| T-12 | Bank unavailable | Submit | "We couldn’t reach the bank. Nothing was sent. Try again." | AC-8 |
 
 #### 10. Expected mutation-check survivors
 
-The age check (journey side and sandbox side) survives on one side; the minimum-owner-count rule, if tested only in the sandbox, is listed. Full list to be written when built (stretch).
+- The five-person maximum: survives unless a scenario adds a sixth.
+- The money band edges: survive, the band label is not asserted.
+- The year 1900 check: survives.
+- The option *Email each owner and director an ID check*: survives, no screen reads it.
 
 ---
 
@@ -3254,8 +3319,8 @@ The mandatory demo from the requirement: **one login**, a personal relationship,
 | Sign-in | `alex.morgan` / `Bwx!Demo2026`; one-time code `482100` |
 | Clock | Fixed at `2026-11-04T10:00:00Z` (a Wednesday, before the 16:00 UTC cut-off, a working day) so value date is today |
 | Alex Personal | Main ••4410 USD 8,720.76; Savings ••7731 USD 15,254.37; daily limit 50,000 USD; beneficiary `ben_maria` ("Maria Lopez", ••5120, a BankWorkx® customer; planned seed) |
-| Alpha Trading LLC | Currency USD; account `alpha_ops` "Operating" ••2001 USD 480,000.00; supplier `sup_harbour` "Harbour Packaging"; company limit 1,000,000.00, used 0; approval threshold 50,000.00; cut-off 16:00; Alex = Maker (`initiator`), personal daily limit 250,000.00; approvers `dana`, `lee`; admin `ravi` |
-| Beta Services Ltd | Currency USD; account `beta_ops` "Operating" ••3001 USD 310,000.00; supplier `sup_nimbus` "Nimbus Logistics"; company limit 1,000,000.00, used 0; threshold 50,000.00; Alex = Approver; makers `priya`, `omar`; admin `noor`. One payment waiting: `priya` started USD 8,200.00 to Nimbus Logistics, reference "INV-2291" (id `pay_1` at Beta) |
+| Alpha Trading LLC | Currency USD; account `alpha_ops` "Operating" ••2001 USD 480,000.00; supplier `sup_harbour` "Harbour Packaging"; company limit 1,000,000.00, used 0; approval threshold 50,000.00; cut-off 16:00; Alex = Maker (`initiator`), personal daily limit 250,000.00; approvers `dana`, `lee`; administrators `ravi` and `mina` (change CHG-1042 from `mina` waiting: extra code from 25,000.00 to 30,000.00) |
+| Beta Services Ltd | Currency USD; account `beta_ops` "Operating" ••3001 USD 310,000.00; supplier `sup_nimbus` "Nimbus Logistics"; company limit 1,000,000.00, used 0; threshold 50,000.00; Alex = Approver; makers `priya`, `omar`; administrators `noor` and `karim` (change CHG-1043 from `karim` waiting: two approvers above 50,000.00 to 60,000.00). One payment waiting: `priya` started USD 8,200.00 to Nimbus Logistics, reference "INV-2291" (id `pay_1` at Beta) |
 | Ids | Each company has its own payment numbering (`pay_1` at Alpha and `pay_1` at Beta both exist). The test therefore reads payments **through the company context**, never by id alone (open question 8). |
 
 ### The 13 steps
@@ -3284,13 +3349,13 @@ For each step: screen, journey, permission used, expected sandbox state, and the
 - Screen: top-bar selector › Alpha Trading LLC. Journey: none (context switch, shell spec above).
 - Permission: context membership; step-up `stepup`.
 - State: first `bank.session.switch { contextId: "alpha" }` answers `STEP_UP_REQUIRED`; after `bank.session.stepUp` and code `482100`, active context is `alpha`; `stepUpUntil` is 5 minutes ahead. Theme: Graphite.
-- Assertion: the first switch attempt throws `STEP_UP_REQUIRED` and the context is still `personal`; a wrong code 3 times leaves the context `personal`; the right code makes `activeContextId` `alpha`; the selector shows "Alpha Trading LLC" with badge "Maker"; the shell shows the Overview tab; the menu contains Payments but **no Approvals action** and no Admin tab; `session.permissions` contains `biz.payments.initiate` and not `biz.approvals.approve`; Personal data (the transfer) is not in the view-model.
+- Assertion: the first switch attempt throws `STEP_UP_REQUIRED` and the context is still `personal`; a wrong code 3 times leaves the context `personal`; the right code makes `activeContextId` `alpha`; the selector shows "Alpha Trading LLC" with badge "Maker"; the shell shows the Overview tab; the menu contains Payments but **no Approvals action**, and the Admin tab shows only "You don’t have access"; `session.permissions` contains `biz.payments.initiate` and not `biz.approvals.approve`; Personal data (the transfer) is not in the view-model.
 
 **Step 5 — Pay a supplier; the payment ends "Pending approval"**
-- Screen: Overview › + Pay a supplier. Journey: `supplier-payment`, 12,500.00 USD from Operating to Harbour Packaging (United States, ACH, the default rail), purpose Goods or services, invoice number "INV-1042". Below 25,000.00 USD no code is asked.
+- Screen: Overview › + Pay a supplier. Journey: `supplier-payment`, 12,500.00 USD from Operating to Harbour Packaging (Standard speed, the default), purpose Goods or services, invoice number "INV-1042". Below 25,000.00 USD no code is asked.
 - Permission: `biz.payments.initiate`; step-up `otp`; limits: Alex 250,000.00 per day, company 1,000,000.00.
 - State after: Alpha `pay_1`: status `pending_approval`, `initiatedBy: "alex"`, `required: 1` (12,500.00 is below the 50,000.00 threshold), `approvals: []`, `valueDate: 2026-11-04`, `afterCutoff: false`; `alpha_ops` balance still 480,000.00 (nothing leaves until released); Alex's `usedToday` 12,500.00.
-- Assertion: result screen title is "Pending approval" (the success copy of the supplier payment) and shows the payment id; `corp.payments.get` returns `pending_approval`; `balance` is 480,000.00; `companyUsedToday` is 0 (the company limit counts at release); the Personal Main balance is not changed by this (still 8,470.76 after the later switch, step 11).
+- Assertion: result screen title is "Sent for approval" with the chip "Waiting for 1 approval" and shows the payment id; `corp.payments.get` returns `pending_approval`; `balance` is 480,000.00; `companyUsedToday` is 0 (the company limit counts at release); the Personal Main balance is not changed by this (still 8,470.76 after the later switch, step 11).
 
 **Step 6 — Alex cannot approve at Alpha, even when forced**
 - Screen: Approvals › inbox (shell). Journey: `approve-payments` is **not offered**: the Approvals tab shows only "Waiting for others" (Alex's own payments, read-only) and no *Approve* button. The test forces the call.
@@ -3311,8 +3376,8 @@ For each step: screen, journey, permission used, expected sandbox state, and the
 - Assertion: `corp.payments.pending` returns exactly one payment: `pay_1` of Beta, 8,200.00 USD, Nimbus Logistics, started by `priya`; the badge on the tab shows 1; it does not include Alpha's payment.
 
 **Step 9 — Approve the payment**
-- Screen: Approvals › inbox › payment. Journey: `approve-payments` (single), consent, one-time code.
-- Permission: `biz.approvals.approve`; step-up `otp`.
+- Screen: Approvals › inbox › payment. Journey: `approve-payments` (single). 8,200.00 is below 25,000.00, so no code is asked (from 25,000.00 a code is).
+- Permission: `biz.approvals.approve`; step-up none below 25,000.00.
 - State after: Beta `pay_1`: `released`, `approvals` has `alex`, `required: 1` (8,200.00 is below the threshold), `releaseReference` "CORP-20261104-0001"; `beta_ops` 301,800.00; `companyUsedToday` 8,200.00; inbox now empty.
 - Assertion: result screen "Payment released" with the release reference; `corp.payments.get` returns `released`; balance 301,800.00; `corp.payments.pending` returns none; Alex was not the initiator (`initiatedBy: "priya"`).
 
@@ -3374,11 +3439,11 @@ Helper functions the test needs (planned): `signIn(app, "alex.morgan", "Bwx!Demo
 **About the 13 steps**
 1. The plan says "13 steps" but lists none. The 13 here are proposed. Is the requirement's own list available? If it differs (for example, it may count "sign in" as two steps, password then code, or include "view receipt"), the table and the test change.
 2. Step 3 uses `personal-transfer` (the plan's M1 list). `internal-transfer` fits a transfer to a BankWorkx® customer better. Which does the requirement mean?
-3. Admin changes apply at once here. Should a second admin have to confirm (four-eyes for admin changes) in Release 1? It adds a pending state to `manage-user`, `change-limits` and `edit-signatory-group`.
+3. In the prototype a second administrator must approve limit increases, any change involving an administrator and any approval group change (options, on by default). Should decreases and other changes need one too?
 4. Account permission changes (the grid) are a shell action here, not a journey. Should they be a journey (`change-account-permissions`) with full proof? That would make 16 SME journeys.
-5. The audit trail has no export in Release 1. Should auditors be able to export it (it needs `biz.audit.view` plus `biz.accounts.export`)?
+5. The activity log on the Admin tab has no export in Release 1. Should administrators be able to export it?
 6. Should creating a statement raise a notification (in-app) when the file is ready? Release 1 says no because it is immediate.
-7. `business-service-request` needs no one-time code. Is that right for "Change company details" and "Review our limits", which could be security relevant?
+7. `business-service-request` needs no one-time code. Is that right for "Update company details", which could be security relevant?
 8. Payment ids are numbered per company (`pay_1` at both Alpha and Beta). Should the sandbox use globally unique ids (`pay_a_1`, `pay_b_1`) so a payment id never needs its company?
 9. Step 12 needs a way for another user (`omar`) to act while Alex is signed in. The test calls the Beta sandbox directly. Should the "Sandbox conditions" panel offer a dev-only "Act as someone else" button for the live demo?
 10. Should the 13-step test also run against Bank B (`corpProvider: "bank-b"`) as the existing 11 corporate tests do?

@@ -781,7 +781,7 @@ None expected.
 |---|---|
 | Slug | `wealth-statement` |
 | Purpose | Get a statement for a portfolio and a period, as PDF or CSV; also opens contract notes and key documents from the list |
-| Release / workspace / status | 2 / Personal (Wealth) / New (planned). Sibling of `account-statement` (Release 1) |
+| Release / workspace / status | 2 / Personal (Wealth) / New (planned). Sibling of `statement` (Release 1) |
 | Channels | Web (download), mobile (share sheet) |
 | Who | `wealth.documents` |
 
